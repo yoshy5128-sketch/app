@@ -15,16 +15,110 @@
     h1 {
       color: #333;
       font-size: 3em;
-      margin-bottom: 0.5em;
+      margin-bottom: 0.2em;
     }
     p {
       color: #666;
       font-size: 1.2em;
+      margin-bottom: 2em;
+    }
+    .apps-section {
+      max-width: 800px;
+      margin: 0 auto;
+      text-align: left;
+    }
+    .apps-title {
+      font-size: 1.6em;
+      color: #444;
+      border-bottom: 2px solid #e0e0e0;
+      margin-bottom: 1em;
+      padding-bottom: 0.2em;
+      font-weight: 700;
+    }
+    .app-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5em;
+      list-style: none;
+      padding: 0;
+      justify-content: center;
+    }
+    .app-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+      padding: 1.5em 2em;
+      min-width: 220px;
+      max-width: 300px;
+      text-align: center;
+      transition: box-shadow 0.2s;
+    }
+    .app-card:hover {
+      box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+    }
+    .app-name {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #222;
+      margin-bottom: 0.3em;
+    }
+    .app-desc {
+      color: #555;
+      font-size: 1em;
+      margin-bottom: 1em;
+    }
+    .app-link {
+      display: inline-block;
+      padding: 0.5em 1.2em;
+      border-radius: 6px;
+      background: #007acc;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .app-link:hover {
+      background: #005fa3;
+    }
+    @media (max-width: 600px) {
+      .app-list {
+        flex-direction: column;
+        gap: 1em;
+      }
+      .app-card {
+        min-width: 0;
+        width: 100%;
+        padding: 1em;
+      }
     }
   </style>
 </head>
 <body>
   <h1>APPLABO</h1>
   <p>ようこそ！これはGitHub Pagesで公開されたテストページです。</p>
+
+  <section class="apps-section">
+    <div class="apps-title">アプリ一覧</div>
+    <ul class="app-list">
+      <!-- ここにアプリを追加していきます -->
+      <li class="app-card">
+        <div class="app-name">石切りゲーム</div>
+        <div class="app-desc">平たい石を川に投げて何回ジャンプできるか？！</div>
+        <a href="https://yoshy5128-sketch.github.io/app/stone/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+       <li class="app-card">
+        <div class="app-name">Bomber Simulater</div>
+        <div class="app-desc">爆撃シミュレーター 地上の物体をすべて破壊せよ！</div>
+        <a href="https://yoshy5128-sketch.github.io/app/bomber/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+      <!-- 追加例
+      <li class="app-card">
+        <div class="app-name">アプリ名</div>
+        <div class="app-desc">アプリの説明</div>
+        <a href="アプリへのリンク" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+      -->
+    </ul>
+  </section>
 </body>
 </html>
