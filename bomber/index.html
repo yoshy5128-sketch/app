@@ -72,6 +72,7 @@
   <audio id="expSound" src="exp.mp3" preload="auto"></audio>
   <audio id="expbmSound" src="expbm.mp3" preload="auto"></audio>
   <audio id="bgSound" src="29.mp3" preload="auto" loop></audio>
+
   <script>
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
@@ -100,6 +101,17 @@
 
     // スマホ対応のスケール係数
     const scale = Math.min(window.innerWidth / 800, 1.5);
+
+    // 衝突予測関数（建物・戦車・i群れ共通）
+    function willCollide(objA, objB) {
+      const nextY = objA.y + objA.speed;
+      return (
+        objA.x < objB.x + (objB.w || 10 * scale) &&
+        objA.x + (objA.w || 10 * scale) > objB.x &&
+        nextY < objB.y + (objB.h || 20 * scale) &&
+        nextY + (objA.h || 20 * scale) > objB.y
+      );
+    }
 
     function generateStageObjects() {
       buildings.length = 0;
@@ -132,7 +144,7 @@
           destroyed: false,
           opacity: 1.0,
           visible: true,
-          stoppedBy: null
+          avoidX: 0
         });
       }
 
@@ -145,7 +157,7 @@
           destroyed: false,
           opacity: 1.0,
           visible: true,
-          stoppedBy: null
+          avoidX: 0
         });
       }
 
@@ -173,7 +185,7 @@
         explosionY: null,
         opacity: 1.0,
         soundPlayed: false,
-        hitTarget: false
+        hitTarget: false // ← 明示的に初期化
       });
 
       downSound.currentTime = 0;
@@ -234,41 +246,44 @@
 
     function drawTanks() {
       tanks.forEach(t => {
-        if (!t.visible) return;
+        if (!t.visible || t.destroyed) return;
 
-        if (t.stoppedBy && t.stoppedBy.destroyed) {
-          t.speed = 0.8 + Math.random() * 1.2;
-          t.stoppedBy = null;
-        }
-
-        t.y += t.speed;
+        let avoiding = false;
 
         buildings.forEach(b => {
           if (!b.visible || b.destroyed) return;
-          const overlap =
-            t.x < b.x + b.w &&
-            t.x + t.w > b.x &&
-            t.y < b.y + b.h &&
-            t.y + t.h > b.y;
-          if (overlap) {
-            t.speed = scrollSpeed;
-            t.stoppedBy = b;
+          if (willCollide(t, b)) {
+            avoiding = true;
+            const direction = t.x < b.x ? -1 : 1;
+            t.avoidX += direction * 0.5 * scale;
           }
         });
 
-        if (t.y > canvas.height + t.h && !t.destroyed) {
-          t.y = -200 * scale;
-          t.x = Math.random() * canvas.width;
-          t.speed = 0.8 + Math.random() * 1.2;
-          t.stoppedBy = null;
+        tanks.forEach(other => {
+          if (other === t || !other.visible || other.destroyed) return;
+          if (willCollide(t, other)) {
+            avoiding = true;
+            const direction = t.x < other.x ? -1 : 1;
+            t.avoidX += direction * 0.3 * scale;
+          }
+        });
+
+        t.x += t.avoidX;
+        t.avoidX *= 0.9;
+
+        if (!avoiding) {
+          t.y += t.speed;
         }
 
-        if (t.destroyed) {
-          t.opacity -= 0.02;
-          if (t.opacity <= 0) {
-            t.visible = false;
-            return;
-          }
+        if (t.y > canvas.height + t.h) {
+          t.y = -200 * scale;
+          t.x = Math.random() * canvas.width;
+        }
+
+        t.opacity -= t.destroyed ? 0.02 : 0;
+        if (t.opacity <= 0) {
+          t.visible = false;
+          return;
         }
 
         ctx.save();
@@ -288,40 +303,35 @@
 
     function drawIGroup() {
       iGroup.forEach(i => {
-        if (!i.visible) return;
+        if (!i.visible || i.destroyed) return;
 
-        if (i.stoppedBy && i.stoppedBy.destroyed) {
-          i.speed = scrollSpeed + Math.random() * 0.3;
-          i.stoppedBy = null;
-        }
-
-        i.y += i.speed;
+        let avoiding = false;
 
         buildings.forEach(b => {
           if (!b.visible || b.destroyed) return;
-          const overlap =
-            i.x < b.x + b.w &&
-            i.x + 10 * scale > b.x &&
-            i.y < b.y + b.h &&
-            i.y + 20 * scale > b.y;
-          if (overlap) {
-            i.speed = scrollSpeed;
-            i.stoppedBy = b;
+          if (willCollide(i, b)) {
+            avoiding = true;
+            const direction = i.x < b.x ? -1 : 1;
+            i.avoidX += direction * 0.5 * scale;
           }
         });
 
-        if (i.y > canvas.height + 20 * scale && !i.destroyed) {
-          i.y = -100 * scale;
-          i.x = canvas.width / 2 + (Math.random() * 60 - 30) * scale;
-          i.stoppedBy = null;
+        i.x += i.avoidX;
+        i.avoidX *= 0.9;
+
+        if (!avoiding) {
+          i.y += i.speed;
         }
 
-        if (i.destroyed) {
-          i.opacity -= 0.02;
-          if (i.opacity <= 0) {
-            i.visible = false;
-            return;
-          }
+        if (i.y > canvas.height + 20 * scale) {
+          i.y = -100 * scale;
+          i.x = canvas.width / 2 + (Math.random() * 60 - 30) * scale;
+        }
+
+        i.opacity -= i.destroyed ? 0.02 : 0;
+        if (i.opacity <= 0) {
+          i.visible = false;
+          return;
         }
 
         ctx.save();
@@ -347,7 +357,7 @@
 
             let hit = false;
             [...buildings, ...tanks, ...iGroup].forEach(obj => {
-              if (!obj.visible) return;
+              if (!obj.visible || obj.destroyed) return; // ← 破壊済み除外
               const ox = obj.x + (obj.w ? obj.w / 2 : 0);
               const oy = obj.y + (obj.h ? obj.h / 2 : 10 * scale);
               const dx = bomb.x - ox;
@@ -355,15 +365,15 @@
               const distance = Math.sqrt(dx * dx + dy * dy);
               if (distance < 50 * scale) {
                 obj.destroyed = true;
-                bomb.hitTarget = true;
                 hit = true;
               }
             });
 
+            bomb.hitTarget = hit; // ← フラグは1回だけ設定
             scars.push({ x: bomb.x, y: impactY, size: 10 * scale, opacity: 0.6 });
 
             if (!bomb.soundPlayed) {
-              if (hit) {
+              if (bomb.hitTarget === true) {
                 expbmSound.currentTime = 0;
                 expbmSound.play();
               } else {
@@ -384,7 +394,7 @@
           bomb.opacity -= 0.01;
           ctx.save();
           ctx.globalAlpha = bomb.opacity;
-          ctx.fillStyle = bomb.hitTarget ? "orange" : "yellow";
+          ctx.fillStyle = bomb.hitTarget === true ? "orange" : "yellow";
           ctx.beginPath();
           ctx.arc(bomb.x, bomb.explosionY, bomb.explosionSize, 0, Math.PI * 2);
           ctx.fill();
