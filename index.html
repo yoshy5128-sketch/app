@@ -81,17 +81,19 @@
       background: #005fa3;
     }
     @media (max-width: 600px) {
-      .app-list {
-        flex-direction: column;
-        gap: 1em;
-      }
-      .app-card {
-        min-width: 0;
-        width: 100%;
-        padding: 1em;
-      }
+    .app-list {
+      flex-direction: column;
+      gap: 1em;
+      align-items: center; /* 追加：カードを中央に揃える */
     }
-  </style>
+    .app-card {
+      min-width: 0;
+      width: 100%;
+      padding: 1em;
+      box-sizing: border-box; /* 追加：余白を含めて幅100%に */
+    }
+  }
+</style>
 </head>
 <body>
   <h1>APPLABO</h1>
@@ -127,5 +129,6 @@
   </section>
 </body>
 </html>
+
 
 
