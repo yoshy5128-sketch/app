@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StoneSkip（石切り）</title>
+<style>
+  body { margin: 0; overflow: hidden; background: skyblue; font-family: sans-serif; }
+  canvas { display: none; }
+  #scoreBoard, #highScoreBoard {
+    position: absolute; top: 10px; font-size: 20px; color: white;
+    text-shadow: 2px 2px 4px #000; display: none;
+  }
+  #scoreBoard { left: 10px; }
+  #highScoreBoard { right: 10px; color: yellow; }
+
+  #startScreen {
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    background: url('ishikiri.jpg') center/cover no-repeat;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    color: white; text-shadow: 2px 2px 4px #000; text-align:center;
+  }
+  #startScreen h1 { font-size: 48px; margin: 0 0 10px; }
+  #startScreen h2 { font-size: 24px; margin: 0 0 30px; }
+  #startBtn {
+    padding: 12px 30px; font-size: 22px; border:none;
+    border-radius:8px; background:#ffcc00; cursor:pointer;
+    box-shadow: 2px 2px 5px #000;
+  }
+  #description {
+    font-size:14px; margin-top:20px; max-width:80%;
+    background: rgba(0,0,0,0.4); padding:10px; border-radius:8px;
+  }
+
+  /* レッドストーン発見文字 */
+  #redStoneText {
+    position:absolute;
+    top:20%; /* 画面上部に表示 */
+    left:50%;
+    transform:translate(-50%,0);
+    font-size:32px;
+    color:red;
+    text-shadow:2px 2px 4px #000;
+    display:none;
+  }
+</style>
+</head>
+<body>
+<div id="startScreen">
+  <h1>StoneSkip</h1>
+  <h2>（石切り）</h2>
+  <button id="startBtn">スタート</button>
+  <div id="description">
+    説明：<br>
+    河原で拾った平べったい石を水平に投げて<br>
+    何回水の上を石がジャンプできるかにチャレンジ！<br>
+    幻のレッドストーンで高得点を目指せ！
+  </div>
+</div>
+
+<div id="scoreBoard">スコア: 0</div>
+<div id="highScoreBoard">ハイスコア: 0</div>
+<div id="redStoneText">レッドストーンを見つけた！</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<audio id="bounceSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"></audio>
+<audio id="splashSound" src="https://actions.google.com/sounds/v1/water/plop.ogg"></audio>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let waterY, stone, ripples, score, highScore=0, bgOffset;
+let launched = false, sinking = false;
+let sinkStartTime = null, sinkStartY = null;
+let gameStarted = false;
+let redStoneTextTimer = null;
+
+// 石の種類
+const stoneTypes = [
+  { type: 1, maxAngle: 20*Math.PI/180, optimalPower: 0.8, color:"#888" },
+  { type: 2, maxAngle: 30*Math.PI/180, optimalPower: 0.8, color:"#ccc" },
+  { type: 3, maxAngle: 40*Math.PI/180, optimalPower: 0.8, color:"#555" },
+  { type: 4, maxAngle: 90*Math.PI/180, optimalPower: 1.0, color:"#c00", isRed:true } // レッドストーン
+];
+
+let waterLines = [];
+const LINE_COUNT = 15;
+
+function initWaterLines(){
+  waterLines = [];
+  for(let i=0;i<LINE_COUNT;i++){
+    waterLines.push({
+      x: Math.random()*canvas.width,
+      y: waterY + Math.random()*(canvas.height-waterY),
+      w: 50+Math.random()*150,
+      speed: 0,
+      alpha: 0.3+Math.random()*0.3
+    });
+  }
+}
+
+function drawWaterLines(){
+  ctx.strokeStyle = "rgba(173,216,230,0.6)";
+  ctx.lineWidth = 2;
+  for(const l of waterLines){
+    ctx.globalAlpha = l.alpha;
+    ctx.beginPath();
+    ctx.moveTo(l.x, l.y);
+    ctx.lineTo(l.x+l.w, l.y);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function updateWaterLines(){
+  const flowSpeed = (launched && !sinking) ? Math.abs(stone.vx) : 0;
+  for(const l of waterLines){
+    l.x -= flowSpeed * 0.5;
+    if(l.x + l.w < 0){
+      l.x = canvas.width + Math.random()*100;
+      l.y = waterY + Math.random()*(canvas.height-waterY);
+      l.w = 50+Math.random()*150;
+    }
+  }
+}
+
+function initGame(){
+  // レッドストーンの出現確率調整
+  let chosen;
+  if(Math.random() < 0.15){ // 15%でレッドストーン
+    chosen = stoneTypes[3];
+    showRedStoneText();
+  } else {
+    chosen = stoneTypes[Math.floor(Math.random()*3)];
+  }
+
+  // レッドストーン用ジャンプ回数
+  let redJumps = chosen.isRed ? 10 + Math.floor(Math.random()*79) : 0;
+
+  stone = { 
+    x: 100, y: waterY - 40, vx:0, vy:0, alpha:1, 
+    type: chosen.type,
+    maxAngle: chosen.maxAngle,
+    optimalPower: chosen.optimalPower,
+    color: chosen.color,
+    isRed: chosen.isRed || false,
+    redJumps: redJumps,
+    redJumpIndex: 0
+  };
+
+  ripples = [];
+  score = 0;
+  bgOffset = 0;
+}
+
+// レッドストーン文字表示
+function showRedStoneText(){
+  const el = document.getElementById("redStoneText");
+  el.style.display = "block";
+  let count = 0;
+  if(redStoneTextTimer) clearInterval(redStoneTextTimer);
+  redStoneTextTimer = setInterval(()=>{
+    el.style.visibility = (el.style.visibility==='hidden')?'visible':'hidden';
+    count++;
+    if(count>5){ // 5回点滅で消える
+      clearInterval(redStoneTextTimer);
+      el.style.display='none';
+      el.style.visibility='visible';
+    }
+  },300);
+}
+
+function resize(){ 
+  canvas.width = innerWidth; 
+  canvas.height = innerHeight; 
+  waterY = canvas.height * 0.7; 
+  if(gameStarted){
+    initGame();
+    initWaterLines();
+  }
+}
+window.addEventListener('resize', resize);
+resize();
+
+const size = 20;
+const SINK_DURATION = 2000;
+
+function playSound(id){
+  const s = document.getElementById(id);
+  if(!s) return;
+  s.currentTime = 0;
+  s.play().catch(()=>{});
+}
+
+function drawBackground(){
+  ctx.fillStyle = "#87CEEB";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = "#1E90FF";
+  for (let i = -Math.floor(bgOffset / canvas.width) - 1; i < 2; i++) {
+    ctx.fillRect(
+      i * canvas.width - (bgOffset % canvas.width),
+      waterY,
+      canvas.width,
+      canvas.height - waterY
+    );
+  }
+}
+
+function drawStone(){
+  if(stone.alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = stone.alpha;
+  ctx.translate(stone.x, stone.y);
+  const angle = Math.atan2(stone.vy, stone.vx || 0.00001);
+  ctx.rotate(angle);
+  ctx.fillStyle = stone.color;
+  ctx.beginPath();
+  ctx.moveTo(-size*1.5,0);
+  ctx.lineTo(0,-size*0.75);
+  ctx.lineTo(size*1.5,0);
+  ctx.lineTo(0,size*0.75);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawRipples(){
+  for(let i=ripples.length-1;i>=0;i--){
+    const r = ripples[i];
+    ctx.beginPath();
+    ctx.arc(r.x - bgOffset, r.y, r.r, 0, Math.PI*2);
+    ctx.strokeStyle = `rgba(255,255,255,${r.alpha})`;
+    ctx.lineWidth = r.big ? 3 : 1;
+    ctx.stroke();
+    r.r += r.big ? 3 : 1;
+    r.alpha -= r.big ? 0.01 : 0.02;
+    if(r.alpha <= 0) ripples.splice(i,1);
+  }
+}
+
+let swipeArrow = null;
+function drawArrow(){
+  if(swipeArrow){
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(swipeArrow.x, swipeArrow.y);
+    ctx.lineTo(swipeArrow.x + swipeArrow.dx, swipeArrow.y + swipeArrow.dy);
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function update(){
+  if(launched && !sinking){
+    // レッドストーンジャンプ演出
+    if(stone.isRed && stone.redJumpIndex < stone.redJumps){
+      const jumpHeight = 15 + Math.random()*30;
+      stone.y = waterY - jumpHeight;
+      stone.x += 15 + Math.random()*10;
+      ripples.push({ x: stone.x + bgOffset, y: waterY, r: 5 + Math.random()*5, alpha:1, big:false });
+      stone.redJumpIndex++;
+      score = stone.redJumpIndex;
+      if(score>highScore) highScore = score;
+    } else {
+      // 通常石
+      stone.x += stone.vx;
+      stone.y += stone.vy;
+      stone.vy += 0.35;
+
+      if(stone.x > canvas.width/2){
+        bgOffset += stone.vx;
+        stone.x = canvas.width/2;
+      }
+
+      if(stone.y >= waterY){
+        stone.y = waterY;
+        const angle = Math.abs(Math.atan2(stone.vy, stone.vx || 0.00001));
+        const vxAbs = Math.abs(stone.vx);
+
+        if(vxAbs < 3 || angle > Math.PI*0.25){
+          sinking = true;
+          sinkStartTime = Date.now();
+          sinkStartY = stone.y;
+          playSound("splashSound");
+          ripples.push({ x: stone.x + bgOffset, y: waterY, r: 10, alpha: 1, big: true });
+        } else {
+          ripples.push({ x: stone.x + bgOffset, y: waterY, r: 5, alpha: 1, big: false });
+          playSound("bounceSound");
+          stone.vy *= -0.8;
+          stone.vx *= 0.9;
+          if(Math.abs(stone.vy) > 3 && Math.abs(stone.vx) > 3){
+            score++;
+            if(score > highScore) highScore = score;
+            if(score > 88) score = 88;
+          } else {
+            sinking = true;
+            sinkStartTime = Date.now();
+            sinkStartY = stone.y;
+            playSound("splashSound");
+            ripples.push({ x: stone.x + bgOffset, y: waterY, r: 10, alpha: 1, big: true });
+          }
+        }
+      }
+    }
+  } else if(sinking){
+    const elapsed = Date.now() - sinkStartTime;
+    const progress = elapsed / SINK_DURATION;
+    stone.alpha = 1 - progress;
+    stone.y = sinkStartY + Math.pow(progress,2)*80;
+    if(stone.alpha <= 0){
+      setTimeout(initGame, 500);
+      launched = false;
+      sinking = false;
+    }
+  }
+
+  document.getElementById('scoreBoard').innerText = 'スコア: ' + score;
+  document.getElementById('highScoreBoard').innerText = 'ハイスコア: ' + highScore;
+}
+
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(gameStarted){
+    updateWaterLines();
+    drawBackground();
+    drawWaterLines();
+    drawStone();
+    drawArrow();
+    drawRipples();
+    update();
+  }
+  requestAnimationFrame(loop);
+}
+loop();
+
+let startX=0, startY=0;
+canvas.addEventListener("touchstart", e=>{
+  e.preventDefault();
+  if(!launched && gameStarted){
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    swipeArrow = { x: startX, y: startY, dx:0, dy:0 };
+  }
+},{passive:false});
+
+canvas.addEventListener("touchmove", e=>{
+  e.preventDefault();
+  if(!launched && gameStarted){
+    const t = e.touches[0];
+    swipeArrow.dx = t.clientX - startX;
+    swipeArrow.dy = t.clientY - startY;
+  }
+},{passive:false});
+
+canvas.addEventListener("touchend", e=>{
+  e.preventDefault();
+  if(!launched && gameStarted){
+    const t = e.changedTouches[0];
+    let dx = t.clientX - startX;
+    let dy = t.clientY - startY;
+    const dist = Math.hypot(dx, dy);
+    const power = Math.min(dist/150, 1);
+    const angle = Math.atan2(dy, dx);
+    stone.vx = Math.cos(angle) * power * 40;
+    stone.vy = Math.sin(angle) * power * 40;
+    launched = true;
+    swipeArrow = null;
+  }
+},{passive:false});
+
+document.getElementById("startBtn").addEventListener("click", ()=>{
+  document.getElementById("startScreen").style.display = "none";
+  document.getElementById("scoreBoard").style.display = "block";
+  document.getElementById("highScoreBoard").style.display = "block";
+  canvas.style.display = "block";
+  gameStarted = true;
+  initGame();
+  initWaterLines();
+});
+</script>
+</body>
+</html>
