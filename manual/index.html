@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マニュアル車シミュレーター＋擬似3D道路＋エンジン音</title>
+<style>
+*{user-select:none;margin:0;padding:0;}
+html,body{height:100%;}
+body{display:flex;flex-direction:column;height:100%;background:#222;color:#fff;font-family:sans-serif;}
+#road{flex:0 0 50%;display:block;background:#333;width:100%;height:50vh;}
+#controls{flex:0 0 50%;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:5px;}
+.meters{display:flex;justify-content:space-around;width:100%;margin-top:10px;}
+canvas{background:#111;border-radius:50%;}
+.gears{display:flex;justify-content:center;flex-wrap:wrap;margin:10px 0;gap:10px;}
+.gear-btn{width:50px;height:50px;border-radius:50%;border:none;background:#555;color:#fff;font-size:16px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:5px;}
+.gear-btn.active{background:#0f0;color:#000;}
+.pedals{display:flex;justify-content:space-around;width:90%;margin-bottom:10px;}
+.pedal-container{display:flex;flex-direction:column;align-items:center;}
+.pedal-btn{border:none;border-radius:10px;background:#555;color:#fff;font-size:1.5em;}
+.pedal-accel{width:50px;height:120px;}
+.pedal-brake{width:80px;height:80px;}
+.pedal-label{margin-top:5px;font-size:1em;}
+</style>
+</head>
+<body>
+
+<canvas id="road"></canvas>
+
+<div id="controls">
+  <div class="meters">
+    <canvas id="speedometer"></canvas>
+    <canvas id="tachometer"></canvas>
+  </div>
+
+  <div class="gears">
+    <button class="gear-btn" data-gear="0">N</button>
+    <button class="gear-btn" data-gear="1">1</button>
+    <button class="gear-btn" data-gear="2">2</button>
+    <button class="gear-btn" data-gear="3">3</button>
+    <button class="gear-btn" data-gear="4">4</button>
+    <button class="gear-btn" data-gear="5">5</button>
+  </div>
+
+  <div class="pedals">
+    <div class="pedal-container">
+      <button class="pedal-btn pedal-brake" id="brake"></button>
+      <div class="pedal-label">ブレーキ</div>
+    </div>
+    <div class="pedal-container">
+      <button class="pedal-btn pedal-accel" id="accel"></button>
+      <div class="pedal-label">アクセル</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// -------------------- 物理 --------------------
+let gear=0,targetRPM=0,targetSpeed=0;
+let displayRPM=0,displaySpeed=0;
+let accel=false,brake=false;
+const gearRatios=[0,3,2,1.5,1,0.8];
+
+// -------------------- Canvas --------------------
+const speedCanvas=document.getElementById("speedometer");
+const speedCtx=speedCanvas.getContext("2d");
+const rpmCanvas=document.getElementById("tachometer");
+const rpmCtx=rpmCanvas.getContext("2d");
+const roadCanvas=document.getElementById("road");
+const roadCtx=roadCanvas.getContext("2d");
+
+// -------------------- 操作 --------------------
+document.querySelectorAll(".gear-btn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    const newGear=parseInt(btn.dataset.gear);
+    if(targetSpeed < 1 && newGear > 1){
+      gear = 0; // 停止中は2速以上に入れない
+    } else {
+      const prevRatio = gearRatios[gear];
+      const newRatio = gearRatios[newGear];
+      if(prevRatio>0 && newRatio>0){ 
+        targetRPM = targetSpeed*newRatio*50; 
+      }
+      gear=newGear;
+    }
+    document.querySelectorAll(".gear-btn").forEach(b=>b.classList.remove("active"));
+    document.querySelector(`.gear-btn[data-gear="${gear}"]`).classList.add("active");
+  });
+});
+
+document.getElementById("accel").addEventListener("touchstart",()=>accel=true);
+document.getElementById("accel").addEventListener("touchend",()=>accel=false);
+document.getElementById("brake").addEventListener("touchstart",()=>brake=true);
+document.getElementById("brake").addEventListener("touchend",()=>brake=false);
+document.getElementById("accel").addEventListener("mousedown",()=>accel=true);
+document.getElementById("accel").addEventListener("mouseup",()=>accel=false);
+document.getElementById("brake").addEventListener("mousedown",()=>brake=true);
+document.getElementById("brake").addEventListener("mouseup",()=>brake=false);
+
+function lerp(current,target,alpha){return current+(target-current)*alpha;}
+
+// -------------------- メーター描画 --------------------
+function drawMeter(ctx,value,maxValue,isRPM=false){
+  const w=ctx.canvas.width,h=ctx.canvas.height,cx=w/2,cy=h/2,r=w/2-10;
+  ctx.clearRect(0,0,w,h);
+  ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.fillStyle="#111";ctx.fill();
+  ctx.strokeStyle="#555";ctx.lineWidth=5;ctx.stroke();
+  ctx.strokeStyle="#888";ctx.lineWidth=2;
+
+  const divisions = isRPM ? 9 : 10; // RPMは0-9表示
+
+  for(let i=0;i<=divisions;i++){
+    const angle=Math.PI*0.75+i*(1.5/divisions)*Math.PI;
+    const x1=cx+r*0.85*Math.cos(angle);const y1=cy+r*0.85*Math.sin(angle);
+    const x2=cx+r*0.95*Math.cos(angle);const y2=cy+r*0.95*Math.sin(angle);
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    ctx.fillStyle="#fff";ctx.font="12px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";
+
+    let val;
+    if(isRPM){
+      val = i; // 0〜9
+    }else{
+      val = Math.round(maxValue*i/divisions);
+    }
+    ctx.fillText(val,x2,y2);
+  }
+
+  const angle=Math.PI*0.75+1.5*(value/maxValue)*Math.PI;
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+r*0.9*Math.cos(angle),cy+r*0.9*Math.sin(angle));
+  ctx.strokeStyle="red";ctx.lineWidth=3;ctx.stroke();
+  ctx.beginPath();ctx.arc(cx,cy,5,0,2*Math.PI);ctx.fillStyle="red";ctx.fill();
+
+  ctx.fillStyle="#fff";ctx.font="16px sans-serif";ctx.textAlign="center";
+
+  if(isRPM){
+    ctx.fillText(Math.floor(value/1000),cx,cy+r-15);
+    ctx.font="12px sans-serif";
+    ctx.fillText("×1000 rpm",cx,cy+r-2);
+  }else{
+    ctx.fillText(Math.round(value),cx,cy+r-15);
+    ctx.font="12px sans-serif";
+    ctx.fillText("km/h",cx,cy+r-2);
+  }
+}
+
+// -------------------- 擬似3D道路 --------------------
+const numDots=40; let roadDots=[];
+for(let i=0;i<numDots;i++){roadDots.push({y:Math.random()*roadCanvas.height});}
+
+function drawDotRoad(){
+  const w=roadCanvas.width,h=roadCanvas.height;
+  roadCtx.fillStyle="#333"; roadCtx.fillRect(0,0,w,h);
+  const roadWidth=w/2-20;
+  for(let i=0;i<numDots;i++){
+    let dot=roadDots[i];
+    let perspective=dot.y/h;
+    let size=2+8*perspective;
+    let y=dot.y;
+    roadCtx.fillStyle="#fff";
+    roadCtx.beginPath();roadCtx.arc(w/2,y,size/2,0,2*Math.PI);roadCtx.fill();
+    roadCtx.beginPath();roadCtx.arc(w/2-roadWidth*perspective,y,size/2,0,2*Math.PI);roadCtx.fill();
+    roadCtx.beginPath();roadCtx.arc(w/2+roadWidth*perspective,y,size/2,0,2*Math.PI);roadCtx.fill();
+    dot.y += displaySpeed*0.5;
+    if(dot.y>h) dot.y=0;
+  }
+}
+
+// -------------------- エンジン音 --------------------
+let audioCtx, osc, gainNode, audioStarted=false;
+
+async function startEngineAudio(){
+  if(audioStarted) return;
+  audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  await audioCtx.resume();
+  osc = audioCtx.createOscillator();
+  gainNode = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+  gainNode.gain.value = 0.15; 
+  osc.start();
+  audioStarted = true;
+}
+
+function updateEngineSound(rpm){
+  if(!audioStarted) return;
+  const minFreq=40, maxFreq=600; 
+  const freq = minFreq + (maxFreq-minFreq)*(rpm/9000);
+  osc.frequency.setTargetAtTime(freq,audioCtx.currentTime,0.05);
+}
+
+document.body.addEventListener('touchstart', startEngineAudio, {once:true});
+document.body.addEventListener('mousedown', startEngineAudio, {once:true});
+
+// -------------------- 物理更新 --------------------
+function updatePhysics(dt){
+  if(accel) targetRPM += 2000 * dt; 
+  else targetRPM -= 1000 * dt;
+
+  targetRPM = Math.max(0, Math.min(9000, targetRPM));
+
+  const ratio = gearRatios[gear];
+  if(ratio > 0) targetSpeed = targetRPM / ratio / 50; 
+  else targetSpeed *= 0.995;
+
+  if(brake) targetSpeed -= 0.05 * targetSpeed + 0.5; 
+  targetSpeed = Math.max(0, targetSpeed);
+
+  // 車が停止した場合のギア制御
+  if(targetSpeed < 0.1) {
+    if(gear > 1){
+      gear = 0; // ニュートラル
+      targetRPM = 500; // アイドリング回転
+    }
+    document.querySelectorAll(".gear-btn").forEach(b => b.classList.remove("active"));
+    document.querySelector(`.gear-btn[data-gear="${gear}"]`).classList.add("active");
+  }
+
+  displayRPM = lerp(displayRPM, targetRPM, 0.1);
+  displaySpeed = lerp(displaySpeed, targetSpeed, 0.1);
+  drawMeter(speedCtx, displaySpeed, 200, false);
+  drawMeter(rpmCtx, displayRPM, 9000, true); // ★ 最大9000rpm
+  drawDotRoad();
+  updateEngineSound(displayRPM);
+}
+setInterval(()=>updatePhysics(0.016),16);
+
+// -------------------- レスポンシブ --------------------
+function resizeCanvas(){
+  roadCanvas.width=roadCanvas.clientWidth;
+  roadCanvas.height=roadCanvas.clientHeight;
+  const meterSize=window.innerWidth*0.4;
+  speedCanvas.width=meterSize; speedCanvas.height=meterSize;
+  rpmCanvas.width=meterSize; rpmCanvas.height=meterSize;
+}
+window.addEventListener("resize",resizeCanvas);
+resizeCanvas();
+</script>
+
+</body>
+</html>
+
