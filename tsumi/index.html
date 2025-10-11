@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>積み木シミュレーター</title>
+  <style>
+    html, body { margin:0; padding:0; overflow:scroll; background:#f0f0f0; touch-action:none; }
+    canvas { display:block; background:#e0e0ff; touch-action:none; }
+    #bomb, .chain-bomb-icon {
+      position:fixed; right:10px;
+      width:40px; height:40px;
+      font-size:24px; text-align:center; line-height:40px;
+      background:black; color:white; border-radius:50%;
+      cursor:grab; z-index:20; user-select:none;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .chain-bomb-icon {
+      background: #222;
+      width:32px; height:32px; line-height:32px; font-size:18px;
+      right:16px;
+      opacity: 1;
+      transition: opacity 0.2s;
+      pointer-events: auto;
+      text-shadow: 0 1px 4px #000;
+    }
+    .chain-bomb-disabled {
+      opacity: 0.4 !important;
+      pointer-events: none !important;
+    }
+    .chain-bomb-placed {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="bomb">💣️</div>
+  <!-- 連鎖爆弾アイコン4つ -->
+  <div class="chain-bomb-icon" id="chain-bomb-1" style="top:60px;display:block;">1</div>
+  <div class="chain-bomb-icon chain-bomb-disabled" id="chain-bomb-2" style="top:100px;display:block;">2</div>
+  <div class="chain-bomb-icon chain-bomb-disabled" id="chain-bomb-3" style="top:140px;display:block;">3</div>
+  <div class="chain-bomb-icon chain-bomb-disabled" id="chain-bomb-4" style="top:180px;display:block;">4</div>
+  <audio id="boom-sound" src="bm.mp3" preload="auto"></audio>
+  <audio id="rensa-sound" src="rensa.mp3" preload="auto"></audio>
+  <canvas id="world"></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/matter-js"></script>
+  <script>
+    const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Body, Vector, Events } = Matter;
+    const engine = Engine.create();
+    const world = engine.world;
+
+    const canvas = document.getElementById('world');
+    const screenWidth = window.innerWidth;
+    const screenHeight = window.innerHeight;
+    canvas.width = screenWidth;
+    canvas.height = screenHeight;
+
+    const render = Render.create({
+      canvas: canvas, engine: engine,
+      options: { width: screenWidth, height: screenHeight, wireframes: false, background: '#e0e0ff' }
+    });
+    Render.run(render);
+    Runner.run(Runner.create(), engine);
+
+    // 地面
+    const ground = Bodies.rectangle(screenWidth/2, screenHeight-20, screenWidth, 40, { isStatic: true, render: { fillStyle: '#888' } });
+    Composite.add(world, ground);
+
+    // 積み木生成
+    function createBlock(x, y) {
+      return Bodies.rectangle(x, y, 50, 50, {
+        restitution: 0.1, friction: 0.5,
+        render: { fillStyle: `hsl(${Math.random() * 360}, 70%, 60%)` }
+      });
+    }
+    Composite.add(world, createBlock(screenWidth-60, screenHeight-100));
+
+    // マウス操作
+    const mouse = Mouse.create(canvas);
+    const mouseConstraint = MouseConstraint.create(engine, {
+      mouse: mouse, constraint: { stiffness: 0.2, render: { visible: false } }
+    });
+    Composite.add(world, mouseConstraint);
+
+    canvas.addEventListener('click', e => { Composite.add(world, createBlock(e.clientX, e.clientY)); });
+    canvas.addEventListener('touchend', e => {
+      const t = e.changedTouches[0];
+      Composite.add(world, createBlock(t.clientX, t.clientY));
+    });
+
+    // 爆弾ドラッグ（通常爆弾）
+    const bombDiv = document.getElementById('bomb');
+    bombDiv.addEventListener('mousedown', e => startDragBomb(e, 'normal'));
+    bombDiv.addEventListener('touchstart', e => startDragBomb(e, 'normal'));
+
+    // 連鎖爆弾（個別設置型）
+    const chainBombCount = 4;
+    let placingChainBombIdx = 1; // 設置可能な番号
+    let chainBombsPlaced = 0;
+    let chainBombBodies = [];
+    for(let i=1;i<=chainBombCount;i++) {
+      const el = document.getElementById('chain-bomb-'+i);
+      el.addEventListener('mousedown', e => startDragBomb(e, 'chain', i));
+      el.addEventListener('touchstart', e => startDragBomb(e, 'chain', i));
+    }
+
+    function startDragBomb(e, type, chainIdx) {
+      e.preventDefault && e.preventDefault();
+      let dragEl;
+      let iconSize, iconOffset;
+      if(type==='normal') {
+        dragEl = bombDiv;
+        iconSize = 40;
+        iconOffset = 20;
+      } else {
+        // 連鎖爆弾
+        if(chainIdx!==placingChainBombIdx) return;
+        dragEl = document.getElementById('chain-bomb-'+chainIdx);
+        iconSize = 32;
+        iconOffset = 16;
+      }
+      dragEl.style.position = 'absolute';
+      dragEl.style.cursor = 'grabbing';
+      moveDragBomb(e);
+      document.addEventListener('mousemove', moveDragBomb);
+      document.addEventListener('touchmove', moveDragBomb);
+      document.addEventListener('mouseup', dropDragBomb);
+      document.addEventListener('touchend', dropDragBomb);
+
+      function moveDragBomb(ev) {
+        const x = ev.clientX || (ev.touches && ev.touches[0].clientX);
+        const y = ev.clientY || (ev.touches && ev.touches[0].clientY);
+        dragEl.style.left = x - iconOffset + 'px';
+        dragEl.style.top = y - iconOffset + 'px';
+      }
+
+      function dropDragBomb(ev) {
+        document.removeEventListener('mousemove', moveDragBomb);
+        document.removeEventListener('touchmove', moveDragBomb);
+        document.removeEventListener('mouseup', dropDragBomb);
+        document.removeEventListener('touchend', dropDragBomb);
+        dragEl.style.display = 'none';
+
+        const x = ev.clientX || (ev.changedTouches && ev.changedTouches[0].clientX);
+        const y = ev.clientY || (ev.changedTouches && ev.changedTouches[0].clientY);
+
+        if(type==='normal'){
+          // 通常爆弾
+          placeBombBody(x, y, 20, 'normal', null, dragEl, iconSize);
+        } else {
+          // 連鎖爆弾
+          placeBombBody(x, y, 14, 'chain', chainIdx, dragEl, iconSize);
+        }
+      }
+    }
+
+    function placeBombBody(x, y, radius, type, chainIdx, iconEl, iconSize) {
+      let label = type==='normal' ? 'bomb' : ('chain-bomb-'+chainIdx);
+      let bombBody = Bodies.circle(x, y, radius, {
+        restitution: 0.2, friction: 0.5,
+        render: { fillStyle: type==='normal' ? '#000' : '#444' },
+        label: label,
+        countdown: 3,
+        customType: type,
+        chainIdx: chainIdx||null
+      });
+      Composite.add(world, bombBody);
+
+      // カウントダウン描画
+      function renderText() {
+        if (bombBody.countdown > 0) {
+          const ctx = render.context;
+          ctx.font = (type === 'normal') ? '18px sans-serif' : '14px sans-serif';
+          ctx.fillStyle = 'white';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            (type === 'normal') ? String(bombBody.countdown) : String(bombBody.chainIdx),
+            bombBody.position.x,
+            bombBody.position.y + ((type === 'normal') ? 7 : 6)
+          );
+        }
+      }
+      Events.on(render, 'afterRender', renderText);
+      bombBody.renderTextHandler = renderText; // 解除用に保存
+
+      setTimeout(()=>{
+        iconEl.style.left = '';
+        iconEl.style.top = '';
+        iconEl.style.position = 'fixed';
+        if(type==='normal') {
+          iconEl.style.top = '10px';
+          iconEl.style.right = '10px';
+        } else {
+          iconEl.style.top = (60+40*(chainIdx-1))+'px';
+          iconEl.style.right = '16px';
+        }
+        iconEl.style.display = 'block';
+        iconEl.style.cursor = 'grab';
+      },0);
+
+      // 連鎖爆弾：設置後状態管理
+      if(type==='chain'){
+        iconEl.classList.add('chain-bomb-placed');
+        // 次の爆弾を有効化
+        if(chainIdx < chainBombCount){
+          let nextEl = document.getElementById('chain-bomb-'+(chainIdx+1));
+          nextEl.classList.remove('chain-bomb-disabled');
+          placingChainBombIdx = chainIdx + 1;
+        }
+        chainBombsPlaced++;
+        chainBombBodies[chainIdx-1] = bombBody;
+        if(chainBombsPlaced===chainBombCount){
+          setTimeout(() => {
+            triggerChainBombs();
+          }, 500);
+        }
+      }
+      // 通常爆弾：3秒後に爆破
+      if(type==='normal'){
+        let countdownInterval = setInterval(() => {
+          bombBody.countdown--;
+          if (bombBody.countdown <= 0) clearInterval(countdownInterval);
+        }, 1000);
+        setTimeout(() => {
+          explodeBomb(bombBody, radius*5, false);
+          iconEl.style.display = 'block';
+        }, 3000);
+      }
+    }
+
+    // 連鎖爆弾を1→4の順で0.5秒ごとに爆発
+    function triggerChainBombs(){
+      let delay = 0;
+      for(let i=0;i<chainBombCount;i++){
+        setTimeout(()=>{
+          if(chainBombBodies[i]) {
+            explodeBomb(chainBombBodies[i], 70, true);
+            let el = document.getElementById('chain-bomb-'+(i+1));
+            el.classList.remove('chain-bomb-placed');
+            el.classList.add('chain-bomb-disabled');
+          }
+          if(i===chainBombCount-1){
+            placingChainBombIdx = 1;
+            chainBombsPlaced = 0;
+            chainBombBodies = [];
+            let el1 = document.getElementById('chain-bomb-1');
+            el1.classList.remove('chain-bomb-disabled');
+          }
+        }, delay);
+        delay += 500;
+      }
+    }
+
+    // 爆発処理
+    function explodeBomb(bombBody, radius, isChain){
+      // 番号表示を消す
+      if (bombBody.renderTextHandler) {
+        Events.off(render, 'afterRender', bombBody.renderTextHandler);
+        bombBody.renderTextHandler = null;
+      }
+
+      const bodies = Composite.allBodies(world);
+
+      // 爆発音（通常爆弾はbm.mp3、連鎖爆弾はrensa.mp3）
+      let soundId = (isChain ? "rensa-sound" : "boom-sound");
+      const boom = document.getElementById(soundId);
+      boom.currentTime = 0; boom.play();
+
+      // 爆発エフェクト
+      let opacity = 0.4;
+      const bx = bombBody.position.x, by = bombBody.position.y;
+      const fade = setInterval(() => { opacity -= 0.02; if (opacity <= 0) clearInterval(fade); }, 50);
+
+      Events.on(render, 'afterRender', () => {
+        if (opacity > 0) {
+          const ctx = render.context;
+          ctx.beginPath();
+          ctx.arc(bx, by, radius, 0, 2 * Math.PI);
+          ctx.fillStyle = `rgba(255,255,0,${opacity})`;
+          ctx.fill();
+        }
+      });
+
+      // 分割対象リストアップ
+      const toSplit = [];
+      bodies.forEach(body => {
+        const dx = body.position.x - bx;
+        const dy = body.position.y - by;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < radius && !body.isStatic) {
+          const force = Vector.mult(Vector.normalise({ x: dx, y: dy }), 0.04 * (1 - dist / radius));
+          Body.applyForce(body, body.position, force);
+
+          const width = body.bounds.max.x - body.bounds.min.x;
+          const height = body.bounds.max.y - body.bounds.min.y;
+          if (
+            body.label !== 'bomb' &&
+            (
+              (width >= 40 && width <= 60 && height >= 40 && height <= 60) ||
+              (width >= 20 && width <= 30 && height >= 20 && height <= 30) ||
+              (width >= 10 && width <= 15 && height >= 10 && height <= 15)
+            )
+          ) {
+            toSplit.push({body, width, height});
+          }
+        }
+      });
+      toSplit.forEach(obj => {
+        const body = obj.body;
+        const origWidth = obj.width;
+        const origHeight = obj.height;
+        if(origWidth <= 10 || origHeight <= 10) return;
+
+        Composite.remove(world, body);
+        const color = body.render.fillStyle || `hsl(${Math.random() * 360}, 70%, 60%)`;
+        const newWidth = origWidth / 2;
+        const newHeight = origHeight / 2;
+        const offsetX = newWidth / 2;
+        const offsetY = newHeight / 2;
+        for (let ix = -1; ix <= 1; ix += 2) {
+          for (let iy = -1; iy <= 1; iy += 2) {
+            const nx = body.position.x + ix * offsetX;
+            const ny = body.position.y + iy * offsetY;
+            const newBlock = Bodies.rectangle(
+              nx, ny, newWidth, newHeight,
+              { restitution: 0.2, friction: 0.5, render: { fillStyle: color } }
+            );
+            const dx = nx - bx;
+            const dy = ny - by;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const forceMag = 0.03 * (1 - Math.min(dist / radius, 1)) + (Math.random()-0.5)*0.01;
+            const force = Vector.mult(Vector.normalise({x: dx, y: dy}), forceMag);
+            Body.applyForce(newBlock, {x: nx, y: ny}, force);
+            Composite.add(world, newBlock);
+          }
+        }
+      });
+
+      Composite.remove(world, bombBody);
+    }
+
+    // 連鎖爆弾アイコン初期化
+    for(let i=2;i<=chainBombCount;i++){
+      document.getElementById('chain-bomb-'+i).classList.add('chain-bomb-disabled');
+    }
+    document.getElementById('chain-bomb-1').classList.remove('chain-bomb-disabled');
+  </script>
+</body>
+</html>
