@@ -23,9 +23,12 @@
       margin-bottom: 2em;
     }
     .apps-section {
-      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      align-items: center; /* 中央揃え */
+      max-width: 100vw;
       margin: 0 auto;
-      text-align: left;
+      text-align: center;
     }
     .apps-title {
       font-size: 1.6em;
@@ -42,6 +45,7 @@
       list-style: none;
       padding: 0;
       justify-content: center;
+      margin: 0;
     }
     .app-card {
       background: #fff;
@@ -81,19 +85,19 @@
       background: #005fa3;
     }
     @media (max-width: 600px) {
-    .app-list {
-      flex-direction: column;
-      gap: 1em;
-      align-items: center; /* 追加：カードを中央に揃える */
+      .app-list {
+        flex-direction: column;
+        gap: 1em;
+        align-items: center;
+      }
+      .app-card {
+        min-width: 0;
+        width: 100%;
+        padding: 1em;
+        box-sizing: border-box;
+      }
     }
-    .app-card {
-      min-width: 0;
-      width: 100%;
-      padding: 1em;
-      box-sizing: border-box; /* 追加：余白を含めて幅100%に */
-    }
-  }
-</style>
+  </style>
 </head>
 <body>
   <h1>APPLABO</h1>
@@ -108,12 +112,12 @@
         <div class="app-desc">平たい石を川に投げて何回ジャンプさせられるか？！</div>
         <a href="https://yoshy5128-sketch.github.io/app/stone/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
       </li>
-       <li class="app-card">
+      <li class="app-card">
         <div class="app-name">Bomber Simulater</div>
         <div class="app-desc">爆撃シミュレーター 地上の物体をすべて破壊せよ！</div>
         <a href="https://yoshy5128-sketch.github.io/app/bomber/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
       </li>
-         <li class="app-card">
+      <li class="app-card">
         <div class="app-name">マニュアル車シミュレーター（クラッチ無し）</div>
         <div class="app-desc">マニュアル車のギアチェンジを楽しめる（まだ未完成）</div>
         <a href="https://yoshy5128-sketch.github.io/app/manual/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
@@ -129,6 +133,3 @@
   </section>
 </body>
 </html>
-
-
-
