@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>爆撃ゲーム</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+    canvas {
+      display: block;
+      background: transparent;
+      touch-action: manipulation;
+    }
+
+    #stageLabel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 20px;
+      color: white;
+      z-index: 5;
+    }
+
+    #startScreen {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      z-index: 10;
+    }
+
+    #startImage {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+ #startButton {
+  position: absolute;
+  bottom: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 24px;
+  padding: 12px 24px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+#startDescription {
+  position: absolute;
+  bottom: 14%; /* ← ボタンの高さ分下に配置 */
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: white;
+  text-align: center;
+  background: rgba(0,0,0,0.4);
+  padding: 6px 12px;
+  border-radius: 6px;
+  z-index: 2;
+  white-space: pre-line; /* ← 明示的な改行を反映 */
+  line-height: 1.4;
+}
+  </style>
+</head>
+<body>
+  <div id="stageLabel">Stage 1</div>
+
+  <div id="startScreen">
+   
+  <img src="bomber.jpg" id="startImage" />
+  <button id="startButton">爆撃開始</button>
+  <div id="startDescription">
+    爆撃機から爆弾をまき散らして<br>地上のものを一つ残らず破壊せよ！
+  </div>
+</div>
+
+  <canvas id="canvas"></canvas>
+
+  <audio id="downSound" src="down.mp3" preload="auto"></audio>
+  <audio id="expSound" src="exp.mp3" preload="auto"></audio>
+  <audio id="expbmSound" src="expbm.mp3" preload="auto"></audio>
+  <audio id="bgSound" src="29.mp3" preload="auto" loop></audio>
+
+  <script>
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const downSound = document.getElementById("downSound");
+    const expSound = document.getElementById("expSound");
+    const expbmSound = document.getElementById("expbmSound");
+    const bgSound = document.getElementById("bgSound");
+
+    const bombs = [];
+    const scars = [];
+    const gravity = 0.02;
+    const impactY = canvas.height * 0.75;
+    const scrollSpeed = 0.5;
+
+    const buildings = [];
+    const tanks = [];
+    const iGroup = [];
+    let stage = 1;
+
+    // 地面色の定義と現在の色
+    const groundColors = ["#DEB887", "#228B22", "#A9A9A9"];
+    let currentGroundColor = groundColors[0];
+
+    // スマホ対応のスケール係数
+    const scale = Math.min(window.innerWidth / 800, 1.5);
+
+    // 衝突予測関数（建物・戦車・i群れ共通）
+    function willCollide(objA, objB) {
+      const nextY = objA.y + objA.speed;
+      return (
+        objA.x < objB.x + (objB.w || 10 * scale) &&
+        objA.x + (objA.w || 10 * scale) > objB.x &&
+        nextY < objB.y + (objB.h || 20 * scale) &&
+        nextY + (objA.h || 20 * scale) > objB.y
+      );
+    }
+
+    function generateStageObjects() {
+      buildings.length = 0;
+      tanks.length = 0;
+      iGroup.length = 0;
+
+      currentGroundColor = groundColors[(stage - 1) % groundColors.length];
+
+      for (let i = 0; i < 20 + stage * 2; i++) {
+        buildings.push({
+          x: Math.random() * canvas.width,
+          y: -i * 180 * scale,
+          w: (40 + Math.random() * 40) * scale,
+          h: (60 + Math.random() * 60) * scale,
+          color: "#888888",
+          destroyed: false,
+          opacity: 1.0,
+          visible: true
+        });
+      }
+
+      for (let i = 0; i < 5 + stage; i++) {
+        tanks.push({
+          x: Math.random() * (canvas.width - 20 * scale),
+          y: -i * 400 * scale - 200 * scale,
+          w: 20 * scale, h: 30 * scale,
+          turretW: 14 * scale, turretH: 14 * scale,
+          barrelW: 4 * scale, barrelH: 14 * scale,
+          speed: 0.8 + Math.random() * 1.2,
+          destroyed: false,
+          opacity: 1.0,
+          visible: true,
+          avoidX: 0
+        });
+      }
+
+      for (let i = 0; i < 6 + stage; i++) {
+        iGroup.push({
+          x: canvas.width / 2 + (Math.random() * 60 - 30) * scale,
+          y: -i * 100 * scale - 100 * scale,
+          fontSize: 20 * scale,
+          speed: scrollSpeed + Math.random() * 0.3,
+          destroyed: false,
+          opacity: 1.0,
+          visible: true,
+          avoidX: 0
+        });
+      }
+
+      document.getElementById("stageLabel").textContent = `Stage ${stage}`;
+    }
+    document.getElementById("startButton").addEventListener("click", () => {
+      document.getElementById("startScreen").style.display = "none";
+      bgSound.volume = 0.4;
+      bgSound.play();
+      generateStageObjects();
+      loop(); // ゲーム開始
+    });
+
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const tapX = e.clientX - rect.left;
+
+      bombs.push({
+        x: tapX,
+        y: canvas.height * 0.3,
+        size: 40 * scale,
+        vy: 0,
+        exploded: false,
+        explosionSize: 0,
+        explosionY: null,
+        opacity: 1.0,
+        soundPlayed: false,
+        hitTarget: false // ← 明示的に初期化
+      });
+
+      downSound.currentTime = 0;
+      downSound.play();
+    });
+
+    function checkStageClear() {
+      const allDestroyed =
+        buildings.every(b => b.destroyed) &&
+        tanks.every(t => t.destroyed) &&
+        iGroup.every(i => i.destroyed);
+
+      if (allDestroyed) {
+        stage++;
+        generateStageObjects();
+      }
+    }
+
+    function drawGround() {
+      ctx.fillStyle = currentGroundColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height); // ← 全面塗りつぶしでズレ防止
+    }
+
+    function drawScars() {
+      scars.forEach(scar => {
+        scar.y += scrollSpeed;
+        ctx.save();
+        ctx.globalAlpha = scar.opacity;
+        ctx.fillStyle = "black";
+        ctx.beginPath();
+        ctx.arc(scar.x, scar.y, scar.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+    function drawBuildings() {
+      buildings.forEach(b => {
+        if (!b.visible) return;
+        b.y += scrollSpeed;
+        if (b.y > canvas.height + b.h && !b.destroyed) {
+          b.y = -150 * scale;
+          b.x = Math.random() * canvas.width;
+        }
+        if (b.destroyed) {
+          b.opacity -= 0.02;
+          if (b.opacity <= 0) {
+            b.visible = false;
+            return;
+          }
+        }
+        ctx.save();
+        ctx.globalAlpha = b.opacity;
+        ctx.fillStyle = b.color;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.restore();
+      });
+    }
+
+    function drawTanks() {
+      tanks.forEach(t => {
+        if (!t.visible || t.destroyed) return;
+
+        let avoiding = false;
+
+        buildings.forEach(b => {
+          if (!b.visible || b.destroyed) return;
+          if (willCollide(t, b)) {
+            avoiding = true;
+            const direction = t.x < b.x ? -1 : 1;
+            t.avoidX += direction * 0.5 * scale;
+          }
+        });
+
+        tanks.forEach(other => {
+          if (other === t || !other.visible || other.destroyed) return;
+          if (willCollide(t, other)) {
+            avoiding = true;
+            const direction = t.x < other.x ? -1 : 1;
+            t.avoidX += direction * 0.3 * scale;
+          }
+        });
+
+        t.x += t.avoidX;
+        t.avoidX *= 0.9;
+
+        if (!avoiding) {
+          t.y += t.speed;
+        }
+
+        if (t.y > canvas.height + t.h) {
+          t.y = -200 * scale;
+          t.x = Math.random() * canvas.width;
+        }
+
+        t.opacity -= t.destroyed ? 0.02 : 0;
+        if (t.opacity <= 0) {
+          t.visible = false;
+          return;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = t.opacity;
+        ctx.fillStyle = "#9A9A6E";
+        ctx.fillRect(t.x, t.y, t.w, t.h);
+        const turretX = t.x + t.w / 2 - t.turretW / 2;
+        const turretY = t.y + t.h / 2 - t.turretH / 2;
+        ctx.fillStyle = "#6E6E4B";
+        ctx.fillRect(turretX, turretY, t.turretW, t.turretH);
+        const barrelX = turretX + t.turretW / 2 - t.barrelW / 2;
+        const barrelY = turretY + t.turretH;
+        ctx.fillRect(barrelX, barrelY, t.barrelW, t.barrelH);
+        ctx.restore();
+      });
+    }
+
+    function drawIGroup() {
+      iGroup.forEach(i => {
+        if (!i.visible || i.destroyed) return;
+
+        let avoiding = false;
+
+        buildings.forEach(b => {
+          if (!b.visible || b.destroyed) return;
+          if (willCollide(i, b)) {
+            avoiding = true;
+            const direction = i.x < b.x ? -1 : 1;
+            i.avoidX += direction * 0.5 * scale;
+          }
+        });
+
+        i.x += i.avoidX;
+        i.avoidX *= 0.9;
+
+        if (!avoiding) {
+          i.y += i.speed;
+        }
+
+        if (i.y > canvas.height + 20 * scale) {
+          i.y = -100 * scale;
+          i.x = canvas.width / 2 + (Math.random() * 60 - 30) * scale;
+        }
+
+        i.opacity -= i.destroyed ? 0.02 : 0;
+        if (i.opacity <= 0) {
+          i.visible = false;
+          return;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = i.opacity;
+        ctx.fillStyle = "#6E6E4B";
+        ctx.font = `bold ${i.fontSize}px sans-serif`;
+        ctx.fillText("i", i.x, i.y);
+        ctx.restore();
+      });
+    }
+    function updateBombs() {
+      bombs.forEach(bomb => {
+        if (!bomb.exploded) {
+          bomb.vy += gravity;
+          bomb.y += bomb.vy;
+          bomb.size *= 0.98;
+
+          if (bomb.y >= impactY) {
+            bomb.y = impactY;
+            bomb.exploded = true;
+            bomb.explosionSize = bomb.size * 1.5;
+            bomb.explosionY = impactY;
+
+            let hit = false;
+            [...buildings, ...tanks, ...iGroup].forEach(obj => {
+              if (!obj.visible || obj.destroyed) return; // ← 破壊済み除外
+              const ox = obj.x + (obj.w ? obj.w / 2 : 0);
+              const oy = obj.y + (obj.h ? obj.h / 2 : 10 * scale);
+              const dx = bomb.x - ox;
+              const dy = bomb.explosionY - oy;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              if (distance < 50 * scale) {
+                obj.destroyed = true;
+                hit = true;
+              }
+            });
+
+            bomb.hitTarget = hit; // ← フラグは1回だけ設定
+            scars.push({ x: bomb.x, y: impactY, size: 10 * scale, opacity: 0.6 });
+
+            if (!bomb.soundPlayed) {
+              if (bomb.hitTarget === true) {
+                expbmSound.currentTime = 0;
+                expbmSound.play();
+              } else {
+                expSound.currentTime = 0;
+                expSound.play();
+              }
+              bomb.soundPlayed = true;
+            }
+          }
+
+          ctx.fillStyle = "black";
+          ctx.beginPath();
+          ctx.arc(bomb.x, bomb.y, bomb.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (bomb.opacity > 0) {
+          bomb.explosionSize += 2 * scale;
+          bomb.explosionY += scrollSpeed;
+          bomb.opacity -= 0.01;
+          ctx.save();
+          ctx.globalAlpha = bomb.opacity;
+          ctx.fillStyle = bomb.hitTarget === true ? "orange" : "yellow";
+          ctx.beginPath();
+          ctx.arc(bomb.x, bomb.explosionY, bomb.explosionSize, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      });
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGround();
+      drawScars();
+      drawBuildings();
+      drawTanks();
+      drawIGroup();
+      updateBombs();
+      checkStageClear();
+      requestAnimationFrame(loop);
+    }
+  </script>
+</body>
+</html>
