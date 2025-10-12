@@ -56,22 +56,6 @@
   cursor: pointer;
   z-index: 2;
 }
-
-#startDescription {
-  position: absolute;
-  bottom: 5%; /* ← ボタンの高さ＋余白分下へ */
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 13px;
-  color: white;
-  text-align: center;
-  background: rgba(0,0,0,0.4);
-  padding: 6px 12px;
-  border-radius: 6px;
-  z-index: 2;
-  white-space: pre-line;
-  line-height: 1.4;
-}
   </style>
 </head>
 <body>
@@ -80,9 +64,6 @@
 <div id="startScreen">
   <img src="bomber.jpg" id="startImage" />
   <button id="startButton">爆撃開始</button>
-  <div id="startDescription">
-    爆撃機から爆弾をまき散らして<br>地上のものを一つ残らず破壊せよ！
-  </div>
 </div>
 
   <canvas id="canvas"></canvas>
@@ -437,4 +418,5 @@
 </body>
 
 </html>
+
 
