@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ジャンケンポン！あっちむいてホイ！</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: sans-serif;
+      background: #f0f0f0;
+      touch-action: none;
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+    #janken-phase,
+    #hoi-phase,
+    #hand-display {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #janken-text, #hoi-text {
+      font-size: 1.50rem;
+      margin: 20px;
+      text-align: center;
+      transition: scale 0.2s ease;
+    }
+    #hand-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+    #hand-buttons button {
+      font-size: 2rem;
+      padding: 10px 20px;
+    }
+    #hand-display {
+      height: 200px;
+      display: none;
+    }
+    #player-hand, #ai-hand {
+      font-size: 4rem;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    #player-hand {
+      bottom: 0px;
+    }
+    #ai-hand {
+      top: 0px;
+      transform: translateX(-50%) rotate(180deg);
+      opacity: 0.7;
+    }
+    #swipe-box {
+      width: 180px;
+      height: 180px;
+      background: #fff;
+      border: 2px solid #333;
+      margin: 20px;
+      touch-action: none;
+      position: relative;
+    }
+    #hoi-result {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    #ai-box, #player-box {
+      font-size: 3rem;
+      margin: 4px;
+      transition: transform 0.3s ease;
+    }
+    #result {
+      font-size: 1.4rem;
+      margin-top: 2px;
+      text-align: center;
+    }
+    @keyframes gestureMove {
+      0%   { transform: translateY(0) scale(1); opacity: 1; }
+      50%  { transform: translateY(-20px) scale(1.3); opacity: 1; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    .gesture-animate {
+      animation: gestureMove 0.4s ease;
+    }
+  </style>
+</head>
+<body>
+  <div id="janken-phase">
+    <div id="janken-text">あっちむいてホイ</div>
+    <div id="hand-buttons">
+      <button data-hand="グー">✊</button>
+      <button data-hand="チョキ">✌️</button>
+      <button data-hand="パー">🖐️</button>
+    </div>
+  </div>
+
+  <div id="hand-display">
+    <div id="ai-hand">✊</div>
+    <div id="player-hand">✊</div>
+  </div>
+
+  <div id="hoi-phase" style="display:none;">
+    <div id="hoi-text">あっちむいて…</div>
+    <div id="hoi-result">
+      <div id="ai-box"></div>
+      <div id="player-box"></div>
+      <div id="result"></div>
+    </div>
+    <div id="swipe-box"></div>
+  </div>
+
+ <script>
+let playerHand = null;
+let aiHand = null;
+let swipeDirection = null;
+let aiDirection = null;
+let jankenResult = null;
+let startX, startY;
+let canInputDirection = false;
+let isAikoLoop = false;
+
+const jankenText = document.getElementById("janken-text");
+const hoiText = document.getElementById("hoi-text");
+const resultText = document.getElementById("result");
+const swipeBox = document.getElementById("swipe-box");
+
+function playSound(id, callback) {
+  const audio = new Audio(id + ".mp3");
+  audio.play();
+  if (callback) {
+    audio.addEventListener("ended", () => {
+      callback();
+    });
+  }
+}
+
+function startJankenSequence(callback) {
+  const texts = ["ジャン", "ケン"];
+  const ids = ["jan", "ken"];
+  let i = 0;
+  const interval = setInterval(() => {
+    jankenText.textContent = texts[i];
+    playSound(ids[i]);
+    jankenText.style.scale = "1.2";
+    setTimeout(() => jankenText.style.scale = "1", 200);
+    i++;
+    if (i === texts.length) {
+      clearInterval(interval);
+      setTimeout(callback, 600);
+    }
+  }, 600);
+}
+
+document.querySelectorAll("#hand-buttons button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    playerHand = btn.dataset.hand;
+    document.querySelectorAll("#hand-buttons button").forEach(b => b.disabled = true);
+    aiHand = ["グー", "チョキ", "パー"][Math.floor(Math.random() * 3)];
+    jankenResult = getJankenResult(playerHand, aiHand);
+
+    if (isAikoLoop) {
+      playSound("sho");
+      jankenText.textContent = "しょ！";
+      showHandsThenJudge();
+    } else {
+      startJankenSequence(() => {
+        playSound("pon");
+        jankenText.textContent = "ポン！";
+        showHandsThenJudge();
+      });
+    }
+  });
+});
+
+function getJankenResult(p, a) {
+  if (p === a) return "draw";
+  if ((p === "グー" && a === "チョキ") || (p === "チョキ" && a === "パー") || (p === "パー" && a === "グー")) {
+    return "win";
+  }
+  return "lose";
+}
+
+function showHandsThenJudge() {
+  const handIcons = { "グー": "✊", "チョキ": "✌️", "パー": "🖐️" };
+  document.getElementById("player-hand").textContent = handIcons[playerHand];
+  document.getElementById("ai-hand").textContent = handIcons[aiHand];
+  document.getElementById("janken-phase").style.display = "none";
+  document.getElementById("hand-display").style.display = "flex";
+
+  setTimeout(() => {
+    document.getElementById("hand-display").style.display = "none";
+
+    if (jankenResult === "draw") {
+      isAikoLoop = true;
+      document.getElementById("janken-phase").style.display = "flex";
+      jankenText.textContent = "あいこで";
+      document.querySelectorAll("#hand-buttons button").forEach(b => b.disabled = true);
+      playSound("aikode", () => {
+        document.querySelectorAll("#hand-buttons button").forEach(b => b.disabled = false);
+      });
+      playerHand = null;
+    } else {
+      isAikoLoop = false;
+      document.getElementById("hoi-phase").style.display = "flex";
+      hoiText.textContent = "あっちむいて…";
+      playSound("att", () => {
+        canInputDirection = true;
+        setupSwipe();
+      });
+    }
+  }, 1000);
+}
+    function setupSwipe() {
+      swipeBox.addEventListener("mousedown", e => {
+        startX = e.clientX;
+        startY = e.clientY;
+      }, { once: true });
+
+      swipeBox.addEventListener("mouseup", e => {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        swipeDirection = getDirection(dx, dy);
+        handleHoi();
+      }, { once: true });
+
+      swipeBox.addEventListener("touchstart", e => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      }, { once: true });
+
+      swipeBox.addEventListener("touchend", e => {
+        const dx = e.changedTouches[0].clientX - startX;
+        const dy = e.changedTouches[0].clientY - startY;
+        swipeDirection = getDirection(dx, dy);
+        handleHoi();
+      }, { once: true });
+    }
+
+    window.addEventListener("keydown", e => {
+      if (!canInputDirection || document.getElementById("hoi-phase").style.display === "none") return;
+
+      const keyMap = {
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right"
+      };
+
+      if (keyMap[e.key]) {
+        swipeDirection = keyMap[e.key];
+        handleHoi();
+      }
+    });
+
+    function getDirection(dx, dy) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        return dx > 0 ? "right" : "left";
+      } else {
+        return dy > 0 ? "down" : "up";
+      }
+    }
+
+    function handleHoi() {
+      if (!canInputDirection) return;
+      canInputDirection = false;
+      aiDirection = ["up", "down", "left", "right"][Math.floor(Math.random() * 4)];
+      playSound("hoi");
+
+      swipeBox.style.visibility = "hidden";
+      showHoiResult(false);
+
+      const targetId = jankenResult === "win" ? "player-box" : "ai-box";
+      animateExistingGesture(targetId);
+    }
+
+    function animateExistingGesture(targetId) {
+      const el = document.getElementById(targetId);
+      el.classList.add("gesture-animate");
+      setTimeout(() => {
+        el.classList.remove("gesture-animate");
+      }, 400);
+    }
+
+    function showHoiResult(isLate) {
+      hoiText.textContent = "ホイ！";
+      hoiText.style.scale = "1.3";
+      setTimeout(() => hoiText.style.scale = "1", 200);
+
+      const arrows = {
+        up: "⬆️",
+        down: "⬇️",
+        left: "⬅️",
+        right: "➡️"
+      };
+      const fingers = {
+        up: "👆",
+        down: "👇",
+        left: "👈",
+        right: "👉"
+      };
+
+      const match = swipeDirection === aiDirection;
+      let resultMsg = "";
+
+      if (isLate) {
+        resultMsg = "後出し → 敗北…";
+      } else if (jankenResult === "win") {
+        resultMsg = match ? "やった〜！あなたの勝ち！" : "くそ〜！もう一回！";
+        document.getElementById("ai-box").textContent = arrows[aiDirection];
+        document.getElementById("player-box").textContent = fingers[swipeDirection];
+      } else {
+        resultMsg = match ? "うわ〜負けた！" : "よっしゃ！セーフ！";
+        document.getElementById("ai-box").textContent = fingers[aiDirection];
+        document.getElementById("player-box").textContent = arrows[swipeDirection];
+      }
+
+      resultText.textContent = resultMsg;
+      resultText.style.color = match || isLate ? "#d00" : "#333";
+      document.getElementById("hoi-result").style.display = "flex";
+
+      setTimeout(() => {
+        document.getElementById("hoi-result").style.display = "none";
+        resetGame();
+      }, match || isLate ? 2500 : 1500);
+    }
+
+    function resetGame() {
+      document.getElementById("janken-phase").style.display = "flex";
+      document.getElementById("hoi-phase").style.display = "none";
+      document.getElementById("hand-display").style.display = "none";
+      jankenText.textContent = "あっちむいてホイ";
+      hoiText.textContent = "あっちむいて…";
+      resultText.textContent = "";
+      document.getElementById("ai-box").textContent = "";
+      document.getElementById("player-box").textContent = "";
+      playerHand = null;
+      aiHand = null;
+      swipeDirection = null;
+      aiDirection = null;
+      jankenResult = null;
+      canInputDirection = false;
+      isAikoLoop = false;
+
+      swipeBox.style.visibility = "visible";
+
+      // ✅ 勝敗がついた後はすぐにボタンを有効化
+      document.querySelectorAll("#hand-buttons button").forEach(b => {
+        b.disabled = false;
+      });
+    }
+</script>
+</body>
+</html>
