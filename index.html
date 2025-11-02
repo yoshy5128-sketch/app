@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -22,19 +23,6 @@
       font-size: 1.2em;
       margin-bottom: 2em;
     }
-    /* ⭐ 追加: QRコード用のスタイル */
-    .qr-code {
-      margin-bottom: 2em; /* 下にスペースを追加 */
-    }
-
-    .qr-code img {
-      width: 150px; /* QRコードのサイズを調整 */
-      height: auto;
-      border: 1px solid #ccc; /* 任意: 枠線を追加 */
-      border-radius: 5px; /* 任意: 角を丸める */
-    }
-    /* ⭐ 追加終わり */
-
     .apps-section {
       display: flex;
       flex-direction: column;
@@ -116,14 +104,11 @@
   <h1>APPLABO</h1>
   <p>基本的にスマホ向けのWEBアプリです。一部PC対応もあり</p>
 
-  <div class="qr-code">
-    <img src="qr.png" alt="QRコード">
-    <p style="font-size: 1em; margin-top: 0.5em; color: #333;">このページへのQRコード</p>
-  </div>
-    <section class="apps-section">
+  <section class="apps-section">
     <div class="apps-title">アプリ一覧</div>
     <ul class="app-list">
-            <li class="app-card">
+      <!-- ここにアプリを追加していきます -->
+      <li class="app-card">
         <div class="app-name">石切りゲーム</div>
         <div class="app-desc">平たい石を川に投げて何回ジャンプさせられるか？！　PC不可</div>
         <a href="https://yoshy5128-sketch.github.io/app/stone/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
@@ -153,7 +138,14 @@
         <div class="app-desc">積み木を爆破して粉々にせよ！3秒で爆発する通常爆弾と4連鎖爆弾で壊しまくれ！　PC可</div>
         <a href="https://yoshy5128-sketch.github.io/app/tsumi" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
       </li>
-          </ul>
+      <!-- 追加例
+      <li class="app-card">
+        <div class="app-name">アプリ名</div>
+        <div class="app-desc">アプリの説明</div>
+        <a href="https://yoshy5128-sketch.github.io/app/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+      -->
+    </ul>
   </section>
 </body>
 </html>
