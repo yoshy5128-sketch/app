@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>遊び方 - 人生ゲーム</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #0056b3;
+            border-bottom: 2px solid #0056b3;
+            padding-bottom: 5px;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 1.3em;
+            border-bottom: 1px solid #0056b3;
+        }
+        ul {
+            list-style-type: disc;
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        .ball-type {
+            font-weight: bold;
+            color: #d9534f; /* Red for emphasis */
+        }
+        .ball-type.red { color: red; }
+        .ball-type.yellow { color: orange; }
+        .ball-type.blue { color: blue; }
+        .ball-type.pink { color: hotpink; }
+        .ball-type.black { color: black; }
+        a {
+            display: block;
+            margin-top: 30px;
+            color: #007bff;
+            text-decoration: none;
+            font-size: 1.1em;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Life Simulator - 遊び方</h1>
+
+        <p>ゲームエリアには4種類の不幸ボールが存在し、赤のボールをスワイプさせることであなたの人生が始まります。</p>
+        <p>不幸ボールは、互いに弾け合い、壁に当たれば反射してあなたの周りを縦横無尽に飛び交います。</p>
+
+        <p>さまざまな不幸が飛び交う中、あなたは右から左へと歩を進めはじめます。</p>
+        <p>左端にたどり着くことで、あなたはひとつ歳をとります。</p>
+        <p>あなたの動きを操作したり、止めたりすることは不可能です。</p>
+        <p>あなたは寿命が尽きるまで、右端から左端までの歩みを黙々と繰り返します。</p>
+        <p>その間には、さまざまな不幸が目の前に現れ、病気や怪我をしたり、事故に遭ったり、過度のストレスに苛まれたりもします。時には死神の囁きまでもが聞こえてきます。</p>
+
+        <h2>◆各ボールの種類◆</h2>
+        <ul>
+            <li><span class="ball-type red">赤色ボール</span>＝事故・怪我：-2</li>
+            <li><span class="ball-type yellow">黄色ボール</span>＝病気：-1</li>
+            <li><span class="ball-type blue">青色ボール</span>＝ストレス：-0.5</li>
+            <li><span class="ball-type pink">桃色ボール</span>＝幸運：運バリア出現</li>
+            <li><span class="ball-type black">黒色ボール</span>＝死神：死亡</li>
+        </ul>
+
+        <p>不幸ボールがあなたに当たる度に寿命のメーターは減っていきます。</p>
+        <p>ですが、幸運のボール当たると、あなたの周りには一定時間運のバリアが張られて、全ての不幸ボールから身を守ってくれます。</p>
+
+        <p>寿命は、MAX100から、ボールが当たる度にマイナスされます。</p>
+        <p>寿命が0になった時点で死亡が確定。</p>
+        <p>その時の年齢があなたの寿命となります。</p>
+
+        <h2>死神の出現</h2>
+        <p>時に黒いボールの死神が出現します。死神は他の不幸ボールと進路が重なった時、あなたに向きを変えて襲い掛かります。その時は残念ですが、人生途中でも死に至るでしょう。</p>
+
+        <a href="start.html">スタート画面に戻る</a>
+    </div>
+</body>
+</html>

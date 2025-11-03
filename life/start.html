@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人生ゲーム</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="status-display">
+            <div class="status-row">
+                <span id="age">年齢: 0</span>
+                <div id="life-gauge-container">
+                    <div id="life-gauge-fill"></div>
+                    <span id="life-value">100</span>
+                </div>
+                <button id="toggle-speed-button">SP×2</button>
+            </div>
+            <div id="event-log">
+                <!-- イベントログがここに表示されます -->
+            </div>
+        </div>
+        <div id="game-area">
+            <canvas id="gameCanvas"></canvas>
+            <button id="reincarnate-button" style="display: none;">転生する</button>
+        </div>
+    </div>
+    <script src="script.js?v=4"></script>
+</body>
+</html>
