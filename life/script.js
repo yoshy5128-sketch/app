@@ -38,9 +38,9 @@ const BACKGROUND_IMAGES = [
     { range: [3, 5], file: '02.png' },
     { range: [6, 12], file: '03.png' },
     { range: [13, 19], file: '04.png' },
-    { range: [20, 40], file: '05.png' },
-    { range: [41, 60], file: '06.png' },
-    { range: [61, 200], file: '07.png' }
+    { range: [20, 49], file: '05.png' },
+    { range: [50, 69], file: '06.png' },
+    { range: [70, 200], file: '07.png' }
 ];
 
 const loadedBackgroundImages = {};
@@ -100,7 +100,7 @@ function initGame(autoStart = false) {
     barrierActive = false;
     gameStarted = false;
     updateStatusDisplay();
-    addEventToLog('ゲーム開始！赤色のボールをスワイプして人生を始めよう！');
+    addEventToLog('赤色のボールをスワイプして人生を始めよう！');
     
     // Only create the initial red ball for swiping
     balls.push(createBall('RED', GAME_WIDTH / 2, GAME_HEIGHT / 2, 0, 0, BALL_RADIUS * 2));
@@ -183,7 +183,7 @@ function draw() {
 
 function getBallTypeName(type) {
     switch (type) {
-        case 'RED': return '怪我や事故';
+        case 'RED': return '怪我・事故';
         case 'YELLOW': return '病気';
         case 'BLUE': return 'ストレス';
         case 'PINK': return 'ラッキー';
@@ -336,7 +336,7 @@ function updateGame() {
 
             if (barrierActive) {
                 if (ball.type !== 'PINK') { // Only log if it's not a PINK ball
-                    addEventToLog(`運バリアが${getBallTypeName(ball.type)}をはじき返した！`);
+                    addEventToLog(`幸運バリアが${getBallTypeName(ball.type)}をはじき返した！`);
                 }
                 // Reflect ball
                 ball.vx *= -1;
@@ -350,7 +350,7 @@ function updateGame() {
                 if (ball.type === 'PINK') {
                     // Only activate barrier and log if it's not already active
                     if (!barrierActive) {
-                        addEventToLog('ラッキーボールに当たった！運バリア発生！');
+                        addEventToLog('ラッキーボールに当たった！幸運バリア発生！');
                         barrierActive = true;
                     }
                     clearTimeout(barrierTimer);
@@ -358,7 +358,7 @@ function updateGame() {
                     const currentBarrierDuration = (age >= 45) ? 3 * 1000 : BARRIER_DURATION;
                     barrierTimer = setTimeout(() => {
                         barrierActive = false;
-                        addEventToLog('運バリアが消滅しました。');
+                        addEventToLog('幸運バリアが消滅しました。');
                     }, currentBarrierDuration);
 
                 } else { // This is for non-pink balls when barrier is NOT active
@@ -368,9 +368,9 @@ function updateGame() {
                     } else {
                         life += ball.damage;
                         let eventText = '';
-                        if (ball.type === 'RED') eventText = '大怪我をした！';
+                        if (ball.type === 'RED') eventText = '怪我をした！';
                         if (ball.type === 'YELLOW') eventText = '病気にかかった！';
-                        if (ball.type === 'BLUE') eventText = '大きなストレスを感じた！';
+                        if (ball.type === 'BLUE') eventText = 'ストレスを感じた！';
 
                         addEventToLog(`${eventText} 寿命が${ball.damage}減少。`);
 
