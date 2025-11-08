@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ピッチング・シミュレーター</title>
+  <style>
+    body { margin: 0; background: #111; overflow: hidden; }
+    canvas { position: absolute; top: 0; left: 0; display: block; background: #222; z-index: -1; }
+    #startScreen, #howToPlayScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #1a1a1a;
+      background-image: url('start.jpg');
+      background-size: cover;
+      display: flex;
+      flex-direction: column;
+      justify-content: center; /* 変更 */
+      align-items: center;
+      text-align: center;
+      color: white;
+      font-family: 'Impact', sans-serif;
+      z-index: 10; /* Ensure start screen is above canvas */
+      padding: 20px; /* Add padding to the screen itself */
+      box-sizing: border-box; /* Include padding in the element's total width and height */
+      gap: 10px; /* 追加 */
+    }
+    #logo {
+      width: 80%; /* Responsive width */
+      max-width: 300px; /* Max width for larger screens */
+      height: auto; /* Maintain aspect ratio */
+      display: block; /* Ensure it's a block element */
+      margin-bottom: 40px; /* Maintain bottom margin */
+      transform: translateX(-0%); /* Shift even further to the left */
+    }
+    @keyframes bounce {
+      from { transform: skew(-10deg) translateY(-10px); }
+      to { transform: skew(-10deg) translateY(10px); }
+    }
+    .button {
+      font-size: 1.5em;
+      padding: 10px 20px;
+      /* margin-bottom: 10px; */ /* 削除 */
+      background-color: #ff4500;
+      border: 2px solid black;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .button:hover { transform: scale(1.1); }
+    #withoutBatterButton {
+        /* margin-top: 30px; */
+    }
+    #modeSwitchButton {
+        position: absolute;
+        top: 10px;
+        left: 100px; /* Adjusted position to be further left */
+        font-size: 0.6em;
+        padding: 4px 8px;
+        margin: 0;
+        background-color: white; 
+        border: 1px solid black; 
+        border-radius: 4px;
+        cursor: pointer;
+        display: none; 
+    }
+    #batterTypeSwitchButton {
+        position: absolute;
+        top: 10px;
+        right: 10px; /* Moved to right side */
+        font-size: 0.6em;
+        padding: 4px 8px;
+        margin: 0;
+        background-color: white; 
+        border: 1px solid black; 
+        border-radius: 4px;
+        cursor: pointer;
+        display: none; 
+    }
+    #batterTypeDisplay {
+        position: absolute;
+        top: 40px; /* Below the batter type switch button */
+        right: 10px; /* Aligned with batter type switch button */
+        font-size: 1.2em;
+        color: white;
+        font-family: sans-serif;
+        text-shadow: 1px 1px 0 black;
+        display: none;
+    }
+    #batterStanceSwitchButton {
+        position: absolute;
+        top: 10px;
+        left: 10px; /* Moved to left side */
+        font-size: 0.6em;
+        padding: 4px 8px;
+        margin: 0;
+        background-color: white; 
+        border: 1px solid black; 
+        border-radius: 4px;
+        cursor: pointer;
+        display: none; 
+    }
+    #batterStanceDisplay {
+        position: absolute;
+        top: 40px; /* Below the batter stance switch button */
+        left: 10px; /* Aligned with batter stance switch button */
+        font-size: 1.2em;
+        color: white;
+        font-family: sans-serif;
+        text-shadow: 1px 1px 0 black;
+        display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="startScreen">
+    <div id="logo"><img src="top.png" alt="ピッチングシミュレーター"></div>
+    <div class="button" id="withBatterButton">打者あり</div>
+    <div class="button" id="withoutBatterButton">打者なし</div>
+    <div class="button" id="howToPlayButton">遊び方</div>
+  </div>
+
+  <div id="howToPlayScreen" style="display: none;">
+    <h2 style="color: white; font-family: 'Impact', sans-serif; margin-bottom: 20px;">遊び方</h2>
+    <div style="text-align: left; max-width: 80%; margin-bottom: 30px; font-size: 1.2em; line-height: 1.6; text-shadow: 1px 1px 2px black; flex-grow: 1; overflow-y: auto;">
+      <p>このピッチングシミュレーターでは、指やマウスでスワイプしてボールを投げることができます。</p>
+      <h3>投球方法:</h3>
+      <ol>
+        <li>画面下部の水色の丸（投球ゾーン）内でスワイプを開始します。</li>
+        <li>指を離す（マウスを放す）とボールが投げられます。</li>
+        <li>スワイプの速さや軌道によって、ストレート、カーブ、スライダー、シンカー、フォークなどの球種を投げ分けることができます。</li>
+      </ol>
+      <h3>打者との対戦モード:</h3>
+      <p>「打者あり」モードでは、AIがボールを打ち返してきます。</p>
+      <ul>
+        <li><strong>打者タイプ切替:</strong> ノーマル打者と強打者を切り替えられます。</li>
+        <li><strong>構え切替:</strong> 右打者と左打者を切り替えられます。</li>
+      </ul>
+      <h3>目標:</h3>
+      <p>様々な球種を投げ分け、AI打者から三振を奪いましょう！</p>
+    </div>
+    <div class="button" id="backToStartButton">戻る</div>
+  </div>
+  <canvas id="gameCanvas" width="360" height="640"></canvas>
+  <button id="modeSwitchButton"></button>
+  <button id="batterTypeSwitchButton" style="display: none;"></button>
+  <button id="batterStanceSwitchButton" style="display: none;"></button>
+  <div id="batterTypeDisplay"></div>
+  <div id="batterStanceDisplay" style="display: none;"></div>
+  <script>
+    const startScreen = document.getElementById('startScreen');
+    const withBatterButton = document.getElementById('withBatterButton');
+    const withoutBatterButton = document.getElementById('withoutBatterButton');
+    const modeSwitchButton = document.getElementById('modeSwitchButton');
+    const batterTypeDisplay = document.getElementById('batterTypeDisplay');
+    const batterTypeSwitchButton = document.getElementById('batterTypeSwitchButton');
+    const batterStanceSwitchButton = document.getElementById('batterStanceSwitchButton');
+    const batterStanceDisplay = document.getElementById('batterStanceDisplay');
+    const howToPlayButton = document.getElementById('howToPlayButton');
+    const howToPlayScreen = document.getElementById('howToPlayScreen');
+    const backToStartButton = document.getElementById('backToStartButton');
+
+    const batterImg01 = new Image(); // Right-handed idle
+    batterImg01.src = "01.png";
+    const batterImg02 = new Image(); // Right-handed swing
+    batterImg02.src = "02.png";
+    const batterImg03 = new Image(); // Left-handed idle
+    batterImg03.src = "03.png";
+    const batterImg04 = new Image(); // Left-handed swing
+    batterImg04.src = "04.png";
+
+    console.log('withBatterButton:', document.getElementById('withBatterButton'));
+    console.log('withoutBatterButton:', document.getElementById('withoutBatterButton'));
+
+    let batterEnabled = false;
+    let currentBatterType = 'Normal'; 
+    const BATTER_TYPES = ['Normal', 'Power'];
+    let framesSinceLastPitch = 0; 
+    let pitchType = ""; 
+    let currentBatterImage = batterImg01; // Initialize with 01.png
+    let batterImageX = 0;
+    let batterImageY = 0;
+    let batterImageWidth = 0;
+    let batterImageHeight = 0;
+
+    let currentStance = 'Right'; // 'Right' or 'Left'
+    const BATTER_STANCES = ['Right', 'Left'];
+
+    withBatterButton.addEventListener('click', () => {
+      console.log('With Batter button clicked');
+      startGame(true);
+    });
+    withoutBatterButton.addEventListener('click', () => {
+      console.log('Without Batter button clicked');
+      startGame(false);
+    });
+    howToPlayButton.addEventListener('click', () => {
+      startScreen.style.display = 'none';
+      howToPlayScreen.style.display = 'flex';
+    });
+    backToStartButton.addEventListener('click', () => {
+      howToPlayScreen.style.display = 'none';
+      startScreen.style.display = 'flex';
+    });
+    modeSwitchButton.addEventListener('click', switchMode);
+    batterTypeSwitchButton.addEventListener('click', switchBatterType);
+    batterStanceSwitchButton.addEventListener('click', switchBatterStance);
+
+    function startGame(withBatter) {
+      console.log('startGame called with batter:', withBatter);
+      batterEnabled = withBatter;
+      startScreen.style.display = 'none';
+      modeSwitchButton.style.display = 'block';
+      batterTypeSwitchButton.style.display = withBatter ? 'block' : 'none'; // Show/hide batter type switch button
+      batterStanceSwitchButton.style.display = withBatter ? 'block' : 'none'; // Show/hide batter stance switch button
+      batterTypeDisplay.style.display = withBatter ? 'block' : 'none';
+      batterStanceDisplay.style.display = withBatter ? 'block' : 'none'; // Show/hide batter stance display
+      // Removed: batterImagesContainer.style.display = withBatter ? 'block' : 'none'; // Control batter images container visibility
+      updateModeSwitchButton();
+      updateBatterTypeSwitchButton(); 
+      updateBatterStanceSwitchButton(); // Update text for the new button
+      
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+            // Audio context resume for autoplay policy
+            if (catchSound.paused) {
+              catchSound.play().then(() => {
+                catchSound.pause();
+                catchSound.currentTime = 0;
+              }).catch(e => console.log("catchSound autoplay blocked:", e));
+            }
+            if (hitSound.paused) {
+              hitSound.play().then(() => {
+                hitSound.pause();
+                hitSound.currentTime = 0;
+              }).catch(e => console.log("hitSound autoplay blocked:", e));
+            }
+            resetGame();
+            loop();    }
+
+    function switchMode() {
+      batterEnabled = !batterEnabled;
+      modeSwitchButton.style.display = 'block';
+      batterTypeSwitchButton.style.display = batterEnabled ? 'block' : 'none'; 
+      batterStanceSwitchButton.style.display = batterEnabled ? 'block' : 'none'; // Show/hide batter stance switch button
+      batterTypeDisplay.style.display = batterEnabled ? 'block' : 'none';
+      batterStanceDisplay.style.display = batterEnabled ? 'block' : 'none'; // Show/hide batter stance display
+      // Removed: batterImagesContainer.style.display = batterEnabled ? 'block' : 'none'; // Control batter images container visibility
+      updateModeSwitchButton();
+      updateBatterTypeSwitchButton(); 
+      updateBatterStanceSwitchButton(); // Update text for the new button
+      resetGame();
+    }
+
+    function updateModeSwitchButton() {
+      if (batterEnabled) {
+        modeSwitchButton.textContent = '打者なしへ';
+      } else {
+        modeSwitchButton.textContent = '打者ありへ';
+      }
+    }
+
+    function updateBatterTypeSwitchButton() {
+        if (batterEnabled) {
+            batterTypeSwitchButton.textContent = `打者タイプ切替: ${currentBatterType === 'Power' ? 'ノーマル' : '強打者'}`;
+        }
+    }
+
+    function updateBatterStanceSwitchButton() {
+        if (batterEnabled) {
+            batterStanceSwitchButton.textContent = `構え切替: ${currentStance === 'Right' ? '左打者' : '右打者'}`;
+        }
+    }
+
+    function switchBatterStance() {
+      if (!batterEnabled) return;
+      const currentIndex = BATTER_STANCES.indexOf(currentStance);
+      const nextIndex = (currentIndex + 1) % BATTER_STANCES.length;
+      currentStance = BATTER_STANCES[nextIndex];
+      batterStanceDisplay.textContent = `構え: ${currentStance === 'Right' ? '右打者' : '左打者'}`;
+      updateBatterStanceSwitchButton();
+      resetGame();
+    }
+
+    function switchBatterType() {
+      if (!batterEnabled) return;
+      const currentIndex = BATTER_TYPES.indexOf(currentBatterType);
+      const nextIndex = (currentIndex + 1) % BATTER_TYPES.length;
+      currentBatterType = BATTER_TYPES[nextIndex];
+      batterTypeDisplay.textContent = `タイプ: ${currentBatterType === 'Power' ? '強打者' : 'ノーマル'}`;
+      currentBatterImage = (currentStance === 'Right') ? batterImg01 : batterImg03;
+
+      resetGame();
+    }
+
+    function handleEndOfPitch() { // Renamed from switchBatter
+      if (!batterEnabled) return;
+      // Only update display, don't switch batter type here
+      batterTypeDisplay.textContent = `タイプ: ${currentBatterType === 'Power' ? '強打者' : 'ノーマル'}`;
+      currentBatterImage = (currentStance === 'Right') ? batterImg01 : batterImg03;
+      resetGame(); // Crucial for preparing for the next pitch
+    }
+
+    function resetGame() {
+      swipeStart = null;
+      swipeEnd = null;
+      swipePath = [];
+      lastSwipePath = [];
+      isTouching = false;
+      ball = null;
+      ballCaught = false;
+      pitchSpeed = 0;
+      showSpeed = false;
+      framesSinceLastPitch = 0; 
+      pitchType = ""; 
+
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      
+      viewCircle.x = canvasWidth / 2 + 10;
+      viewCircle.y = canvasHeight / 2 + 190;
+      
+      moundTop = viewCircle.y - viewCircle.radius - 90;
+      moundBottom = canvasHeight;
+      mittStartY = moundTop - 45 * 2 - 20;
+      
+      mitt.x = canvasWidth / 2 + 10;
+      mitt.y = mittStartY;
+      
+      swing.state = 'idle';
+      swing.progress = 0;
+      swing.ellipse.cx = canvasWidth / 2;
+      swing.ellipse.cy = mittStartY + 50;
+
+      if (batterEnabled && batterTypeDisplay.textContent === "") {
+        batterTypeDisplay.textContent = `打者: ${currentBatterType === 'Power' ? '強打者' : 'ノーマル'}`;
+      }
+      if (batterEnabled && batterStanceDisplay.textContent === "") {
+        batterStanceDisplay.textContent = `構え: ${currentStance === 'Right' ? '右打者' : '左打者'}`;
+      }
+
+      // Set initial batter image state and position
+      if (batterEnabled) {
+        currentBatterImage = (currentStance === 'Right') ? batterImg01 : batterImg03;
+
+        batterImageHeight = 227.25; // From CSS
+        batterImageWidth = 151.5; // From CSS
+        
+        const mittWidth = 45; // From mitt.width
+
+        if (currentStance === 'Right') {
+            // Right-handed batter: positioned to the right of the mitt
+            const greenBoxRightEdgeX = canvas.width / 2 + 40;
+            batterImageX = greenBoxRightEdgeX - mittWidth + 10;
+        } else {
+            // Left-handed batter: positioned to the left of the mitt
+            const greenBoxLeftEdgeX = canvas.width / 2 - 40;
+            batterImageX = greenBoxLeftEdgeX - batterImageWidth + mittWidth + 10; // Adjust to be to the left
+        }
+
+        // Vertical position remains the same (lowered by one catcher mitt height)
+        const greenBoxBottomY = mittStartY + 40;
+        const mittHeight = 45; // From mitt.height
+        batterImageY = (greenBoxBottomY - batterImageHeight) + mittHeight;
+      }
+    }
+
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const bgImage = new Image();
+    bgImage.src = "background.jpg";
+
+    const catchSound = new Audio("katch.mp3");
+    catchSound.preload = "auto";
+
+    const hitSound = new Audio("bat.mp3");
+    hitSound.preload = "auto";
+
+    let viewCircle = {
+      x: canvas.width / 2,
+      y: canvas.height / 2 + 190,
+      radius: 30,
+    };
+
+    let moundTop = viewCircle.y - viewCircle.radius - 90;
+    let moundBottom = canvas.height;
+    let mittStartY = moundTop - 45 * 2;
+
+    let swipeStart = null, swipeEnd = null, swipePath = [], lastSwipePath = [], isTouching = false, isMouseDown = false;
+    let ball = null, ballCaught = false;
+    let pitchSpeed = 0;
+    let showSpeed = false;
+
+    let mittImpactFrames = 0;
+    let mittImpactOffset = { x: 0, y: 0 };
+
+    const mitt = {
+      x: canvas.width / 2,
+      y: mittStartY,
+      width: 45,
+      height: 45,
+      image: new Image(),
+      loaded: false,
+    };
+    mitt.image.onload = () => { mitt.loaded = true };
+    mitt.image.src = "mit.png";
+
+
+    window.addEventListener('resize', resetGame); 
+
+
+    canvas.addEventListener("mousedown", (e) => {
+      e.preventDefault(); 
+      console.log("mousedown event fired.");
+      if (isTouching) {
+        console.log("mousedown ignored: touch is active.");
+        return; 
+      }
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.clientX - rect.left;
+      const clientY = e.clientY - rect.top;
+
+      if (batterEnabled && framesSinceLastPitch > 0) {
+          console.log("mousedown ignored: batter enabled and framesSinceLastPitch > 0.");
+          return;
+      }
+
+      const rx = viewCircle.radius + 80;
+      const ry = viewCircle.radius + 120;
+      const cx = viewCircle.x, cy = viewCircle.y;
+      const ellipseCheck = ((clientX - cx) ** 2) / (rx ** 2) + ((clientY - cy) ** 2) / (ry ** 2);
+      console.log("mousedown ellipseCheck:", ellipseCheck);
+      if (ellipseCheck < 1) {
+        isMouseDown = true;
+        console.log("isMouseDown set to true.");
+        swipeStart = { x: clientX, y: clientY };
+        swipePath = [swipeStart];
+        lastSwipePath = [];
+        mitt.x = viewCircle.x;
+        mitt.y = mittStartY;
+        ballCaught = false;
+        ball = null;
+        pitchSpeed = 0;
+        showSpeed = false;
+        pitchType = "";
+      }
+    });
+
+    canvas.addEventListener("touchstart", (e) => {
+      e.preventDefault(); 
+      if (isMouseDown) return; // Ignore touch if mouse is active
+      const rect = canvas.getBoundingClientRect();
+      const t = e.touches[0];
+      const clientX = t.clientX - rect.left;
+      const clientY = t.clientY - rect.top;
+
+      if (batterEnabled && framesSinceLastPitch > 0) {
+          return;
+      }
+
+      const rx = viewCircle.radius + 80;
+      const ry = viewCircle.radius + 120;
+      const cx = viewCircle.x, cy = viewCircle.y;
+      const ellipseCheck = ((clientX - cx) ** 2) / (rx ** 2) + ((clientY - cy) ** 2) / (ry ** 2);
+            if (ellipseCheck < 1) {
+              isTouching = true;
+              swipeStart = { x: clientX, y: clientY };
+              swipePath = [swipeStart];
+              lastSwipePath = [];
+              mitt.x = viewCircle.x;
+              mitt.y = mittStartY;
+              ballCaught = false;
+              ball = null;
+              pitchSpeed = 0;
+              showSpeed = false;
+              pitchType = "";
+            }    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      e.preventDefault(); 
+      console.log("mousemove event fired. isMouseDown:", isMouseDown);
+      if (!isMouseDown) return;
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.clientX - rect.left;
+      const clientY = e.clientY - rect.top;
+      swipePath.push({ x: clientX, y: clientY });
+      console.log("swipePath length:", swipePath.length);
+    });
+
+    canvas.addEventListener("touchmove", (e) => {
+      e.preventDefault(); 
+      if (!isTouching) return;
+      const rect = canvas.getBoundingClientRect();
+      const t = e.touches[0];
+      const clientX = t.clientX - rect.left;
+      const clientY = t.clientY - rect.top;
+      swipePath.push({ x: clientX, y: clientY });
+    });
+
+    canvas.addEventListener("mouseup", (e) => {
+      console.log("mouseup event fired. isMouseDown:", isMouseDown);
+      if (!isMouseDown) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.clientX - rect.left;
+      const clientY = e.clientY - rect.top;
+      swipeEnd = { x: clientX, y: clientY };
+
+      const releaseDepth = swipeStart.y - swipeEnd.y;
+      const maxDepth = 300;
+      const clampedDepth = Math.max(0, Math.min(releaseDepth, maxDepth));
+      const normalizedPower = clampedDepth / maxDepth;
+
+      const isCircular = detectCircularSwipe(swipePath);
+      const spin = analyzeSpin(swipePath);
+      
+      let curve = isCircular ? spin.curve : 0;
+      
+      const lift = calculateLift(swipePath);
+
+      const inValidZone = swipeEnd.y >= moundTop - mitt.height * 2 && swipeEnd.y <= moundBottom;
+      if (clampedDepth > 10 && inValidZone && !isSwipePathTouchingForbiddenZone(swipePath)) {
+        const determinedPitchType = detectPitchType(normalizedPower, isCircular, lift, spin.curve);
+        pitchType = determinedPitchType;
+        launchBall(swipeEnd.x, swipeEnd.y, normalizedPower, curve, lift, determinedPitchType);
+      }
+
+      lastSwipePath = [...swipePath];
+      isMouseDown = false;
+      console.log("isMouseDown set to false.");
+    });
+
+    canvas.addEventListener("touchend", (e) => {
+      if (!isTouching) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const t = e.changedTouches[0];
+      const clientX = t.clientX - rect.left;
+      const clientY = t.clientY - rect.top;
+      swipeEnd = { x: clientX, y: clientY };
+
+      const releaseDepth = swipeStart.y - swipeEnd.y;
+      const maxDepth = 300;
+      const clampedDepth = Math.max(0, Math.min(releaseDepth, maxDepth));
+      const normalizedPower = clampedDepth / maxDepth;
+
+      const isCircular = detectCircularSwipe(swipePath);
+      const spin = analyzeSpin(swipePath);
+      
+      let curve = isCircular ? spin.curve : 0;
+      
+      const lift = calculateLift(swipePath);
+
+      const inValidZone = swipeEnd.y >= moundTop - mitt.height * 2 && swipeEnd.y <= moundBottom;
+      if (clampedDepth > 10 && inValidZone && !isSwipePathTouchingForbiddenZone(swipePath)) {
+        const determinedPitchType = detectPitchType(normalizedPower, isCircular, lift, spin.curve); // curveの生の値も渡す
+        pitchType = determinedPitchType;
+        launchBall(swipeEnd.x, swipeEnd.y, normalizedPower, curve, lift, determinedPitchType);
+      }
+
+      lastSwipePath = [...swipePath];
+      isTouching = false;
+    });
+
+    // ★ 修正関数: 球種判定ロジックにフォークを追加 ★
+    function detectPitchType(power, isCircular, lift, rawCurve) {
+        // power: 0.0 (弱) - 1.0 (強)
+        // isCircular: true/false (円形スワイプ)
+        // lift: -1.0 (落ちる) - 1.0 (浮き上がる)
+        // rawCurve: 横方向の変化の強さ (0.0に近いほどストレート)
+
+        // New Forkball detection logic: Double vertical swipe through the blue circle
+        const doubleVerticalSwipeDetected = detectForkballDoubleVerticalSwipe(swipePath);
+        if (doubleVerticalSwipeDetected) {
+            return "フォーク";
+        }
+
+        if (isCircular && lift < -0.3) {
+            return "カーブ";
+        }
+        
+        if (power > 0.7 && lift > 0.3) {
+            return "ストレート";
+        }
+
+        if (power > 0.5 && lift < -0.5) {
+            return "シンカー";
+        }
+
+        if (isCircular) {
+            return "スライダー";
+        }
+
+        return "ストレート";
+    }
+
+    function detectForkballDoubleVerticalSwipe(path) {
+        if (path.length < 15) return false; // Need enough points for a complex gesture
+
+        const circleLeft = viewCircle.x - viewCircle.radius;
+        const circleRight = viewCircle.x + viewCircle.radius;
+        const minMovement = 5; // Minimum pixel movement to consider a direction change
+
+        let downUpCount = 0;
+        let lastDir = 0; // 1 for down, -1 for up
+        let inViewCircle = false;
+
+        for (let i = 1; i < path.length; i++) {
+            const p = path[i];
+            const prevP = path[i-1];
+
+            // Check if the current point is within the horizontal bounds of the viewCircle
+            if (p.x >= circleLeft && p.x <= circleRight) {
+                if (!inViewCircle) { // Just entered view circle
+                    inViewCircle = true;
+                    lastDir = 0; // Reset direction when entering
+                }
+
+                const currentDir = p.y > prevP.y + minMovement ? 1 : (p.y < prevP.y - minMovement ? -1 : 0);
+
+                if (currentDir !== 0) { // If there's significant vertical movement
+                    if (lastDir === 0) { // First significant movement within this segment
+                        lastDir = currentDir;
+                    } else if (currentDir !== lastDir) { // Direction changed
+                        downUpCount++;
+                        lastDir = currentDir;
+                    }
+                }
+            } else {
+                // If we exit the view circle, reset the state for the next entry
+                if (inViewCircle) {
+                    inViewCircle = false;
+                    lastDir = 0;
+                }
+            }
+        }
+
+        // For "twice up and down", we need at least 2 full direction changes (e.g., down-up-down)
+        // This means 3 distinct vertical segments.
+        return downUpCount >= 2;
+    }
+    // ★--------------------------------------★
+
+    function detectCircularSwipe(path) {
+      if (path.length < 6) return false;
+      const center = viewCircle;
+      let totalAngle = 0;
+      for (let i = 1; i < path.length - 1; i++) {
+        const a = path[i - 1], b = path[i], c = path[i + 1];
+        const angle1 = Math.atan2(a.y - center.y, a.x - center.x);
+        const angle2 = Math.atan2(c.y - center.y, c.x - center.x);
+        let delta = angle2 - angle1;
+        if (delta > Math.PI) delta -= 2 * Math.PI;
+        if (delta < -Math.PI) delta += 2 * Math.PI;
+        totalAngle += delta;
+      }
+      return Math.abs(totalAngle) > Math.PI * 1.2;
+    }
+
+    function analyzeSpin(path) {
+      if (path.length < 3) return { curve: 0 };
+      const start = path[0], mid = path[Math.floor(path.length / 2)], end = path[path.length - 1];
+      const cross = (mid.x - start.x) * (end.y - start.y) - (mid.y - start.y) * (end.x - start.x);
+      const strength = Math.min(1, Math.abs(cross) / 5000);
+      const direction = cross > 0 ? -1 : 1;
+      return { curve: direction * strength * 0.1 };
+    }
+
+    function calculateLift(path) {
+      if (path.length < 4) return 0;
+      const first = path[0];
+      const mid = path[Math.floor(path.length / 2)];
+      const liftVector = mid.y - first.y;
+      return Math.max(-1, Math.min(1, -liftVector / 100));
+    }
+
+    function isSwipePathTouchingForbiddenZone(path) {
+        if (!path || path.length === 0) return false;
+
+        // Define the bottom edge of the green box
+        const boxSize = 60;
+        const greenBoxBottomY = mittStartY - boxSize / 2 + boxSize; // mittStartY - 30 + 60 = mittStartY + 30
+        const greenBoxLeftX = canvas.width / 2 - boxSize / 2; // canvas.width / 2 - 30
+        const greenBoxRightX = canvas.width / 2 + boxSize / 2; // canvas.width / 2 + 30
+        const tolerance = 5; // Pixels above/below the line to consider "touching"
+
+        for (let i = 0; i < path.length; i++) {
+            const p = path[i];
+
+            // Check if point touches the bottom edge of the green box
+            if (p.x >= greenBoxLeftX && p.x <= greenBoxRightX &&
+                Math.abs(p.y - greenBoxBottomY) < tolerance) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ★ 修正関数: launchBallにフォークの判定フラグを追加 ★
+    function launchBall(x, y, power, curve, lift, determinedPitchType) {
+      if (ball) {
+        ball = null;
+      }
+
+      const isFork = determinedPitchType === "フォーク";
+      // フォークは初速を少し抑える（フォークの握りによる）
+      const vzMultiplier = isFork ? 0.85 : 1.0; 
+      const vz = (6 + power * 10) * vzMultiplier;
+      pitchSpeed = Math.round(vz * 12);
+
+      const targetY = mitt.y;
+      const dy = targetY - y;
+      const flightFrames = 60;
+      const initialVy = (dy / flightFrames) - 0.5;
+      
+      ball = {
+        x, y, z: 0,
+        vz,
+        vx: curve * 10,
+        ax: curve,
+        vy: initialVy + lift * 5,
+        radius: 7.5,
+        isHit: false, 
+        type: determinedPitchType, 
+        isFork: isFork, // ★ フォークフラグ ★
+        isFoul: false // New flag for foul ball
+      };
+
+      // Removed: if (batterEnabled) { batterImage01.style.display = 'none'; batterImage02.style.display = 'block'; currentBatterImage = batterImage02; }
+    } // Closing brace for launchBall function
+    
+    function updateBall() {
+      if (!ball || ballCaught) return;
+
+      if (ball.isHit) {
+        ball.z += ball.vz;
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+        ball.vy += 0.2; 
+
+        const shrink = Math.pow(0.993, ball.z);
+        
+        if (ball.isFoul) {
+            // For foul balls, apply a very slow, constant shrinkage to simulate flying away
+            // without a strong perspective "zoom" effect.
+            ball.radius = Math.max(2, ball.radius * 0.995); // Shrink very slowly
+        } else {
+            // For regular hits, apply the normal perspective-based shrinkage
+            ball.radius = Math.max(2, 28 * shrink);
+        }
+
+      } else {
+        ball.vx += ball.ax;
+        ball.x += ball.vx;
+        ball.z += ball.vz;
+        const shrink = Math.pow(0.993, ball.z);
+        ball.radius = Math.max(2, 28 * shrink);
+        ball.y += ball.vy;
+        ball.vy += 0.3;
+        ball.vy *= 0.98;
+        ball.y -= ball.vz * 0.4;
+        
+        // ★ フォークボールの急激な落差ロジック ★
+        if (ball.isFork) {
+            // zがバッターに近いほど減速・落差を大きくする
+            const proximityFactor = Math.min(1.0, (180 - ball.z) / 100);
+            if (ball.z > 80 && proximityFactor > 0.1) {
+                ball.vz *= (1.0 - 0.02 * proximityFactor); // 速度を急激に落とす
+                ball.vy += (0.8 * proximityFactor); // 縦方向の落差を急激に大きくする
+            }
+        }
+        // ★--------------------------------------★
+
+        const bounceY = moundTop + mitt.height - 50;
+        if (ball.y + ball.radius > bounceY) {
+          ball.y = bounceY - ball.radius;
+          ball.vy *= -0.5;
+          if (Math.abs(ball.vy) < 1) ball.vy = 0;
+        }
+      }
+
+      if (ball.z < -500 || ball.z > 500 || ball.y > canvas.height + 100 || ball.y < -100 || ball.x < -100 || ball.x > canvas.width + 100) {
+        if (!ball.isHit && !ballCaught) { 
+            showSpeed = true;
+        }
+        ball = null;
+        return;
+      }
+    }
+
+    function updateMitt() {
+      if (!ball || ballCaught || ball.isHit) return; 
+      const dx = ball.x - mitt.x;
+      const dy = ball.y - mitt.y;
+      mitt.x += dx * 0.05;
+      mitt.y += dy * 0.05;
+      mitt.y = Math.max(moundTop - 180, Math.min(mitt.y, moundBottom - mitt.height / 2));
+    }
+
+    function checkCatch() {
+      if (!ball || ballCaught || ball.isHit) return; 
+      const minZ = 180 + Math.abs(ball.vx) * 2;
+      
+      if (ball.z < minZ) return;
+
+      const dist = Math.hypot(ball.x - mitt.x, ball.y - mitt.y);
+      if (dist < ball.radius + mitt.width / 2 + 10) {
+        ballCaught = true;
+        ball.x = mitt.x;
+        ball.y = mitt.y;
+        ball.z = 0;
+        ball.radius = 5;
+
+        if (!catchSound.paused) {
+          catchSound.pause();
+          catchSound.currentTime = 0;
+        }
+        catchSound.play().catch(() => {});
+
+        mittImpactFrames = 8;
+        mittImpactOffset.x = (ball.vx || 0) * 2;
+        mittImpactOffset.y = (ball.vy || 0) * 2;
+
+        showSpeed = true;
+        
+        if (batterEnabled) {
+             framesSinceLastPitch = 1; 
+        }
+      } else if (!batterEnabled) {
+          showSpeed = true;
+      } else {
+        if (ball.z > minZ + 20) {
+            showSpeed = true;
+            framesSinceLastPitch = 1; 
+        }
+      }
+    }
+
+
+    const swing = {
+      x: 0, y: 0, radius: 10,
+      state: 'idle', 
+      progress: 0,
+      ellipse: { cx: canvas.width / 2, cy: mittStartY + 50, rx: 100, ry: 40, rotation: -Math.PI / 12 },
+    };
+
+    function batterAI() {
+      if (!ball || swing.state !== 'idle' || ball.isHit) return;
+
+      const strikeZone = {
+        left: canvas.width / 2 - 40,
+        right: canvas.width / 2 + 40,
+        top: mittStartY - 40,
+        bottom: mittStartY + 40,
+      };
+
+      const timeToPlate = (180 - ball.z) / ball.vz;
+      if (timeToPlate > 0 && timeToPlate < 8) {
+        const predictedX = ball.x + ball.vx * timeToPlate;
+        const predictedY = ball.y + ball.vy * timeToPlate;
+
+        let errorScale = currentBatterType === 'Power' ? 30 : 50; // Power hitter has slightly more error, Normal hitter has more error
+        let swingChance = currentBatterType === 'Power' ? 0.9 : 0.7; // Power hitter swings more often
+
+        if (Math.random() < swingChance && // Add probability check
+          predictedX > strikeZone.left - 20 && predictedX < strikeZone.right + 20 &&
+          predictedY > strikeZone.top - 20 && predictedY < strikeZone.bottom + 20
+        ) {
+          swing.state = 'swinging';
+          swing.progress = 0;
+          if (batterEnabled) {
+            currentBatterImage = (currentStance === 'Right') ? batterImg02 : batterImg04; // Set batter image to swinging pose
+          }
+
+          const errorX = (Math.random() - 0.5) * errorScale;
+          const errorY = (Math.random() - 0.5) * errorScale;
+          swing.predictedX = predictedX + errorX;
+          swing.predictedY = predictedY + errorY;
+
+          swing.ellipse.cx = swing.predictedX;
+          swing.ellipse.cy = swing.predictedY;
+        }
+      }
+    }
+
+    function updateSwing() {
+      if (swing.state !== 'swinging') {
+                swing.ellipse.cx = canvas.width / 2;
+                swing.ellipse.cy = mittStartY + 50;
+                swing.ellipse.rotation = (currentStance === 'Right') ? -Math.PI / 12 : Math.PI / 12; // Adjust rotation for left-handed batter
+          return;
+      }
+
+      swing.progress += 0.15;
+      
+      const angle = (currentStance === 'Right') ? (-Math.PI / 2 - swing.progress) : (-Math.PI / 2 + swing.progress); 
+      
+      const xOnEllipse = swing.ellipse.rx * Math.cos(angle);
+      const yOnEllipse = swing.ellipse.ry * Math.sin(angle);
+
+      swing.x = swing.ellipse.cx + xOnEllipse * Math.cos(swing.ellipse.rotation) - yOnEllipse * Math.sin(swing.ellipse.rotation);
+      swing.y = swing.ellipse.cy + xOnEllipse * Math.sin(swing.ellipse.rotation) + yOnEllipse * Math.cos(swing.ellipse.rotation);
+
+      if (swing.progress > Math.PI) {
+        swing.state = 'idle';
+        swing.progress = 0;
+        if (batterEnabled) {
+            currentBatterImage = (currentStance === 'Right') ? batterImg01 : batterImg03; // Revert batter image to idle pose
+        }
+      }
+    }
+
+    function checkSwingHit() {
+      if (!ball || swing.state !== 'swinging' || ball.isHit) return;
+
+      const dist = Math.hypot(ball.x - swing.x, ball.y - swing.y);
+      if (dist < ball.radius + swing.radius) {
+        const hitAccuracy = Math.hypot(ball.x - swing.predictedX, ball.y - swing.predictedY);
+
+        const powerMultiplier = currentBatterType === 'Power' ? 2.5 : 2.2; 
+
+        const hitAccuracyThreshold = currentBatterType === 'Power' ? 50 : 40; // Power hitter has a larger hit zone
+
+        if (hitAccuracy < hitAccuracyThreshold) { 
+          ball.isHit = true;
+          ball.vz *= -powerMultiplier; 
+          if (hitAccuracy < 15) { 
+            ball.vx = (ball.x - swing.ellipse.cx) * 0.2 + (Math.random() - 0.5) * 20;
+            ball.vy = -12 - Math.random() * 8;
+          } else { 
+            ball.vx = (ball.x - swing.ellipse.cx) * 0.1 + (Math.random() - 0.5) * 15;
+            ball.vy = -10 - Math.random() * 6; 
+          }
+        } else { 
+          // Miss or Foul
+          if (Math.random() < 0.5) { // 50% chance for a foul ball
+            ball.isHit = true; // Treat as a hit for animation purposes
+            ball.isFoul = true; // New flag for foul ball
+            ball.vz = -5 - Math.random() * 5; // Reverse Z velocity for backward flight
+            ball.vx = (Math.random() - 0.5) * 10; // Random horizontal movement
+            ball.vy = -5 - Math.random() * 5; // Upward or slightly downward movement
+
+            if (!hitSound.paused) {
+              hitSound.pause();
+              hitSound.currentTime = 0;
+            }
+            hitSound.play().catch(() => {});
+            framesSinceLastPitch = 1; 
+
+            if (batterEnabled) {
+                currentBatterImage = batterImg02;
+            }
+          } else {
+            // True miss, no action needed for ball trajectory
+          }
+        }
+
+        if (ball.isHit) {
+            if (!hitSound.paused) {
+              hitSound.pause();
+              hitSound.currentTime = 0;
+            }
+            hitSound.play().catch(() => {});
+            framesSinceLastPitch = 1; 
+
+            if (batterEnabled) {
+                currentBatterImage = (currentStance === 'Right') ? batterImg02 : batterImg04;
+            }
+        }
+      }
+    }
+
+    function drawSwing() {
+      if (swing.state !== 'swinging') return;
+      ctx.beginPath();
+      ctx.ellipse(swing.ellipse.cx, swing.ellipse.cy, swing.ellipse.rx, swing.ellipse.ry, swing.ellipse.rotation, 0, 2 * Math.PI);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0)"; // White ellipse (transparent)
+      ctx.lineWidth = 10;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(swing.x, swing.y, swing.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 0, 0, 0)"; // Red circle (transparent)
+      ctx.fill();
+    }
+
+    function drawBall() {
+      if (!ball) return;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.strokeStyle = "rgba(0,0,0,0.6)";
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    function drawFieldBackground() {
+      console.log('drawFieldBackground called');
+      if (bgImage.complete) {
+        console.log('bgImage complete, drawing image');
+        ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+      } else {
+        console.log('bgImage not complete, drawing green rectangle');
+        ctx.fillStyle = "#0a0";
+        ctx.fillRect(0, 0, canvas.width, moundTop);
+      }
+    }
+
+    function drawPitcherMound() {}
+
+    function drawViewCircle() {
+      ctx.beginPath();
+      ctx.arc(viewCircle.x, viewCircle.y, viewCircle.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = "#0ff";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawGreenBox() {
+      const boxSize = 60;
+      const boxX = canvas.width / 2 - boxSize / 2 + 10;
+      const boxY = mittStartY - boxSize / 2;
+      ctx.beginPath();
+      ctx.rect(boxX, boxY, boxSize, boxSize);
+      ctx.strokeStyle = "#0f0";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawMitt() {
+      let offsetX = 0, offsetY = 0;
+      if (mittImpactFrames > 0) {
+        offsetX = mittImpactOffset.x * Math.sin((8 - mittImpactFrames) * Math.PI / 4);
+        offsetY = mittImpactOffset.y * Math.sin((8 - mittImpactFrames) * Math.PI / 4);
+        mittImpactFrames--;
+      }
+
+      const drawX = mitt.x + offsetX;
+      const drawY = mitt.y + offsetY;
+
+      if (mitt.loaded) {
+        ctx.drawImage(mitt.image, drawX - mitt.width / 2, drawY - mitt.height / 2, mitt.width, mitt.height);
+      } else {
+        ctx.beginPath();
+        ctx.arc(drawX, drawY, mitt.width / 2, 0, Math.PI * 2);
+        ctx.fillStyle = "#fa0";
+        ctx.fill();
+      }
+    }
+
+    function drawSwipePath(path) {
+      console.log("drawSwipePath called with path length:", path ? path.length : 0);
+      if (!path || path.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let i = 1; i < path.length; i++) {
+        ctx.lineTo(path[i].x, path[i].y);
+      }
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.50)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+    }
+
+    function drawPitchInfo() {
+      if (!showSpeed) return; 
+
+      const speedText = `${pitchSpeed} km/h`;
+      const typeText = pitchType; 
+
+      ctx.textAlign = "center";
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "black";
+      ctx.fillStyle = "white";
+
+      const x = canvas.width / 2;
+      
+      // 球種 (上に大きく表示)
+      ctx.font = "bold 32px sans-serif";
+      const typeY = 110; // Adjusted vertical position
+      ctx.strokeText(typeText, x, typeY);
+      ctx.fillText(typeText, x, typeY);
+
+      // スピード (下に小さく表示)
+      ctx.font = "bold 20px sans-serif";
+      const speedY = 140; // Adjusted vertical position
+      ctx.strokeText(speedText, x, speedY);
+      ctx.fillText(speedText, x, speedY);
+    }
+
+    function drawBatter() {
+      if (!batterEnabled) return;
+      if (currentBatterImage.complete) {
+        ctx.drawImage(currentBatterImage, batterImageX, batterImageY, batterImageWidth, batterImageHeight);
+      }
+    }
+
+    function updateGameLogic() {
+        if (batterEnabled && framesSinceLastPitch > 0) {
+            framesSinceLastPitch++;
+            if (framesSinceLastPitch > 90) { 
+                handleEndOfPitch();
+            }
+        }
+    }
+
+    function loop() {
+      console.log('Looping...');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawFieldBackground();
+      drawPitcherMound();
+      drawViewCircle();
+      drawGreenBox();
+      drawSwipePath(lastSwipePath);
+      
+      // --- 更新処理 ---
+      updateBall();
+      updateMitt();
+      if (batterEnabled) {
+        updateSwing();
+      }
+
+      // --- 判定処理 ---
+      if (batterEnabled) {
+        batterAI();
+        checkSwingHit();
+      }
+      checkCatch();
+      updateGameLogic(); 
+
+      // --- 描画処理 ---
+      drawMitt();
+      if (batterEnabled) {
+        drawSwing();
+      }
+      drawBatter(); // Draw batter before ball
+      drawBall();
+      drawPitchInfo(); 
+
+      requestAnimationFrame(loop);
+    }
+
+    window.onload = () => {
+        resetGame();
+    };
+  </script>
+</body>
+</html>
