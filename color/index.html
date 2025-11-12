@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カテゴリ別 コード作成用カラーピッカー (濃淡セレクター付き)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1 {
+            color: #1a1a1a;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        /* --- カテゴリタブ --- */
+        #category-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ccc;
+        }
+        .tab-button {
+            background-color: #e0e0e0;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s, color 0.2s;
+            border-radius: 5px 5px 0 0;
+            outline: none;
+        }
+        .tab-button:hover {
+            background-color: #d5d5d5;
+        }
+        .tab-button.active {
+            background-color: #007bff;
+            color: white;
+        }
+
+        /* --- カラーパレット --- */
+        #color-palette {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            padding: 20px 0;
+            border-radius: 8px;
+            background-color: #fff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            min-height: 200px;
+        }
+        .color-swatch {
+            height: 100px;
+            border-radius: 6px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 10px;
+            padding: 5px;
+            box-sizing: border-box;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.7);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .color-swatch:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        .color-swatch strong {
+            font-size: 12px;
+            line-height: 1.2;
+        }
+
+        /* --- 選択色情報 --- */
+        #selected-color-info {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #color-preview {
+            width: 100%;
+            height: 80px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        #code-output p {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #f9f9f9;
+            padding: 8px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        #code-output span {
+            font-family: 'Consolas', 'Courier New', monospace;
+            color: #333;
+        }
+        #code-output button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #code-output button:hover {
+            background-color: #218838;
+        }
+
+        /* --- 濃淡パレット --- */
+        #tone-palette-container {
+            margin-top: 20px;
+        }
+        #tone-palette {
+            display: flex;
+            justify-content: space-between;
+            overflow-x: auto;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .tone-swatch {
+            min-width: 40px;
+            height: 40px;
+            flex-grow: 1;
+            cursor: pointer;
+            position: relative;
+        }
+        .tone-swatch:hover {
+            opacity: 0.8;
+        }
+        .tone-swatch span {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            font-size: 8px;
+            color: white;
+            text-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎨 カテゴリ別 コード作成用カラーピッカー</h1>
+
+    <div id="category-tabs">
+        <button class="tab-button" data-category="rainbow">🌈 レインボー</button>
+        <button class="tab-button active" data-category="system">システムカラー</button>
+        <button class="tab-button" data-category="dark">ダーク系</button>
+        <button class="tab-button" data-category="gray">グレー系</button> 
+        <button class="tab-button" data-category="pop">ポップ系</button>
+        <button class="tab-button" data-category="cool">クール系</button> <button class="tab-button" data-category="nuance">ニュアンス系</button> 
+        <button class="tab-button" data-category="warm">ウォーム系</button>
+        <button class="tab-button" data-category="earth">アース系</button>
+    </div>
+
+    <div id="color-palette">
+        </div>
+
+    <hr>
+
+    <div id="selected-color-info">
+        <h2>選択中の色</h2>
+        <div id="color-preview" style="background-color: #FFFFFF;"></div>
+        
+        <div id="tone-palette-container">
+            <h3>🎨 濃淡バリエーション</h3>
+            <div id="tone-palette">
+                </div>
+        </div>
+
+        <div id="code-output">
+            <p>HEX: <span id="hex-code">#FFFFFF</span> <button onclick="copyCode('hex')">コピー</button></p>
+            <p>RGB: <span id="rgb-code">rgb(255, 255, 255)</span> <button onclick="copyCode('rgb')">コピー</button></p>
+            <p>HSL: <span id="hsl-code">hsl(0, 0%, 100%)</span> <button onclick="copyCode('hsl')">コピー</button></p>
+        </div>
+    </div>
+
+    <script>
+        // ----------------------------------------------------
+        // 1. カラーデータ定義 (クール系を拡張)
+        // ----------------------------------------------------
+        const colorData = {
+            rainbow: [
+                { name: "Red", hex: "#FF0000" }, { name: "Orange", hex: "#FFA500" }, { name: "Yellow", hex: "#FFFF00" },
+                { name: "Green", hex: "#008000" }, { name: "Cyan", hex: "#00FFFF" }, { name: "Blue", hex: "#0000FF" },
+                { name: "Indigo", hex: "#4B0082" }, { name: "Violet", hex: "#EE82EE" },
+            ],
+            system: [
+                { name: "Success (緑)", hex: "#28A745" }, { name: "Error (赤)", hex: "#DC3545" },
+                { name: "Info (青)", hex: "#007BFF" }, { name: "Warning (黄)", hex: "#FFC107" },
+            ],
+            dark: [
+                { name: "Navy Blue", hex: "#0A1931" }, { name: "Charcoal", hex: "#333333" },
+                { name: "Bordeaux", hex: "#800020" }, { name: "Deep Emerald", hex: "#00533C" },
+            ],
+            gray: [
+                { name: "ライトグレー", hex: "#F2F2F2" },
+                { name: "シルバー", hex: "#CCCCCC" },
+                { name: "ミディアムグレー", hex: "#999999" },
+                { name: "スレートグレー", hex: "#666666" },
+                { name: "チャコール", hex: "#444444" },
+                { name: "黒 (ブラック)", hex: "#000000" },
+            ],
+            pop: [
+                { name: "Shocking Pink", hex: "#FF1493" }, { name: "Vivid Yellow", hex: "#FFEB3B" },
+                { name: "Electric Blue", hex: "#00FFFF" }, { name: "Lime Green", hex: "#32CD32" },
+            ],
+            // 拡張: クール系
+            cool: [
+                { name: "Ice Blue", hex: "#ADD8E6" }, 
+                { name: "Royal Blue", hex: "#4169E1" },
+                { name: "ティール", hex: "#008080" }, // NEW
+                { name: "パウダーブルー", hex: "#B0E0E6" }, // NEW
+                { name: "ミッドナイトブルー", hex: "#191970" }, // NEW (ダーク系と重複しないように注意)
+            ],
+            nuance: [
+                { name: "スモーキーピンク", hex: "#D8BFD8" }, 
+                { name: "ダスティブルー", hex: "#A9BCD6" }, 
+                { name: "セージグリーン", hex: "#B2AC88" },
+                { name: "モーブ", hex: "#996699" },
+            ],
+            warm: [
+                { name: "Terracotta", hex: "#E2725B" }, 
+                { name: "Mustard", hex: "#FFD700" },
+                { name: "アプリコット", hex: "#FBCEB1" }, 
+                { name: "ラスティレッド", hex: "#8B0000" }, 
+            ],
+            earth: [
+                { name: "Moss Green", hex: "#8A9A5B" }, 
+                { name: "Khaki", hex: "#C3B091" },
+                { name: "セピア", hex: "#704214" }, 
+                { name: "ベージュ", hex: "#F5F5DC" }, 
+            ]
+        };
+
+        // DOM要素の取得
+        const palette = document.getElementById('color-palette');
+        const preview = document.getElementById('color-preview');
+        const hexOutput = document.getElementById('hex-code');
+        const rgbOutput = document.getElementById('rgb-code');
+        const hslOutput = document.getElementById('hsl-code');
+        const tonePalette = document.getElementById('tone-palette'); 
+        
+        // ----------------------------------------------------
+        // 2. カラーコード変換ユーティリティ
+        // ----------------------------------------------------
+
+        function hexToRgb(hex) {
+            const bigint = parseInt(hex.slice(1), 16);
+            const r = (bigint >> 16) & 255;
+            const g = (bigint >> 8) & 255;
+            const b = bigint & 255;
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function hexToHslArray(hex) {
+            let r = 0, g = 0, b = 0;
+            if (hex.length === 4) {
+                r = parseInt(hex[1] + hex[1], 16);
+                g = parseInt(hex[2] + hex[2], 16);
+                b = parseInt(hex[3] + hex[3], 16);
+            } else if (hex.length === 7) {
+                r = parseInt(hex.substring(1, 3), 16);
+                g = parseInt(hex.substring(3, 5), 16);
+                b = parseInt(hex.substring(5, 7), 16);
+            }
+            r /= 255, g /= 255, b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+
+            if (max === min) {
+                h = s = 0;
+            } else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+            return [h * 360, s * 100, l * 100];
+        }
+
+        function hslToHex(h, s, l) {
+            h /= 360;
+            s /= 100;
+            l /= 100;
+            let r, g, b;
+            if (s === 0) {
+                r = g = b = l; 
+            } else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1 / 6) return p + (q - p) * 6 * t;
+                    if (t < 1 / 2) return q;
+                    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1 / 3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1 / 3);
+            }
+            const toHex = x => {
+                const hex = Math.round(x * 255).toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+            };
+            return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+        }
+        
+        // ----------------------------------------------------
+        // 3. メイン機能
+        // ----------------------------------------------------
+
+        function renderPalette(categoryKey) {
+            palette.innerHTML = '';
+            const colors = colorData[categoryKey] || [];
+
+            colors.forEach(color => {
+                const swatch = document.createElement('div');
+                swatch.className = 'color-swatch';
+                swatch.style.backgroundColor = color.hex;
+                
+                // 明るさに応じてテキストの色を決定
+                const rgbMatch = hexToRgb(color.hex).match(/\d+/g);
+                const r = parseInt(rgbMatch[0]);
+                const g = parseInt(rgbMatch[1]);
+                const b = parseInt(rgbMatch[2]);
+                const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                swatch.style.color = luminance > 0.5 ? '#333' : 'white';
+                
+                swatch.innerHTML = `<strong>${color.name}</strong><br>${color.hex}`;
+                
+                // クリックでメインプレビューと濃淡パレットを更新
+                swatch.addEventListener('click', () => {
+                    updateSelectedColor(color.hex);
+                    renderTonePalette(color.hex);
+                });
+                palette.appendChild(swatch);
+            });
+        }
+
+        // 濃淡パレットのレンダリング
+        function renderTonePalette(baseHex) {
+            tonePalette.innerHTML = '';
+            let [h, s, l] = hexToHslArray(baseHex);
+            
+            // ニュアンス系やグレー系など彩度が低い色は、濃淡を出すためにSを少しブーストする
+            if (s > 0 && s < 20) {
+                 s = 20;
+            }
+            
+            // 濃淡スケール (明度: 90% から 10%まで9段階)
+            const lightnessScale = [90, 80, 70, 60, 50, 40, 30, 20, 10]; 
+
+            lightnessScale.forEach((newLightness, index) => {
+                const toneHex = hslToHex(h, s, newLightness);
+                
+                const swatch = document.createElement('div');
+                swatch.className = 'tone-swatch';
+                swatch.style.backgroundColor = toneHex;
+                swatch.title = `L: ${newLightness}% | ${toneHex}`;
+                
+                swatch.innerHTML = `<span>${newLightness}%</span>`; 
+                
+                // 濃淡スウォッチのクリックでメインプレビューを更新
+                swatch.addEventListener('click', () => updateSelectedColor(toneHex));
+                tonePalette.appendChild(swatch);
+            });
+        }
+
+        function updateSelectedColor(hex) {
+            preview.style.backgroundColor = hex;
+            hexOutput.textContent = hex;
+            
+            // HSLを(H%, S%, L%)形式で表示するために変換
+            const [h, s, l] = hexToHslArray(hex).map(Math.round);
+            hslOutput.textContent = `hsl(${h}, ${s}%, ${l}%)`; 
+            
+            rgbOutput.textContent = hexToRgb(hex);
+        }
+
+        function switchCategory(event) {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const categoryKey = event.target.getAttribute('data-category');
+            
+            // activeクラスの切り替え
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            renderPalette(categoryKey);
+            // カテゴリ切り替え時、濃淡パレットはクリア
+            tonePalette.innerHTML = '';
+        }
+        
+        window.copyCode = (format) => {
+            let codeToCopy;
+            switch(format) {
+                case 'hex': codeToCopy = hexOutput.textContent; break;
+                case 'rgb': codeToCopy = rgbOutput.textContent; break;
+                case 'hsl': codeToCopy = hslOutput.textContent; break;
+                default: return;
+            }
+            
+            navigator.clipboard.writeText(codeToCopy).then(() => {
+                alert(`${format.toUpperCase()}コードをコピーしました: ${codeToCopy}`);
+            }).catch(err => {
+                console.error('コピー失敗:', err);
+                alert('コピーに失敗しました。手動でコピーしてください。');
+            });
+        };
+
+        // 4. 実行コード
+        (function init() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            
+            // イベントリスナーを設定
+            tabButtons.forEach(button => {
+                button.addEventListener('click', switchCategory);
+            });
+            
+            // 初回表示: 'system' カテゴリをレンダリング
+            renderPalette('system'); 
+            
+            // 初期選択色を設定
+            updateSelectedColor("#FFFFFF"); 
+            tonePalette.innerHTML = '';
+        })();
+
+    </script>
+
+</body>
+</html>
