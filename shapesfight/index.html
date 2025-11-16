@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Speedy FPS Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        html { height: 100%; }
+        body { margin: 0; overflow: hidden; -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+        canvas { display: block; }
+        #joystick-area {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 150px;
+            height: 150px;
+            background-color: rgba(128, 128, 128, 0.5);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 999; /* より高い値に設定 */
+        }
+        #joystick-handle {
+            width: 70px;
+            height: 70px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+        }
+        #jump-button, #shoot-button {
+            position: absolute;
+            bottom: 100px;
+            width: 80px;
+            height: 80px;
+            background-color: rgba(0, 128, 255, 0.3); /* 透過度を0.3に変更 */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 1.2em;
+            font-weight: bold;
+            z-index: 100;
+        }
+        #jump-button {
+            right: 20px;
+            bottom: 200px;
+        }
+        #shoot-button {
+            right: 20px;
+            background-color: rgba(255, 0, 0, 0.3); /* 透過度を0.3に変更 */
+        }
+        #look-area {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50vw; /* 画面右半分 */
+            height: 100vh;
+            z-index: 90;
+        }
+        #start-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* 垂直方向を上揃えに */
+            align-items: center;
+            z-index: 10000; /* 最前面に表示 */
+        }
+        #start-screen h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        #start-button {
+            padding: 15px 30px;
+            font-size: 1.5em;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #start-button:hover {
+            background-color: #0056b3;
+        }
+
+        /* クロスヘアのスタイル */
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px; /* クロスヘアの全体の幅 */
+            height: 20px; /* クロスヘアの全体の高さ */
+            z-index: 10001; /* 他のUIより上に表示 */
+            pointer-events: none; /* クリックイベントを透過 */
+        }
+
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background-color: black;
+        }
+
+        /* 横棒 */
+        #crosshair::before {
+            width: 100%;
+            height: 2px; /* 線の太さ */
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+        }
+
+        /* 縦棒 */
+        #crosshair::after {
+            width: 2px; /* 線の太さ */
+            height: 100%;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .red-flash-active {
+            background-color: rgba(255, 0, 0, 0.8) !important; /* 強制的に適用 */
+            transition: none !important; /* トランジションを無効化 */
+        }
+        #start-image {
+            margin-top: 20px; /* 上からの余白を調整 */
+            max-width: 80%; /* 画像の最大幅を調整 */
+            height: auto;
+            /* align-self: center; は親のalign-items: center;でカバーされるため不要 */
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <img id="start-image" src="top.jpg" alt="Game Title">
+        <button id="start-button" style="padding: 15px 30px; font-size: 1.5em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s ease; width: 150px;">START</button>
+        <button id="readme-button" style="margin-top: 10px; padding: 15px 30px; font-size: 1.5em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; transition: background-color 0.3s ease; width: 150px;">README</button>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.1/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.min.js"></script> <!-- TWEEN.js を追加 -->
+    <div id="joystick-area">
+        <div id="joystick-handle"></div>
+    </div>
+    <div id="jump-button">JUMP</div>
+    <div id="shoot-button">SHOOT</div>
+    <div id="look-area"></div>
+    <div id="crosshair"></div> <!-- クロスヘア要素を追加 -->
+    <script>
+        let scene, camera, renderer;
+        let player;
+        let pitchObject; // グローバルスコープで宣言
+        let yawObject;   // グローバルスコープで宣言
+        let moveForward = false;
+        let moveBackward = false;
+        let moveLeft = false;
+        let moveRight = false;
+        let canJump = false;
+        let bullets = []; // 発射された球を管理する配列
+        let enemies = []; // 敵を管理する配列
+        let enemyBullets = []; // 敵が発射した弾を管理する配列
+        let enemyBulletTrails = []; // 敵の弾の軌跡パーティクルを管理する配列
+        const enemyBulletTrailMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.2 }); // 軌跡の基本マテリアル
+        let velocity = new THREE.Vector3();
+        const enemySpeed = 0.3; // 敵の基本移動速度をグローバル変数として定義
+
+        let isRocketPackActive = false; // ロケットパックがアクティブかどうか
+        let isJetpackForcedOff = false; // ジェットパックが強制的にオフになっているか
+        let lastJumpPressTime = 0; // 最後のジャンプボタン押下時間
+        const doubleClickThreshold = 300; // ダブルクリック/タップと認識する時間 (ms)
+        let isHovering = false; // ホバリング中かどうか
+
+        let currentStage = 0; // 現在のステージ
+        const maxStages = 3; // 最大ステージ数 (ステージ1: 四角、ステージ2: 三角、ステージ3: ひし形)
+        let direction = new THREE.Vector3();
+        const speed = 0.1; // プレイヤーの移動速度
+        const jumpStrength = 0.2; // ジャンプ力
+        const gravity = 0.005; // 重力
+
+        // モバイル操作用変数
+        let isMobile = /Mobi|Android/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches); // 元のコード
+        // let isMobile = /Mobi|Android/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches); // 元のコード
+        let joystickActive = false;
+        let joystickStartPos = { x: 0, y: 0 };
+        let joystickCurrentPos = { x: 0, y: 0 };
+        let lookActive = false;
+        let lookStartPos = { x: 0, y: 0 };
+        let lookCurrentPos = { x: 0, y: 0 };
+        let joystickMoveX = 0; // ジョイスティックのX方向の移動量
+        let joystickMoveY = 0; // ジョイスティックのY方向の移動量
+        let joystickTouchId = -1; // ジョイスティック操作中のタッチID
+        let lookTouchId = -1;     // 視点移動操作中のタッチID
+        const joystickRadius = 75; // ジョイスティックの半径
+        let lookSensitivity = 0.015; // 視点移動の感度 (ユーザー設定可能にするためletに変更)
+
+        let joystickArea, joystickHandle, jumpButton, shootButton, lookArea; // グローバルスコープで宣言
+
+        // オートエイム関連変数
+        let autoAimEnabled = false;
+        let lastAutoShootTime = 0;
+        const autoAimCooldown = 500; // オートエイムのクールダウン (ms)
+        let autoAimBurstCount = 5; // オートエイムの連射回数
+        const autoAimShotDelay = 100; // オートエイムの連射間隔 (ms)
+        let isAutoAimBursting = false; // オートエイム連射中フラグ
+        let currentBurstShot = 0; // 現在の連射数
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'KeyW':
+                    moveForward = true;
+                    break;
+                case 'KeyS':
+                    moveBackward = true;
+                    break;
+                case 'KeyA':
+                    moveLeft = true;
+                    break;
+                case 'KeyD':
+                    moveRight = true;
+                    break;
+                case 'Space':
+                    if (!isMobile) { // PCの場合のみ
+                        const currentTime = performance.now();
+                        if (currentTime - lastJumpPressTime < doubleClickThreshold) {
+                            // ダブルクリック検出
+                            isJetpackForcedOff = true;
+                            isRocketPackActive = false; // 強制オフなのでジェットパックは非アクティブ
+                            console.log("PC Space double-click detected! Jetpack forced off.");
+                        } else {
+                            isRocketPackActive = true;
+                            isJetpackForcedOff = false; // 通常のジェットパック動作
+                        }
+                        lastJumpPressTime = currentTime;
+                        console.log(`[onKeyDown] Space - Active: ${isRocketPackActive}, ForcedOff: ${isJetpackForcedOff}`);
+                    }
+                    break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'KeyW':
+                    moveForward = false;
+                    break;
+                case 'KeyS':
+                    moveBackward = false;
+                    break;
+                case 'KeyA':
+                    moveLeft = false;
+                    break;
+                case 'KeyD':
+                    moveRight = false;
+                    break;
+                case 'Space':
+                    if (!isMobile) { // PCの場合のみ
+                        isRocketPackActive = false;
+                        if (!isJetpackForcedOff && yawObject.position.y > 0.9) { // 空中にいて強制オフでない場合のみホバリング開始
+                            isHovering = true;
+                        }
+                        isJetpackForcedOff = false; // キーを離したら強制オフもリセット
+                        console.log(`[onKeyUp] Space - Active: ${isRocketPackActive}, ForcedOff: ${isJetpackForcedOff}, Hovering: ${isHovering}`);
+                    }
+                    break;
+            }
+        }
+
+        function onMouseMove(event) {
+            if (!isMobile && document.pointerLockElement === document.body) { // PCの場合のみマウスロック
+                const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+                const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+                yawObject.rotation.y -= movementX * 0.002;
+                pitchObject.rotation.x -= movementY * 0.002;
+                pitchObject.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchObject.rotation.x));
+            }
+        }
+
+        function onClick() {
+            console.log('onClick called.');
+            if (!isMobile) { // PCの場合のみマウスロック
+                document.body.requestPointerLock();
+                console.log('requestPointerLock called.');
+                if (document.pointerLockElement === document.body) {
+                    console.log('Pointer lock successful. Shooting bullet.');
+                    shootBullet();
+                } else {
+                    console.log('Pointer lock not yet successful or failed.');
+                }
+            }
+        }
+
+        // モバイル操作用イベントハンドラ
+        function onJoystickStart(event) {
+            event.preventDefault(); // デフォルトのブラウザ動作を抑制
+            if (joystickTouchId === -1) { // まだジョイスティックがアクティブでない場合
+                const touch = event.changedTouches[0];
+                joystickTouchId = touch.identifier;
+                joystickActive = true;
+                joystickStartPos.x = touch.clientX;
+                joystickStartPos.y = touch.clientY;
+                joystickHandle.style.transform = `translate(${0}px, ${0}px)`;
+            }
+        }
+
+        function onJoystickMove(event) {
+            event.preventDefault();
+            if (joystickActive && joystickTouchId !== -1) {
+                for (let i = 0; i < event.changedTouches.length; i++) {
+                    const touch = event.changedTouches[i];
+                    if (touch.identifier === joystickTouchId) {
+                        joystickCurrentPos.x = touch.clientX;
+                        joystickCurrentPos.y = touch.clientY;
+
+                        let deltaX = joystickCurrentPos.x - joystickStartPos.x;
+                        let deltaY = joystickCurrentPos.y - joystickStartPos.y;
+
+                        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                        if (distance > joystickRadius) {
+                            const angle = Math.atan2(deltaY, deltaX);
+                            deltaX = joystickRadius * Math.cos(angle);
+                            deltaY = joystickRadius * Math.sin(angle);
+                        }
+
+                        joystickHandle.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+                        // ジョイスティックの移動量を保存
+                        joystickMoveX = deltaX;
+                        joystickMoveY = deltaY;
+
+                        // 移動方向の更新 (PCのキーボード入力と同様のフラグを使用)
+                        moveForward = deltaY < -joystickRadius * 0.05;
+                        moveBackward = deltaY > joystickRadius * 0.05;
+                        moveLeft = deltaX < -joystickRadius * 0.05;
+                        moveRight = deltaX > joystickRadius * 0.05;
+
+                        console.log('Move Flags:', { moveForward, moveBackward, moveLeft, moveRight }); // デバッグログを追加
+                        break;
+                    }
+                }
+            }
+        }
+
+        function onJoystickEnd(event) {
+            event.preventDefault();
+            for (let i = 0; i < event.changedTouches.length; i++) {
+                const touch = event.changedTouches[i];
+                if (touch.identifier === joystickTouchId) {
+                    joystickActive = false;
+                    joystickTouchId = -1;
+                    joystickMoveX = 0;
+                    joystickMoveY = 0;
+                    moveForward = false;
+                    moveBackward = false;
+                    moveLeft = false;
+                    moveRight = false;
+                    joystickHandle.style.transform = `translate(${0}px, ${0}px)`;
+                    break;
+                }
+            }
+        }
+
+        function onJumpButtonDown(event) {
+            event.preventDefault(); // デフォルトのブラウザ動作を抑制
+            const currentTime = performance.now();
+            if (currentTime - lastJumpPressTime < doubleClickThreshold) {
+                // ダブルタップ検出
+                isJetpackForcedOff = true;
+                isRocketPackActive = false; // 強制オフなのでジェットパックは非アクティブ
+                console.log("Mobile Jump button double-tap detected! Jetpack forced off.");
+            } else {
+                isRocketPackActive = true;
+                isJetpackForcedOff = false; // 通常のジェットパック動作
+            }
+            lastJumpPressTime = currentTime;
+            console.log(`[onJumpButtonDown] Active: ${isRocketPackActive}, ForcedOff: ${isJetpackForcedOff}`);
+        }
+
+        function onJumpButtonUp(event) {
+            event.preventDefault();
+            isRocketPackActive = false;
+            if (!isJetpackForcedOff && yawObject.position.y > 0.9) { // 空中にいて強制オフでない場合のみホバリング開始
+                isHovering = true;
+            }
+            isJetpackForcedOff = false; // ボタンを離したら強制オフもリセット
+            console.log(`[onJumpButtonUp] Active: ${isRocketPackActive}, ForcedOff: ${isJetpackForcedOff}, Hovering: ${isHovering}`);
+        }
+
+        function onShootButtonDown(event) {
+            event.preventDefault(); // デフォルトのブラウザ動作を抑制
+            shootBullet();
+        }
+
+        function onShootButtonUp(event) {
+            event.preventDefault();
+            // 特に何もしない
+        }
+
+        function onLookStart(event) {
+            event.preventDefault(); // デフォルトのブラウザ動作を抑制
+            if (lookTouchId === -1) { // まだ視点移動がアクティブでない場合
+                const touch = event.changedTouches[0];
+                lookTouchId = touch.identifier;
+                lookActive = true;
+                lookStartPos.x = touch.clientX;
+                lookStartPos.y = touch.clientY;
+            }
+        }
+
+        function onLookMove(event) {
+            event.preventDefault();
+            if (lookActive && lookTouchId !== -1) {
+                for (let i = 0; i < event.changedTouches.length; i++) {
+                    const touch = event.changedTouches[i];
+                    if (touch.identifier === lookTouchId) {
+                        lookCurrentPos.x = touch.clientX;
+                        lookCurrentPos.y = touch.clientY;
+
+                        const movementX = lookCurrentPos.x - lookStartPos.x;
+                        const movementY = lookCurrentPos.y - lookStartPos.y;
+
+                        yawObject.rotation.y -= movementX * lookSensitivity;
+                        pitchObject.rotation.x -= movementY * lookSensitivity;
+                        pitchObject.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchObject.rotation.x));
+
+                        lookStartPos.x = lookCurrentPos.x;
+                        lookStartPos.y = lookCurrentPos.y;
+                        break;
+                    }
+                }
+            }
+        }
+
+        function onLookEnd(event) {
+            event.preventDefault();
+            for (let i = 0; i < event.changedTouches.length; i++) {
+                const touch = event.changedTouches[i];
+                if (touch.identifier === lookTouchId) {
+                    lookActive = false;
+                    lookTouchId = -1;
+                    break;
+                }
+            }
+        }
+
+        function shootBullet() {
+            // 発射音を再生
+            const gunSound = new Audio('shot.mp3'); // gun.mp3 を shot.mp3 に変更
+            gunSound.volume = 0.5; // 音量を調整 (0.0から1.0)
+            gunSound.play().catch(e => console.error("Failed to play gun sound:", e)); // エラーハンドリングを追加
+
+            const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+            const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+
+            // カメラの位置から発射
+            bullet.position.copy(camera.getWorldPosition(new THREE.Vector3()));
+
+            // カメラの向きに速度を設定
+            const bulletDirection = new THREE.Vector3();
+            camera.getWorldDirection(bulletDirection);
+            bullet.velocity = bulletDirection.multiplyScalar(0.5); // 球の速度
+
+            scene.add(bullet);
+            bullets.push(bullet);
+        }
+
+        function init() {
+            console.log('init() called.'); // デバッグログ
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb); // 空の色
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.y = 1.6; // プレイヤーの目の高さ
+            camera.lookAt(new THREE.Vector3(0, 1.6, -1)); // 初期視点
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+            console.log('Renderer created and added to body.'); // デバッグログ
+            console.log('Canvas element:', renderer.domElement); // デバッグログ
+            console.log('Canvas width:', renderer.domElement.width, 'height:', renderer.domElement.height); // デバッグログ
+
+            // プレイヤー（立方体）
+            const playerGeometry = new THREE.BoxGeometry(0.5, 1.8, 0.5);
+            const playerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+            player = new THREE.Mesh(playerGeometry, playerMaterial);
+            player.position.set(0, 0, 0); // yawObjectの原点に配置
+            // scene.add(player); // sceneには直接追加しない
+
+            // 地面
+            const groundGeometry = new THREE.PlaneGeometry(200, 200);
+            const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = Math.PI / 2;
+            scene.add(ground);
+
+            // 光源
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(1, 1, 0);
+            scene.add(directionalLight);
+
+            // イベントリスナー
+            console.log('Registering PC event listeners...');
+            document.addEventListener('keydown', onKeyDown, false);
+            document.addEventListener('keyup', onKeyUp, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+            document.addEventListener('click', onClick, false); // マウスロックを有効にするため
+            console.log('PC event listeners registered.');
+
+            console.log('Is Mobile Device:', isMobile); // デバッグログを追加
+
+            // モバイル操作用のイベントリスナーとUIの表示/非表示
+            if (isMobile) {
+                joystickArea = document.getElementById('joystick-area');
+                joystickHandle = document.getElementById('joystick-handle');
+                jumpButton = document.getElementById('jump-button');
+                shootButton = document.getElementById('shoot-button');
+                lookArea = document.getElementById('look-area');
+
+                joystickArea.addEventListener('touchstart', onJoystickStart, false);
+                joystickArea.addEventListener('touchmove', onJoystickMove, false);
+                joystickArea.addEventListener('touchend', onJoystickEnd, false);
+
+                jumpButton.addEventListener('touchstart', onJumpButtonDown, false);
+                jumpButton.addEventListener('touchend', onJumpButtonUp, false);
+
+                shootButton.addEventListener('touchstart', onShootButtonDown, false);
+                shootButton.addEventListener('touchend', onShootButtonUp, false);
+
+                lookArea.addEventListener('touchstart', onLookStart, false);
+                lookArea.addEventListener('touchmove', onLookMove, false);
+                lookArea.addEventListener('touchend', onLookEnd, false);
+            } else {
+                // PCの場合、モバイルUIを非表示にする
+                const mobileUIElements = ['joystick-area', 'jump-button', 'shoot-button', 'look-area'];
+                mobileUIElements.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.style.display = 'none';
+                    }
+                });
+            }
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            // yawObjectとpitchObjectの初期化をinit関数内に移動
+            pitchObject = new THREE.Object3D();
+            pitchObject.add(camera);
+
+            yawObject = new THREE.Object3D();
+            yawObject.position.y = 1.6; // プレイヤーの目の高さ
+            yawObject.add(pitchObject);
+            yawObject.add(player); // playerをyawObjectの子として追加
+            scene.add(yawObject);
+            console.log('YawObject created, pitchObject and player added, then yawObject added to scene.'); // デバッグログ
+
+            currentStage = 1; // ステージ1から開始
+            spawnEnemiesForStage(currentStage); // ステージに応じた敵を生成
+        }
+
+        // ステージに応じた敵を生成する関数
+        function spawnEnemiesForStage(stage) {
+            const minDistanceToPlayer = 20;
+            const maxDistanceToPlayer = 30;
+            const playerInitialPosition = new THREE.Vector3(0, 1.6, 0);
+
+            let numEnemies = 5; // 各ステージの敵の数
+            let enemyGeometry;
+            let enemyMaterial;
+            let enemyType;
+
+            if (stage === 1) {
+                enemyGeometry = new THREE.BoxGeometry(1, 1, 1);
+                enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
+                enemyType = 'square';
+                console.log("Spawning Stage 1 (Square) enemies."); // デバッグログ
+            } else if (stage === 2) {
+                enemyGeometry = new THREE.ConeGeometry(0.7, 1.5, 4); // 三角錐 (底面の半径, 高さ, 分割数)
+                enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
+                enemyType = 'triangle';
+                numEnemies = 3; // 三角形の敵は3体
+                console.log("Spawning Stage 2 (Triangle) enemies."); // デバッグログ
+            } else if (stage === 3) {
+                enemyGeometry = new THREE.OctahedronGeometry(1); // ひし形 (半径)
+                enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
+                enemyType = 'diamond';
+                numEnemies = 2; // ひし形の敵は2体
+                console.log("Spawning Stage 3 (Diamond) enemies."); // デバッグログ
+            } else {
+                console.log("Game Over or Unknown Stage!");
+                return;
+            }
+
+            for (let i = 0; i < numEnemies; i++) {
+                const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+                let enemyX, enemyZ;
+                let distance;
+                console.log(`Enemy ${i} (Type: ${enemyType}) generated at:`, enemy.position.toArray()); // デバッグログ
+
+                do {
+                    enemyX = Math.random() * 40 - 20;
+                    enemyZ = -(Math.random() * (maxDistanceToPlayer - minDistanceToPlayer) + minDistanceToPlayer);
+                    distance = Math.sqrt(
+                        Math.pow(enemyX - playerInitialPosition.x, 2) +
+                        Math.pow(enemyZ - playerInitialPosition.z, 2)
+                    );
+                } while (distance < minDistanceToPlayer || distance > maxDistanceToPlayer);
+
+                enemy.position.x = enemyX;
+                enemy.position.z = enemyZ;
+                // 敵のタイプに応じてY座標を設定
+                if (enemy.type === 'diamond') {
+                    enemy.position.y = 3 + Math.random() * 7; // ひし形の敵は3～10の高さにランダムに浮く
+                } else {
+                    enemy.position.y = 0.5; // その他の敵は地面に配置
+                }
+
+                const lookAtPlayerVector = new THREE.Vector3().subVectors(playerInitialPosition, enemy.position).normalize();
+                enemy.rotation.y = Math.atan2(lookAtPlayerVector.x, lookAtPlayerVector.z);
+
+                enemy.lastShotTime = 0;
+                enemy.shootInterval = Math.random() * 2000 + 1000; // 1秒から3秒の間でランダムな発射間隔
+                enemy.nextActionTime = performance.now() + Math.random() * 3000;
+                enemy.currentGoal = new THREE.Vector3();
+                enemy.speedMultiplier = 0.8 + Math.random() * 0.4;
+                enemy.hp = 3; // 敵のHPを設定
+                enemy.isHit = false;
+                enemy.hitTime = 0;
+                enemy.type = enemyType; // 敵のタイプを追加
+                enemy.isJumping = false; // ジャンプ中かどうかのフラグ
+                enemy.jumpVelocity = 0; // ジャンプの垂直速度
+                enemy.lastJumpTime = 0; // 最後にジャンプした時間
+                enemy.jumpCooldown = 2000 + Math.random() * 2000; // ジャンプのクールダウン (2-4秒)
+                enemy.currentGoal = enemy.position.clone(); // 初期目標地点を敵の現在位置に設定
+
+                scene.add(enemy);
+                enemies.push(enemy);
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOMContentLoaded event fired.'); // デバッグログ
+        const startButton = document.getElementById('start-button');
+        const startScreen = document.getElementById('start-screen');
+
+        // 設定関連の要素を取得
+        const settingsButton = document.getElementById('settings-button');
+        const settingsPanel = document.getElementById('settings-panel');
+        const closeSettingsButton = document.getElementById('close-settings');
+        const sensitivitySlider = document.getElementById('sensitivity-slider');
+        const sensitivityValueSpan = document.getElementById('sensitivity-value');
+        const autoAimCheckbox = document.getElementById('auto-aim-checkbox');
+
+        // 初期感度をスライダーと表示に反映
+        // lookSensitivity (0.015) をスライダーの中間値 (50) にマッピング
+        // 最小感度 (0.005) -> スライダー0
+        // 最大感度 (0.025) -> スライダー100
+        const minSensitivity = 0.005;
+        const maxSensitivity = 0.025;
+        const defaultSensitivity = 0.015; // 現在のデフォルト感度
+
+        // スライダーの値を感度に変換する関数
+        function sliderToSensitivity(sliderValue) {
+            return minSensitivity + (sliderValue / 100) * (maxSensitivity - minSensitivity);
+        }
+
+        // 感度をスライダーの値に変換する関数
+        function sensitivityToSlider(sensitivity) {
+            return ((sensitivity - minSensitivity) / (maxSensitivity - minSensitivity)) * 100;
+        }
+
+        // 初期設定
+        sensitivitySlider.value = sensitivityToSlider(defaultSensitivity);
+        sensitivityValueSpan.textContent = defaultSensitivity.toFixed(3);
+        lookSensitivity = defaultSensitivity; // JavaScript変数にも設定
+
+        // イベントリスナー
+        startButton.addEventListener('click', () => {
+            // フルスクリーンをリクエスト
+            const element = document.documentElement;
+            if (element.requestFullscreen) {
+                element.requestFullscreen();
+            } else if (element.webkitRequestFullscreen) { /* Safari */
+                element.webkitRequestFullscreen();
+            } else if (element.msRequestFullscreen) { /* IE11 */
+                element.msRequestFullscreen();
+            }
+
+            // 画面の向きを横に固定
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(e => console.log('Screen orientation lock failed (iOS/Browser restriction):', e));
+            }
+
+            startScreen.style.display = 'none'; // スタート画面を非表示にする
+            init();
+            animate();
+            if (!isMobile) { // PCの場合のみマウスロックを試みる
+                document.body.requestPointerLock();
+            }
+            // console.log('init() and animate() called after start button click.'); // デバッグログ - コメントアウト
+        });
+
+        const readmeButton = document.getElementById('readme-button');
+        readmeButton.addEventListener('click', () => {
+            window.location.href = 'readme_page.html';
+        });
+
+        // 設定ボタンのクリックイベント
+        settingsButton.addEventListener('click', () => {
+            settingsPanel.style.display = 'block';
+        });
+
+        // 設定パネルの閉じるボタンのクリックイベント
+        closeSettingsButton.addEventListener('click', () => {
+            settingsPanel.style.display = 'none';
+        });
+
+        // 感度スライダーの変更イベント
+        sensitivitySlider.addEventListener('input', () => {
+            lookSensitivity = sliderToSensitivity(sensitivitySlider.value);
+            sensitivityValueSpan.textContent = lookSensitivity.toFixed(3);
+        });
+
+        // オートエイムチェックボックスの変更イベント
+        autoAimCheckbox.addEventListener('change', () => {
+            autoAimEnabled = autoAimCheckbox.checked;
+            console.log('Auto Aim Enabled:', autoAimEnabled);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const currentTime = performance.now(); // 現在の時間を取得
+            if (typeof TWEEN !== 'undefined') { // TWEENが定義されているか確認
+                TWEEN.update(); // TWEEN.js のアニメーションを更新
+            }
+
+            // ロケットパックの処理
+            console.log(`[Animate] Active: ${isRocketPackActive}, ForcedOff: ${isJetpackForcedOff}, Hovering: ${isHovering}, Velocity.y: ${velocity.y.toFixed(4)}, Player.y: ${yawObject.position.y.toFixed(4)}`);
+            if (isRocketPackActive && !isJetpackForcedOff) { // 強制オフでない場合のみジェットパック効果を適用
+                const jetpackAscentSpeed = jumpStrength * 1.5; // ジェットパックでの上昇速度
+                velocity.y = jetpackAscentSpeed; // 直接上昇速度を設定
+
+                isHovering = false; // ジェットパックがアクティブな間はホバリングではない
+            } else if (isHovering && !isJetpackForcedOff) { // ホバリング中で強制オフでない場合
+                const hoverGravity = gravity * 0.1; // ホバリング中の重力 (通常の10%)
+                velocity.y -= hoverGravity;
+                // 下降速度に上限を設定 (ゆっくり降下)
+                if (velocity.y < -jumpStrength * 0.5) velocity.y = -jumpStrength * 0.5; // 下降速度を制限
+            }
+            else {
+                // 通常の重力 (ジェットパック非アクティブ、ホバリング中でない、または強制オフの場合)
+                velocity.y -= gravity;
+                isHovering = false; // 通常の重力適用中はホバリングではない
+            }
+
+            // オートエイムのロジック
+            if (autoAimEnabled) {
+                if (!isAutoAimBursting && currentTime - lastAutoShootTime > autoAimCooldown) {
+                    const raycaster = new THREE.Raycaster();
+                    const center = new THREE.Vector2(0, 0); // 画面中央
+
+                    raycaster.setFromCamera(center, camera);
+                    const intersects = raycaster.intersectObjects(enemies.filter(e => e.hp > 0)); // 生きている敵のみ対象
+
+                    if (intersects.length > 0) {
+                        // 最も近い敵がクロスヘアに合っていると判断
+                        isAutoAimBursting = true;
+                        currentBurstShot = 0;
+                        lastAutoShootTime = currentTime; // 連射開始時間を記録
+                    }
+                }
+
+                if (isAutoAimBursting) {
+                    if (currentBurstShot < autoAimBurstCount) {
+                        // 連射間隔が経過したら次の弾を発射
+                        if (currentTime - (lastAutoShootTime + currentBurstShot * autoAimShotDelay) >= autoAimShotDelay) {
+                            shootBullet();
+                            currentBurstShot++;
+                        }
+                    } else {
+                        // 連射が終了したらフラグをリセット
+                        isAutoAimBursting = false;
+                        lastAutoShootTime = currentTime; // 次の連射までのクールダウン開始
+                    }
+                }
+            }
+
+            // プレイヤーの移動
+            // velocityをリセットまたは減衰
+            velocity.x *= 0.8; // 減衰率を調整
+            velocity.z *= 0.8; // 減衰率を調整
+
+            direction.z = Number(moveBackward) - Number(moveForward); // 修正
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            // プレイヤーの向きに応じて速度を更新
+            const currentMoveSpeed = speed * 0.5; // 移動速度を調整
+            if (moveForward || moveBackward || moveLeft || moveRight) {
+                const moveVector = new THREE.Vector3(direction.x, 0, direction.z);
+                moveVector.applyQuaternion(yawObject.quaternion);
+
+                velocity.x += moveVector.x * currentMoveSpeed;
+                velocity.z += moveVector.z * currentMoveSpeed;
+            }
+
+            yawObject.position.x += velocity.x;
+            yawObject.position.z += velocity.z;
+            yawObject.position.y += velocity.y; // ジャンプなどのY軸移動はそのまま
+
+            // プレイヤーの境界チェック
+            const boundaryX = 100;
+            const boundaryZ = 100;
+            const ceilingY = 30;
+
+            if (yawObject.position.x > boundaryX) yawObject.position.x = boundaryX;
+            if (yawObject.position.x < -boundaryX) yawObject.position.x = -boundaryX;
+            if (yawObject.position.z > boundaryZ) yawObject.position.z = boundaryZ;
+            if (yawObject.position.z < -boundaryZ) yawObject.position.z = -boundaryZ;
+            if (yawObject.position.y > ceilingY) {
+                yawObject.position.y = ceilingY;
+                velocity.y = 0; // 天井に当たったらY速度をリセット
+            }
+
+            // 地面との衝突判定
+            if (yawObject.position.y < 0.9) { // プレイヤーの高さの半分
+                // ジェットパックがアクティブで強制オフでない場合は、地面に固定しない
+                if (isRocketPackActive && !isJetpackForcedOff) {
+                    // Do not clamp to ground, allow ascent
+                    // However, if velocity.y is negative (falling), set it to 0 to prevent falling through
+                    if (velocity.y < 0) {
+                        velocity.y = 0;
+                    }
+                } else {
+                    velocity.y = 0;
+                    yawObject.position.y = 0.9;
+                    isHovering = false; // 地面に着いたらホバリング終了
+                }
+
+                // ロケットパックがアクティブでない、または強制オフの場合のみcanJumpをtrueにする
+                if (!isRocketPackActive || isJetpackForcedOff) {
+                    canJump = true;
+                }
+            }
+
+            renderer.render(scene, camera);
+
+            // 球の移動と削除
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.position.add(bullet.velocity);
+
+                // 一定距離移動したら削除 (例: 50ユニット)
+                if (bullet.position.distanceTo(yawObject.position) > 50) {
+                    scene.remove(bullet);
+                    bullets.splice(i, 1);
+                    continue; // 弾が削除されたので次の弾へ
+                }
+                
+                // 敵との衝突判定
+                for (let k = 0; k < enemies.length; k++) {
+                    const enemy = enemies[k];
+                    if (enemy.hp <= 0) continue; // HPが0以下の敵はスキップ
+
+                    // 弾と敵の衝突判定 (簡易的な距離チェック)
+                    if (bullet.position.distanceTo(enemy.position) < 1) { // 衝突したとみなす距離
+                        scene.remove(bullet);
+                        bullets.splice(i, 1); // 弾を削除
+                        
+                        enemy.hp--; // 敵のHPを減らす
+                        if (enemy.hp <= 0) {
+                            // 爆発音を再生
+                            const explosionSound = new Audio('ab.mp3');
+                            explosionSound.volume = 0.7; // 音量を調整
+                            explosionSound.play().catch(e => console.error("Failed to play explosion sound:", e));
+
+                            // ---- 新しい爆発エフェクト ----
+                            // １．中心の光
+                            const explosionLight = new THREE.PointLight(0xffa500, 2, 20); // 色, 強度, 距離
+                            explosionLight.position.copy(enemy.position);
+                            scene.add(explosionLight);
+
+                            if (typeof TWEEN !== 'undefined') {
+                                new TWEEN.Tween({ intensity: 2, distance: 20 })
+                                    .to({ intensity: 0, distance: 0 }, 800) // 0.8秒で光を消す
+                                    .easing(TWEEN.Easing.Quadratic.Out)
+                                    .onUpdate(function() {
+                                        explosionLight.intensity = this.intensity;
+                                        explosionLight.distance = this.distance;
+                                    })
+                                    .onComplete(() => {
+                                        scene.remove(explosionLight);
+                                    })
+                                .start();
+                            } else {
+                                // TWEENが未定義の場合、setTimeoutで処理
+                                setTimeout(() => scene.remove(explosionLight), 800);
+                            }
+
+
+                            // ２．親となる大きな球体と子となる小さな球体たち
+                            const explosionMaterial = new THREE.MeshBasicMaterial({ color: 0xffa500, transparent: true, opacity: 1 });
+                            const explosionCoreGeometry = new THREE.SphereGeometry(1.5, 16, 16);
+                            const explosionCore = new THREE.Mesh(explosionCoreGeometry, explosionMaterial);
+                            explosionCore.position.copy(enemy.position);
+                            scene.add(explosionCore);
+
+                            // 初期フラッシュ球 (にじみ効果)
+                            const flashGeometry = new THREE.SphereGeometry(3, 16, 16); // 大きめの球体
+                            const flashMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }); // 白く明るい色
+                            const flashSphere = new THREE.Mesh(flashGeometry, flashMaterial);
+                            flashSphere.position.copy(enemy.position);
+                            scene.add(flashSphere);
+
+                            if (typeof TWEEN !== 'undefined') {
+                                new TWEEN.Tween({ scale: 0.1, opacity: 0.8 })
+                                    .to({ scale: 5, opacity: 0 }, 300) // 0.3秒で急速に拡大・透明化
+                                    .easing(TWEEN.Easing.Quadratic.Out)
+                                    .onUpdate(function() {
+                                        flashSphere.scale.set(this.scale, this.scale, this.scale);
+                                        flashSphere.material.opacity = this.opacity;
+                                    })
+                                    .onComplete(function() {
+                                        scene.remove(flashSphere);
+                                    })
+                                .start();
+                            } else {
+                                setTimeout(() => scene.remove(flashSphere), 300);
+                            }
+
+                            // 小さな破片のような球体をいくつか生成
+                            const fragmentGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+                            for (let f = 0; f < 15; f++) { // 破片の数を5から15に増加
+                                const fragmentSize = 0.1 + Math.random() * 0.4; // 0.1から0.5のランダムなサイズ
+                                const fragment = new THREE.Mesh(new THREE.SphereGeometry(fragmentSize, 8, 8), explosionMaterial.clone());
+                                fragment.position.copy(enemy.position);
+                                scene.add(fragment);
+
+                                const randomDirection = new THREE.Vector3(
+                                    Math.random() * 2 - 1,
+                                    Math.random() * 2 - 1,
+                                    Math.random() * 2 - 1
+                                ).normalize();
+                                const fragmentSpeed = 3 + Math.random() * 3; // 速度範囲を3から6に増加
+
+                                if (typeof TWEEN !== 'undefined') {
+                                    new TWEEN.Tween(fragment.position)
+                                        .to({
+                                            x: fragment.position.x + randomDirection.x * fragmentSpeed,
+                                            y: fragment.position.y + randomDirection.y * fragmentSpeed,
+                                            z: fragment.position.z + randomDirection.z * fragmentSpeed
+                                        }, 800) // 0.8秒で破片が飛散
+                                        .easing(TWEEN.Easing.Quadratic.Out)
+                                        .onComplete(() => {
+                                            scene.remove(fragment);
+                                        })
+                                    .start();
+
+                                    new TWEEN.Tween(fragment.material)
+                                        .to({ opacity: 0 }, 800)
+                                        .easing(TWEEN.Easing.Quadratic.Out)
+                                        .start();
+                                } else {
+                                    // TWEENが未定義の場合、setTimeoutで処理
+                                    setTimeout(() => scene.remove(fragment), 800);
+                                }
+                            }
+
+                            // コアの爆発アニメーション
+                            if (typeof TWEEN !== 'undefined') {
+                                new TWEEN.Tween({ scale: 0.1, opacity: 1 })
+                                    .to({ scale: 2.5, opacity: 0 }, 800) // 0.8秒で拡大・透明化
+                                    .easing(TWEEN.Easing.Quadratic.Out)
+                                    .onUpdate(function() {
+                                        explosionCore.scale.set(this.scale, this.scale, this.scale);
+                                        explosionCore.material.opacity = this.opacity;
+                                    })
+                                    .onComplete(function() {
+                                        scene.remove(explosionCore);
+                                    })
+                                .start();
+                            } else {
+                                // TWEENが未定義の場合、setTimeoutで処理
+                                setTimeout(() => scene.remove(explosionCore), 800);
+                            }
+                            // ---- 新しい爆発エフェクトここまで ----
+
+                            // 敵を削除対象としてマーク
+                            enemy.hp = 0; // 確実にHPを0にする
+                            enemy.isHit = true; // 爆発演出中
+                            enemy.hitTime = performance.now(); // 爆発開始時間
+                            scene.remove(enemy); // 敵のThree.jsメッシュをシーンから削除
+                            // 敵オブジェクトをenemies配列から削除するのは、animateループの最後で個別に処理
+                        }
+                        break; // 弾が衝突したので次の弾へ
+                    }
+                }
+            }
+
+            // 敵の移動と行動の更新
+            for (let i = 0; i < enemies.length; i++) {
+                const enemy = enemies[i];
+                if (enemy.dead) continue; // 既に死んでいる敵はスキップ
+
+                // デバッグログ: 敵の位置と目標を監視
+                if (enemy.position.x === NaN || enemy.position.y === NaN || enemy.position.z === NaN ||
+                    enemy.currentGoal.x === NaN || enemy.currentGoal.y === NaN || enemy.currentGoal.z === NaN) {
+                    console.error(`[AI Debug Error] Enemy ${i} has NaN in position or goal! Position: (${enemy.position.x.toFixed(2)}, ${enemy.position.y.toFixed(2)}, ${enemy.position.z.toFixed(2)}), Goal: (${enemy.currentGoal.x.toFixed(2)}, ${enemy.currentGoal.y.toFixed(2)}, ${enemy.currentGoal.z.toFixed(2)})`);
+                }
+                // console.log(`[AI Debug] Enemy ${i} Pos: (${enemy.position.x.toFixed(2)}, ${enemy.position.y.toFixed(2)}, ${enemy.position.z.toFixed(2)}), Goal: (${enemy.currentGoal.x.toFixed(2)}, ${enemy.currentGoal.y.toFixed(2)}, ${enemy.currentGoal.z.toFixed(2)})`);
+
+                // console.log(`Enemy ${i} - Position:`, enemy.position.toArray()); // デバッグログ
+                // console.log(`Enemy ${i} - Current Goal:`, enemy.currentGoal.toArray()); // デバッグログ
+                // console.log(`Enemy ${i} - Speed Multiplier:`, enemy.speedMultiplier); // デバッグログ
+
+                const playerPosition = yawObject.position.clone(); // プレイヤーの現在位置
+
+                // 一定時間ごとに新しい目標を設定
+                if (currentTime > enemy.nextActionTime || enemy.position.distanceTo(enemy.currentGoal) < 1) { // 目標地点に到達した、または時間切れ
+                    // プレイヤーの周囲をランダムな目標として設定
+                    const angleOffset = (Math.random() - 0.5) * Math.PI; // プレイヤーから見てランダムな角度
+                    const distanceOffset = 10 + Math.random() * 20; // プレイヤーからのランダムな距離
+                    
+                    enemy.currentGoal.x = playerPosition.x + Math.cos(angleOffset) * distanceOffset;
+                    enemy.currentGoal.z = playerPosition.z + Math.sin(angleOffset) * distanceOffset;
+                    // 敵のタイプに応じてY座標を設定
+                    if (enemy.type === 'diamond') {
+                        enemy.currentGoal.y = playerPosition.y + (Math.random() * 5 - 2.5); // プレイヤーのY座標を中心に-2.5～2.5の範囲で目標Y座標を設定
+                    } else {
+                        enemy.currentGoal.y = 0.5; // その他の敵は地面の高さに合わせる
+                    }
+
+                    // 次の行動までの時間をランダムに設定 (1秒～4秒)
+                    enemy.nextActionTime = currentTime + Math.random() * 3000 + 1000; 
+                }
+
+                // 目標地点に向かう方向ベクトル
+                let directionToGoal = new THREE.Vector3().subVectors(enemy.currentGoal, enemy.position).normalize();
+
+                // 敵同士の接近による反発力を計算
+                let repulsionVector = new THREE.Vector3();
+                const repulsionRadius = 3; 
+                const repulsionStrength = 0.5;
+
+                for (let j = 0; j < enemies.length; j++) {
+                    const otherEnemy = enemies[j];
+                    if (enemy === otherEnemy || otherEnemy.dead) continue;
+
+                    const distanceToOther = enemy.position.distanceTo(otherEnemy.position);
+
+                    if (distanceToOther < repulsionRadius) {
+                        const repelDirection = new THREE.Vector3().subVectors(enemy.position, otherEnemy.position).normalize();
+                        repulsionVector.add(repelDirection.multiplyScalar(repulsionStrength * (1 - distanceToOther / repulsionRadius)));
+                    }
+                }
+
+                // 回避ベクトル (プレイヤーの弾回避) を計算
+                let evadeVector = new THREE.Vector3();
+                const evadeRadius = 5; 
+                const evadeStrength = 0.1;
+                const evadeChance = 0.7; // 70%の確率で回避行動を取る
+
+                if (Math.random() < evadeChance) { // 確率的に回避行動を取る
+                    for (let j = 0; j < bullets.length; j++) {
+                        const bullet = bullets[j];
+                        const distanceToBullet = enemy.position.distanceTo(bullet.position);
+
+                        if (distanceToBullet < evadeRadius) {
+                            const evadeDirection = new THREE.Vector3().subVectors(enemy.position, bullet.position).normalize();
+                            evadeVector.add(evadeDirection.multiplyScalar(evadeStrength * (1 - distanceToBullet / evadeRadius)));
+                        }
+                    }
+                }
+
+                // 全ての力 (目標点への移動、敵の反発、弾の回避) を合成
+                let finalMovementVector = directionToGoal;
+                if (repulsionVector.length() > 0) {
+                    finalMovementVector.add(repulsionVector);
+                }
+                if (evadeVector.length() > 0) {
+                    finalMovementVector.add(evadeVector);
+                }
+                finalMovementVector.normalize();
+
+                // 三角形の敵のジャンプ回避ロジック
+                if (enemy.type === 'triangle') {
+                    // ジャンプ中ではない、かつジャンプクールダウンが終了している場合
+                    if (!enemy.isJumping && (currentTime - enemy.lastJumpTime > enemy.jumpCooldown)) {
+                        // プレイヤーの弾が近くにある場合にジャンプを試みる
+                        let bulletNearby = false;
+                        for (let j = 0; j < bullets.length; j++) {
+                            const bullet = bullets[j];
+                            if (enemy.position.distanceTo(bullet.position) < 5) { // 弾が5ユニット以内に近づいたら
+                                bulletNearby = true;
+                                break;
+                            }
+                        }
+                        if (bulletNearby) {
+                            enemy.isJumping = true;
+                            enemy.jumpVelocity = 0.2; // ジャンプの初速
+                            enemy.lastJumpTime = currentTime;
+                            enemy.jumpCooldown = 2000 + Math.random() * 2000; // 次のジャンプクールダウンをリセット
+                        }
+                    }
+
+                    if (enemy.isJumping) {
+                        enemy.position.y += enemy.jumpVelocity;
+                        enemy.jumpVelocity -= gravity * 2; // 重力の影響を強くする
+                        if (enemy.position.y <= 0.5) { // 地面に着地
+                            enemy.position.y = 0.5;
+                            enemy.isJumping = false;
+                            enemy.jumpVelocity = 0;
+                        }
+                    }
+                }
+
+                // 敵の移動
+                const moveAmount = finalMovementVector.multiplyScalar(enemySpeed * enemy.speedMultiplier);
+                enemy.position.add(moveAmount);
+
+                // ひし形の敵はY軸方向にも移動
+                if (enemy.type === 'diamond') {
+                    const yDirection = enemy.currentGoal.y - enemy.position.y;
+                    enemy.position.y += yDirection * 0.01; // Y軸方向の移動速度を調整
+                }
+                // console.log(`Enemy ${i} - Final Movement Vector:`, finalMovementVector.toArray()); // デバッグログ
+                // console.log(`Enemy ${i} - New Position:`, enemy.position.toArray()); // デバッグログ
+
+                // 敵の発射ロジック
+                // プレイヤーが射程内かつ視線が通っている場合に発射
+                const distanceToPlayer = enemy.position.distanceTo(playerPosition);
+                const raycaster = new THREE.Raycaster(enemy.position, new THREE.Vector3().subVectors(playerPosition, enemy.position).normalize());
+                const intersects = raycaster.intersectObjects(scene.children); // シーン内の全てのオブジェクトと交差判定
+                let canSeePlayer = true;
+                if (intersects.length > 0) {
+                    // 最初の交差点がプレイヤー自身ではない、かつプレイヤーよりも近い場所にある場合は視線が遮られている
+                    if (intersects[0].object !== player && intersects[0].distance < distanceToPlayer) {
+                        canSeePlayer = false;
+                    }
+                }
+
+                console.log(`Enemy ${i} - Can See Player: ${canSeePlayer}, Distance: ${distanceToPlayer.toFixed(2)}, Time Since Last Shot: ${(currentTime - enemy.lastShotTime).toFixed(0)}, Shoot Interval: ${enemy.shootInterval}`); // デバッグログ
+                if (canSeePlayer && distanceToPlayer < 30 && currentTime - enemy.lastShotTime > enemy.shootInterval) { // プレイヤーが30ユニット以内に入ったら発射
+                    console.log(`[AI Shoot] Enemy ${i} at (${enemy.position.x.toFixed(2)}, ${enemy.position.y.toFixed(2)}, ${enemy.position.z.toFixed(2)}) shoots at Player at (${playerPosition.x.toFixed(2)}, ${playerPosition.y.toFixed(2)}, ${playerPosition.z.toFixed(2)})`);
+
+                    console.log(`[AI Shoot Debug] Enemy Pos: (${enemy.position.x.toFixed(2)}, ${enemy.position.y.toFixed(2)}, ${enemy.position.z.toFixed(2)})`);
+                    console.log(`[AI Shoot Debug] Player Pos: (${playerPosition.x.toFixed(2)}, ${playerPosition.y.toFixed(2)}, ${playerPosition.z.toFixed(2)})`);
+                    const enemyBulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+                    const enemyBulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                    const enemyBullet = new THREE.Mesh(enemyBulletGeometry, enemyBulletMaterial);
+
+                    enemyBullet.position.copy(enemy.position);
+
+                    // プレイヤーのy軸に合わせて射撃
+                    const targetY = yawObject.position.y + 0.9; 
+                    const enemyToPlayerDirection = new THREE.Vector3().subVectors(new THREE.Vector3(playerPosition.x, targetY, playerPosition.z), enemy.position).normalize();
+                    enemyBullet.velocity = enemyToPlayerDirection.multiplyScalar(0.4); // 弾の速度を増加 (0.4 -> 0.4)
+                    console.log(`[AI Shoot Debug] Target Y: ${targetY.toFixed(2)}`);
+                    console.log(`[AI Shoot Debug] Calculated Direction: (${enemyToPlayerDirection.x.toFixed(2)}, ${enemyToPlayerDirection.y.toFixed(2)}, ${enemyToPlayerDirection.z.toFixed(2)})`);
+                    console.log(`[AI Bullet Created] Initial Pos: (${enemyBullet.position.x.toFixed(2)}, ${enemyBullet.position.y.toFixed(2)}, ${enemyBullet.position.z.toFixed(2)}), Velocity: (${enemyBullet.velocity.x.toFixed(2)}, ${enemyBullet.velocity.y.toFixed(2)}, ${enemyBullet.velocity.z.toFixed(2)})`);
+
+                    // 弾の軌跡 (残像) を生成
+                    const trailMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 1 });
+                    const trailGeometry = new THREE.BufferGeometry().setFromPoints([enemyBullet.position.clone(), enemyBullet.position.clone()]); // 初期は2点
+                    const bulletTrail = new THREE.Line(trailGeometry, trailMaterial);
+                    scene.add(bulletTrail);
+                    enemyBullet.trail = bulletTrail; // 弾に軌跡オブジェクトを紐付け
+
+                    scene.add(enemyBullet);
+                    enemyBullets.push(enemyBullet);
+                    enemy.lastShotTime = currentTime;
+                    enemy.shootInterval = Math.random() * 2000 + 1000; // 発射後、次の発射間隔を再度ランダム化
+                }
+            }
+
+            // 敵の弾の移動と削除
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                const enemyBullet = enemyBullets[i];
+                enemyBullet.position.add(enemyBullet.velocity);
+
+                // 弾の軌跡パーティクルを生成 (一定フレームごとに)
+                if (Math.random() < 0.5) { // 50%の確率でパーティクルを生成 (頻度調整)
+                    const trailParticleGeometry = new THREE.SphereGeometry(0.08, 4, 4); // 小さな球体
+                    const trailParticle = new THREE.Mesh(trailParticleGeometry, enemyBulletTrailMaterial.clone()); // マテリアルはクローンして個別に透明度を制御
+                    trailParticle.position.copy(enemyBullet.position);
+                    trailParticle.creationTime = performance.now(); // 生成時間を記録
+                    scene.add(trailParticle);
+                    enemyBulletTrails.push(trailParticle);
+                    console.log('Trail particle generated and added to enemyBulletTrails array.'); // デバッグログ
+
+                    // パーティクルの透明度を時間とともに減少させるアニメーションを追加
+                    if (typeof TWEEN !== 'undefined') {
+                        new TWEEN.Tween(trailParticle.material)
+                            .to({ opacity: 0 }, 1000) // 1秒かけて透明にする
+                            .easing(TWEEN.Easing.Quadratic.Out)
+                            .start();
+                    }
+                }
+
+                // プレイヤーとの衝突判定
+                const playerHitboxRadius = 1.5; // プレイヤーの当たり判定半径を調整 (1.2 -> 1.5)
+                const bulletRadius = 0.1; // 弾の半径
+                const distanceToPlayer = enemyBullet.position.distanceTo(yawObject.position);
+
+                console.log(`[Collision Check] Bullet Pos: (${enemyBullet.position.x.toFixed(2)}, ${enemyBullet.position.y.toFixed(2)}, ${enemyBullet.position.z.toFixed(2)}), Player Pos: (${yawObject.position.x.toFixed(2)}, ${yawObject.position.y.toFixed(2)}, ${yawObject.position.z.toFixed(2)}), Distance: ${distanceToPlayer.toFixed(2)}, Threshold: ${(playerHitboxRadius + bulletRadius).toFixed(2)}`);
+
+                if (distanceToPlayer < playerHitboxRadius + bulletRadius) {
+                    // プレイヤーに弾が当たった！
+                    console.log("Player hit by enemy bullet!");
+
+                    // 1. 画面揺れ
+                    // TWEEN.js を使用してカメラを揺らす
+                    if (typeof TWEEN !== 'undefined') { // TWEENが定義されているか確認
+                        const shakeIntensity = 1.0;
+                        const shakeDuration = 300; // ms
+                        new TWEEN.Tween(camera.position)
+                            .to({
+                                x: camera.position.x + (Math.random() - 0.5) * shakeIntensity,
+                                y: camera.position.y + (Math.random() - 0.5) * shakeIntensity,
+                                z: camera.position.z + (Math.random() - 0.5) * shakeIntensity
+                            }, shakeDuration)
+                            .easing(TWEEN.Easing.Quadratic.Out)
+                            .repeat(7) // 7回揺らす
+                            .yoyo(true) // 行ったり来たり
+                            .onUpdate(() => {
+                                console.log(`Camera position during shake: x=${camera.position.x.toFixed(2)}, y=${camera.position.y.toFixed(2)}, z=${camera.position.z.toFixed(2)}`);
+                            })
+                            .start();
+                    }
+
+                    // 2. サウンドエフェクト
+                    const hitSound = new Audio('gan.mp3');
+                    hitSound.volume = 0.8;
+                    hitSound.play().catch(e => console.error("Failed to play hit sound:", e));
+
+                    // 3. 赤いフラッシュ点滅
+                    const redFlashOverlay = document.getElementById('red-flash-overlay');
+                    if (redFlashOverlay) {
+                        console.log("Applying red flash class.");
+                        redFlashOverlay.classList.add('red-flash-active'); // クラスを追加
+                        setTimeout(() => {
+                            console.log("Removing red flash class.");
+                            redFlashOverlay.classList.remove('red-flash-active'); // クラスを削除
+                        }, 400); // 400ms後に消す
+                    }
+
+                    // 弾を削除
+                    scene.remove(enemyBullet);
+                    enemyBullets.splice(i, 1);
+                    continue; // 次の弾へ
+                }
+
+                // 一定距離移動したら削除 (例: 50ユニット)
+                if (enemyBullet.position.distanceTo(yawObject.position) > 50) {
+                    scene.remove(enemyBullet);
+                    enemyBullets.splice(i, 1);
+                }
+            }
+
+            // 敵の弾の軌跡パーティクルの削除
+            const trailLifetime = 300; // 1秒 (ミリ秒)
+            for (let i = enemyBulletTrails.length - 1; i >= 0; i--) {
+                const trailParticle = enemyBulletTrails[i];
+                if (performance.now() - trailParticle.creationTime > trailLifetime) {
+                    scene.remove(trailParticle);
+                    enemyBulletTrails.splice(i, 1);
+                }
+            }
+
+            // 爆発演出中の敵をenemies配列から削除チェック
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                if (enemy.isHit && (performance.now() - enemy.hitTime > 800)) { // 爆発アニメーションのduration (0.8s)
+                    enemies.splice(i, 1); // 配列から完全に削除
+                }
+            }
+
+            // ステージ進行チェック
+            console.log(`Enemies remaining: ${enemies.length}, Current Stage: ${currentStage}`); // デバッグログ
+            if (enemies.length === 0) {
+                console.log(`Stage ${currentStage} cleared! Advancing to next stage.`); // デバッグログ
+                currentStage++;
+                if (currentStage <= maxStages) {
+                    spawnEnemiesForStage(currentStage);
+                } else {
+                    console.log("All Stages Completed! Spawning all enemy types for final challenge.");
+                    // 全ステージクリア時の処理 (例: 勝利画面表示)
+                    // ステージ1, 2, 3の敵をすべて出現させる
+                    spawnEnemiesForStage(1); // ステージ1の敵
+                    spawnEnemiesForStage(2); // ステージ2の敵
+                    spawnEnemiesForStage(3); // ステージ3の敵
+                    currentStage = maxStages + 1; // 無限ループにならないようにステージを更新
+                }
+            }
+        }
+    }); // DOMContentLoaded の閉じ括弧とセミコロン
+    </script>
+    <!-- 設定ボタン -->
+    <button id="settings-button" style="position: fixed; top: 10px; right: 10px; z-index: 10002; padding: 10px; background-color: #333; color: white; border: none; border-radius: 5px; cursor: pointer;">設定</button>
+
+    <!-- 設定パネル -->
+    <div id="settings-panel" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; background-color: rgba(0, 0, 0, 0.8); color: white; padding: 20px; border-radius: 10px; z-index: 10003; display: none;">
+        <h2>設定</h2>
+        <div>
+            <label for="sensitivity-slider">視点感度:</label>
+            <input type="range" id="sensitivity-slider" min="0" max="100" value="50" style="width: 100%;">
+            <span id="sensitivity-value">0.015</span>
+        </div>
+        <div style="margin-top: 15px;">
+            <input type="checkbox" id="auto-aim-checkbox">
+            <label for="auto-aim-checkbox">オートエイム</label>
+        </div>
+        <button id="close-settings" style="margin-top: 20px; padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">閉じる</button>
+    </div>
+    <div id="red-flash-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 0, 0, 0); z-index: 10004; pointer-events: none; transition: background-color 0.1s ease-out;"></div>
+</body>
+</html>
