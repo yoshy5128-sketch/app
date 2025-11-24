@@ -211,6 +211,8 @@ canvas {
 
     <div id="joystick-move"></div>
     <div id="fire-button">発射</div>
+    <!-- Add this new crouch button -->
+    <div id="crouch-button" style="position: fixed; right: 20px; bottom: 20px; width: 60px; height: 60px; z-index: 10; background-color: rgba(100, 100, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(100, 100, 255, 0.5);">しゃがむ</div>
     
     <div id="crosshair">
         <div class="cross-line" id="line-h"></div>
@@ -228,11 +230,12 @@ canvas {
     <audio id="playerGunSound" src="pgun.mp3" preload="auto"></audio>
     <audio id="mgGunSound" src="mg.mp3" preload="auto"></audio>
     <audio id="rrGunSound" src="rr.mp3" preload="auto"></audio>
-    <audio id="srGunSound" src="ss.mp3" preload="auto"></audio>
+    <audio id="srGunSound" src="pss.mp3" preload="auto"></audio>
     <audio id="aimgGunSound" src="aimg.mp3" preload="auto"></audio>
     <audio id="aiGunSound" src="aigun.mp3" preload="auto"></audio>
     <audio id="explosionSound" src="bom.mp3" preload="auto"></audio>
     <audio id="setSound" src="set.mp3" preload="auto"></audio>
+    <audio id="aiSrGunSound" src="ss.mp3" preload="auto"></audio> <!-- この行を追加 -->
     
     <div id="game-over-screen" class="end-screen">
         YOU ARE LOSE
@@ -274,6 +277,8 @@ document.body.appendChild(renderer.domElement);
 
 const clock = new THREE.Clock();
 let isGameRunning = false;
+let playerTargetHeight = 2.0;
+let isCrouchingToggle = false;
 const GRAVITY = 9.8; 
 let playerHP = 3;
 let screenShakeDuration = 0;
@@ -354,6 +359,7 @@ const aiGunSound = document.getElementById('aiGunSound');
 const explosionSound = document.getElementById('explosionSound');
 const startScreen = document.getElementById('start-screen');
 const gameOverScreen = document.getElementById('game-over-screen');
+const aiSrGunSound = document.getElementById('aiSrGunSound'); // この行を追加
 const winScreen = document.getElementById('win-screen');
 const playerHPDisplay = document.getElementById('player-hp-display');
 const aiHPDisplay = document.getElementById('ai-hp-display');
@@ -391,13 +397,19 @@ const AI_INITIAL_POSITION = new THREE.Vector3(0, 0, 20);
 const NUM_RANDOM_OBSTACLES = 20; 
 
 const defaultObstaclesConfig = [
-    {x: 5, z: 5}, {x: -5, z: -5}, {x: 0, z: 10}, {x: 10, z: 0}, {x: -10, z: 5}, {x: 5, z: -10},
-    {x: 15, z: 15}, {x: -15, z: 15}, {x: 15, z: -15}, {x: -15, z: -15}, {x: 0, z: -18}, {x: -18, z: 0},
+    {x: 5, z: 5, height: 1.8}, {x: -5, z: -5}, {x: 0, z: 10, height: 1.8}, {x: 10, z: 0}, {x: -10, z: 5}, {x: 5, z: -10},
+    {x: 15, z: 15, height: 1.8}, {x: -15, z: 15}, {x: 15, z: -15, height: 1.8}, {x: -15, z: -15}, {x: 0, z: -18, height: 1.8}, {x: -18, z: 0},
     {x: 25, z: 0, width: 0.5, depth: 10}, {x: -25, z: 0, width: 0.5, depth: 10}, {x: 0, z: 25, width: 10, depth: 0.5}, {x: 0, z: -25, width: 10, depth: 0.5},
-    {x: 20, z: 20}, {x: -20, z: 20}, {x: 20, z: -20}, {x: -20, z: -20},
+    {x: 20, z: 20, height: 1.8}, {x: -20, z: 20}, {x: 20, z: -20, height: 1.8}, {x: -20, z: -20},
     {x: 35, z: 10, width: 0.5, depth: 8}, {x: -35, z: 10, width: 0.5, depth: 8}, {x: 10, z: 35, width: 8, depth: 0.5}, {x: -10, z: 35, width: 8, depth: 0.5},
-    {x: 30, z: -30}, {x: -30, z: -30},
-    {x: 40, z: 0, width: 0.5, depth: 15}, {x: -40, z: 0, width: 0.5, depth: 15}, {x: 0, z: 40, width: 15, depth: 0.5}, {x: 0, z: -40, width: 15, depth: 0.5}
+    {x: 30, z: -30, height: 1.8}, {x: -30, z: -30},
+    {x: 40, z: 0, width: 0.5, depth: 15}, {x: -40, z: 0, width: 0.5, depth: 15}, {x: 0, z: 40, width: 15, depth: 0.5, height: 1.8}, {x: 0, z: -40, width: 15, depth: 0.5},
+    {x: 0, z: -30, width: 2, height: 1.8, depth: 2},  // Adjusted half-height obstacles
+    {x: 10, z: -35, width: 2, height: 1.8, depth: 2},
+    {x: -10, z: -35, width: 2, height: 1.8, depth: 2},
+    {x: 20, z: -25, width: 3, height: 1.8, depth: 3},
+    {x: -20, z: -25, width: 3, height: 1.8, depth: 3},
+    {x: 30, z: -15, width: 2, height: 1.8, depth: 2}
 ];
 
 function getRandomSafePosition() {
@@ -474,7 +486,7 @@ function createWeaponPickups() {
 }
 const DEFAULT_OBSTACLE_HEIGHT = BODY_HEIGHT + (2 * HEAD_RADIUS);
 
-function createAndAttachLadder(obstacle) {
+function createAndAttachLadder(obstacle, ladderFace = -1) {
     const LADDER_WIDTH = 1.5;
     const RUNG_SPACING = 0.5;
     const RUNG_THICKNESS = 0.1;
@@ -505,14 +517,14 @@ function createAndAttachLadder(obstacle) {
         ladderGroup.add(rung);
     }
     
-    const face = Math.floor(Math.random() * 4);
+    const face = ladderFace === -1 ? Math.floor(Math.random() * 4) : ladderFace;
     const offset = 0.1; 
 
     switch (face) {
-        case 0: ladderGroup.position.set(0, 0, obstacleSize.z / 2 + offset); break;
-        case 1: ladderGroup.position.set(0, 0, -obstacleSize.z / 2 - offset); break;
-        case 2: ladderGroup.position.set(obstacleSize.x / 2 + offset, 0, 0); ladderGroup.rotation.y = Math.PI / 2; break;
-        case 3: ladderGroup.position.set(-obstacleSize.x / 2 - offset, 0, 0); ladderGroup.rotation.y = -Math.PI / 2; break;
+        case 0: ladderGroup.position.set(0, 0, obstacleSize.z / 2 + offset); break; // +z
+        case 1: ladderGroup.position.set(0, 0, -obstacleSize.z / 2 - offset); break; // -z
+        case 2: ladderGroup.position.set(obstacleSize.x / 2 + offset, 0, 0); ladderGroup.rotation.y = Math.PI / 2; break; // +x
+        case 3: ladderGroup.position.set(-obstacleSize.x / 2 - offset, 0, 0); ladderGroup.rotation.y = -Math.PI / 2; break; // -x
     }
     
     obstacle.add(ladderGroup);
@@ -570,10 +582,88 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     }
 
     const HIDING_DISTANCE = 1.5; 
-    HIDING_SPOTS.push(new THREE.Vector3(x + HIDING_DISTANCE, 0, z + HIDING_DISTANCE));
-    HIDING_SPOTS.push(new THREE.Vector3(x - HIDING_DISTANCE, 0, z + HIDING_DISTANCE));
-    HIDING_SPOTS.push(new THREE.Vector3(x + HIDING_DISTANCE, 0, z - HIDING_DISTANCE));
-    HIDING_SPOTS.push(new THREE.Vector3(x - HIDING_DISTANCE, 0, z - HIDING_DISTANCE));
+    // HIDING_SPOTSに位置情報と関連する障害物情報を格納
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x + HIDING_DISTANCE, 0, z + HIDING_DISTANCE), obstacle: box });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z + HIDING_DISTANCE), obstacle: box });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x + HIDING_DISTANCE, 0, z - HIDING_DISTANCE), obstacle: box });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z - HIDING_DISTANCE), obstacle: box });
+}
+
+function createSniperTower(x, z) {
+    const TOWER_WIDTH = 6;
+    const TOWER_DEPTH = 6;
+    const TOWER_HEIGHT = DEFAULT_OBSTACLE_HEIGHT * 3; // DEFAULT_OBSTACLE_HEIGHTは3.0なので、TOWER_HEIGHTは9.0
+    const towerYPos = (TOWER_HEIGHT / 2) - FLOOR_HEIGHT;
+
+    // 1. Create the main tower structure
+    const towerGeometry = new THREE.BoxGeometry(TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH);
+    const towerMaterial = new THREE.MeshLambertMaterial({ color: 0x4A4A4A }); // Dark grey
+    const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+    tower.position.set(x, towerYPos, z);
+    
+    // 塔本体に userData を追加
+    tower.userData.isTower = true;
+    // 塔のHPを計算 (例: 通常障害物の体積比を考慮)
+    const DEFAULT_OBSTACLE_VOLUME = 2 * DEFAULT_OBSTACLE_HEIGHT * 2; // 幅2, 高さDEFAULT_OBSTACLE_HEIGHT, 奥行き2
+    const TOWER_VOLUME = TOWER_WIDTH * TOWER_HEIGHT * TOWER_DEPTH;
+    // HPは体積比の約半分 (おおよそ1ロケット弾で0.5ダメージ)
+    tower.userData.hp = Math.round(TOWER_VOLUME / DEFAULT_OBSTACLE_VOLUME / 2); // おおよそ20HP
+    tower.userData.coverWalls = []; // カバーウォールを格納する配列
+    
+    scene.add(tower);
+    obstacles.push(tower);
+
+    // Add rooftop floor for collision
+    const rooftopY = tower.position.y + (TOWER_HEIGHT / 2);
+    const rooftopFloorGeometry = new THREE.BoxGeometry(TOWER_WIDTH, 0.1, TOWER_DEPTH);
+    const rooftopFloorMaterial = new THREE.MeshLambertMaterial({ color: 0x666666, transparent: true, opacity: 0.0 }); // Invisible but collidable
+    const rooftopFloor = new THREE.Mesh(rooftopFloorGeometry, rooftopFloorMaterial);
+    rooftopFloor.position.set(x, rooftopY, z);
+    rooftopFloor.userData.parentTower = tower; // Link to the main tower body
+    scene.add(rooftopFloor);
+    obstacles.push(rooftopFloor);
+
+    // 2. Determine the outward face for the ladder (0: +z, 1: -z, 2: +x, 3: -x)
+    let ladderFace;
+    // Simplified logic: Place ladder on the face furthest from the center (0,0)
+    if (Math.abs(x) > Math.abs(z)) {
+        ladderFace = x > 0 ? 2 : 3; // Furthest on X-axis, so ladder on +x or -x face
+    } else {
+        ladderFace = z > 0 ? 0 : 1; // Furthest on Z-axis, so ladder on +z or -z face
+    }
+
+    // 3. Attach the ladder
+    createAndAttachLadder(tower, ladderFace);
+
+    // 4. Add rooftop cover walls
+    const wallHeight = 1.0;
+    const wallThickness = 0.5;
+    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x880000 });
+    
+    // Defines the 4 potential walls
+    const wallDefs = [
+        { face: 0, w: TOWER_WIDTH + wallThickness, h: wallHeight, d: wallThickness, ox: 0, oz: TOWER_DEPTH / 2 }, // +z
+        { face: 1, w: TOWER_WIDTH + wallThickness, h: wallHeight, d: wallThickness, ox: 0, oz: -TOWER_DEPTH / 2 }, // -z
+        { face: 2, w: wallThickness, h: wallHeight, d: TOWER_DEPTH, ox: TOWER_WIDTH / 2, oz: 0 }, // +x
+        { face: 3, w: wallThickness, h: wallHeight, d: TOWER_DEPTH, ox: -TOWER_WIDTH / 2, oz: 0 }  // -x
+    ];
+
+    for (const def of wallDefs) {
+        if (def.face === ladderFace) continue; // Don't build a wall where the ladder is
+
+        const wallGeometry = new THREE.BoxGeometry(def.w, def.h, def.d);
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.set(
+            tower.position.x + def.ox,
+            rooftopY + (def.h / 2), // The center of the wall should be half its height above the roof
+            tower.position.z + def.oz
+        );
+        wall.userData.isTowerWall = true;
+        wall.userData.parentTowerRef = tower; // 親の塔本体への参照を追加
+        tower.userData.coverWalls.push(wall); // 塔本体の配列にカバーウォールを追加
+        scene.add(wall);
+        obstacles.push(wall);
+    }
 }
 
 function generateObstaclePositions(count) {
@@ -685,6 +775,8 @@ function resetObstacles() {
         }
     } else { // 'default' またはそれ以外の場合
         obstaclesToCreate = defaultObstaclesConfig;
+        createSniperTower(35, -35); // Player side tower
+        createSniperTower(-35, 35); // AI side tower
     }
 
     for (const config of obstaclesToCreate) {
@@ -701,6 +793,23 @@ scene.add(player);
 player.position.copy(PLAYER_INITIAL_POSITION);
 player.rotation.y = Math.PI;
 camera.position.set(0, 0, 0);
+
+// Player model for death animation
+let playerBody, playerHead, playerModel;
+let isPlayerDeathPlaying = false;
+
+const playerMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 }); // Yellow
+playerBody = new THREE.Mesh(new THREE.BoxGeometry(1.0, BODY_HEIGHT, 1.0), playerMaterial);
+playerHead = new THREE.Mesh(new THREE.SphereGeometry(HEAD_RADIUS, 16, 16), playerMaterial);
+playerBody.position.y = BODY_HEIGHT / 2;
+playerHead.position.y = BODY_HEIGHT + HEAD_RADIUS;
+
+playerModel = new THREE.Group();
+playerModel.add(playerBody);
+playerModel.add(playerHead);
+player.add(playerModel);
+playerModel.visible = false;
+
 
 const AI_SPEED = 15.0;      
 const HIDE_DURATION = 3.0;  
@@ -744,6 +853,7 @@ function createAI(color) {
     aiObject.hp = 3;
     aiObject.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
     aiObject.targetPosition = new THREE.Vector3(); 
+    aiObject.isCrouching = false; 
     return aiObject;
 }
 
@@ -812,17 +922,53 @@ function findNewHidingSpot(ai) {
     let bestSpot = null;
     let maxDistanceToPlayer = -Infinity;
     if (HIDING_SPOTS.length === 0) return false;
-    for (const spot of HIDING_SPOTS) {
-        if (spot.distanceTo(currentAIPos) < ARRIVAL_THRESHOLD) continue; 
-        const distanceToPlayer = spot.distanceTo(player.position);
-        if (distanceToPlayer > maxDistanceToPlayer) {
-            maxDistanceToPlayer = distanceToPlayer;
-            bestSpot = spot;
+
+    const aiStandingHeight = BODY_HEIGHT + HEAD_RADIUS * 2; // AIの立ち姿勢の全高 (3.0)
+    const aiCrouchingHeight = aiStandingHeight * 0.7; // AIのしゃがみ姿勢の全高 (2.1)
+
+    // 隠れるのに適したスポットのリスト
+    const viableCrouchSpots = [];
+    // 通常のスポットのリスト
+    const regularSpots = [];
+
+    for (const spotInfo of HIDING_SPOTS) { // spotはspotInfoオブジェクトに変更
+        const spotPosition = spotInfo.position; // spotInfo.positionを使用
+        const obstacle = spotInfo.obstacle; // spotInfo.obstacleを使用
+
+        // 障害物がない、または既に破壊されている場合はスキップ
+        if (!obstacle || !obstacle.parent) continue;
+
+        const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+        const obstacleHeight = obstacleBox.max.y - obstacleBox.min.y;
+
+        // 障害物がAIの立ち姿勢より低く、かつAIがしゃがむことで隠れられる高さの場合
+        if (obstacleHeight < aiStandingHeight && obstacleHeight >= aiCrouchingHeight * 0.8) {
+            viableCrouchSpots.push(spotInfo); // しゃがんで隠れるのに適したスポット
+        } else {
+            regularSpots.push(spotInfo); // 通常のスポット
         }
     }
+
+    let spotsToConsider = viableCrouchSpots;
+    if (spotsToConsider.length === 0) {
+        spotsToConsider = regularSpots; // しゃがんで隠れるスポットがなければ、通常のスポットを考慮
+    }
+    if (spotsToConsider.length === 0) return false; // 考慮するスポットがなければ終了
+
+    // 考慮するスポットの中から最適なものを選ぶ
+    for (const spotInfo of spotsToConsider) {
+        const spotPosition = spotInfo.position;
+        if (spotPosition.distanceTo(currentAIPos) < ARRIVAL_THRESHOLD) continue; 
+        const distanceToPlayer = spotPosition.distanceTo(player.position);
+        if (distanceToPlayer > maxDistanceToPlayer) {
+            maxDistanceToPlayer = distanceToPlayer;
+            bestSpot = spotInfo; // bestSpotもspotInfoオブジェクトを格納
+        }
+    }
+
     if (bestSpot) {
         ai.state = 'MOVING';
-        ai.targetPosition.copy(bestSpot);
+        ai.targetPosition.copy(bestSpot.position); // bestSpot.positionを使用
         ai.avoiding = false;
         return true;
     }
@@ -919,6 +1065,43 @@ function destroyObstacle(obstacle, explosionPosition) {
     } else {
         return;
     }
+
+    // もし破壊対象が塔本体であれば、関連するカバーウォールも削除する
+    if (obstacle.userData.isTower) {
+        for (const wall of obstacle.userData.coverWalls) {
+            const wallIndex = obstacles.indexOf(wall);
+            if (wallIndex > -1) {
+                obstacles.splice(wallIndex, 1); // 障害物リストからカバーウォールを削除
+            }
+            if (wall.parent) {
+                wall.parent.remove(wall); // シーンからカバーウォールを削除
+            }
+            if (wall.geometry) wall.geometry.dispose();
+            if (wall.material) wall.material.dispose();
+        }
+    }
+
+    // 梯子グループとセンサーエリアの削除
+    // 1. 梯子グループを障害物から削除
+    const ladderGroup = obstacle.children.find(child => child.name === 'ladder');
+    if (ladderGroup) {
+        obstacle.remove(ladderGroup);
+        // 必要に応じてladderGroupのdisposeも行う
+        // ladderGroup.traverse(obj => { if (obj.geometry) obj.geometry.dispose(); if (obj.material) obj.material.dispose(); });
+    }
+
+    // 2. 関連するセンサーエリアをladderSwitches配列とシーンから削除
+    for (let i = ladderSwitches.length - 1; i >= 0; i--) {
+        const sensorArea = ladderSwitches[i];
+        if (sensorArea.userData.obstacle === obstacle) {
+            scene.remove(sensorArea);
+            ladderSwitches.splice(i, 1);
+            // 必要に応じてsensorAreaのdisposeも行う
+            if (sensorArea.geometry) sensorArea.geometry.dispose();
+            if (sensorArea.material) sensorArea.material.dispose();
+        }
+    }
+
     scene.remove(obstacle);
     const NUM_FRAGMENTS_PER_AXIS = 3;
     const fragmentSize = new THREE.Vector3(obstacle.geometry.parameters.width / NUM_FRAGMENTS_PER_AXIS, obstacle.geometry.parameters.height / NUM_FRAGMENTS_PER_AXIS, obstacle.geometry.parameters.depth / NUM_FRAGMENTS_PER_AXIS);
@@ -968,7 +1151,7 @@ function createSmokeEffect(position) {
 }
 
 function createRedSmokeEffect(position) {
-    const SMOKE_PARTICLE_COUNT = 15; 
+    const SMOKE_PARTICLE_COUNT = 7; // パーティクル数を15から7に半減
     for (let i = 0; i < SMOKE_PARTICLE_COUNT; i++) {
         const smokeGeometry = new THREE.SphereGeometry(0.1, 8, 8);
         const smokeMaterial = new THREE.MeshBasicMaterial({
@@ -982,7 +1165,7 @@ function createRedSmokeEffect(position) {
         scene.add(smoke);
 
         const scaleTarget = 5 + Math.random() * 5; 
-        const duration = 0.8 + Math.random() * 0.5; 
+        const duration = 0.4 + Math.random() * 0.25; // 表示時間を約半分に短縮
         new TWEEN.Tween(smoke.scale).to({ x: scaleTarget, y: scaleTarget, z: scaleTarget }, duration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
         new TWEEN.Tween(smokeMaterial).to({ opacity: 0 }, duration * 1000).easing(TWEEN.Easing.Linear.None).onComplete(() => {
             scene.remove(smoke);
@@ -1112,16 +1295,7 @@ function shoot() {
         let soundToPlay = playerGunSound;
         if (currentWeapon === WEAPON_MG) soundToPlay = mgGunSound;
         else if (currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
-        if (currentWeapon === WEAPON_MG) {
-            if (mgGunSound.paused) {
-                mgGunSound.play().catch(e => console.error("Audio playback failed:", e));
-            } else {
-                mgGunSound.currentTime = 0;
-                mgGunSound.play().catch(e => console.error("Audio playback failed:", e));
-            }
-        } else {
-            soundToPlay.cloneNode(true).play().catch(e => console.error("Audio playback failed:", e));
-        }
+        soundToPlay.cloneNode(true).play().catch(e => console.error("Audio playback failed:", e));
         const startPosition = new THREE.Vector3();
         player.getWorldPosition(startPosition); 
         let direction = new THREE.Vector3();
@@ -1157,7 +1331,7 @@ function shoot() {
 function aiShoot(ai, timeElapsed) {
     if (!isGameRunning || playerHP <= 0) return;
 
-    const startPosition = ai.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0)); // AIの体の約3/4の高さから発射
+    const startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0)); // AIの体の約3/4の高さから発射。しゃがみ時は半分の高さ
     const playerBodyPos = player.position.clone().add(new THREE.Vector3(0, 0.5, 0));
     
     if (!checkLineOfSight(startPosition, playerBodyPos, obstacles)) {
@@ -1211,18 +1385,13 @@ function aiShoot(ai, timeElapsed) {
     if (timeElapsed - ai.lastAttackTime < aiFireRate) return; 
     if (canAIShoot) {
         if (ai.currentWeapon === WEAPON_MG) {
-            if (aimgGunSound.paused) { 
-                aimgGunSound.play().catch(e => console.error("AI audio playback failed:", e));
-            } else {
-                aimgGunSound.currentTime = 0;
-                aimgGunSound.play().catch(e => console.error("AI audio playback failed:", e));
-            }
+            aimgGunSound.cloneNode(true).play().catch(e => console.error("AI audio playback failed:", e));
         } else if (ai.currentWeapon === WEAPON_RR) { 
             rrGunSound.cloneNode(true).play().catch(e => console.error("AI audio playback failed:", e));
         } else { 
             let soundToPlay = aiGunSound;
             if (ai.currentWeapon === WEAPON_SR) {
-                soundToPlay = srGunSound;
+                soundToPlay = aiSrGunSound; // ここをsrGunSoundからaiSrGunSoundに変更
             }
             soundToPlay.cloneNode(true).play().catch(e => console.error("AI audio playback failed:", e));
         }
@@ -1292,7 +1461,13 @@ if (document.getElementById('joystick-move')) {
 }
 
 const keySet = new Set();
-document.addEventListener('keydown', (event) => { if (!isGameRunning) return; keySet.add(event.code); });
+document.addEventListener('keydown', (event) => {
+    if (!isGameRunning) return;
+    keySet.add(event.code);
+    if (event.code === 'KeyC') {
+        isCrouchingToggle = !isCrouchingToggle;
+    }
+});
 document.addEventListener('keyup', (event) => { if (!isGameRunning) return; keySet.delete(event.code); });
 
 const canvas = renderer.domElement;
@@ -1418,6 +1593,15 @@ document.addEventListener('touchend', (event) => {
     } 
 }, false);
 
+const crouchButton = document.getElementById('crouch-button');
+if (crouchButton) {
+crouchButton.addEventListener('touchstart', (event) => {
+    if (!isGameRunning) return;
+    isCrouchingToggle = !isCrouchingToggle; // Toggle the state
+    event.preventDefault(); // Prevent default touch behavior
+}, { passive: false });
+}
+
 
 // =========================================================================
 // ゲームループ・管理ロジック
@@ -1441,13 +1625,17 @@ function startGame() {
     if ('ontouchstart' in window) { // タッチデバイスの場合
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
+        const crouch = document.getElementById('crouch-button'); // 追加
         if(joy) joy.style.display = 'block';
         if(fire) fire.style.display = 'flex'; // fire-buttonはflexなのでflexに戻す
+        if(crouch) crouch.style.display = 'flex'; // crouch-buttonもflexで表示
     } else { // PCの場合
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
+        const crouch = document.getElementById('crouch-button'); // 追加
         if(joy) joy.style.display = 'none';
         if(fire) fire.style.display = 'none';
+        if(crouch) crouch.style.display = 'none'; // PCでは非表示
     }
 
     // フルスクリーン処理
@@ -1536,18 +1724,23 @@ function restartGame() {
         ai2HPDisplay.style.display = 'none';
     }
 
-    const gameUI = ['crosshair', 'player-hp-display', 'ai-hp-display'];
+    const gameUI = ['crosshair', 'player-hp-display', 'ai-hp-display', 'player-weapon-display'];
     if (gameSettings.aiCount > 1) {
         gameUI.push('ai2-hp-display');
     }
-    gameUI.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'block'; });
-            // モバイル判定でUIを表示/非表示
-            if ('ontouchstart' in window) { // タッチデバイスの場合
-                const joy = document.getElementById('joystick-move');
-                const fire = document.getElementById('fire-button');
-                if(joy) joy.style.display = 'block';
-                if(fire) fire.style.display = 'flex'; // fire-buttonはflexなのでflexに戻す
-            }    
+    gameUI.forEach(id => { 
+        const el = document.getElementById(id); 
+        if (el) el.style.display = 'block'; 
+    });
+    // モバイル判定でUIを表示/非表示
+    if ('ontouchstart' in window) { // タッチデバイスの場合
+        const joy = document.getElementById('joystick-move');
+        const fire = document.getElementById('fire-button');
+        const crouch = document.getElementById('crouch-button');
+        if(joy) joy.style.display = 'block';
+        if(fire) fire.style.display = 'flex';
+        if(crouch) crouch.style.display = 'flex';
+    }    
     for (let i = projectiles.length - 1; i >= 0; i--) scene.remove(projectiles[i].mesh);
     projectiles.length = 0;
     
@@ -1570,11 +1763,20 @@ function restartGame() {
     joystickMoveVector.set(0, 0);
     isMouseButtonDown = false;
     isGameRunning = true;
+
+    // Reset player model for death animation
+    scene.remove(playerBody);
+    scene.remove(playerHead);
+    player.add(playerModel);
+    playerModel.visible = false;
 }
 
 function startAIDeathSequence(impactVelocity, ai) {
     if (isAIDeathPlaying) return;
     isAIDeathPlaying = true;
+
+    // 赤い煙エフェクトを追加
+    createRedSmokeEffect(ai.position); 
 
     const joy = document.getElementById('joystick-move');
     const fire = document.getElementById('fire-button');
@@ -1640,6 +1842,7 @@ function startAIDeathSequence(impactVelocity, ai) {
     cinematicCamera.position.copy(cameraPos);
     cinematicCamera.lookAt(aiDeathLocation.clone().add(new THREE.Vector3(0, 1, 0))); // 注視点を少し上に調整
     cinematicCamera.fov = 75;
+    cinematicCamera.aspect = window.innerWidth / window.innerHeight; // アスペクト比を更新
     cinematicCamera.updateProjectionMatrix();
 
     new TWEEN.Tween(cinematicCamera)
@@ -1662,6 +1865,121 @@ function startAIDeathSequence(impactVelocity, ai) {
     }, 3500); 
 }
 
+function playerFallDownCinematicSequence() {
+    createRedSmokeEffect(player.position);
+
+    const playerDeathLocation = player.position.clone();
+    const targetCameraPosition = findClearCameraPosition(playerDeathLocation, obstacles);
+
+    cinematicCamera.position.copy(targetCameraPosition);
+    cinematicCamera.lookAt(playerDeathLocation.clone().add(new THREE.Vector3(0, 1, 0)));
+    cinematicCamera.fov = 75;
+    cinematicCamera.aspect = window.innerWidth / window.innerHeight;
+    cinematicCamera.updateProjectionMatrix();
+    new TWEEN.Tween(cinematicCamera).to({ fov: 30 }, 2000).easing(TWEEN.Easing.Quadratic.InOut).start();
+
+    playerModel.visible = true; // Ensure player model is visible
+    player.remove(playerModel); // Detach playerModel from player
+    scene.add(playerModel); // Add playerModel directly to the scene at current player position
+    playerModel.position.copy(player.position); // Ensure playerModel is at the current player position
+
+    // AIの倒れる演出と同様にTweenでアニメーションさせる
+    const fallDuration = 1.0; 
+    const fallRotationAxisAngle = Math.PI / 2;
+    const finalRotation = playerModel.rotation.clone();
+    finalRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
+
+    new TWEEN.Tween(playerModel.rotation)
+        .to({ x: finalRotation.x }, fallDuration * 1000)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
+
+    // Player model's Y position should drop slightly to appear 'collapsed'
+    const finalPlayerYPosition = -FLOOR_HEIGHT + (BODY_HEIGHT / 2); // Assuming body is 2 units high
+    new TWEEN.Tween(playerModel.position)
+        .to({ y: finalPlayerYPosition }, fallDuration * 1000)
+        .easing(TWEEN.Easing.Quadratic.In)
+        .start();
+    
+    // Set a flag to indicate this type of death sequence
+    playerModel.userData.deathType = 'fallDown';
+
+    setTimeout(() => {
+        isPlayerDeathPlaying = false;
+        showGameOver();
+        playerModel.userData = {}; // Clear user data
+        scene.remove(playerModel); // Remove the model from scene
+    }, fallDuration * 1000 + 1500); // Wait for animation + a bit
+}
+
+function startPlayerDeathSequence(projectile) {
+    if (isPlayerDeathPlaying || playerHP > 0) return;
+    isPlayerDeathPlaying = true;
+    isGameRunning = false;
+
+    document.exitPointerLock();
+    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'player-weapon-display'];
+    uiToHide.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    
+    playerModel.visible = true; // Make model visible before doing anything else
+    
+    // For rocket launcher, blow away. For guns, fall down.
+    if (projectile.isRocket) {
+        const impactVelocity = projectile.velocity;
+        
+        const bodyPos = playerBody.getWorldPosition(new THREE.Vector3());
+        const headPos = playerHead.getWorldPosition(new THREE.Vector3());
+
+        player.remove(playerModel); // playerModelをplayerから剥がす
+        scene.add(playerBody); // body, headをそれぞれシーンに追加
+        scene.add(playerHead);
+        playerBody.position.copy(bodyPos);
+        playerHead.position.copy(headPos);
+        
+        // Mark as blowAway type for animate loop
+        playerBody.userData.deathType = 'blowAway';
+        playerHead.userData.deathType = 'blowAway';
+
+        const forceMagnitude = 25;
+        const upForce = 20;
+        const bodyVelocity = impactVelocity.clone().normalize().multiplyScalar(forceMagnitude);
+        bodyVelocity.y += upForce;
+        playerBody.userData.velocity = bodyVelocity;
+        playerBody.userData.angularVelocity = new THREE.Vector3((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15);
+
+        const headVelocity = bodyVelocity.clone().multiplyScalar(1.2);
+        headVelocity.y += 8;
+        playerHead.userData.velocity = headVelocity;
+        playerHead.userData.angularVelocity = new THREE.Vector3((Math.random() - 0.5) * 25, (Math.random() - 0.5) * 25, (Math.random() - 0.5) * 25);
+
+        const playerDeathLocation = bodyPos.clone();
+        const cameraPos = findClearCameraPosition(playerDeathLocation, obstacles);
+
+        cinematicCamera.position.copy(cameraPos);
+        cinematicCamera.lookAt(playerDeathLocation.clone().add(new THREE.Vector3(0, 1, 0)));
+        cinematicCamera.fov = 75;
+        cinematicCamera.aspect = window.innerWidth / window.innerHeight;
+        cinematicCamera.updateProjectionMatrix();
+
+        new TWEEN.Tween(cinematicCamera).to({ fov: 40 }, 2000).easing(TWEEN.Easing.Quadratic.InOut).start();
+
+        setTimeout(() => {
+            isPlayerDeathPlaying = false;
+            showGameOver();
+            playerBody.userData = {};
+            playerHead.userData = {};
+            scene.remove(playerBody);
+            scene.remove(playerHead);
+        }, 3500);
+    } else {
+        playerFallDownCinematicSequence();
+    }
+}
+
+
 function aiFallDownCinematicSequence(impactVelocity, ai) {
     if (isAIDeathPlaying) return; 
     isAIDeathPlaying = true;
@@ -1682,6 +2000,7 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
     cinematicCamera.position.copy(targetCameraPosition);
     cinematicCamera.lookAt(aiDeathLocation.clone().add(new THREE.Vector3(0, 1, 0))); // 注視点を少し上に調整
     cinematicCamera.fov = 75;
+    cinematicCamera.aspect = window.innerWidth / window.innerHeight; // アスペクト比を更新
     cinematicCamera.updateProjectionMatrix();
 
     new TWEEN.Tween(cinematicCamera)
@@ -1734,27 +2053,75 @@ function showWinScreen() {
 
 function checkCollision(object, obstacles, ignoreObstacle = null) {
     const objectBox = new THREE.Box3();
-    const pos = object.position;
+    const pos = object.position; // ここでのpos.yが何を指すのかを特定する
+
+    console.log("--- checkCollision start ---");
+    console.log("Object type:", object === player ? "Player" : (ais.includes(object) ? "AI" : "Other"));
+    console.log("Object position (world):", object.getWorldPosition(new THREE.Vector3()));
+    
+    // 追加: プレイヤーの生のposition.yの値を出力
     if (object === player) {
-        objectBox.min.set(pos.x - 0.5, pos.y - 2.0, pos.z - 0.5); 
-        objectBox.max.set(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5); 
-    } else if (ais.includes(object)) {
-        objectBox.setFromObject(object);
-        const AI_HALF_WIDTH = 0.25;
-        objectBox.min.x -= AI_HALF_WIDTH;
-        objectBox.max.x += AI_HALF_WIDTH;
-        objectBox.min.z -= AI_HALF_WIDTH;
-        objectBox.max.z += AI_HALF_WIDTH;
-        objectBox.min.y = object.position.y; 
-        objectBox.max.y = object.position.y + 3; 
-    } else return false;
-    for (const obstacle of obstacles) {
-        if (obstacle === ignoreObstacle) continue;
-        if (objectBox.intersectsBox(new THREE.Box3().setFromObject(obstacle))) return true;
+        console.log("Player raw position.y (pos.y):", pos.y);
+        console.log("Player target height:", playerTargetHeight);
     }
+    
+    let currentObjectBox;
+
+    if (object === player) {
+        objectBox.min.set(pos.x - 0.5, pos.y, pos.z - 0.5); 
+        objectBox.max.set(pos.x + 0.5, pos.y + playerTargetHeight, pos.z + 0.5);
+        
+        // プレイヤーの衝突ボックスをわずかに拡大して、浮動小数点数の誤差を吸収
+        objectBox.expandByScalar(0.01); // 例: 全方向に0.01拡大
+        
+        currentObjectBox = objectBox;
+    } else if (ais.includes(object)) {
+        currentObjectBox = new THREE.Box3().setFromObject(object);
+        const AI_HALF_WIDTH = 0.25;
+        currentObjectBox.min.x -= AI_HALF_WIDTH;
+        currentObjectBox.max.x += AI_HALF_WIDTH;
+        currentObjectBox.min.z -= AI_HALF_WIDTH;
+        currentObjectBox.max.z += AI_HALF_WIDTH;
+        currentObjectBox.min.y = object.position.y;
+        currentObjectBox.max.y = object.position.y + 3;
+    } else {
+        console.log("--- checkCollision end (invalid object) ---");
+        return false;
+    }
+    
+    console.log("Checking object's BoundingBox (min):", currentObjectBox.min.x, currentObjectBox.min.y, currentObjectBox.min.z);
+    console.log("Checking object's BoundingBox (max):", currentObjectBox.max.x, currentObjectBox.max.y, currentObjectBox.max.z);
+
+
+    for (const obstacle of obstacles) {
+        const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+        const isTowerWall = obstacle.userData && obstacle.userData.isTowerWall;
+
+        // 追加: ignoreObstacleによってどの障害物が無視されているかログ出力
+        if (obstacle === ignoreObstacle) {
+            console.log("DEBUG: Obstacle ignored (exact match). isTowerWall:", isTowerWall, "Obstacle ID:", obstacle.id);
+            continue;
+        }
+        if (ignoreObstacle && obstacle.userData.parentTower === ignoreObstacle) {
+            console.log("DEBUG: Obstacle ignored (parentTower match). isTowerWall:", isTowerWall, "Obstacle ID:", obstacle.id);
+            continue;
+        }
+        
+        if (isTowerWall) {
+            console.log("Obstacle (Tower Wall) BoundingBox (min):", obstacleBox.min.x, obstacleBox.min.y, obstacleBox.min.z);
+            console.log("Obstacle (Tower Wall) BoundingBox (max):", obstacleBox.max.x, obstacleBox.max.y, obstacleBox.max.z);
+        }
+
+        if (currentObjectBox.intersectsBox(obstacleBox)) {
+            console.log("Collision detected with obstacle:", obstacle.position);
+            console.log("Collided obstacle is Tower Wall:", isTowerWall);
+            console.log("--- checkCollision end (collision) ---");
+            return true;
+        }
+    }
+    console.log("--- checkCollision end (no collision) ---");
     return false;
 }
-
 function findClearCameraPosition(targetPosition, obstaclesArray) {
     const lookAtTargetForRaycast = targetPosition.clone().add(new THREE.Vector3(0, 1.5, 0)); // レイキャスト用に胸の高さをターゲット
 
@@ -1785,10 +2152,16 @@ function findClearCameraPosition(targetPosition, obstaclesArray) {
     return targetPosition.clone().add(new THREE.Vector3(0, 15, 0));
 }
 
+
+
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
     const timeElapsed = clock.getElapsedTime();
+
+    playerTargetHeight = isCrouchingToggle ? 1.0 : 2.0;
+
+        const currentMoveSpeed = isCrouchingToggle ? moveSpeed / 2 : moveSpeed;
 
     for (let i = debris.length - 1; i >= 0; i--) {
         const d = debris[i];
@@ -1852,6 +2225,52 @@ function animate() {
 
         cinematicCamera.updateProjectionMatrix();
         TWEEN.update();
+        renderer.render(scene, cinematicCamera);
+        return;
+    }
+
+    if (isPlayerDeathPlaying) {
+        const focusPos = new THREE.Vector3();
+        let partsInFocus = 0;
+        const tempVector = new THREE.Vector3();
+
+        if (playerModel.userData.deathType === 'fallDown') { // その場で倒れる演出の場合
+            // Tweenがアニメーションを処理するので、物理演算は不要
+            // カメラはplayerModel全体を追跡
+            cinematicCamera.lookAt(playerModel.position.clone().add(new THREE.Vector3(0, 1, 0)));
+            // playerModelが既にシーンに直接addされているので、その位置を基にフォーカス
+            focusPos.add(playerModel.getWorldPosition(tempVector));
+            partsInFocus++;
+        } else { // 吹き飛ぶ演出の場合 ('blowAway'または未設定)
+            const parts = [playerBody, playerHead];
+            for (const part of parts) {
+                if (part && part.userData.velocity) {
+                    part.userData.velocity.y -= GRAVITY * delta;
+                    part.position.add(part.userData.velocity.clone().multiplyScalar(delta));
+                    part.rotation.x += part.userData.angularVelocity.x * delta;
+                    part.rotation.y += part.userData.angularVelocity.y * delta;
+                    part.rotation.z += part.userData.angularVelocity.z * delta;
+
+                    if (part.position.y < -FLOOR_HEIGHT) {
+                        part.position.y = -FLOOR_HEIGHT;
+                        part.userData.velocity.y *= -0.4;
+                        part.userData.velocity.x *= 0.8;
+                        part.userData.velocity.z *= 0.8;
+                        part.userData.angularVelocity.multiplyScalar(0.8);
+                    }
+                    focusPos.add(part.getWorldPosition(tempVector));
+                    partsInFocus++;
+                }
+            }
+        }
+        
+        if (partsInFocus > 0) {
+            focusPos.divideScalar(partsInFocus);
+        }
+        cinematicCamera.lookAt(focusPos);
+
+        cinematicCamera.updateProjectionMatrix();
+        TWEEN.update(); // Tweenアニメーションを更新
         renderer.render(scene, cinematicCamera);
         return;
     }
@@ -1949,8 +2368,8 @@ function animate() {
                         }
                 
                         if (finalMoveVector.length() > 0) finalMoveVector.normalize();
-                        const forwardMove = finalMoveVector.y * moveSpeed * delta;
-                        const rightMove = finalMoveVector.x * moveSpeed * delta;
+                        const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
+                        const rightMove = finalMoveVector.x * currentMoveSpeed * delta;
                         const oldPlayerPosition = player.position.clone();
                         const forwardVector = new THREE.Vector3();
                         player.getWorldDirection(forwardVector);
@@ -1975,8 +2394,8 @@ function animate() {
                         // センサーエリアとの接触をチェック
                         // プレイヤーのBoundingBoxを作成
                         const playerBoundingBox = new THREE.Box3().setFromCenterAndSize(
-                            player.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT/2, 0)), // プレイヤーの体全体
-                            new THREE.Vector3(1, BODY_HEIGHT, 1) // プレイヤーのサイズ (幅1, 高さBODY_HEIGHT, 奥行き1)
+                            player.position.clone().add(new THREE.Vector3(0, playerTargetHeight/2, 0)), // プレイヤーの体全体
+                            new THREE.Vector3(1, playerTargetHeight, 1) // プレイヤーのサイズ (幅1, 高さBODY_HEIGHT, 奥行き1)
                         );
                 
                         for (const sensorArea of ladderSwitches) { // ladderSwitches配列にセンサーエリアを格納している
@@ -1987,7 +2406,7 @@ function animate() {
                 
                                 isElevating = true;
                                 elevatingTargetObstacle = obs;
-                                elevatingTargetY = (obs.position.y + obs.geometry.parameters.height / 2) + 2.0;
+                                elevatingTargetY = (obs.position.y + obs.geometry.parameters.height / 2) + 2.1;
                 
                                 // プレイヤーを梯子の中心に固定し、上昇を開始
                                 const ladderPos = sensorArea.userData.ladderPos;
@@ -2001,8 +2420,8 @@ function animate() {
                         // スイッチに乗っていなければ、通常の移動処理
                         if (!inSensorArea) {
                             if (finalMoveVector.length() > 0) finalMoveVector.normalize();
-                            const forwardMove = finalMoveVector.y * moveSpeed * delta;
-                            const rightMove = finalMoveVector.x * moveSpeed * delta;
+                            const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
+                            const rightMove = finalMoveVector.x * currentMoveSpeed * delta;
                             const oldPlayerPosition = player.position.clone();
                             const forwardVector = new THREE.Vector3();
                             player.getWorldDirection(forwardVector);
@@ -2026,16 +2445,17 @@ function animate() {
                                 player.position.z *= ratio;
                             }
                 
-                            // Y座標の処理 (重力)
+                            // Y座標の処理 (重力および高さ調整)
                             let onGround = false;
                             currentGroundObstacle = null;
-                            const playerFeetY = player.position.y - 2.0; // プレイヤーの足元のY座標
-                
+                            let groundY = 0; // 現在立っている地面のY座標
+
+                            const playerFeetY = player.position.y - playerTargetHeight;
+
                             for (const obs of obstacles) {
                                 const obstacleBox = new THREE.Box3().setFromObject(obs);
                                 const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
-                
-                                // プレイヤーの水平方向のバウンディングボックスを作成
+
                                 const playerHorizontalBox = new THREE.Box2(
                                     new THREE.Vector2(player.position.x - 0.5, player.position.z - 0.5),
                                     new THREE.Vector2(player.position.x + 0.5, player.position.z + 0.5)
@@ -2044,32 +2464,28 @@ function animate() {
                                     new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z),
                                     new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z)
                                 );
-                
-                                // プレイヤーの水平範囲が障害物の水平範囲と重なっているかチェック
+
                                 if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
-                                    
-                                    // プレイヤーの足元が障害物の天面に非常に近いかチェック
-                                    if (playerFeetY >= topOfObstacle - 0.5 && playerFeetY <= topOfObstacle + 0.5) {
-                                        // 足元の高さを天面に合わせる
-                                        player.position.y = topOfObstacle + 2.0;
+                                    if (playerFeetY >= topOfObstacle - 1.5 && playerFeetY <= topOfObstacle + 0.5) {
                                         onGround = true;
                                         currentGroundObstacle = obs;
+                                        groundY = topOfObstacle;
                                         break;
                                     }
                                 }
                             }
                 
-                            // 地面についているか
-                            if (!onGround && player.position.y <= 2.0) {
-                                player.position.y = 2.0;
+                            if (!onGround && playerFeetY < 0.1) {
                                 onGround = true;
+                                groundY = 0;
                             }
                             
-                            // どこにも接地していない場合は重力を適用
-                            if (!onGround) {
-                                 player.position.y -= GRAVITY * delta;
-                            }
-                        }
+                            if (onGround) {
+                                const targetY = groundY + playerTargetHeight;
+                                player.position.y = THREE.MathUtils.lerp(player.position.y, targetY, 0.2);
+                            } else {
+                                player.position.y -= GRAVITY * delta;
+                            }                        }
                     }
     for (let i = weaponPickups.length - 1; i >= 0; i--) {
         const pickup = weaponPickups[i];
@@ -2131,13 +2547,43 @@ function animate() {
     }
     
     ais.forEach((ai, index) => {
-        aiCheckPickup(ai);
-        const isAISeen = isVisibleToPlayer(ai);
-        const distanceToTarget = ai.position.distanceTo(ai.targetPosition);
-        const isArrived = distanceToTarget < ARRIVAL_THRESHOLD;
-        const isMoving = !isArrived;
+            // AIの移動速度をしゃがみ状態に応じて調整
+            const currentAISpeed = ai.isCrouching ? AI_SPEED / 2 : AI_SPEED;
 
-        if (ai.state === 'ATTACKING' || isMoving) {
+            aiCheckPickup(ai);
+            const isAISeen = isVisibleToPlayer(ai);
+            const distanceToTarget = ai.position.distanceTo(ai.targetPosition);
+            const isArrived = distanceToTarget < ARRIVAL_THRESHOLD;
+            const isMoving = !isArrived;
+    
+                                    // AIのしゃがみロジック: HIDING状態ならしゃがみ、それ以外なら立つ
+    
+                                    if (ai.state === 'HIDING') {
+    
+                                        ai.isCrouching = true;
+    
+                                    } else {
+    
+                                        ai.isCrouching = false;
+    
+                                    }
+    
+                                
+    
+                        
+    
+            
+    
+                    // AIのYスケール調整 (見た目の変更) と位置調整
+    
+                    ai.scale.y = ai.isCrouching ? 0.7 : 1.0; // 縮小率を0.7に変更
+    
+                    // スケール変更によってAIの足元が地面に埋まらないように、position.yを調整
+    
+                    ai.position.y = -FLOOR_HEIGHT - (ai.isCrouching ? (BODY_HEIGHT + HEAD_RADIUS * 2) * 0.15 : 0); // 調整量を0.15に変更 (3 * 0.15 = 0.45)
+    
+                
+                if (ai.state === 'ATTACKING' || isMoving) {
             ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 5 * delta);
         }
 
@@ -2189,7 +2635,7 @@ function animate() {
                 const oldAIPosition_attack = ai.position.clone();
                 const directionToPlayer = new THREE.Vector3().subVectors(player.position, ai.position).normalize();
                 const strafeVector = new THREE.Vector3(directionToPlayer.z, 0, -directionToPlayer.x);
-                const strafeSpeed = AI_SPEED * 0.5;
+                const strafeSpeed = currentAISpeed * 0.5;
                 const moveVectorDelta_attack = strafeVector.multiplyScalar(ai.strafeDirection * strafeSpeed * delta);
                 ai.position.add(moveVectorDelta_attack);
                 if (checkCollision(ai, obstacles)) {
@@ -2208,7 +2654,7 @@ function animate() {
         if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING') { 
             const oldAIPosition = ai.position.clone();
             const moveDirection = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
-            const moveVectorDelta = moveDirection.clone().multiplyScalar(AI_SPEED * delta);
+            const moveVectorDelta = moveDirection.clone().multiplyScalar(currentAISpeed * delta);
             raycaster.set(oldAIPosition.clone().add(new THREE.Vector3(0, 1.0, 0)), moveDirection); 
             const intersects = raycaster.intersectObjects(obstacles, true);
             if (intersects.length > 0 && intersects[0].distance < AVOIDANCE_RAY_DISTANCE && !ai.avoiding && ai.state !== 'EVADING') {
@@ -2228,13 +2674,31 @@ function animate() {
             ai.position.x *= ratio;
             ai.position.z *= ratio;
         }
-        ai.position.y = -FLOOR_HEIGHT; 
-        ai.children[1].position.y = BODY_HEIGHT + HEAD_RADIUS; 
-        ai.children[0].position.y = BODY_HEIGHT / 2;
+        
     });
 
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const p = projectiles[i];
+
+        // Sniper bullet tunneling fix using raycasting
+        if (p.isSniper) {
+            const moveVector = p.velocity.clone().multiplyScalar(delta);
+            const moveDistance = moveVector.length();
+            if (moveDistance > 0) { // Only cast if the bullet is moving
+                raycaster.set(p.mesh.position, moveVector.normalize());
+                raycaster.far = moveDistance;
+                const intersects = raycaster.intersectObjects(obstacles, true);
+
+                if (intersects.length > 0) {
+                    // We have a hit, handle it and remove the projectile
+                    createSmokeEffect(intersects[0].point);
+                    scene.remove(p.mesh);
+                    projectiles.splice(i, 1);
+                    continue; // Skip the rest of the logic for this projectile
+                }
+            }
+        }
+
         p.mesh.position.add(p.velocity.clone().multiplyScalar(delta));
 
         if (p.isRocket) {
@@ -2276,6 +2740,8 @@ function animate() {
                     else {
                         if (ai.hp !== Infinity) {
                             ai.hp--;
+                            // 赤い煙エフェクトを追加
+                            createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0))); 
                         }
                         if (ai.hp <= 0) {
                             aiFallDownCinematicSequence(p.velocity, ai);
@@ -2299,34 +2765,58 @@ function animate() {
             playerBoundingBox.max.set(playerPos.x + 0.5, playerPos.y + 0.5, playerPos.z + 0.5);
             if (playerBoundingBox.intersectsSphere(bulletSphere)) {
                 hitSomething = true;
-                // SR弾がHP無限でないプレイヤーに命中した場合
-                if (p.isSniper && playerHP !== Infinity) {
-                    playerHP = 0;
-                }
-                // ロケット弾の場合
-                else if (p.isRocket) { 
-                    playerHP = 0; 
-                } 
-                // 通常弾の場合
-                else {
-                    if (playerHP !== Infinity) {
+                
+                if (playerHP !== Infinity) {
+                    if (p.isSniper || p.isRocket) {
+                        playerHP = 0;
+                    } else {
                         playerHP -= 1;
                     }
+                    
                     screenShakeDuration = SHAKE_DURATION_MAX;
                     redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
                     setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
                 }
-                if (playerHP <= 0) {
-                     showGameOver();
+
+                if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                     startPlayerDeathSequence(p);
                 }
             }
         }
         
         if (hitSomething) {
             if (p.isRocket) {
-                explosionSound.cloneNode(true).play().catch(e => console.error("Explosion audio playback failed:", e));
-                createExplosionEffect(p.mesh.position.clone());
+                // ロケット弾が障害物に当たった場合の処理
+                let obstacleHitByRocket = null;
+                // ロケット弾が当たった障害物を特定するため、再度intersectsObjectsを呼び出す
+                // (前段のhitSomething判定ではintersectsSphereを使っているため、正確なオブジェクト特定が難しい場合がある)
+                raycaster.set(p.mesh.position, p.velocity.clone().normalize());
+                const rocketIntersects = raycaster.intersectObjects(obstacles, true);
+                if (rocketIntersects.length > 0) {
+                    obstacleHitByRocket = rocketIntersects[0].object;
+                }
+
+                if (obstacleHitByRocket && obstacleHitByRocket.userData.isTower) {
+                    // 命中したのが塔本体だった場合
+                    obstacleHitByRocket.userData.hp -= 1; // ロケット弾1発でHPを1減らす
+                    explosionSound.cloneNode(true).play().catch(e => console.error("Explosion audio playback failed:", e));
+                    createExplosionEffect(p.mesh.position.clone()); // 爆発エフェクトは出す
+                    
+                    if (obstacleHitByRocket.userData.hp <= 0) {
+                        // HPが0以下になったら破壊する
+                        destroyObstacle(obstacleHitByRocket, p.mesh.position);
+                    }
+                } else {
+                    // 塔以外の障害物、または塔の屋上フロア/カバーウォールに当たった場合は即破壊 (HPを持たないので)
+                    // または、上記rocketIntersectsで障害物が特定できなかった場合
+                    explosionSound.cloneNode(true).play().catch(e => console.error("Explosion audio playback failed:", e));
+                    createExplosionEffect(p.mesh.position.clone());
+                    if (obstacleHitByRocket) { // 実際に障害物に当たっていれば破壊
+                        destroyObstacle(obstacleHitByRocket, p.mesh.position);
+                    }
+                }
             } else {
+                // ロケット弾以外の通常の弾が当たった場合
                 createSmokeEffect(p.mesh.position);
             }
             scene.remove(p.mesh);
