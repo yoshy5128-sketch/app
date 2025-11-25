@@ -265,6 +265,60 @@ canvas {
         if (editorLink && 'ontouchstart' in window) {
             editorLink.href = 'map_editor_sp.html';
         }
+
+        // 保存された設定をロードしてUIに反映
+        loadSettings();
+
+        // 設定UI要素の変更を監視し、変更時にgameSettingsを更新して保存
+        const playerHpSelect = document.getElementById('player-hp');
+        const aiHpSelect = document.getElementById('ai-hp');
+        const mgCountSelect = document.getElementById('mg-count');
+        const rrCountSelect = document.getElementById('rr-count');
+        const srCountSelect = document.getElementById('sr-count');
+
+        const aiCountRadios = document.querySelectorAll('input[name="ai-count"]');
+        const fieldStateRadios = document.querySelectorAll('input[name="field-state"]');
+        const mapTypeRadios = document.querySelectorAll('input[name="map-type"]');
+
+        if (playerHpSelect) playerHpSelect.addEventListener('change', () => { gameSettings.playerHP = playerHpSelect.value; saveSettings(); });
+        if (aiHpSelect) aiHpSelect.addEventListener('change', () => { gameSettings.aiHP = aiHpSelect.value; saveSettings(); });
+        if (mgCountSelect) mgCountSelect.addEventListener('change', () => { gameSettings.mgCount = parseInt(mgCountSelect.value, 10); saveSettings(); });
+        if (rrCountSelect) rrCountSelect.addEventListener('change', () => { gameSettings.rrCount = parseInt(rrCountSelect.value, 10); saveSettings(); });
+        if (srCountSelect) srCountSelect.addEventListener('change', () => { gameSettings.srCount = parseInt(srCountSelect.value, 10); saveSettings(); });
+
+        aiCountRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.aiCount = parseInt(radio.value, 10);
+                    saveSettings();
+                }
+            });
+        });
+        fieldStateRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.fieldState = radio.value;
+                    saveSettings();
+                }
+            });
+        });
+        mapTypeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.mapType = radio.value;
+                    saveSettings();
+                }
+            });
+        });
+
+        // 「Start Game」ボタンのクリック時に current gameSettings を使用してゲームを開始
+        const startGameBtn = document.getElementById('start-game-btn');
+        if (startGameBtn) {
+            startGameBtn.addEventListener('click', () => {
+                // startGame関数内でgameSettingsが参照されるため、特に何もせず呼び出す
+                startGame();
+            });
+        }
     });
 })();
 
@@ -349,6 +403,37 @@ const gameSettings = {
     mapType: 'default', // 'default', 'random', 'custom'
     aiCount: 2
 };
+
+// 設定をlocalStorageに保存する関数
+function saveSettings() {
+    localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
+}
+
+// 設定をlocalStorageから読み込み、UIに反映する関数
+function loadSettings() {
+    const savedSettings = localStorage.getItem('gameSettings');
+    if (savedSettings) {
+        Object.assign(gameSettings, JSON.parse(savedSettings));
+        
+        // UI要素に設定値を反映
+        document.getElementById('player-hp').value = gameSettings.playerHP;
+        document.getElementById('ai-hp').value = gameSettings.aiHP;
+        document.getElementById('mg-count').value = gameSettings.mgCount;
+        document.getElementById('rr-count').value = gameSettings.rrCount;
+        document.getElementById('sr-count').value = gameSettings.srCount;
+
+        // radioボタンの反映
+        document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
+            radio.checked = (radio.value == gameSettings.aiCount);
+        });
+        document.querySelectorAll('input[name="field-state"]').forEach(radio => {
+            radio.checked = (radio.value === gameSettings.fieldState);
+        });
+        document.querySelectorAll('input[name="map-type"]').forEach(radio => {
+            radio.checked = (radio.value === gameSettings.mapType);
+        });
+    }
+}
 
 const playerGunSound = document.getElementById('playerGunSound');
 const mgGunSound = document.getElementById('mgGunSound');

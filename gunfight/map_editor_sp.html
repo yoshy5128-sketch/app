@@ -18,57 +18,58 @@
         #editor-container { 
             position: relative; 
         }
-        #ui-container { 
-            position: absolute; 
-            top: 10px; 
-            left: 10px; 
-            background: rgba(44, 62, 80, 0.85); 
-            padding: 15px; 
-            border-radius: 8px;
-            border: 1px solid #34495e;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-            max-width: 250px;
-        }
-        h2 { 
-            margin-top: 0; 
-            color: #1abc9c;
-            border-bottom: 1px solid #16a085;
-            padding-bottom: 5px;
-        }
-        p { 
-            margin: 5px 0 10px 0; 
-            font-size: 0.9em;
-        }
-        button { 
-            width: 100%;
-            margin-top: 10px; 
-            padding: 10px 12px; 
-            cursor: pointer; 
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 1em;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        #back-button {
-            background-color: #e74c3c;
-        }
-        #back-button:hover {
-            background-color: #c0392b;
-        }
-        hr {
-            border: none;
-            border-top: 1px solid #34495e;
-            margin: 15px 0;
-        }
-        #canvas-container { 
-            width: 100vw; 
-            height: 100vh; 
-        }
+                #ui-container {
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 30vh; /* 35vhから30vhに調整 */
+                    background: rgba(44, 62, 80, 0.85);
+                    padding: 5px;
+                    box-sizing: border-box;
+                    border-top: 1px solid #34495e;
+                    box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: flex-start;
+                    align-items: center;
+                    z-index: 100;
+                    overflow-y: auto;
+                }
+                #ui-container h2 {
+                    margin-top: 3px; /* マージンをさらに減らす */
+                    margin-bottom: 3px; /* マージンをさらに減らす */
+                    color: #1abc9c;
+                    border-bottom: 1px solid #16a085;
+                    padding-bottom: 2px; /* パディングをさらに減らす */
+                    width: 100%;
+                    text-align: center;
+                    flex-shrink: 0;
+                }
+                #ui-container p {
+                    margin: 1px 0; /* マージンをさらに減らす */
+                    font-size: 0.75em;
+                    text-align: center;
+                    flex-shrink: 0;
+                }
+                #ui-content-wrapper {
+                    display: flex;
+                    width: 100%;
+                    height: calc(100% - 30px); /* h2とpの高さ分を調整 (h2の高さとマージン、pのマージン考慮) */
+                    overflow-y: auto;
+                }
+                #canvas-container {
+                    width: 100vw;
+                    height: calc(100vh - 30vh - 50px); /* 50px分だけ高さを縮める */
+                    max-height: 100vh;
+                    display: flex;
+                    justify-content: center; /* centerに戻す */
+                    align-items: center;    /* centerに戻す */
+                    position: absolute;
+                    top: -50px; /* 50px分画面上部にずらす */
+                    left: 0;
+                }
+
         #notification {
             position: fixed;
             bottom: 20px;
@@ -90,31 +91,36 @@
         <div id="canvas-container"></div>
         <div id="ui-container">
             <h2>Map Editor</h2>
-            <p><b>左クリック:</b> 障害物を追加</p>
-            <p><b>ドラッグ:</b> 障害物を移動</p>
-            <p><b>右クリック:</b> 障害物を削除</p>
 
-            <div id="properties-editor" style="display: none; margin-top: 15px;">
-                <h4>Properties</h4>
-                <label style="display: block; margin-bottom: 5px;">Width (X): <input type="number" id="prop-width" step="0.5" style="width: 60px;"></label>
-                <label style="display: block; margin-bottom: 5px;">Height (Y): <input type="number" id="prop-height" step="0.5" style="width: 60px;"></label>
-                <label style="display: block; margin-bottom: 10px;">Depth (Z): <input type="number" id="prop-depth" step="0.5" style="width: 60px;"></label>
-                <button id="apply-props-button" style="width: auto; padding: 5px 10px; font-size: 0.9em;">Apply Size</button>
+            <div id="ui-content-wrapper">
+                <div id="left-panel">
+                    <h3>Map Actions</h3>
+                    <div id="properties-editor">
+                        <h4>Properties</h4>
+                        <label style="display: block; margin-bottom: 5px;">Width (X): <input type="number" id="prop-width" step="0.5"></label>
+                        <label style="display: block; margin-bottom: 5px;">Height (Y): <input type="number" id="prop-height" step="0.5"></label>
+                        <label style="display: block; margin-bottom: 10px;">Depth (Z): <input type="number" id="prop-depth" step="0.5"></label>
+                        <button id="apply-props-button">Apply Size</button>
+                    </div>
+                    <button id="reset-button">New Map</button>
+                </div>
+                <div id="right-panel">
+                    <h3>Save/Load</h3>
+                    <button id="save-browser-button">Save to Browser</button>
+                    <button id="load-browser-button">Load from Browser</button>
+                    <button id="export-file-button">Export to File</button>
+                    <button id="import-file-button">Import from File</button>
+                    <input type="file" id="import-file-input" accept=".json" style="display: none;">
+                    <a href="index.html"><button id="back-button">Back to Game</button></a>
+                    
+                    <div style="margin-top: 15px; border-top: 1px solid #34495e; padding-top: 10px;">
+                        <h4 style="text-align: center; margin-bottom: 5px;">How to Use</h4>
+                        <p style="font-size: 0.7em; margin: 2px 0;"><b>Tap:</b> Add Obstacle / Select</p>
+                        <p style="font-size: 0.7em; margin: 2px 0;"><b>Drag:</b> Move Obstacle</p>
+                        <p style="font-size: 0.7em; margin: 2px 0;"><b>Long Press:</b> Delete Obstacle</p>
+                    </div>
+                </div>
             </div>
-
-            <hr>
-            <p style="font-size: 0.8em; text-align: center; opacity: 0.7;">-- Browser Storage --</p>
-            <button id="save-browser-button">Save to Browser</button>
-            <button id="load-browser-button">Load from Browser</button>
-            <hr>
-            <p style="font-size: 0.8em; text-align: center; opacity: 0.7;">-- File I/O --</p>
-            <button id="export-file-button">Export to File</button>
-            <button id="import-file-button">Import from File</button>
-            <input type="file" id="import-file-input" accept=".json" style="display: none;">
-            <hr>
-            <button id="reset-button">New Map</button>
-            <hr>
-            <a href="index.html"><button id="back-button">Back to Game</button></a>
         </div>
     </div>
     <div id="notification"></div>
@@ -139,7 +145,7 @@
         const canvasContainer = document.getElementById('canvas-container');
         
         const aspect = window.innerWidth / window.innerHeight;
-        const frustumSize = 150;
+        const frustumSize = 200;
         const camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 1, 1000);
         camera.position.set(0, 100, 0);
         camera.lookAt(scene.position);
@@ -386,8 +392,9 @@
 
         // --- EVENT LISTENERS ---
         function onMouseMove(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            const canvasBounds = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
+            mouse.y = -((event.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
 
             if (isDragging && selectedObstacle) {
                 raycaster.setFromCamera(mouse, camera);
@@ -399,6 +406,9 @@
         }
 
         function onMouseDown(event) {
+            const canvasBounds = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
+            mouse.y = -((event.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
             // 左クリック
             if (event.button === 0) {
                 raycaster.setFromCamera(mouse, camera);
@@ -444,15 +454,21 @@
         }
         
         function onWindowResize() {
-            const aspect = window.innerWidth / window.innerHeight;
+            // canvasContainerの現在のサイズを取得
+            const currentWidth = canvasContainer.clientWidth;
+            const currentHeight = canvasContainer.clientHeight;
+
+            const aspect = currentWidth / currentHeight;
+            
+            const verticalOffset = frustumSize * 0.1; // 上にシフトさせる量
+
             camera.left = frustumSize * aspect / -2;
             camera.right = frustumSize * aspect / 2;
-            camera.top = frustumSize / 2;
-            camera.bottom = frustumSize / -2;
+            camera.top = frustumSize / 2 + verticalOffset; // 上にシフト
+            camera.bottom = frustumSize / -2 + verticalOffset; // 上にシフト
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(currentWidth, currentHeight); // rendererのサイズもcanvasContainerに合わせる
         }
-
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mousedown', onMouseDown);
         document.addEventListener('mouseup', onMouseUp);
@@ -460,6 +476,100 @@
         document.addEventListener('contextmenu', e => e.preventDefault());
         window.addEventListener('resize', onWindowResize);
         
+        let touchDownTime = 0;
+        const LONG_PRESS_THRESHOLD = 500; // ms
+        let touchStartPos = { x: 0, y: 0 };
+        let currentTouch = null; // 現在追跡中のタッチID
+        let hasMoved = false; // タッチ中に移動があったか
+
+        canvasContainer.addEventListener('touchstart', (event) => {
+            event.preventDefault(); // デフォルトのスクロールやズームを防ぐ
+
+            if (event.touches.length === 1) {
+                currentTouch = event.touches[0];
+                touchStartPos = { x: currentTouch.clientX, y: currentTouch.clientY };
+                hasMoved = false; // タッチ開始時は移動なし
+
+                const canvasBounds = renderer.domElement.getBoundingClientRect();
+                mouse.x = ((currentTouch.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
+                mouse.y = -((currentTouch.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(obstacles);
+
+                if (intersects.length > 0) { // 障害物をタッチした場合
+                    selectedObstacle = intersects[0].object;
+                    setSelected(selectedObstacle);
+                    isDragging = true;
+                } else { // 障害物以外をタッチした場合
+                    setSelected(null); // まず選択を解除
+                    // タップで追加する処理はtouchendで行う (長押しとの区別のため)
+                }
+                touchDownTime = Date.now(); // 長押し判定用タイマー開始
+            }
+        }, { passive: false });
+
+        canvasContainer.addEventListener('touchmove', (event) => {
+            event.preventDefault(); // デフォルトのスクロールやズームを防ぐ
+            
+            if (isDragging && selectedObstacle && event.touches.length === 1 && event.touches[0].identifier === currentTouch.identifier) {
+                currentTouch = event.touches[0];
+                const canvasBounds = renderer.domElement.getBoundingClientRect();
+                mouse.x = ((currentTouch.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
+                mouse.y = -((currentTouch.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
+
+                raycaster.setFromCamera(mouse, camera);
+                const intersection = new THREE.Vector3();
+                raycaster.ray.intersectPlane(plane, intersection);
+                selectedObstacle.position.x = intersection.x;
+                selectedObstacle.position.z = intersection.z;
+
+                // ドラッグ中に一定以上動いたらhasMovedをtrueに
+                if (Math.abs(currentTouch.clientX - touchStartPos.x) > 5 || Math.abs(currentTouch.clientY - touchStartPos.y) > 5) {
+                    hasMoved = true;
+                }
+            }
+        }, { passive: false });
+
+        canvasContainer.addEventListener('touchend', (event) => {
+            if (isDragging) {
+                isDragging = false;
+            }
+
+            // touchDownTimeが有効で、移動がなく、閾値未満であれば単一タップ（追加/選択）
+            if (touchDownTime > 0 && !hasMoved && (Date.now() - touchDownTime < LONG_PRESS_THRESHOLD)) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(obstacles);
+
+                if (intersects.length === 0) { // 何も選択されていなければ追加
+                    const floorIntersects = raycaster.intersectObject(floor);
+                    if (floorIntersects.length > 0) { // 床をタップした場合は、新しい障害物を生成
+                        const pos = floorIntersects[0].point;
+                        createObstacle(pos.x, pos.z);
+                        showNotification('Obstacle added!');
+                    }
+                } else { // 障害物を選択
+                    setSelected(intersects[0].object);
+                }
+            } 
+            // 長押し判定 (移動がなく、閾値以上であれば削除)
+            else if (touchDownTime > 0 && !hasMoved && (Date.now() - touchDownTime >= LONG_PRESS_THRESHOLD)) {
+                // 長押しでの削除処理
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(obstacles);
+                if (intersects.length > 0) {
+                    const toDelete = intersects[0].object;
+                    scene.remove(toDelete);
+                    obstacles = obstacles.filter(obs => obs !== toDelete);
+                    setSelected(null); // 削除したら選択も解除
+                    showNotification('Obstacle deleted (Long Press)!');
+                }
+            }
+            currentTouch = null;
+            touchDownTime = 0;
+            hasMoved = false;
+        });
+
         // --- NEW I/O FUNCTIONS ---
         function exportMapToFile() {
             const mapData = obstacles.map(obs => ({
