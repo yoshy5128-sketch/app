@@ -2,8 +2,8 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Map Editor</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Editor (Complete - Grid Snap)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         body { 
             margin: 0; 
@@ -13,66 +13,145 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             -webkit-user-select: none;
             user-select: none;
-            touch-action: none;
+            touch-action: none; 
         }
         #editor-container { 
             position: relative; 
         }
-                #ui-container {
-                    position: fixed;
-                    bottom: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 30vh; /* 35vhから30vhに調整 */
-                    background: rgba(44, 62, 80, 0.85);
-                    padding: 5px;
-                    box-sizing: border-box;
-                    border-top: 1px solid #34495e;
-                    box-shadow: 0 -4px 15px rgba(0,0,0,0.4);
-                    display: flex;
-                    flex-direction: column;
-                    justify-content: flex-start;
-                    align-items: center;
-                    z-index: 100;
-                    overflow-y: auto;
-                }
-                #ui-container h2 {
-                    margin-top: 3px; /* マージンをさらに減らす */
-                    margin-bottom: 3px; /* マージンをさらに減らす */
-                    color: #1abc9c;
-                    border-bottom: 1px solid #16a085;
-                    padding-bottom: 2px; /* パディングをさらに減らす */
-                    width: 100%;
-                    text-align: center;
-                    flex-shrink: 0;
-                }
-                #ui-container p {
-                    margin: 1px 0; /* マージンをさらに減らす */
-                    font-size: 0.75em;
-                    text-align: center;
-                    flex-shrink: 0;
-                }
-                #ui-content-wrapper {
-                    display: flex;
-                    width: 100%;
-                    height: calc(100% - 30px); /* h2とpの高さ分を調整 (h2の高さとマージン、pのマージン考慮) */
-                    overflow-y: auto;
-                }
-                #canvas-container {
-                    width: 100vw;
-                    height: calc(100vh - 30vh - 50px); /* 50px分だけ高さを縮める */
-                    max-height: 100vh;
-                    display: flex;
-                    justify-content: center; /* centerに戻す */
-                    align-items: center;    /* centerに戻す */
-                    position: absolute;
-                    top: -50px; /* 50px分画面上部にずらす */
-                    left: 0;
-                }
-
+        #ui-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 30vh;
+            background: rgba(44, 62, 80, 0.95);
+            padding: 5px;
+            box-sizing: border-box;
+            border-top: 1px solid #34495e;
+            box-shadow: 0 -4px 15px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            z-index: 100;
+            overflow-y: auto;
+        }
+        #ui-container h2 {
+            margin: 3px 0;
+            color: #1abc9c;
+            border-bottom: 1px solid #16a085;
+            padding-bottom: 2px;
+            width: 100%;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        #ui-container h3, #ui-container h4 {
+            margin: 5px 0 3px 0;
+            color: #bdc3c7;
+            text-align: center;
+        }
+        #ui-container p {
+            margin: 1px 0;
+            font-size: 0.75em;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        #ui-content-wrapper {
+            display: flex;
+            width: 100%;
+            height: calc(100% - 30px);
+            overflow-y: auto;
+            gap: 10px;
+            padding: 5px;
+        }
+        #left-panel, #right-panel {
+            flex: 1;
+            min-width: 0;
+            padding: 5px;
+            border: 1px solid #34495e;
+            border-radius: 5px;
+            overflow-y: auto;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: calc(100vh - 30vh);
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #properties-editor {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #1abc9c;
+            border-radius: 5px;
+            background: rgba(26, 188, 156, 0.1);
+            display: none;
+        }
+        #properties-editor label {
+            font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        #properties-editor input[type="number"] {
+            width: 60px;
+            padding: 3px;
+            border: 1px solid #3498db;
+            background: #34495e;
+            color: #ecf0f1;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        #properties-editor input[type="color"] {
+            padding: 0;
+            border: none;
+            width: 50px;
+            height: 25px;
+        }
+        #spawn-editor {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #f39c12;
+            border-radius: 5px;
+            background: rgba(243, 156, 18, 0.1);
+            display: none;
+        }
+        #spawn-editor p {
+            font-size: 0.9em;
+            text-align: left;
+            margin: 2px 0;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            font-size: 14px;
+            margin: 4px auto;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+            width: 95%;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #apply-props-button {
+            background-color: #1abc9c;
+        }
+        #apply-props-button:hover {
+            background-color: #16a085;
+        }
         #notification {
             position: fixed;
-            bottom: 20px;
+            bottom: calc(30vh + 20px);
             left: 50%;
             transform: translateX(-50%);
             background-color: #1abc9c;
@@ -83,6 +162,7 @@
             opacity: 0;
             transition: opacity 0.5s;
             pointer-events: none;
+            z-index: 110;
         }
     </style>
 </head>
@@ -91,33 +171,49 @@
         <div id="canvas-container"></div>
         <div id="ui-container">
             <h2>Map Editor</h2>
+            <p style="margin-bottom: 5px;">**PC:** L-Click: Add/Select/Move | R-Click: Delete | R-Drag: Pan | Scroll: Zoom</p>
 
             <div id="ui-content-wrapper">
                 <div id="left-panel">
                     <h3>Map Actions</h3>
-                    <div id="properties-editor">
-                        <h4>Properties</h4>
-                        <label style="display: block; margin-bottom: 5px;">Width (X): <input type="number" id="prop-width" step="0.5"></label>
-                        <label style="display: block; margin-bottom: 5px;">Height (Y): <input type="number" id="prop-height" step="0.5"></label>
-                        <label style="display: block; margin-bottom: 10px;">Depth (Z): <input type="number" id="prop-depth" step="0.5"></label>
-                        <button id="apply-props-button">Apply Size</button>
-                    </div>
+                    <p style="font-size: 0.8em; color: #88c;">**Grid Snap:** $\pm$ **3.0** units</p>
                     <button id="reset-button">New Map</button>
+
+                    <div id="properties-editor">
+                        <h4>Obstacle Properties</h4>
+                        <label>Width (X): <input type="number" id="prop-width" step="0.5"></label>
+                        <label>Height (Y): <input type="number" id="prop-height" step="0.5"></label>
+                        <label>Depth (Z): <input type="number" id="prop-depth" step="0.5"></label>
+                        <label>HP (Rocket Hits): <input type="number" id="prop-hp" step="1" min="1"></label>
+                        <label style="margin-bottom: 10px;">Color: <input type="color" id="prop-color"></label>
+                        <div id="recent-colors-palette" style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; padding: 5px; border: 1px dashed #555; border-radius: 3px;">
+                            </div>
+                        <button id="apply-props-button">Apply Properties</button>
+                    </div>
+
+                    <div id="spawn-editor">
+                        <h4>Spawn Point</h4>
+                        <p>Type: <b id="spawn-type"></b></p>
+                        <p>X Position: <b id="spawn-x"></b></p>
+                        <p>Z Position: <b id="spawn-z"></b></p>
+                    </div>
                 </div>
                 <div id="right-panel">
                     <h3>Save/Load</h3>
-                    <button id="save-browser-button">Save to Browser</button>
-                    <button id="load-browser-button">Load from Browser</button>
-                    <button id="export-file-button">Export to File</button>
-                    <button id="import-file-button">Import from File</button>
+                    <button id="save-browser-button">Save to Browser (Local)</button>
+                    <button id="load-browser-button">Load from Browser (Local)</button>
+                    <button id="export-file-button" style="background-color: #27ae60;">Export to File (.json)</button>
+                    <button id="import-file-button" style="background-color: #f39c12;">Import from File (.json)</button>
                     <input type="file" id="import-file-input" accept=".json" style="display: none;">
-                    <a href="index.html"><button id="back-button">Back to Game</button></a>
+                    <a href="main.html"><button id="back-button" style="background-color: #e74c3c;">Back to Game</button></a>
                     
-                    <div style="margin-top: 15px; border-top: 1px solid #34495e; padding-top: 10px;">
-                        <h4 style="text-align: center; margin-bottom: 5px;">How to Use</h4>
-                        <p style="font-size: 0.7em; margin: 2px 0;"><b>Tap:</b> Add Obstacle / Select</p>
-                        <p style="font-size: 0.7em; margin: 2px 0;"><b>Drag:</b> Move Obstacle</p>
-                        <p style="font-size: 0.7em; margin: 2px 0;"><b>Long Press:</b> Delete Obstacle</p>
+                    <div style="margin-top: 10px; border-top: 1px solid #34495e; padding-top: 5px;">
+                        <h4 style="text-align: center; margin-bottom: 5px;">How to Use (Touch)</h4>
+                        <p style="font-size: 0.7em; margin: 2px 0;"><b>1-Finger Tap:</b> Add/Select</p>
+                        <p style="font-size: 0.7em; margin: 2px 0;"><b>1-Finger Drag:</b> Move Selected</p>
+                        <p style="font-size: 0.7em; margin: 2px 0;"><b>1-Finger Long Press:</b> Delete</p>
+                        <p style="font-size: 0.7em; margin: 2px 0;"><b>2-Finger Drag:</b> Pan Camera</p>
+                        <p style="font-size: 0.7em; margin: 2px 0;"><b>2-Finger Pinch:</b> Zoom Camera</p>
                     </div>
                 </div>
             </div>
@@ -130,12 +226,27 @@
         // --- CONSTANTS ---
         const ARENA_RADIUS = 60;
         const ARENA_EDGE_THICKNESS = 1;
-        const OBSTACLE_DEFAULT_SIZE = 4;
-        const OBSTACLE_HEIGHT = 4;
-        const PLAYER_INITIAL_POSITIONS = [
-            {x: 0, z: -20, color: 0x0000ff}, // Player
-            {x: 0, z: 20, color: 0x00ff00},  // AI 1
-            {x: 15, z: 20, color: 0x00ffff}  // AI 2
+        const FRUSTUM_SIZE = 200;
+        
+        // --- GRID CONSTANTS (New) ---
+        const GRID_SIZE = ARENA_RADIUS * 2; // 120
+        const GRID_DIVISIONS = 40; // 120 / 40 = 3 => 3ユニットごとのグリッド
+        const GRID_STEP = GRID_SIZE / GRID_DIVISIONS; // 3.0
+        // GRID_STEPがスナップ単位となります。
+
+        let PERSISTENT_OBSTACLE_SIZE = { 
+            width: 4, 
+            height: 4, 
+            depth: 4, 
+            color: 0x7f8c8d,
+            hp: 1
+        };
+
+        let SPAWN_POINTS_DATA = [
+            { id: 0, x: 0, z: -20, color: 0x0000ff, name: 'Player' },
+            { id: 1, x: 0, z: 20, color: 0x00ff00, name: 'AI 1' },
+            { id: 2, x: 15, z: 20, color: 0x00ffff, name: 'AI 2' },
+            { id: 3, x: -15, z: 20, color: 0xffb6c1, name: 'AI 3' }
         ];
 
         // --- SCENE SETUP ---
@@ -144,16 +255,20 @@
 
         const canvasContainer = document.getElementById('canvas-container');
         
-        const aspect = window.innerWidth / window.innerHeight;
-        const frustumSize = 200;
-        const camera = new THREE.OrthographicCamera(frustumSize * aspect / -2, frustumSize * aspect / 2, frustumSize / 2, frustumSize / -2, 1, 1000);
+        let aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+        const camera = new THREE.OrthographicCamera(
+            FRUSTUM_SIZE * aspect / -2, FRUSTUM_SIZE * aspect / 2, 
+            FRUSTUM_SIZE / 2, FRUSTUM_SIZE / -2, 
+            1, 1000
+        );
         camera.position.set(0, 100, 0);
         camera.lookAt(scene.position);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
         canvasContainer.appendChild(renderer.domElement);
         
+        // --- LIGHTING ---
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
@@ -162,426 +277,406 @@
 
         // --- ARENA ---
         const floorGeometry = new THREE.CircleGeometry(ARENA_RADIUS, 64);
-        const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x34495e });
+        const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x34495e }); 
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.rotation.x = -Math.PI / 2;
         floor.name = 'floor';
         scene.add(floor);
 
         const edgeGeometry = new THREE.TorusGeometry(ARENA_RADIUS, ARENA_EDGE_THICKNESS, 8, 100);
-        const edgeMaterial = new THREE.MeshLambertMaterial({ color: 0x95a5a6 });
+        const edgeMaterial = new THREE.MeshBasicMaterial({ color: 0x95a5a6 }); 
         const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
         edge.rotation.x = Math.PI / 2;
         scene.add(edge);
         
-        // --- SPAWN POINTS ---
-        PLAYER_INITIAL_POSITIONS.forEach(pos => {
-            const spawnGeo = new THREE.CylinderGeometry(2, 2, 0.5, 32);
-            const spawnMat = new THREE.MeshBasicMaterial({ color: pos.color, transparent: true, opacity: 0.5 });
-            const spawnMesh = new THREE.Mesh(spawnGeo, spawnMat);
-            spawnMesh.position.set(pos.x, 0.25, pos.z);
-            scene.add(spawnMesh);
-        });
-
+        // --- GRID SETUP ---
+        // GridHelperを追加
+        const gridHelper = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0x4f6b80, 0x4f6b80);
+        gridHelper.rotation.x = Math.PI / 2;
+        scene.add(gridHelper);
+        
         // --- STATE ---
         let obstacles = [];
-        let selectedObstacle = null;
+        let spawnMeshes = [];
+        let selectedObject = null;
         let isDragging = false;
+        let isPanning = false;
+        let panStart = new THREE.Vector2();
+        let initialFrustumSize = FRUSTUM_SIZE;
+
+        // 最近使用した色の管理
+        const MAX_RECENT_COLORS = 8; 
+        let recentColors = [];
+
+        function loadRecentColors() {
+            const savedColors = localStorage.getItem('recentMapEditorColors');
+            if (savedColors) {
+                try {
+                    recentColors = JSON.parse(savedColors);
+                } catch (e) {
+                    console.error("Error parsing recent colors from localStorage", e);
+                    recentColors = [];
+                }
+            }
+        }
+
+        function saveRecentColors() {
+            localStorage.setItem('recentMapEditorColors', JSON.stringify(recentColors));
+        }
+
+        function addRecentColor(colorHex) {
+            const hex = typeof colorHex === 'number' ? '#' + colorHex.toString(16).padStart(6, '0') : colorHex;
+            recentColors = recentColors.filter(c => c !== hex);
+            recentColors.unshift(hex); 
+            
+            if (recentColors.length > MAX_RECENT_COLORS) {
+                recentColors.pop();
+            }
+            saveRecentColors();
+            renderRecentColors(); 
+        }
+
+        function renderRecentColors() {
+            const paletteDiv = document.getElementById('recent-colors-palette');
+            if (!paletteDiv) return;
+
+            paletteDiv.innerHTML = ''; 
+
+            recentColors.forEach(colorHex => {
+                const colorSwatch = document.createElement('div');
+                colorSwatch.style.backgroundColor = colorHex;
+                colorSwatch.style.width = '24px';
+                colorSwatch.style.height = '24px';
+                colorSwatch.style.border = '1px solid #777';
+                colorSwatch.style.cursor = 'pointer';
+                colorSwatch.style.borderRadius = '3px';
+                colorSwatch.title = colorHex; 
+
+                colorSwatch.addEventListener('click', () => {
+                    const propColorInput = document.getElementById('prop-color');
+                    if (propColorInput) {
+                        propColorInput.value = colorHex;
+                        propColorInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+                paletteDiv.appendChild(colorSwatch);
+            });
+            if (recentColors.length === 0) {
+                paletteDiv.innerHTML = '<span style="color: #999; font-size: 0.8em;">No recent colors.</span>';
+            }
+        }
+
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        
+        // --- TOUCH CONTROL STATE ---
+        let touchDownTimer = null;
+        const LONG_PRESS_THRESHOLD = 500; 
+        let touchStartPos = { x: 0, y: 0 };
+        let touchMode = 'none'; 
+        let initialPinchDistance = 0;
+        let cameraTarget = new THREE.Vector3(0, 0, 0); 
 
-        // --- FUNCTIONS ---
-        function createAndAttachLadder(obstacle) {
-            const LADDER_WIDTH = 1.5;
-            const RUNG_SPACING = 0.5;
-            const RUNG_THICKNESS = 0.1;
-
-            const ladderGroup = new THREE.Group();
-            ladderGroup.name = 'ladder'; // 削除時に識別するため名前をつける
-            const obstacleSize = new THREE.Vector3();
-            new THREE.Box3().setFromObject(obstacle).getSize(obstacleSize);
-
-            const numRungs = Math.floor(obstacleSize.y / RUNG_SPACING);
-
-            const sideMaterial = new THREE.MeshLambertMaterial({ color: 0x607d8b }); // Editor color
-            const rungMaterial = new THREE.MeshLambertMaterial({ color: 0x90a4ae }); // Editor color
-
-            const sideGeometry = new THREE.BoxGeometry(RUNG_THICKNESS * 2, obstacleSize.y, RUNG_THICKNESS * 2);
-            const leftSide = new THREE.Mesh(sideGeometry, sideMaterial);
-            const rightSide = new THREE.Mesh(sideGeometry, sideMaterial);
-            leftSide.position.set(-LADDER_WIDTH / 2, 0, 0);
-            rightSide.position.set(LADDER_WIDTH / 2, 0, 0);
-            ladderGroup.add(leftSide);
-            ladderGroup.add(rightSide);
-
-            for (let i = 0; i < numRungs; i++) {
-                const rungGeometry = new THREE.BoxGeometry(LADDER_WIDTH, RUNG_THICKNESS, RUNG_THICKNESS);
-                const rung = new THREE.Mesh(rungGeometry, rungMaterial);
-                rung.position.y = -obstacleSize.y / 2 + RUNG_SPACING * (i + 0.5);
-                ladderGroup.add(rung);
-            }
-            
-            const face = Math.floor(Math.random() * 4);
-            const offset = 0.1;
-
-            switch (face) {
-                case 0: // +Z
-                    ladderGroup.position.set(0, 0, obstacleSize.z / 2 + offset);
-                    break;
-                case 1: // -Z
-                    ladderGroup.position.set(0, 0, -obstacleSize.z / 2 - offset);
-                    break;
-                case 2: // +X
-                    ladderGroup.position.set(obstacleSize.x / 2 + offset, 0, 0);
-                    ladderGroup.rotation.y = Math.PI / 2;
-                    break;
-                case 3: // -X
-                    ladderGroup.position.set(-obstacleSize.x / 2 - offset, 0, 0);
-                    ladderGroup.rotation.y = -Math.PI / 2;
-                    break;
-            }
-            obstacle.add(ladderGroup);
+        // --- UTILITY (Grid Snap Function) ---
+        function snapToGrid(value) {
+            return Math.round(value / GRID_STEP) * GRID_STEP;
         }
 
-        function createObstacle(x, z, width = OBSTACLE_DEFAULT_SIZE, height = OBSTACLE_HEIGHT, depth = OBSTACLE_DEFAULT_SIZE, isNew = true) {
+        // --- THREE.JS OBJECT MANAGEMENT ---
+
+        function createObstacleMaterial(color) {
+            const textureLoader = new THREE.TextureLoader();
+            const obstacleTexture = textureLoader.load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAD0lEQVQYV2NkgID/DAAAMQBA1FjR7IAAAAASUVORK5CYII=');
+            obstacleTexture.wrapS = THREE.RepeatWrapping;
+            obstacleTexture.wrapT = THREE.RepeatWrapping;
+
+            const material = new THREE.MeshLambertMaterial({ 
+                color: color,
+                map: obstacleTexture 
+            });
+            return material;
+        }
+
+        function renderSpawnPoints() {
+            spawnMeshes.forEach(mesh => scene.remove(mesh));
+            spawnMeshes = [];
+
+            SPAWN_POINTS_DATA.forEach((pos, index) => {
+                const spawnGeo = new THREE.CylinderGeometry(2, 2, 0.5, 32);
+                const spawnMat = new THREE.MeshBasicMaterial({ color: pos.color, transparent: true, opacity: 0.5 });
+                const spawnMesh = new THREE.Mesh(spawnGeo, spawnMat);
+                
+                // スポーンポイントの座標もグリッドにスナップして配置
+                const snappedX = snapToGrid(pos.x);
+                const snappedZ = snapToGrid(pos.z);
+                spawnMesh.position.set(snappedX, 0.25, snappedZ);
+                
+                spawnMesh.userData = { 
+                    type: 'spawn', 
+                    id: pos.id, 
+                    name: pos.name,
+                    color: pos.color
+                };
+                scene.add(spawnMesh);
+                spawnMeshes.push(spawnMesh);
+            });
+        }
+
+        function createObstacle(x, z, width, height, depth, color, hp, isNew = true) {
+            width = width || PERSISTENT_OBSTACLE_SIZE.width;
+            height = height || PERSISTENT_OBSTACLE_SIZE.height;
+            depth = depth || PERSISTENT_OBSTACLE_SIZE.depth;
+            color = color || PERSISTENT_OBSTACLE_SIZE.color;
+            hp = hp === undefined ? PERSISTENT_OBSTACLE_SIZE.hp : hp;
+
             const geometry = new THREE.BoxGeometry(width, height, depth);
-            const material = new THREE.MeshLambertMaterial({ color: 0x1abc9c });
+            const material = createObstacleMaterial(color); 
             const obstacle = new THREE.Mesh(geometry, material);
-            obstacle.position.set(x, height / 2, z);
+            
+            // 障害物の中心座標をグリッドにスナップ
+            const snappedX = snapToGrid(x);
+            const snappedZ = snapToGrid(z);
+
+            obstacle.position.set(snappedX, height / 2, snappedZ);
+            
+            obstacle.userData = { type: 'obstacle', color: color, hp: hp };
             
             if (isNew) {
+                // 境界チェック (スナップ後の座標を使用)
                 const halfWidth = width / 2;
                 const halfDepth = depth / 2;
                 const corners = [
-                    new THREE.Vector2(x - halfWidth, z - halfDepth), new THREE.Vector2(x + halfWidth, z - halfDepth),
-                    new THREE.Vector2(x - halfWidth, z + halfDepth), new THREE.Vector2(x + halfWidth, z + halfDepth)
+                    new THREE.Vector2(snappedX - halfWidth, snappedZ - halfDepth), new THREE.Vector2(snappedX + halfWidth, snappedZ - halfDepth),
+                    new THREE.Vector2(snappedX - halfWidth, snappedZ + halfDepth), new THREE.Vector2(snappedX + halfWidth, snappedZ + halfDepth)
                 ];
                 for (const corner of corners) {
                     if (corner.length() > ARENA_RADIUS) {
-                        showNotification('Cannot place obstacle outside the arena.', true);
-                        return; // アリーナ外には配置しない
+                        showNotification('Cannot place obstacle outside the arena (Grid snap prevented placement).', true);
+                        return;
                     }
                 }
             }
 
             scene.add(obstacle);
             obstacles.push(obstacle);
+        }
+
+        // --- UI / STATE MANAGEMENT ---
+
+        function setSelected(object) {
+            const propEditor = document.getElementById('properties-editor');
+            const spawnEditor = document.getElementById('spawn-editor');
+
+            if (selectedObject) {
+                if (selectedObject.userData.type === 'obstacle') {
+                    selectedObject.material.emissive.setHex(0x000000);
+                } else if (selectedObject.userData.type === 'spawn') {
+                    selectedObject.material.opacity = 0.5;
+                }
+                propEditor.style.display = 'none';
+                spawnEditor.style.display = 'none';
+            }
             
-            // 高さチェックと梯子設置
-            if (height > OBSTACLE_HEIGHT * 2) {
-                createAndAttachLadder(obstacle);
+            if (object) {
+                selectedObject = object;
+
+                if (object.userData.type === 'obstacle') {
+                    selectedObject.material.emissive.setHex(0x3498db);
+                    propEditor.style.display = 'block';
+
+                    document.getElementById('prop-width').value = selectedObject.geometry.parameters.width;
+                    document.getElementById('prop-height').value = selectedObject.geometry.parameters.height;
+                    document.getElementById('prop-depth').value = selectedObject.geometry.parameters.depth;
+                    document.getElementById('prop-hp').value = selectedObject.userData.hp || 1;
+                    document.getElementById('prop-color').value = '#' + selectedObject.userData.color.toString(16).padStart(6, '0');
+
+                } else if (object.userData.type === 'spawn') {
+                    selectedObject.material.opacity = 0.8;
+                    spawnEditor.style.display = 'block';
+
+                    document.getElementById('spawn-type').textContent = selectedObject.userData.name;
+                    document.getElementById('spawn-x').textContent = selectedObject.position.x.toFixed(2);
+                    document.getElementById('spawn-z').textContent = selectedObject.position.z.toFixed(2);
+                }
+            } else {
+                selectedObject = null;
+            }
+        }
+        
+        function applyProperties() {
+            if (!selectedObject || selectedObject.userData.type !== 'obstacle') return;
+
+            const width = parseFloat(document.getElementById('prop-width').value);
+            const height = parseFloat(document.getElementById('prop-height').value);
+            const depth = parseFloat(document.getElementById('prop-depth').value);
+            const hp = parseInt(document.getElementById('prop-hp').value, 10);
+            const hexColor = document.getElementById('prop-color').value;
+            const newColor = parseInt(hexColor.replace('#', '0x'));
+
+            if (isNaN(width) || isNaN(height) || isNaN(depth) || isNaN(hp) || width <= 0 || height <= 0 || depth <= 0 || hp <= 0) {
+                showNotification('Invalid dimensions or HP.', true);
+                return;
+            }
+            
+            // Resize geometry
+            selectedObject.geometry.dispose();
+            selectedObject.geometry = new THREE.BoxGeometry(width, height, depth);
+            selectedObject.position.y = height / 2;
+            
+            selectedObject.material.color.setHex(newColor);
+            selectedObject.userData.color = newColor;
+            selectedObject.userData.hp = hp;
+            
+            PERSISTENT_OBSTACLE_SIZE = { width, height, depth, color: newColor, hp: hp };
+            
+            addRecentColor(newColor); 
+
+            showNotification('Properties applied!');
+        }
+
+        function onColorChange(event) {
+            if (selectedObject && selectedObject.userData.type === 'obstacle') {
+                const hexColor = event.target.value;
+                const newColor = parseInt(hexColor.replace('#', '0x'));
+                
+                selectedObject.material.color.setHex(newColor);
+                selectedObject.userData.color = newColor;
+                PERSISTENT_OBSTACLE_SIZE.color = newColor;
+                addRecentColor(newColor); 
             }
         }
 
+        function showNotification(message, isError = false) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.style.backgroundColor = isError ? '#e74c3c' : '#1abc9c';
+            notification.style.opacity = 1;
+            setTimeout(() => {
+                notification.style.opacity = 0;
+            }, 3000);
+        }
+
+        // --- I/O (セーブ・ロード・ファイル操作の実装) ---
+
         function saveMap() {
-            const mapData = obstacles.map(obs => {
-                const ladder = obs.getObjectByName('ladder');
-                return {
+            const finalObstacleData = [];
+
+            obstacles.forEach(obs => {
+                finalObstacleData.push({
                     x: obs.position.x,
                     z: obs.position.z,
                     width: obs.geometry.parameters.width,
                     height: obs.geometry.parameters.height,
                     depth: obs.geometry.parameters.depth,
-                    // Note: ラダーの情報は保存せず、ロード時に再生成する
-                };
+                    color: obs.userData.color,
+                    hp: obs.userData.hp
+                });
             });
-            localStorage.setItem('customMapData', JSON.stringify(mapData));
-            showNotification('Map saved successfully!');
+
+            const mapData = {
+                obstacles: finalObstacleData,
+                spawnPoints: SPAWN_POINTS_DATA,
+                persistentSize: PERSISTENT_OBSTACLE_SIZE
+            };
+            
+            try {
+                localStorage.setItem('customMapData', JSON.stringify(mapData));
+                showNotification('Map saved successfully to browser!');
+            } catch (e) {
+                showNotification('Failed to save map data to browser.', true);
+                console.error("Local storage save error:", e);
+            }
         }
 
         function loadMap() {
-            resetMap();
+            resetMap(false); 
             const mapData = localStorage.getItem('customMapData');
             if (mapData) {
-                const parsedData = JSON.parse(mapData);
-                parsedData.forEach(data => createObstacle(data.x, data.z, data.width, data.height, data.depth, false));
-                showNotification('Map loaded!');
+                try {
+                    const parsedData = JSON.parse(mapData);
+                    
+                    if (parsedData.obstacles) {
+                        parsedData.obstacles.forEach(data => createObstacle(data.x, data.z, data.width, data.height, data.depth, data.color, data.hp, false));
+                    }
+                    
+                    if (parsedData.spawnPoints && parsedData.spawnPoints.length === SPAWN_POINTS_DATA.length) {
+                        SPAWN_POINTS_DATA = parsedData.spawnPoints;
+                    }
+                    
+                    if (parsedData.persistentSize) {
+                        PERSISTENT_OBSTACLE_SIZE = parsedData.persistentSize;
+                    }
+                    
+                    // ロード後の座標もスナップを適用
+                    SPAWN_POINTS_DATA.forEach(data => {
+                        data.x = snapToGrid(data.x);
+                        data.z = snapToGrid(data.z);
+                    });
+                    
+                    renderSpawnPoints();
+                    showNotification('Map loaded from browser!');
+                } catch(e) {
+                    showNotification('Failed to load map data or data is corrupted.', true);
+                    renderSpawnPoints();
+                    console.error("Local storage load error:", e);
+                }
             } else {
-                showNotification('No saved map found.', true);
+                renderSpawnPoints();
+                showNotification('No saved map found in browser.', true);
             }
         }
         
-        function resetMap() {
+        function resetMap(showNote = true) {
+            setSelected(null);
+            
             obstacles.forEach(obs => scene.remove(obs));
             obstacles = [];
-            if(selectedObstacle) {
-                setSelected(null); // エディタも非表示にする
-            }
-        }
-        
-        function showNotification(message, isError = false) {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.style.backgroundColor = isError ? '#e74c3c' : '#1abc9c';
-            notification.style.opacity = '1';
-            setTimeout(() => {
-                notification.style.opacity = '0';
-            }, 2000);
-        }
-
-        function setSelected(object) {
-            const editor = document.getElementById('properties-editor');
-            const widthInput = document.getElementById('prop-width');
-            const heightInput = document.getElementById('prop-height');
-            const depthInput = document.getElementById('prop-depth');
-
-            if (selectedObstacle) {
-                selectedObstacle.material.emissive.setHex(0x000000);
-            }
             
-            if (object && obstacles.includes(object)) {
-                selectedObstacle = object;
-                selectedObstacle.material.emissive.setHex(0x555555);
-                
-                widthInput.value = selectedObstacle.geometry.parameters.width;
-                heightInput.value = selectedObstacle.geometry.parameters.height;
-                depthInput.value = selectedObstacle.geometry.parameters.depth;
-                
-                editor.style.display = 'block';
-            } else {
-                selectedObstacle = null;
-                editor.style.display = 'none';
-            }
-        }
-        
-        function applyProperties() {
-            if (!selectedObstacle) return;
-
-            const width = parseFloat(document.getElementById('prop-width').value);
-            const height = parseFloat(document.getElementById('prop-height').value);
-            const depth = parseFloat(document.getElementById('prop-depth').value);
-
-            if (isNaN(width) || isNaN(height) || isNaN(depth) || width <= 0 || height <= 0 || depth <= 0) {
-                showNotification('Invalid dimensions.', true);
-                return;
-            }
-            
-            const halfWidth = width / 2;
-            const halfDepth = depth / 2;
-            const x = selectedObstacle.position.x;
-            const z = selectedObstacle.position.z;
-            const corners = [
-                new THREE.Vector2(x - halfWidth, z - halfDepth), new THREE.Vector2(x + halfWidth, z - halfDepth),
-                new THREE.Vector2(x - halfWidth, z + halfDepth), new THREE.Vector2(x + halfWidth, z + depth)
+            SPAWN_POINTS_DATA = [
+                { id: 0, x: 0, z: -20, color: 0x0000ff, name: 'Player' },
+                { id: 1, x: 0, z: 20, color: 0x00ff00, name: 'AI 1' },
+                { id: 2, x: 15, z: 20, color: 0x00ffff, name: 'AI 2' },
+                { id: 3, x: -15, z: 20, color: 0xffb6c1, name: 'AI 3' }
             ];
-            for (const corner of corners) {
-                if (corner.length() > ARENA_RADIUS) {
-                    showNotification('Resized obstacle would be outside the arena.', true);
-                    return;
-                }
-            }
-
-            // 古い梯子を削除
-            const oldLadder = selectedObstacle.getObjectByName('ladder');
-            if (oldLadder) {
-                selectedObstacle.remove(oldLadder);
-            }
-
-            selectedObstacle.geometry.dispose();
-            selectedObstacle.geometry = new THREE.BoxGeometry(width, height, depth);
-            selectedObstacle.position.y = height / 2;
-
-            // 新しい高さで再度梯子を付けるか判断
-            if (height > OBSTACLE_HEIGHT * 2) {
-                createAndAttachLadder(selectedObstacle);
-            }
-
-            showNotification('Size applied!');
-        }
-
-        // --- EVENT LISTENERS ---
-        function onMouseMove(event) {
-            const canvasBounds = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((event.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
-            mouse.y = -((event.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
-
-            if (isDragging && selectedObstacle) {
-                raycaster.setFromCamera(mouse, camera);
-                const intersection = new THREE.Vector3();
-                raycaster.ray.intersectPlane(plane, intersection);
-                selectedObstacle.position.x = intersection.x;
-                selectedObstacle.position.z = intersection.z;
-            }
-        }
-
-        function onMouseDown(event) {
-            const canvasBounds = renderer.domElement.getBoundingClientRect();
-            mouse.x = ((event.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
-            mouse.y = -((event.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
-            // 左クリック
-            if (event.button === 0) {
-                raycaster.setFromCamera(mouse, camera);
-                const intersects = raycaster.intersectObjects(obstacles);
-
-                if (intersects.length > 0) { // 障害物をクリックした場合
-                    isDragging = true;
-                    setSelected(intersects[0].object);
-                } else { // 障害物以外をクリックした場合
-                    setSelected(null); // まず選択を解除
-                    const floorIntersects = raycaster.intersectObject(floor);
-                    if (floorIntersects.length > 0) { // 床をクリックした場合は、新しい障害物を生成
-                        const pos = floorIntersects[0].point;
-                        createObstacle(pos.x, pos.z);
-                    }
-                }
-            } 
-            // 右クリック
-            else if (event.button === 2) {
-                 raycaster.setFromCamera(mouse, camera);
-                const intersects = raycaster.intersectObjects(obstacles);
-                if (intersects.length > 0) {
-                    const toDelete = intersects[0].object;
-                    scene.remove(toDelete);
-                    obstacles = obstacles.filter(obs => obs !== toDelete);
-                    setSelected(null); // 削除したら選択も解除
-                }
-            }
-        }
-
-        function onMouseUp(event) {
-            if (event.button === 0) {
-                isDragging = false;
-            }
-        }
-        
-        function onKeyDown(event) {
-            if (event.key === 'Delete' && selectedObstacle) {
-                scene.remove(selectedObstacle);
-                obstacles = obstacles.filter(obs => obs !== selectedObstacle);
-                setSelected(null); // 削除したら選択も解除
-            }
-        }
-        
-        function onWindowResize() {
-            // canvasContainerの現在のサイズを取得
-            const currentWidth = canvasContainer.clientWidth;
-            const currentHeight = canvasContainer.clientHeight;
-
-            const aspect = currentWidth / currentHeight;
             
-            const verticalOffset = frustumSize * 0.1; // 上にシフトさせる量
-
-            camera.left = frustumSize * aspect / -2;
-            camera.right = frustumSize * aspect / 2;
-            camera.top = frustumSize / 2 + verticalOffset; // 上にシフト
-            camera.bottom = frustumSize / -2 + verticalOffset; // 上にシフト
-            camera.updateProjectionMatrix();
-            renderer.setSize(currentWidth, currentHeight); // rendererのサイズもcanvasContainerに合わせる
-        }
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mousedown', onMouseDown);
-        document.addEventListener('mouseup', onMouseUp);
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('contextmenu', e => e.preventDefault());
-        window.addEventListener('resize', onWindowResize);
-        
-        let touchDownTime = 0;
-        const LONG_PRESS_THRESHOLD = 500; // ms
-        let touchStartPos = { x: 0, y: 0 };
-        let currentTouch = null; // 現在追跡中のタッチID
-        let hasMoved = false; // タッチ中に移動があったか
-
-        canvasContainer.addEventListener('touchstart', (event) => {
-            event.preventDefault(); // デフォルトのスクロールやズームを防ぐ
-
-            if (event.touches.length === 1) {
-                currentTouch = event.touches[0];
-                touchStartPos = { x: currentTouch.clientX, y: currentTouch.clientY };
-                hasMoved = false; // タッチ開始時は移動なし
-
-                const canvasBounds = renderer.domElement.getBoundingClientRect();
-                mouse.x = ((currentTouch.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
-                mouse.y = -((currentTouch.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
-
-                raycaster.setFromCamera(mouse, camera);
-                const intersects = raycaster.intersectObjects(obstacles);
-
-                if (intersects.length > 0) { // 障害物をタッチした場合
-                    selectedObstacle = intersects[0].object;
-                    setSelected(selectedObstacle);
-                    isDragging = true;
-                } else { // 障害物以外をタッチした場合
-                    setSelected(null); // まず選択を解除
-                    // タップで追加する処理はtouchendで行う (長押しとの区別のため)
-                }
-                touchDownTime = Date.now(); // 長押し判定用タイマー開始
-            }
-        }, { passive: false });
-
-        canvasContainer.addEventListener('touchmove', (event) => {
-            event.preventDefault(); // デフォルトのスクロールやズームを防ぐ
+            // 初期スポーンポイントもスナップ
+            SPAWN_POINTS_DATA.forEach(data => {
+                data.x = snapToGrid(data.x);
+                data.z = snapToGrid(data.z);
+            });
             
-            if (isDragging && selectedObstacle && event.touches.length === 1 && event.touches[0].identifier === currentTouch.identifier) {
-                currentTouch = event.touches[0];
-                const canvasBounds = renderer.domElement.getBoundingClientRect();
-                mouse.x = ((currentTouch.clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
-                mouse.y = -((currentTouch.clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
-
-                raycaster.setFromCamera(mouse, camera);
-                const intersection = new THREE.Vector3();
-                raycaster.ray.intersectPlane(plane, intersection);
-                selectedObstacle.position.x = intersection.x;
-                selectedObstacle.position.z = intersection.z;
-
-                // ドラッグ中に一定以上動いたらhasMovedをtrueに
-                if (Math.abs(currentTouch.clientX - touchStartPos.x) > 5 || Math.abs(currentTouch.clientY - touchStartPos.y) > 5) {
-                    hasMoved = true;
-                }
+            renderSpawnPoints();
+            
+            if (showNote) {
+                showNotification('New map created.'); 
             }
-        }, { passive: false });
+        }
 
-        canvasContainer.addEventListener('touchend', (event) => {
-            if (isDragging) {
-                isDragging = false;
-            }
-
-            // touchDownTimeが有効で、移動がなく、閾値未満であれば単一タップ（追加/選択）
-            if (touchDownTime > 0 && !hasMoved && (Date.now() - touchDownTime < LONG_PRESS_THRESHOLD)) {
-                raycaster.setFromCamera(mouse, camera);
-                const intersects = raycaster.intersectObjects(obstacles);
-
-                if (intersects.length === 0) { // 何も選択されていなければ追加
-                    const floorIntersects = raycaster.intersectObject(floor);
-                    if (floorIntersects.length > 0) { // 床をタップした場合は、新しい障害物を生成
-                        const pos = floorIntersects[0].point;
-                        createObstacle(pos.x, pos.z);
-                        showNotification('Obstacle added!');
-                    }
-                } else { // 障害物を選択
-                    setSelected(intersects[0].object);
-                }
-            } 
-            // 長押し判定 (移動がなく、閾値以上であれば削除)
-            else if (touchDownTime > 0 && !hasMoved && (Date.now() - touchDownTime >= LONG_PRESS_THRESHOLD)) {
-                // 長押しでの削除処理
-                raycaster.setFromCamera(mouse, camera);
-                const intersects = raycaster.intersectObjects(obstacles);
-                if (intersects.length > 0) {
-                    const toDelete = intersects[0].object;
-                    scene.remove(toDelete);
-                    obstacles = obstacles.filter(obs => obs !== toDelete);
-                    setSelected(null); // 削除したら選択も解除
-                    showNotification('Obstacle deleted (Long Press)!');
-                }
-            }
-            currentTouch = null;
-            touchDownTime = 0;
-            hasMoved = false;
-        });
-
-        // --- NEW I/O FUNCTIONS ---
         function exportMapToFile() {
-            const mapData = obstacles.map(obs => ({
-                x: obs.position.x,
-                z: obs.position.z,
-                width: obs.geometry.parameters.width,
-                height: obs.geometry.parameters.height,
-                depth: obs.geometry.parameters.depth,
-            }));
+            const finalObstacleData = [];
+            obstacles.forEach(obs => {
+                finalObstacleData.push({
+                    x: obs.position.x,
+                    z: obs.position.z,
+                    width: obs.geometry.parameters.width,
+                    height: obs.geometry.parameters.height,
+                    depth: obs.geometry.parameters.depth,
+                    color: obs.userData.color,
+                    hp: obs.userData.hp
+                });
+            });
+
+            const mapData = {
+                obstacles: finalObstacleData,
+                spawnPoints: SPAWN_POINTS_DATA,
+                persistentSize: PERSISTENT_OBSTACLE_SIZE
+            };
+
             const jsonString = JSON.stringify(mapData, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
+            
             const a = document.createElement('a');
             a.href = url;
             a.download = `gunfight-map-${Date.now()}.json`;
@@ -600,10 +695,27 @@
             reader.onload = (e) => {
                 try {
                     const mapData = JSON.parse(e.target.result);
-                    if (!Array.isArray(mapData)) throw new Error('Invalid map format.');
+                    if (!mapData.obstacles) throw new Error('Invalid map format.');
                     
-                    resetMap();
-                    mapData.forEach(data => createObstacle(data.x, data.z, data.width, data.height, data.depth, false));
+                    resetMap(false); 
+
+                    mapData.obstacles.forEach(data => createObstacle(data.x, data.z, data.width, data.height, data.depth, data.color, data.hp, false));
+
+                    if (mapData.spawnPoints && mapData.spawnPoints.length === SPAWN_POINTS_DATA.length) {
+                        SPAWN_POINTS_DATA = mapData.spawnPoints;
+                        
+                        // インポートされたスポーンポイントの座標を再スナップ
+                        SPAWN_POINTS_DATA.forEach(data => {
+                            data.x = snapToGrid(data.x);
+                            data.z = snapToGrid(data.z);
+                        });
+                    }
+                    
+                    if (mapData.persistentSize) {
+                        PERSISTENT_OBSTACLE_SIZE = mapData.persistentSize;
+                    }
+                    
+                    renderSpawnPoints();
                     showNotification('Map imported successfully!');
                 } catch (error) {
                     showNotification('Error: Could not read map file.', true);
@@ -611,34 +723,383 @@
                 }
             };
             reader.readAsText(file);
-            event.target.value = ''; // Reset input to allow re-importing the same file
+            event.target.value = ''; 
         }
 
-        // --- ATTACH EVENT LISTENERS ---
+        // --- CAMERA CONTROLS & EVENT LISTENERS (Touch/Mouse) ---
+
+        function updateCameraPosition() {
+            camera.position.x = cameraTarget.x;
+            camera.position.z = cameraTarget.z;
+            camera.lookAt(cameraTarget.x, 0, cameraTarget.z);
+        }
+
+        function getNormalizedPointer(event, index = 0) {
+            const canvasBounds = renderer.domElement.getBoundingClientRect();
+            let clientX, clientY;
+            
+            if (event.touches && event.touches.length > index) {
+                clientX = event.touches[index].clientX;
+                clientY = event.touches[index].clientY;
+            } else if (event.clientX !== undefined) {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            } else {
+                return null;
+            }
+
+            const x = ((clientX - canvasBounds.left) / canvasBounds.width) * 2 - 1;
+            const y = -((clientY - canvasBounds.top) / canvasBounds.height) * 2 + 1;
+            
+            mouse.x = x;
+            mouse.y = y;
+            return { x, y };
+        }
+
+        // --- MOUSE LISTENERS (PC fallback) ---
+
+        function onMouseMove(event) {
+            if (touchMode !== 'none') return;
+            
+            const canvasBounds = renderer.domElement.getBoundingClientRect();
+            getNormalizedPointer(event);
+
+            if (isDragging && selectedObject) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersection = new THREE.Vector3();
+                raycaster.ray.intersectPlane(plane, intersection);
+                
+                // スナップ処理の適用
+                const snappedX = snapToGrid(intersection.x);
+                const snappedZ = snapToGrid(intersection.z);
+
+                if (Math.sqrt(snappedX * snappedX + snappedZ * snappedZ) < ARENA_RADIUS) { 
+                    selectedObject.position.x = snappedX;
+                    selectedObject.position.z = snappedZ;
+                    
+                    if (selectedObject.userData.type === 'spawn') {
+                        const data = SPAWN_POINTS_DATA.find(d => d.id === selectedObject.userData.id);
+                        if (data) {
+                            data.x = snappedX;
+                            data.z = snappedZ;
+                            // UIもスナップ後の値を表示
+                            document.getElementById('spawn-x').textContent = snappedX.toFixed(2);
+                            document.getElementById('spawn-z').textContent = snappedZ.toFixed(2);
+                        }
+                    }
+                }
+            } else if (isPanning) {
+                const deltaX = event.clientX - panStart.x;
+                const deltaY = event.clientY - panStart.y;
+                panStart.set(event.clientX, event.clientY);
+                const panFactor = camera.right - camera.left;
+                cameraTarget.x -= deltaX * panFactor / canvasBounds.width;
+                cameraTarget.z -= deltaY * panFactor / canvasBounds.height; 
+                const maxPanRadius = ARENA_RADIUS / 2;
+                if (cameraTarget.length() > maxPanRadius) {
+                    cameraTarget.normalize().multiplyScalar(maxPanRadius);
+                }
+                updateCameraPosition();
+            }
+        }
+
+        function onMouseDown(event) {
+            if (touchMode !== 'none') return;
+            
+            getNormalizedPointer(event);
+            const allClickable = [...obstacles, ...spawnMeshes];
+
+            if (event.button === 0) { // 左クリック
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(allClickable);
+                if (intersects.length > 0) {
+                    isDragging = true;
+                    setSelected(intersects[0].object);
+                } else {
+                    setSelected(null);
+                    const floorIntersects = raycaster.intersectObject(floor);
+                    if (floorIntersects.length > 0) {
+                        const pos = floorIntersects[0].point;
+                        
+                        // 新規追加時にもスナップ処理を適用
+                        const snappedX = snapToGrid(pos.x);
+                        const snappedZ = snapToGrid(pos.z);
+                        
+                        createObstacle(snappedX, snappedZ, PERSISTENT_OBSTACLE_SIZE.width, PERSISTENT_OBSTACLE_SIZE.height, PERSISTENT_OBSTACLE_SIZE.depth, PERSISTENT_OBSTACLE_SIZE.color, PERSISTENT_OBSTACLE_SIZE.hp);
+                        showNotification('Obstacle added!');
+                    }
+                }
+            } else if (event.button === 2) { // 右クリック
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(obstacles);
+                if (intersects.length > 0) {
+                    const toDelete = intersects[0].object;
+                    scene.remove(toDelete);
+                    obstacles = obstacles.filter(obs => obs !== toDelete);
+                    setSelected(null);
+                    showNotification('Obstacle deleted (Right Click)!');
+                } else {
+                    isPanning = true;
+                    panStart.set(event.clientX, event.clientY);
+                }
+            }
+        }
+
+        function onMouseUp(event) {
+            if (touchMode !== 'none') return;
+            if (event.button === 0) isDragging = false;
+            if (event.button === 2) isPanning = false;
+        }
+        
+        function onWheel(event) {
+            event.preventDefault();
+            const zoomFactor = 1.05;
+            initialFrustumSize *= (event.deltaY < 0 ? 1 / zoomFactor : zoomFactor);
+            initialFrustumSize = Math.max(50, Math.min(400, initialFrustumSize));
+            onWindowResize();
+        }
+
+        // --- TOUCH LISTENERS (Mobile) ---
+
+        function onTouchStart(event) {
+            event.preventDefault(); 
+            
+            const touches = event.touches;
+            
+            clearTimeout(touchDownTimer); 
+            isDragging = false; 
+            isPanning = false;
+
+            if (touches.length === 1) {
+                touchMode = 'single-tap-drag';
+                touchStartPos.x = touches[0].clientX;
+                touchStartPos.y = touches[0].clientY;
+                
+                touchDownTimer = setTimeout(() => {
+                    touchMode = 'long-press';
+                    handleDelete(touches[0]); 
+                }, LONG_PRESS_THRESHOLD);
+
+                getNormalizedPointer(event);
+                raycaster.setFromCamera(mouse, camera);
+                const allClickable = [...obstacles, ...spawnMeshes];
+                const intersects = raycaster.intersectObjects(allClickable);
+
+                if (intersects.length > 0) {
+                    isDragging = true;
+                    setSelected(intersects[0].object);
+                } else {
+                    isDragging = false;
+                }
+
+            } else if (touches.length === 2) {
+                touchMode = 'two-finger-pan';
+                isPanning = true;
+                panStart.set((touches[0].clientX + touches[1].clientX) / 2, (touches[0].clientY + touches[1].clientY) / 2);
+                initialPinchDistance = getPinchDistance(touches);
+            }
+        }
+
+        function onTouchMove(event) {
+            event.preventDefault();
+            const touches = event.touches;
+            const canvasBounds = renderer.domElement.getBoundingClientRect();
+
+            if (touchMode === 'long-press') return;
+
+            if (touches.length === 1 && touchMode === 'single-tap-drag') {
+                const deltaX = touches[0].clientX - touchStartPos.x;
+                const deltaY = touches[0].clientY - touchStartPos.y;
+                if (Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 5) {
+                    clearTimeout(touchDownTimer); 
+                }
+
+                if (isDragging && selectedObject) {
+                    getNormalizedPointer(event);
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersection = new THREE.Vector3();
+                    raycaster.ray.intersectPlane(plane, intersection);
+                    
+                    // スナップ処理の適用 (Touch Move)
+                    const snappedX = snapToGrid(intersection.x);
+                    const snappedZ = snapToGrid(intersection.z);
+
+                    if (Math.sqrt(snappedX * snappedX + snappedZ * snappedZ) < ARENA_RADIUS) { 
+                        selectedObject.position.x = snappedX;
+                        selectedObject.position.z = snappedZ;
+                        if (selectedObject.userData.type === 'spawn') {
+                            const data = SPAWN_POINTS_DATA.find(d => d.id === selectedObject.userData.id);
+                            if (data) {
+                                data.x = snappedX;
+                                data.z = snappedZ;
+                                document.getElementById('spawn-x').textContent = snappedX.toFixed(2);
+                                document.getElementById('spawn-z').textContent = snappedZ.toFixed(2);
+                            }
+                        }
+                    }
+                }
+            } else if (touches.length === 2) {
+                clearTimeout(touchDownTimer);
+                touchMode = 'two-finger-pan'; 
+
+                const currentDistance = getPinchDistance(touches);
+                const deltaDistance = initialPinchDistance - currentDistance;
+                
+                if (Math.abs(deltaDistance) > 3) {
+                    const zoomFactor = 1.0 + (deltaDistance / 500); 
+                    initialFrustumSize *= zoomFactor;
+                    initialFrustumSize = Math.max(50, Math.min(400, initialFrustumSize));
+                    initialPinchDistance = currentDistance; 
+                    onWindowResize();
+                } 
+                
+                const newCenterX = (touches[0].clientX + touches[1].clientX) / 2;
+                const newCenterY = (touches[0].clientY + touches[1].clientY) / 2;
+                
+                const deltaX = newCenterX - panStart.x;
+                const deltaY = newCenterY - panStart.y;
+                
+                panStart.set(newCenterX, newCenterY);
+                
+                const panFactor = camera.right - camera.left;
+                cameraTarget.x -= deltaX * panFactor / canvasBounds.width;
+                cameraTarget.z -= deltaY * panFactor / canvasBounds.height; 
+                
+                const maxPanRadius = ARENA_RADIUS / 2;
+                if (cameraTarget.length() > maxPanRadius) {
+                    cameraTarget.normalize().multiplyScalar(maxPanRadius);
+                }
+                updateCameraPosition();
+            }
+        }
+
+        function onTouchEnd(event) {
+            clearTimeout(touchDownTimer);
+            
+            const touches = event.changedTouches;
+            const singleTap = touchMode === 'single-tap-drag';
+            
+            isDragging = false; 
+            isPanning = false; 
+            
+            if (singleTap && touches.length === 1) {
+                const deltaX = touches[0].clientX - touchStartPos.x;
+                const deltaY = touches[0].clientY - touchStartPos.y;
+                
+                if (Math.sqrt(deltaX * deltaX + deltaY * deltaY) < 5) { 
+                    handleSingleTap(touches[0]);
+                }
+            }
+            touchMode = 'none';
+        }
+
+        function getPinchDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function handleSingleTap(touch) {
+            getNormalizedPointer({ clientX: touch.clientX, clientY: touch.clientY });
+            const allClickable = [...obstacles, ...spawnMeshes];
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(allClickable);
+
+            if (intersects.length > 0) {
+                setSelected(intersects[0].object);
+            } else {
+                setSelected(null);
+                const floorIntersects = raycaster.intersectObject(floor);
+                if (floorIntersects.length > 0) {
+                    const pos = floorIntersects[0].point;
+                    
+                    // 新規追加時にもスナップ処理を適用
+                    const snappedX = snapToGrid(pos.x);
+                    const snappedZ = snapToGrid(pos.z);
+                    
+                    createObstacle(snappedX, snappedZ, PERSISTENT_OBSTACLE_SIZE.width, PERSISTENT_OBSTACLE_SIZE.height, PERSISTENT_OBSTACLE_SIZE.depth, PERSISTENT_OBSTACLE_SIZE.color, PERSISTENT_OBSTACLE_SIZE.hp);
+                    showNotification('Obstacle added!');
+                }
+            }
+        }
+
+        function handleDelete(touch) {
+            getNormalizedPointer({ clientX: touch.clientX, clientY: touch.clientY });
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(obstacles);
+            
+            if (intersects.length > 0) {
+                const toDelete = intersects[0].object;
+                scene.remove(toDelete);
+                obstacles = obstacles.filter(obs => obs !== toDelete);
+                setSelected(null);
+                showNotification('Obstacle deleted (Long Press)!');
+            }
+        }
+
+        function onKeyDown(event) {
+            if (event.key === 'Delete' && selectedObject && selectedObject.userData.type === 'obstacle') {
+                scene.remove(selectedObject);
+                obstacles = obstacles.filter(obs => obs !== selectedObject);
+                setSelected(null);
+                showNotification('Obstacle deleted (Delete Key)!');
+            }
+        }
+        
+        // --- Boilerplate ---
+
+        function onWindowResize() {
+            const currentWidth = canvasContainer.clientWidth;
+            const currentHeight = canvasContainer.clientHeight;
+            aspect = currentWidth / currentHeight;
+            camera.left = initialFrustumSize * aspect / -2;
+            camera.right = initialFrustumSize * aspect / 2;
+            camera.top = initialFrustumSize / 2; 
+            camera.bottom = initialFrustumSize / -2;
+            camera.updateProjectionMatrix();
+            renderer.setSize(currentWidth, currentHeight);
+        }
+        
+        // PC Event Listeners
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+        
+        // Mobile Event Listeners
+        renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+        renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false });
+        renderer.domElement.addEventListener('touchend', onTouchEnd, { passive: false });
+        
+        // UI Event Listeners
+        window.addEventListener('resize', onWindowResize);
         document.getElementById('save-browser-button').addEventListener('click', saveMap);
         document.getElementById('load-browser-button').addEventListener('click', loadMap);
-        document.getElementById('reset-button').addEventListener('click', () => {
-            resetMap();
-            showNotification('New map created.');
-        });
+        document.getElementById('reset-button').addEventListener('click', resetMap);
         document.getElementById('apply-props-button').addEventListener('click', applyProperties);
-        
+        document.getElementById('prop-color').addEventListener('input', onColorChange);
         document.getElementById('export-file-button').addEventListener('click', exportMapToFile);
         document.getElementById('import-file-button').addEventListener('click', () => document.getElementById('import-file-input').click());
         document.getElementById('import-file-input').addEventListener('change', importMapFromFile);
+        document.getElementById('ui-container').addEventListener('mousedown', (event) => event.stopPropagation());
+        document.getElementById('ui-container').addEventListener('touchstart', (event) => event.stopPropagation(), { passive: false });
 
-        // UI上でのクリックが3Dシーンに影響しないようにイベントの伝播を停止
-        document.getElementById('ui-container').addEventListener('mousedown', (event) => {
-            event.stopPropagation();
-        });
+        // 初期化処理
+        loadRecentColors();
+        renderRecentColors();
 
-        // --- RENDER LOOP ---
         function animate() {
             requestAnimationFrame(animate);
             renderer.render(scene, camera);
         }
+        
+        onWindowResize();
         animate();
-        loadMap(); // ページ読み込み時に自動で前回保存したマップを読み込む
+        
+        loadMap();
     </script>
 </body>
 </html>
