@@ -199,9 +199,16 @@
                     </div>
                 </div>
                 <div id="right-panel">
-                    <h3>Save/Load</h3>
-                    <button id="save-browser-button">Save to Browser (Local)</button>
-                    <button id="load-browser-button">Load from Browser (Local)</button>
+                    <h3>Map Management</h3>
+                    <p>Map Name:</p>
+                    <input type="text" id="map-name-input" placeholder="Enter map name" style="width: 90%; padding: 5px; margin: 0 auto 10px auto; display: block; background: #34495e; border: 1px solid #3498db; color: #ecf0f1; border-radius: 3px;">
+                    <button id="save-map-button">Save Map</button>
+                    
+                    <p style="margin-top: 15px;">Load/Delete Maps:</p>
+                    <select id="saved-maps-select" style="width: 95%; padding: 5px; margin: 0 auto 10px auto; display: block; background: #34495e; border: 1px solid #3498db; color: #ecf0f1; border-radius: 3px;"></select>
+                    <button id="load-map-button" style="background-color: #1abc9c;">Load Map</button>
+                    <button id="delete-map-button" style="background-color: #e74c3c;">Delete Map</button>
+                    
                     <button id="export-file-button" style="background-color: #27ae60;">Export to File (.json)</button>
                     <button id="import-file-button" style="background-color: #f39c12;">Import from File (.json)</button>
                     <input type="file" id="import-file-input" accept=".json" style="display: none;">
@@ -559,9 +566,45 @@
 
         // --- I/O (セーブ・ロード・ファイル操作の実装) ---
 
-        function saveMap() {
-            const finalObstacleData = [];
+        let allCustomMaps = JSON.parse(localStorage.getItem('allCustomMaps') || '{}');
 
+        function updateSavedMapsSelect() {
+            const select = document.getElementById('saved-maps-select');
+            select.innerHTML = ''; // Clear existing options
+
+            const mapNames = Object.keys(allCustomMaps);
+            if (mapNames.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No maps saved';
+                option.disabled = true;
+                option.selected = true;
+                select.appendChild(option);
+                document.getElementById('load-map-button').disabled = true;
+                document.getElementById('delete-map-button').disabled = true;
+            } else {
+                mapNames.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    select.appendChild(option);
+                });
+                select.value = mapNames[0]; // Select the first map by default
+                document.getElementById('load-map-button').disabled = false;
+                document.getElementById('delete-map-button').disabled = false;
+            }
+        }
+
+        function saveMap() {
+            const mapNameInput = document.getElementById('map-name-input');
+            const mapName = mapNameInput.value.trim();
+
+            if (!mapName) {
+                showNotification('Please enter a map name.', true);
+                return;
+            }
+
+            const finalObstacleData = [];
             obstacles.forEach(obs => {
                 finalObstacleData.push({
                     x: obs.position.x,
@@ -580,9 +623,12 @@
                 persistentSize: PERSISTENT_OBSTACLE_SIZE
             };
             
+            allCustomMaps[mapName] = mapData;
             try {
-                localStorage.setItem('customMapData', JSON.stringify(mapData));
-                showNotification('Map saved successfully to browser!');
+                localStorage.setItem('allCustomMaps', JSON.stringify(allCustomMaps));
+                showNotification(`Map "${mapName}" saved successfully!`);
+                updateSavedMapsSelect(); // Update the dropdown after saving
+                mapNameInput.value = ''; // Clear input field
             } catch (e) {
                 showNotification('Failed to save map data to browser.', true);
                 console.error("Local storage save error:", e);
@@ -590,40 +636,76 @@
         }
 
         function loadMap() {
-            resetMap(false); 
-            const mapData = localStorage.getItem('customMapData');
-            if (mapData) {
-                try {
-                    const parsedData = JSON.parse(mapData);
-                    
-                    if (parsedData.obstacles) {
-                        parsedData.obstacles.forEach(data => createObstacle(data.x, data.z, data.width, data.height, data.depth, data.color, data.hp, false));
-                    }
-                    
-                    if (parsedData.spawnPoints && parsedData.spawnPoints.length === SPAWN_POINTS_DATA.length) {
-                        SPAWN_POINTS_DATA = parsedData.spawnPoints;
-                    }
-                    
-                    if (parsedData.persistentSize) {
-                        PERSISTENT_OBSTACLE_SIZE = parsedData.persistentSize;
-                    }
-                    
-                    // ロード後の座標もスナップを適用
+            const select = document.getElementById('saved-maps-select');
+            const mapName = select.value;
+
+            console.log('Attempting to load map:', mapName);
+            console.log('allCustomMaps:', allCustomMaps);
+
+            if (!mapName || !allCustomMaps[mapName]) {
+                showNotification('Please select a map to load, or no maps are saved.', true);
+                console.error('No map selected or map not found in allCustomMaps.');
+                return;
+            }
+
+            resetMap(false); // Clear current map, but don't show "new map created"
+
+            const mapData = allCustomMaps[mapName];
+            console.log('Map data to load:', mapData);
+
+            try {
+                if (mapData.obstacles) {
+                    console.log('Loading obstacles:', mapData.obstacles.length);
+                    mapData.obstacles.forEach(data => createObstacle(data.x, data.z, data.width, data.height, data.depth, data.color, data.hp, false));
+                } else {
+                    console.log('No obstacles found in mapData.');
+                }
+                
+                if (mapData.spawnPoints && mapData.spawnPoints.length === SPAWN_POINTS_DATA.length) {
+                    console.log('Loading spawn points:', mapData.spawnPoints.length);
+                    SPAWN_POINTS_DATA = mapData.spawnPoints;
                     SPAWN_POINTS_DATA.forEach(data => {
                         data.x = snapToGrid(data.x);
                         data.z = snapToGrid(data.z);
                     });
-                    
-                    renderSpawnPoints();
-                    showNotification('Map loaded from browser!');
-                } catch(e) {
-                    showNotification('Failed to load map data or data is corrupted.', true);
-                    renderSpawnPoints();
-                    console.error("Local storage load error:", e);
+                } else {
+                    console.log('Spawn points not found or count mismatch, using default.');
                 }
-            } else {
+                
+                if (mapData.persistentSize) {
+                    PERSISTENT_OBSTACLE_SIZE = mapData.persistentSize;
+                    console.log('Loading persistent size:', PERSISTENT_OBSTACLE_SIZE);
+                }
+                
+                renderSpawnPoints(); // スポーンポイントの再描画
+                showNotification(`Map "${mapName}" loaded!`);
+            } catch(e) {
+                showNotification('Failed to load map data or data is corrupted.', true);
                 renderSpawnPoints();
-                showNotification('No saved map found in browser.', true);
+                console.error("Map load error:", e);
+            }
+        }
+
+        function deleteMap() {
+            const select = document.getElementById('saved-maps-select');
+            const mapName = select.value;
+
+            if (!mapName) {
+                showNotification('Please select a map to delete.', true);
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete map "${mapName}"?`)) {
+                delete allCustomMaps[mapName];
+                try {
+                    localStorage.setItem('allCustomMaps', JSON.stringify(allCustomMaps));
+                    showNotification(`Map "${mapName}" deleted.`);
+                    updateSavedMapsSelect(); // Update the dropdown after deleting
+                    resetMap(); // Optionally reset to a new blank map
+                } catch (e) {
+                    showNotification('Failed to delete map.', true);
+                    console.error("Local storage delete error:", e);
+                }
             }
         }
         
@@ -1076,8 +1158,9 @@
         
         // UI Event Listeners
         window.addEventListener('resize', onWindowResize);
-        document.getElementById('save-browser-button').addEventListener('click', saveMap);
-        document.getElementById('load-browser-button').addEventListener('click', loadMap);
+        document.getElementById('save-map-button').addEventListener('click', saveMap);
+        document.getElementById('load-map-button').addEventListener('click', loadMap);
+        document.getElementById('delete-map-button').addEventListener('click', deleteMap);
         document.getElementById('reset-button').addEventListener('click', resetMap);
         document.getElementById('apply-props-button').addEventListener('click', applyProperties);
         document.getElementById('prop-color').addEventListener('input', onColorChange);
@@ -1090,6 +1173,14 @@
         // 初期化処理
         loadRecentColors();
         renderRecentColors();
+        updateSavedMapsSelect(); // Saved maps dropdown update
+        
+        // 初回ロード - 最初のマップがあればそれをロード
+        if (Object.keys(allCustomMaps).length > 0) {
+            loadMap();
+        } else {
+            resetMap(); // なければ新規マップを作成
+        }
 
         function animate() {
             requestAnimationFrame(animate);
@@ -1098,8 +1189,6 @@
         
         onWindowResize();
         animate();
-        
-        loadMap();
     </script>
 </body>
 </html>
