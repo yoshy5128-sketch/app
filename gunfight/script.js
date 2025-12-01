@@ -12,7 +12,8 @@ let gameSettings = {
     aiCount: 2, // <-- ここ
     autoAim: false, // オートエイムの設定を追加 (デフォルトはOFF)
     nightModeEnabled: false, // Night Modeの設定を追加 (デフォルトはOFF)
-    customMapName: 'Default Custom Map' // 選択されたカスタムマップの名前を保持
+    customMapName: 'Default Custom Map', // 選択されたカスタムマップの名前を保持
+    gameMode: 'battle' // ゲームモード設定を追加: 'battle' or 'arcade'
 };
 
 // デバイスに応じてマップエディタのリンク先を変更
@@ -89,6 +90,17 @@ let gameSettings = {
             radio.addEventListener('change', () => {
                 if (radio.checked) {
                     gameSettings.nightModeEnabled = radio.value === 'true'; // 文字列を真偽値に変換
+                    saveSettings();
+                }
+            });
+        });
+
+        // ゲームモード選択のイベントリスナーを追加
+        const gameModeRadios = document.querySelectorAll('input[name="game-mode"]');
+        gameModeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.gameMode = radio.value;
                     saveSettings();
                 }
             });
@@ -263,6 +275,10 @@ function loadSettings() {
         console.log('Found saved settings:', savedSettings);
         const parsedSavedSettings = JSON.parse(savedSettings);
         console.log('Parsed saved settings:', parsedSavedSettings);
+        // 新しい設定項目がlocalStorageにない場合のためにデフォルト値を設定
+        if (parsedSavedSettings.gameMode === undefined) {
+            parsedSavedSettings.gameMode = 'battle'; // デフォルト値
+        }
         Object.assign(gameSettings, parsedSavedSettings);
         console.log('gameSettings after Object.assign:', JSON.stringify(gameSettings));
         
@@ -291,6 +307,10 @@ function loadSettings() {
         document.querySelectorAll('input[name="night-mode"]').forEach(radio => {
             radio.checked = (radio.value === String(gameSettings.nightModeEnabled));
         });
+        // gameModeの反映
+        document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
+            radio.checked = (radio.value === gameSettings.gameMode);
+        });
     }
 }
 
@@ -311,6 +331,9 @@ const playerHPDisplay = document.getElementById('player-hp-display');
 const aiHPDisplay = document.getElementById('ai-hp-display');
 const redFlashOverlay = document.getElementById('red-flash-overlay');
 const scopeOverlay = document.getElementById('scope-overlay');
+const killCountDisplay = document.getElementById('kill-count-display'); // キルカウント表示用要素
+
+let playerKills = 0; // プレイヤーのキルカウント
 
 // オーディオプール関連
 const MAX_AUDIO_INSTANCES = 5; // 各サウンドにつき同時に再生可能な最大インスタンス数
@@ -460,19 +483,21 @@ function createStreetLight(position) {
     const poleGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10, 8);
     const poleMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
     const pole = new THREE.Mesh(poleGeometry, poleMaterial);
-    pole.position.y = 5 - FLOOR_HEIGHT;
+    // ポールの下端をアリーナの床面 (-FLOOR_HEIGHT) に合わせる
+    pole.position.y = (poleGeometry.parameters.height / 2) - FLOOR_HEIGHT; 
     lightGroup.add(pole);
 
     // 笠
     const shadeGeometry = new THREE.CylinderGeometry(0, 1, 1, 8);
     const shadeMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
     const shade = new THREE.Mesh(shadeGeometry, shadeMaterial);
-    shade.position.y = 10.5 - FLOOR_HEIGHT;
+    // ポールの上部に配置
+    shade.position.y = pole.position.y + (poleGeometry.parameters.height / 2) + (shadeGeometry.parameters.height / 2); 
     lightGroup.add(shade);
 
     // 光源
     const pointLight = new THREE.PointLight(0xffddaa, 0, 50, 2); // 初期強度は0
-    pointLight.position.y = 10 - FLOOR_HEIGHT;
+    pointLight.position.y = shade.position.y + (shadeGeometry.parameters.height / 2) - 0.5; // 笠の少し下
     lightGroup.add(pointLight);
 
     lightGroup.position.copy(position);
@@ -488,7 +513,7 @@ function createStreetLights() {
     }
 
     const numLights = 8; // 外灯の数
-    const radius = ARENA_RADIUS + 5; // アリーナの外側に配置
+    const radius = ARENA_RADIUS - (ARENA_EDGE_THICKNESS / 2) + 0.5; // アリーナの縁の壁のすぐ外側に配置
 
     for (let i = 0; i < numLights; i++) {
         const angle = (i / numLights) * Math.PI * 2;
@@ -2147,6 +2172,9 @@ function startGame() {
     }
 
     const gameUI = ['crosshair', 'player-hp-display', 'ai-hp-display', 'player-weapon-display'];
+    if (gameSettings.gameMode === 'arcade') {
+        gameUI.push('kill-count-display');
+    }
     gameUI.forEach(id => { 
         const el = document.getElementById(id); 
         if (el) el.style.display = 'block'; 
@@ -2216,6 +2244,17 @@ function restartGame() {
     gameOverScreen.style.display = 'none';
     winScreen.style.display = 'none';
 
+    // ゲームモードに応じてUIの表示/非表示を切り替える
+    if (gameSettings.gameMode === 'arcade') {
+        if (killCountDisplay) killCountDisplay.style.display = 'block';
+        if (aiHPDisplay) aiHPDisplay.style.display = 'block';
+        if (document.getElementById('ai2-hp-display')) document.getElementById('ai2-hp-display').style.display = 'block';
+        if (document.getElementById('ai3-hp-display')) document.getElementById('ai3-hp-display').style.display = 'block';
+    } else { // Battle Mode
+        if (killCountDisplay) killCountDisplay.style.display = 'none';
+        // AI HPディスプレイはaiCountによって後で制御される
+    }
+
     let customSpawnPoints = null;
     let availableSpawnPoints = []; // プレイヤーとAIに割り当てるスポーンポイントのリスト
 
@@ -2224,17 +2263,22 @@ function restartGame() {
         const R = ARENA_PLAY_AREA_RADIUS - 5; // アリーナの端から少し内側
         const centerOffset = new THREE.Vector3(0, 0, 0); // アリーナの中心
 
-        if (gameSettings.aiCount === 1) { // プレイヤー1体 + AI1体 = 合計2キャラクター
+        let currentAICount = gameSettings.aiCount;
+        if (gameSettings.gameMode === 'arcade') {
+            currentAICount = 3; // アーケードモードではAIは常に3体
+        }
+
+        if (currentAICount === 1) { // プレイヤー1体 + AI1体 = 合計2キャラクター
             // 2つのタワーの裏付近
             availableSpawnPoints.push(new THREE.Vector3(40, 2.0, -40));
             availableSpawnPoints.push(new THREE.Vector3(-40, 2.0, 40));
-        } else if (gameSettings.aiCount === 2) { // プレイヤー1体 + AI2体 = 合計3キャラクター
+        } else if (currentAICount === 2) { // プレイヤー1体 + AI2体 = 合計3キャラクター
             // 正三角形の頂点
             for (let i = 0; i < 3; i++) {
                 const angle = (i / 3) * Math.PI * 2;
                 availableSpawnPoints.push(new THREE.Vector3(Math.sin(angle) * R, 2.0, Math.cos(angle) * R));
             }
-        } else if (gameSettings.aiCount === 3) { // プレイヤー1体 + AI3体 = 合計4キャラクター
+        } else if (currentAICount === 3) { // プレイヤー1体 + AI3体 = 合計4キャラクター
             // 四角形（カーディナルポイント）の頂点
             for (let i = 0; i < 4; i++) {
                 const angle = (i / 4) * Math.PI * 2;
@@ -2264,6 +2308,9 @@ function restartGame() {
     
     playerHP = gameSettings.playerHP === 'Infinity' ? Infinity : parseInt(gameSettings.playerHP, 10);
     playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
+
+    playerKills = 0; // キルカウントをリセット
+    if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
     
     // プレイヤーの位置設定
     let playerSpawnPos;
@@ -2280,14 +2327,21 @@ function restartGame() {
     ammoMG = 0;
     ammoRR = 0;
     ammoSR = 0;
+    ammoSG = 0; // ショットガン弾薬もリセット
     
+    // AIの数をゲームモードに応じて調整
+    let finalAICount = gameSettings.aiCount;
+    if (gameSettings.gameMode === 'arcade') {
+        finalAICount = 3; // アーケードモードではAIは常に3体
+    }
+
     for (const ai of ais) {
         scene.remove(ai);
     }
     ais.length = 0;
 
     const aiColors = [0x00ff00, 0x00ffff, 0xffb6c1]; // AI 1: 緑, AI 2: シアン, AI 3: 薄い桃色
-    for (let i = 0; i < gameSettings.aiCount; i++) {
+    for (let i = 0; i < finalAICount; i++) { // finalAICountを使用
         const ai = createAI(aiColors[i] || 0xff00ff);
         
         // AIの位置設定
@@ -2305,8 +2359,8 @@ function restartGame() {
         ai.rotation.y = Math.atan2(ai.position.x, ai.position.z); // 中央を向くように角度を計算
 
 
-        // 3体いる場合の役割設定
-        if (gameSettings.aiCount === 3) {
+        // 3体いる場合の役割設定 (現在のfinalAICountに基づいて調整)
+        if (finalAICount === 3) {
             if (i === 0) { // 中央突撃役
                 ai.aggression = 0.7;
                 ai.flankAggression = 0.1;
@@ -2351,25 +2405,28 @@ function restartGame() {
         ai.avoiding = false;
         
         if (index === 0) {
-            ai1HPDisplay.textContent = `AI 1 HP: ${aiHPText}`;
+            if (ai1HPDisplay) ai1HPDisplay.textContent = `AI 1 HP: ${aiHPText}`;
         } else if (index === 1) {
-            ai2HPDisplay.textContent = `AI 2 HP: ${aiHPText}`;
+            if (ai2HPDisplay) ai2HPDisplay.textContent = `AI 2 HP: ${aiHPText}`;
         } else if (index === 2) { // 追加
-            ai3HPDisplay.textContent = `AI 3 HP: ${aiHPText}`;
+            if (ai3HPDisplay) ai3HPDisplay.textContent = `AI 3 HP: ${aiHPText}`;
         }
     });
 
     // 表示・非表示のロジックを更新
-    if (ai2HPDisplay) ai2HPDisplay.style.display = (gameSettings.aiCount > 1) ? 'block' : 'none';
-    if (ai3HPDisplay) ai3HPDisplay.style.display = (gameSettings.aiCount > 2) ? 'block' : 'none';
+    if (ai2HPDisplay) ai2HPDisplay.style.display = (finalAICount > 1) ? 'block' : 'none';
+    if (ai3HPDisplay) ai3HPDisplay.style.display = (finalAICount > 2) ? 'block' : 'none';
 
-    const gameUI = ['crosshair', 'player-hp-display', 'ai-hp-display', 'player-weapon-display'];
-    if (gameSettings.aiCount > 1) {
-        gameUI.push('ai2-hp-display');
+    const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display'];
+    if (gameSettings.gameMode === 'arcade') {
+        gameUI.push('kill-count-display'); // アーケードモードではキルカウントを表示
+        gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // アーケードモードではAIのHPも常に表示
+    } else { // Battle Mode
+        if (finalAICount > 0) gameUI.push('ai-hp-display');
+        if (finalAICount > 1) gameUI.push('ai2-hp-display');
+        if (finalAICount > 2) gameUI.push('ai3-hp-display');
     }
-    if (gameSettings.aiCount > 2) { // 追加
-        gameUI.push('ai3-hp-display');
-    }
+
     gameUI.forEach(id => { 
         const el = document.getElementById(id); 
         if (el) el.style.display = 'block'; 
@@ -2414,103 +2471,7 @@ function restartGame() {
 }
 
 function startAIDeathSequence(impactVelocity, ai) {
-    if (isAIDeathPlaying) return;
-    isAIDeathPlaying = true;
-
-    // 赤い煙エフェクトを追加
-    createRedSmokeEffect(ai.position); 
-
-    const joy = document.getElementById('joystick-move');
-    const fire = document.getElementById('fire-button');
-    const cross = document.getElementById('crosshair');
-    if(joy) joy.style.display = 'none';
-    if(fire) fire.style.display = 'none';
-    if(cross) cross.style.display = 'none';
-
-    const aiBody = ai.children[0];
-    const aiHead = ai.children[1];
-
-    const bodyPos = aiBody.getWorldPosition(new THREE.Vector3());
-    const headPos = aiHead.getWorldPosition(new THREE.Vector3());
-
-    ai.remove(aiBody);
-    ai.remove(aiHead);
-    aiBody.position.copy(bodyPos);
-    aiHead.position.copy(headPos);
-    aiDeathFocusObject.add(aiBody);
-    aiDeathFocusObject.add(aiHead);
-    
-    scene.remove(ai);
-
-    const forceMagnitude = 25; 
-    const upForce = 20; 
-
-    const bodyVelocity = impactVelocity.clone().normalize().multiplyScalar(forceMagnitude);
-    bodyVelocity.y += upForce;
-    aiBody.userData.velocity = bodyVelocity;
-    aiBody.userData.angularVelocity = new THREE.Vector3((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15);
-
-    const headVelocity = bodyVelocity.clone().multiplyScalar(1.2); 
-    headVelocity.y += 8; 
-    aiHead.userData.velocity = headVelocity;
-    aiHead.userData.angularVelocity = new THREE.Vector3((Math.random() - 0.5) * 25, (Math.random() - 0.5) * 25, (Math.random() - 0.5) * 25); 
-
-    const aiDeathLocation = bodyPos.clone();
-    
-    // 新しいカメラロジック: プレイヤー視点を基準にする
-    let cameraPos;
-    const targetLookAt = aiDeathLocation.clone().add(new THREE.Vector3(0, 1, 0));
-
-    // プレイヤーからAIへの方向
-    const playerToAiDir = new THREE.Vector3().subVectors(aiDeathLocation, player.position).normalize();
-    
-    // 理想的なカメラ位置（プレイヤーの背後4m、高さ3m）
-    const idealPos = player.position.clone().sub(playerToAiDir.multiplyScalar(4)).add(new THREE.Vector3(0, 3, 0));
-    
-    // 理想位置からAIへの視線チェック
-    const direction = new THREE.Vector3().subVectors(targetLookAt, idealPos).normalize();
-    raycaster.set(idealPos, direction);
-    const intersects = raycaster.intersectObjects(obstacles, true);
-    const distance = idealPos.distanceTo(targetLookAt);
-
-    if (intersects.length > 0 && intersects[0].distance < distance - 0.5) {
-        // 遮蔽物がある場合: AIの真上にカメラを置く
-        cameraPos = aiDeathLocation.clone().add(new THREE.Vector3(0, 10, 5));
-    } else {
-        // 遮蔽物がない場合: 理想位置を採用
-        cameraPos = idealPos;
-    }
-
-    cinematicCamera.position.copy(cameraPos);
-    cinematicCamera.lookAt(aiDeathLocation.clone().add(new THREE.Vector3(0, 1, 0))); // 注視点を少し上に調整
-    cinematicCamera.fov = 75;
-    cinematicCamera.aspect = window.innerWidth / window.innerHeight; // アスペクト比を更新
-    cinematicCamera.updateProjectionMatrix();
-
-    new TWEEN.Tween(cinematicCamera)
-        .to({ fov: 30 }, 2000)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .start();
-
-    setTimeout(() => {
-        // 残っているプロジェクタイルを全て削除
-        for (let i = projectiles.length - 1; i >= 0; i--) {
-            scene.remove(projectiles[i].mesh);
-            projectiles.splice(i, 1);
-        }
-
-        isAIDeathPlaying = false;
-        aiBody.userData = {};
-        aiHead.userData = {};
-        aiDeathFocusObject.remove(aiBody);
-        aiDeathFocusObject.remove(aiHead);
-
-        if (ais.length > 0) {
-            if(joy) joy.style.display = 'block';
-            if(fire) fire.style.display = 'block';
-            if(cross) cross.style.display = 'block';
-        }
-    }, 3500); 
+    aiFallDownCinematicSequence(impactVelocity, ai); // aiFallDownCinematicSequenceを呼び出すように変更
 }
 
 function playerFallDownCinematicSequence(projectile) {
@@ -2558,6 +2519,64 @@ function playerFallDownCinematicSequence(projectile) {
         playerModel.userData = {}; // Clear user data
         scene.remove(playerModel); // Remove the model from scene
     }, fallDuration * 1000 + 1500); // Wait for animation + a bit
+}
+
+// AIをリスポーンさせる関数
+function respawnAI(ai) {
+    const aiHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
+    ai.hp = aiHP; // HPをリセット
+
+    // プレイヤーから最も遠い位置を探す
+    let farthestPosition = new THREE.Vector3();
+    let maxDistance = -Infinity;
+
+    const availablePositions = [];
+    const NUM_RESPAWN_CANDIDATES = 10; // リスポーン候補位置の数
+
+    for (let i = 0; i < NUM_RESPAWN_CANDIDATES; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * (ARENA_RADIUS - ARENA_EDGE_THICKNESS - 5);
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const candidatePos = new THREE.Vector3(x, -FLOOR_HEIGHT, z); // AIのY座標に合わせて調整
+        availablePositions.push(candidatePos);
+    }
+    
+    // スポーンポイントが既存のAIと近すぎないかチェックする
+    const MIN_DISTANCE_BETWEEN_AIS = 10;
+    for (const pos of availablePositions) {
+        let tooCloseToOtherAI = false;
+        for (const otherAI of ais) {
+            if (otherAI !== ai && pos.distanceTo(otherAI.position) < MIN_DISTANCE_BETWEEN_AIS) {
+                tooCloseToOtherAI = true;
+                break;
+            }
+        }
+        if (tooCloseToOtherAI) continue; // 他のAIに近い場合はスキップ
+
+        const distanceToPlayer = pos.distanceTo(player.position);
+        if (distanceToPlayer > maxDistance) {
+            maxDistance = distanceToPlayer;
+            farthestPosition = pos;
+        }
+    }
+
+    ai.position.copy(farthestPosition);
+    ai.rotation.set(0, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 0); // 回転を完全にリセットし、Y軸のみプレイヤー方向へ
+    ai.state = 'HIDING'; // 状態をリセット
+    ai.currentWeapon = WEAPON_PISTOL;
+    ai.ammoMG = 0;
+    ai.ammoRR = 0;
+    ai.ammoSR = 0;
+    ai.ammoSG = 0;
+    ai.targetWeaponPickup = null;
+    ai.lastHiddenTime = clock.getElapsedTime();
+    ai.lastAttackTime = 0;
+    ai.currentAttackTime = 0;
+    ai.avoiding = false;
+    ai.isCrouching = false;
+
+    scene.add(ai); // シーンに再追加
 }
 
 function startPlayerDeathSequence(projectile) {
@@ -2750,9 +2769,17 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
     setTimeout(() => {
         isAIDeathPlaying = false;
         cinematicTargetAI = null; // 対象のAIをリセット
-        scene.remove(ai); 
+
+        // ゲームモードがアーケードの場合、AIを削除せずリスポーンさせる
+        if (gameSettings.gameMode === 'arcade') {
+            playerKills++;
+            if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
+            respawnAI(ai); // AIをリスポーン
+        } else {
+            scene.remove(ai); // Battle Modeの場合はAIをシーンから削除
+        }
         
-        if (ais.length > 0) {
+        if (ais.length > 0 || gameSettings.gameMode === 'arcade') { // Battle ModeでAIが残っているか、Arcade Modeの場合
             if(joy) joy.style.display = 'block';
             if(fire) fire.style.display = 'block';
             if(cross) cross.style.display = 'block';
@@ -3576,7 +3603,7 @@ function animate() {
                         findEvasionSpot(ai);
                     }
 
-                    if (ai.hp <= 0) {
+                    if (ai.hp <= 0 && gameSettings.gameMode !== 'arcade') { // アーケードモード以外の場合のみaisから削除
                         ais.splice(j, 1);
                     }
                     if (p.weaponType === WEAPON_SG) { // ショットガン弾は衝突時に削除
@@ -3733,11 +3760,17 @@ function animate() {
         }
     }
 
-    if (ais.length === 0 && isGameRunning && !isAIDeathPlaying) {
+    if (ais.length === 0 && isGameRunning && !isAIDeathPlaying && gameSettings.gameMode === 'battle') { // Battle Modeの場合のみ勝利判定
         showWinScreen();
     }
     playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
 
+    if (gameSettings.gameMode === 'arcade') {
+        if (killCountDisplay) killCountDisplay.style.display = 'block';
+        if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
+    } else {
+        if (killCountDisplay) killCountDisplay.style.display = 'none';
+    }
 
     if (screenShakeDuration > 0) {
         screenShakeDuration -= delta;
