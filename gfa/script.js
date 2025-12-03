@@ -268,7 +268,6 @@ const AI_WEAPON_SG_SOUND = 'aisgun.mp3'; // AI用ショットガンの音源フ�
 let lastFireTime = -FIRE_RATE_PISTOL;
 let isMouseButtonDown = false;
 let isScoping = false;
-let isShotCancelled = false;
 let isElevating = false;
 let elevatingTargetY = 0;
 let elevatingTargetObstacle = null;
@@ -390,7 +389,6 @@ const aiHPDisplay = document.getElementById('ai-hp-display');
 const redFlashOverlay = document.getElementById('red-flash-overlay');
 const scopeOverlay = document.getElementById('scope-overlay');
 const killCountDisplay = document.getElementById('kill-count-display'); // キルカウント表示用要素
-const cancelShotBtn = document.getElementById('cancel-shot-btn');
 
 let playerKills = 0; // プレイヤーのキルカウント
 
@@ -1722,10 +1720,6 @@ function handleFirePress() {
                     document.getElementById('night-vision-overlay').style.display = 'block';
                 }
                 new TWEEN.Tween(camera).to({ fov: 30 }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
-                // ★ スマホならキャンセルボタン表示
-                if ('ontouchstart' in window) {
-                    if(cancelShotBtn) cancelShotBtn.style.display = 'flex';
-                }
             }
         }
     } else {
@@ -1740,41 +1734,43 @@ function handleFireRelease() {
     if (!isGameRunning) return;
 
     if (isScoping) {
-        // isShotCancelled フラグが false の場合のみ発射
-        if (!isShotCancelled && ammoSR > 0) {
-            const timeSinceLastFire = clock.getElapsedTime() - lastFireTime;
-            if (timeSinceLastFire > FIRE_RATE_SR) {
-                srGunSound.cloneNode(true).play().catch(e => console.error("Audio playback failed:", e));
+        isScoping = false;
+        document.getElementById('night-vision-overlay').style.display = 'none'; // ナイトビジョンオーバーレイを非表示に
+        
+        const timeSinceLastFire = clock.getElapsedTime() - lastFireTime;
+        if (ammoSR > 0 && timeSinceLastFire > FIRE_RATE_SR) {
+            
+            srGunSound.cloneNode(true).play().catch(e => console.error("Audio playback failed:", e));
 
-                const startPosition = new THREE.Vector3();
-                player.getWorldPosition(startPosition);
-                let direction = new THREE.Vector3();
-                camera.getWorldDirection(direction);
-                
-                const playerMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0));
-                createMuzzleFlash(playerMuzzlePosition, 120, 2.7, 120, 0xffff00);
+            const startPosition = new THREE.Vector3();
+            player.getWorldPosition(startPosition);
+            let direction = new THREE.Vector3(); // directionの定義をここに移動
+            camera.getWorldDirection(direction);
+            
+            // 狙撃銃発砲フラッシュの生成
+            const playerMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0)); // プレイヤーの体の前方1.0ユニット先に銃口があると仮定
+            createMuzzleFlash(playerMuzzlePosition, 120, 2.7, 120, 0xffff00); // 強度と距離を微増
 
-                createProjectile(startPosition, direction, 0xffff00, 0.1, false, 'player', projectileSpeed * 2, true);
 
-                lastFireTime = clock.getElapsedTime();
-                if (--ammoSR === 0) {
-                     setTimeout(() => { 
-                        currentWeapon = WEAPON_PISTOL;
-                    }, 100);
-                }
+
+            createProjectile(startPosition, direction, 0xffff00, 0.1, false, 'player', projectileSpeed * 2, true);
+
+            lastFireTime = clock.getElapsedTime();
+            if (--ammoSR === 0) {
+                 setTimeout(() => { 
+                    currentWeapon = WEAPON_PISTOL;
+                    scopeOverlay.style.display = 'none';
+                    document.getElementById('crosshair').style.display = 'block';
+                    document.getElementById('night-vision-overlay').style.display = 'none'; // ここでも非表示に
+                    new TWEEN.Tween(camera).to({ fov: 75 }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
+                }, 100);
             }
         }
-
-        // スコープ解除と後処理
-        isScoping = false;
-        isShotCancelled = false; // フラグをリセット
-        if(cancelShotBtn) cancelShotBtn.style.display = 'none'; // ボタンを非表示
-
         setTimeout(() => { 
             if(!isScoping) { 
                 scopeOverlay.style.display = 'none';
                 document.getElementById('crosshair').style.display = 'block';
-                document.getElementById('night-vision-overlay').style.display = 'none';
+                document.getElementById('night-vision-overlay').style.display = 'none'; // ここでも非表示に
                 new TWEEN.Tween(camera).to({ fov: 75 }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
             }
         }, 100); 
@@ -1893,291 +1889,154 @@ function shoot() {
 }
 
 function aiShoot(ai, timeElapsed) {
-
     if (!isGameRunning || playerHP <= 0) return;
 
-
-
-    // AIの銃口位置とプレイヤーのターゲット位置を決定
-
-    const startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? (BODY_HEIGHT + HEAD_RADIUS * 2) * 0.7 * 0.8 : BODY_HEIGHT + HEAD_RADIUS - 0.2, 0));
-
-    const playerBodyPos = player.position.clone(); 
-
+    const startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0)); // AIの体の約3/4の高さから発射。しゃがみ時は半分の高さ
+    const playerBodyPos = player.position.clone().add(new THREE.Vector3(0, 0.5, 0));
     
-
-    // AIからプレイヤーへの方向と距離を計算
+    if (!checkLineOfSight(startPosition, playerBodyPos, obstacles)) {
+        return; 
+    }
 
     const direction = new THREE.Vector3().subVectors(playerBodyPos, startPosition);
-
     const distanceToPlayer = direction.length();
-
     direction.normalize();
 
-
-
-    // ★ 修正: レイキャストの開始位置をAIの体の半径分だけ前方にずらす
-
-    const rayStart = startPosition.clone().add(direction.clone().multiplyScalar(0.6));
-
-
-
-    // Raycasterで射線チェック
-
-    raycaster.set(rayStart, direction);
-
+    raycaster.set(startPosition, direction);
     const intersects = raycaster.intersectObjects(obstacles, true);
 
-
-
-    // 障害物があり、それがプレイヤーより手前にある場合は発砲しない
-
-    if (intersects.length > 0 && intersects[0].distance < distanceToPlayer - 0.6) { // オフセット分を考慮
-
+    if (intersects.length > 0 && intersects[0].distance < distanceToPlayer) {
         return; 
-
     }
-
-
-
-    // --- (以降の発砲可否判定と発砲処理は変更なし) ---
 
     let canAIShoot = false;
-
     let aiProjectileColor = 0xffff00;
-
     let aiProjectileSize = 0.1;
-
     let aiFireRate = FIRING_RATE;
-
     let aiProjectileSpeed = projectileSpeed;
-
     switch (ai.currentWeapon) {
-
         case WEAPON_PISTOL:
-
             canAIShoot = true;
-
-            aiFireRate = FIRING_RATE * (4.0 - ai.aggression * 3.0);
-
+            aiFireRate = FIRING_RATE * (4.0 - ai.aggression * 3.0); // 発射サイクルを遅くするために乗数を変更
             break;
-
         case WEAPON_MG:
-
             if (ai.ammoMG > 0) {
-
                 canAIShoot = true;
-
                 aiFireRate = FIRING_RATE * (0.5 + (1.0 - ai.aggression) * 0.5); 
-
             }
-
             break;
-
         case WEAPON_RR:
-
             if (ai.ammoRR > 0) {
-
                 canAIShoot = true;
-
                 aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0); 
-
                 aiProjectileSize = 0.5;
-
                 aiProjectileColor = 0xff8c00; 
-
             }
-
             break;
-
         case WEAPON_SR:
-
             if (ai.ammoSR > 0) {
-
                 canAIShoot = true;
-
                 aiFireRate = FIRE_RATE_SR * (1.0 + (1.0 - ai.aggression) * 0.5); 
-
                 aiProjectileColor = 0xffff00;
-
                 aiProjectileSpeed = projectileSpeed * 2;
-
             }
-
             break;
-
         case WEAPON_SG: // ショットガンを追加
-
             if (ai.ammoSG > 0) {
-
                 canAIShoot = true;
-
-                aiFireRate = FIRE_RATE_SG;
-
+                aiFireRate = FIRE_RATE_SG; // プレイヤーと同じ発射レート
                 aiProjectileColor = 0xffa500;
-
                 aiProjectileSize = 0.05;
-
-                if (distanceToPlayer < SHOTGUN_RANGE * 1.5) {
-
-                    aiFireRate /= (1 + ai.aggression);
-
+                // AIはプレイヤーの近くにいる場合、ショットガンを優先的に使うようにする
+                if (distanceToPlayer < SHOTGUN_RANGE * 1.5) { // 有効射程の1.5倍以内なら積極的に使う
+                    aiFireRate /= (1 + ai.aggression); // 好戦性が高いほど連射
                 }
-
             }
-
             break;
-
     }
-
     if (timeElapsed - ai.lastAttackTime < aiFireRate) return; 
-
     if (canAIShoot) {
-
         let soundToPlay;
-
         if (ai.currentWeapon === WEAPON_MG) {
-
             soundToPlay = aimgGunSound;
-
         } else if (ai.currentWeapon === WEAPON_RR) { 
-
             soundToPlay = rrGunSound;
-
         } else if (ai.currentWeapon === WEAPON_SR) {
-
             soundToPlay = aiSrGunSound;
-
-        } else if (ai.currentWeapon === WEAPON_SG) {
-
+        } else if (ai.currentWeapon === WEAPON_SG) { // AIショットガン音
             soundToPlay = aiSgSound;
-
         } else {
-
             soundToPlay = aiGunSound;
-
         }
-
         playSound(soundToPlay);
-
         
+        // aiMuzzlePosition をここで定義する (direction が初期化された後)
+        const aiMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0)); // AIの体の前方1.0ユニット先に銃口があると仮定
 
-        const aiMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0));
+        // AI発砲フラッシュの生成 (PointLight)
+        createMuzzleFlash(aiMuzzlePosition, 150, 3.0, 90, 0xffffff); // 強度と距離を微増
 
+        // 地面発光を追加
+        createGroundFlash(aiMuzzlePosition, 0xffffff, 1.5, 150); // 半径1.5、白色の地面発光
 
-
-        createMuzzleFlash(aiMuzzlePosition, 150, 3.0, 90, 0xffffff);
-
-        createGroundFlash(aiMuzzlePosition, 0xffffff, 1.5, 150);
-
-
-
-        const sparkGeometry = new THREE.SphereGeometry(0.6, 8, 8);
-
-        const sparkMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
-
+        // AI発砲火花 (白色の球体) の生成
+        const sparkGeometry = new THREE.SphereGeometry(0.6, 8, 8); // 初期サイズを3倍に拡大
+        const sparkMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 }); // 白色, 透明度設定
         const spark = new THREE.Mesh(sparkGeometry, sparkMaterial);
-
-        spark.position.copy(aiMuzzlePosition);
-
+        spark.position.copy(aiMuzzlePosition); // 銃口位置に火花を生成
         scene.add(spark);
 
-
-
+        // 火花の一瞬の表示と消滅アニメーション
         new TWEEN.Tween(spark.scale)
-
-            .to({ x: 1.0, y: 1.0, z: 1.0 }, 50)
-
+            .to({ x: 1.0, y: 1.0, z: 1.0 }, 50) // 最大サイズを大きく
             .easing(TWEEN.Easing.Quadratic.Out)
-
             .start();
-
-
 
         new TWEEN.Tween(spark.material)
-
-            .to({ opacity: 0 }, 150)
-
+            .to({ opacity: 0 }, 150) // 0.15秒でフェードアウト (持続時間を延長)
             .easing(TWEEN.Easing.Quadratic.Out)
-
             .onComplete(() => {
-
                 scene.remove(spark);
-
                 spark.geometry.dispose();
-
                 spark.material.dispose();
-
             })
-
             .start();
-
         
 
+        
+        // ショットガン固有の発射ロジック
         if (ai.currentWeapon === WEAPON_SG) {
-
             const upVector = new THREE.Vector3(0, 1, 0);
-
-            const rightVector = new THREE.Vector3().crossVectors(direction, upVector).normalize();
-
+            const rightVector = new THREE.Vector3().crossVectors(direction, upVector).normalize(); // AIの視線方向に対する右
             const spreadStep = SHOTGUN_SPREAD_ANGLE / SHOTGUN_PELLET_COUNT;
 
-
-
             for (let i = 0; i < SHOTGUN_PELLET_COUNT; i++) {
-
                 const angleOffset = (i - (SHOTGUN_PELLET_COUNT - 1) / 2) * spreadStep;
-
                 const spreadDirection = direction.clone();
-
                 
-
                 const randomAngleX = (Math.random() - 0.5) * SHOTGUN_SPREAD_ANGLE;
-
                 const randomAngleY = (Math.random() - 0.5) * SHOTGUN_SPREAD_ANGLE;
 
-
-
                 spreadDirection.applyAxisAngle(upVector, angleOffset + randomAngleX);
-
                 spreadDirection.applyAxisAngle(rightVector, randomAngleY);
-
                 
-
                 createProjectile(startPosition, spreadDirection, aiProjectileColor, aiProjectileSize, false, 'ai', aiProjectileSpeed, false, WEAPON_SG); 
-
             }
-
         } else {
-
             createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR); 
-
         }
-
-
 
         ai.lastAttackTime = timeElapsed;
-
         if (ai.currentWeapon === WEAPON_MG) {
-
             if (--ai.ammoMG === 0) ai.currentWeapon = WEAPON_PISTOL;
-
         } else if (ai.currentWeapon === WEAPON_RR) {
-
             if (--ai.ammoRR === 0) ai.currentWeapon = WEAPON_PISTOL;
-
         } else if (ai.currentWeapon === WEAPON_SR) {
-
             if (--ai.ammoSR === 0) ai.currentWeapon = WEAPON_PISTOL;
-
-        } else if (ai.currentWeapon === WEAPON_SG) {
-
+        } else if (ai.currentWeapon === WEAPON_SG) { // ショットガン弾薬消費
             if (--ai.ammoSG === 0) ai.currentWeapon = WEAPON_PISTOL;
-
         }
-
     }
-
 }
 
 function aiCheckPickup(ai) {
@@ -2266,13 +2125,7 @@ function onMouseMove(event) {
 
 document.addEventListener('mousedown', (event) => { if (!isGameRunning) return; if (event.button === 0) { handleFirePress(); } });
 document.addEventListener('mouseup', (event) => { if (!isGameRunning) return; if (event.button === 0) { handleFireRelease(); } });
-document.addEventListener('contextmenu', (event) => {
-    event.preventDefault();
-    if (isScoping) {
-        isShotCancelled = true;
-        handleFireRelease();
-    }
-});
+document.addEventListener('contextmenu', (event) => event.preventDefault());
 
 // =========================================================================
 // ★ 修正済み: 視点移動 (ルック) のタッチ入力処理
@@ -2381,16 +2234,6 @@ crouchButton.addEventListener('touchstart', (event) => {
     isCrouchingToggle = !isCrouchingToggle; // Toggle the state
     event.preventDefault(); // Prevent default touch behavior
 }, { passive: false });
-}
-
-if (cancelShotBtn) {
-    cancelShotBtn.addEventListener('touchstart', (event) => {
-        event.preventDefault();
-        if (isScoping) {
-            isShotCancelled = true;
-            handleFireRelease();
-        }
-    }, { passive: false });
 }
 
 
@@ -3953,18 +3796,17 @@ function animate() {
         if (!hitSomething && p.source === 'ai') {
             const playerPos = player.position;
             const playerBoundingBox = new THREE.Box3();
-            // プレイヤーの現在の姿勢に合わせて当たり判定を正確に計算
-            playerBoundingBox.min.set(playerPos.x - 0.5, playerPos.y - playerTargetHeight, playerPos.z - 0.5);
-            playerBoundingBox.max.set(playerPos.x + 0.5, playerPos.y, playerPos.z + 0.5);
-
+            // プレイヤーの当たり判定範囲をさらに拡大 (XZ平面を1.0に)
+            playerBoundingBox.min.set(playerPos.x - 1.0, -1.0, playerPos.z - 1.0); // 地面よりさらに下をカバー
+            playerBoundingBox.max.set(playerPos.x + 1.0, 2.5, playerPos.z + 1.0); // プレイヤーの最大高さより上までカバー
             if (playerBoundingBox.intersectsSphere(bulletSphere)) {
                 hitSomething = true;
                 hitObject = player;
                 hitType = 'player';
                 
                 let damageAmount = 1;
-                if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
-                else if (p.isSniper || p.isRocket) damageAmount = playerHP;
+                if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE; // ショットガンはダメージ軽減
+                else if (p.isSniper || p.isRocket) damageAmount = playerHP; // スナイパー・ロケランは即死
 
                 if (playerHP !== Infinity) {
                     playerHP -= damageAmount;
@@ -3978,10 +3820,11 @@ function animate() {
                      startPlayerDeathSequence(p);
                 }
                 if (p.weaponType === WEAPON_SG) {
+                    // ショットガン弾はここで削除、continueはしない
                     projectiles.splice(i, 1);
                     scene.remove(p.mesh);
                 }
-                break; 
+                break; // このbreakは外側のjループを抜ける
             }
         }
         
