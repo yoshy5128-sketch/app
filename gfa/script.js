@@ -685,8 +685,8 @@ function addRooftopFeatures(obstacle, ladderFace) {
     const wallDefs = [
         { face: 0, w: buildingWidth, h: wallHeight, d: wallThickness, ox: 0, oz: buildingDepth / 2 - wallThickness / 2 },
         { face: 1, w: buildingWidth, h: wallHeight, d: wallThickness, ox: 0, oz: -(buildingDepth / 2 - wallThickness / 2) },
-        { face: 2, w: wallThickness, h: wallHeight, d: buildingDepth, ox: buildingWidth / 2 - wallThickness / 2, oz: 0 },
-        { face: 3, w: wallThickness, h: wallHeight, d: buildingDepth, ox: -(buildingWidth / 2 - wallThickness / 2), oz: 0 }
+        { face: 2, w: wallThickness, h: wallHeight, d: buildingDepth - wallThickness * 2, ox: buildingWidth / 2 - wallThickness / 2, oz: 0 },
+        { face: 3, w: wallThickness, h: wallHeight, d: buildingDepth - wallThickness * 2, ox: -(buildingWidth / 2 - wallThickness / 2), oz: 0 }
     ];
     const LADDER_WIDTH = 1.5;
     const LADDER_GAP = LADDER_WIDTH + 1.0;
@@ -901,6 +901,24 @@ const AVOIDANCE_RAY_DISTANCE = 3.0;
 const FIRING_RATE = 0.2;
 const EXPLOSION_RADIUS = 25;
 const EXPLOSION_FORCE = 50;
+
+function cleanupAI(aiObject) {
+    if (aiObject) {
+        // Remove children (body, head, etc.) and dispose their geometries/materials
+        while (aiObject.children.length > 0) {
+            const child = aiObject.children[0];
+            aiObject.remove(child);
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+            if (child.texture) child.texture.dispose(); // Also dispose textures if any
+        }
+        // Remove the main AI group from the scene
+        if (aiObject.parent) {
+            aiObject.parent.remove(aiObject);
+        }
+    }
+}
+
 const ais = [];
 
 function createAI(color) {
@@ -1817,7 +1835,7 @@ function restartGame() {
     ammoSG = 0;
     let finalAICount = gameSettings.aiCount;
     for (const ai of ais) {
-        scene.remove(ai);
+        cleanupAI(ai); // Use cleanupAI to properly remove AI and its resources
     }
     ais.length = 0;
     const aiColors = [0x00ff00, 0x00ffff, 0xffb6c1];
@@ -1935,7 +1953,41 @@ function playerFallDownCinematicSequence(projectile) {
     const finalRotation = playerModel.rotation.clone();
     finalRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
     new TWEEN.Tween(playerModel.rotation).to({ x: finalRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
-    const finalPlayerYPosition = -FLOOR_HEIGHT + (BODY_HEIGHT / 2);
+    
+    // 新しい目標Y座標を計算
+    let deathGroundY = -FLOOR_HEIGHT; // デフォルトは地面
+    const playerFeetYAtDeath = player.position.y - playerTargetHeight;
+
+    for (const obs of obstacles) {
+        // 壁と屋上は区別しない。プレイヤーの足元の判定を優先
+        if (obs.userData.isWall) continue; // 壁は地面としてカウントしない
+
+        const obstacleBox = new THREE.Box3().setFromObject(obs);
+        const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
+        
+        // プレイヤーの水平位置と障害物の水平位置が重なっているかを確認
+        const playerHorizontalBox = new THREE.Box2(
+            new THREE.Vector2(player.position.x - 0.2, player.position.z - 0.2), 
+            new THREE.Vector2(player.position.x + 0.2, player.position.z + 0.2)
+        );
+        const obstacleHorizontalBox = new THREE.Box2(
+            new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), 
+            new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z)
+        );
+
+        if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
+            // プレイヤーの足元が障害物の上または少し上にある場合
+            // topOfObstacle - 0.1: 少しの誤差を許容
+            // topOfObstacle + 2.0: プレイヤーがジャンプ中などの高い位置から死亡した場合も考慮
+            if (playerFeetYAtDeath >= topOfObstacle - 0.1 && playerFeetYAtDeath <= topOfObstacle + 2.0) {
+                // 最も高い着地点を優先
+                if (topOfObstacle > deathGroundY) {
+                    deathGroundY = topOfObstacle;
+                }
+            }
+        }
+    }
+    const finalPlayerYPosition = deathGroundY + (BODY_HEIGHT / 2); // 死亡時のオブジェクトの中心Y座標
     new TWEEN.Tween(playerModel.position).to({ y: finalPlayerYPosition }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.In).start();
     playerModel.userData.deathType = 'fallDown';
     setTimeout(() => {
@@ -2052,14 +2104,14 @@ function createWindows(obstacleMesh, buildingWidth, buildingHeight, buildingDept
     for (let side = 0; side < 2; side++) {
         const zOffset = (buildingDepth / 2) * (side === 0 ? 1 : -1);
         const rotationY = side === 0 ? 0 : Math.PI;
-        const numHorizontalWindows = Math.floor((buildingWidth - WINDOW_SIZE) / HORIZONTAL_SPACING) + 1;
+        const numHorizontalWindows = 2;
         const startX = -((numHorizontalWindows - 1) * HORIZONTAL_SPACING) / 2;
         const numVerticalWindows = Math.floor((buildingHeight - WINDOW_SIZE) / VERTICAL_SPACING) + 1;
         const startY = -((numVerticalWindows - 1) * VERTICAL_SPACING) / 2;
         for (let i = 0; i < numHorizontalWindows; i++) {
             for (let j = 0; j < numVerticalWindows; j++) {
                 const windowMesh = new THREE.Mesh(windowGeometry, WINDOW_MATERIAL);
-                windowMesh.position.set(startX + i * HORIZONTAL_SPACING, startY + j * VERTICAL_SPACING, zOffset + (WINDOW_THICKNESS / 2) * (side === 0 ? 1 : -1));
+                windowMesh.position.set(startX + i * HORIZONTAL_SPACING, startY + j * VERTICAL_SPACING, zOffset);
                 windowMesh.rotation.y = rotationY;
                 obstacleMesh.add(windowMesh);
             }
@@ -2068,14 +2120,14 @@ function createWindows(obstacleMesh, buildingWidth, buildingHeight, buildingDept
     for (let side = 0; side < 2; side++) {
         const xOffset = (buildingWidth / 2) * (side === 0 ? 1 : -1);
         const rotationY = side === 0 ? Math.PI / 2 : -Math.PI / 2;
-        const numHorizontalWindows = Math.floor((buildingDepth - WINDOW_SIZE) / HORIZONTAL_SPACING) + 1;
+        const numHorizontalWindows = 2;
         const startZ = -((numHorizontalWindows - 1) * HORIZONTAL_SPACING) / 2;
         const numVerticalWindows = Math.floor((buildingHeight - WINDOW_SIZE) / VERTICAL_SPACING) + 1;
         const startY = -((numVerticalWindows - 1) * VERTICAL_SPACING) / 2;
         for (let i = 0; i < numHorizontalWindows; i++) {
             for (let j = 0; j < numVerticalWindows; j++) {
                 const windowMesh = new THREE.Mesh(windowGeometry, WINDOW_MATERIAL);
-                windowMesh.position.set(xOffset + (WINDOW_THICKNESS / 2) * (side === 0 ? 1 : -1), startY + j * VERTICAL_SPACING, startZ + i * HORIZONTAL_SPACING);
+                windowMesh.position.set(xOffset, startY + j * VERTICAL_SPACING, startZ + i * HORIZONTAL_SPACING);
                 windowMesh.rotation.y = rotationY;
                 obstacleMesh.add(windowMesh);
             }
@@ -2086,6 +2138,7 @@ function createWindows(obstacleMesh, buildingWidth, buildingHeight, buildingDept
 function aiFallDownCinematicSequence(impactVelocity, ai) {
     if (isAIDeathPlaying) return;
     isAIDeathPlaying = true;
+    ai.targetWeaponPickup = null; // Clear target weapon pickup when AI dies
     cinematicTargetAI = ai;
     const joy = document.getElementById('joystick-move');
     const fire = document.getElementById('fire-button');
@@ -2117,7 +2170,7 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
             if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
             respawnAI(ai);
         } else {
-            scene.remove(ai);
+            cleanupAI(ai);
         }
         if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
             if (joy) joy.style.display = 'block';
@@ -2144,9 +2197,9 @@ function checkCollision(object, obstacles, ignoreObstacle = null) {
     const pos = object.position;
     let currentObjectBox;
     if (object === player) {
-        objectBox.min.set(pos.x - 0.5, pos.y - playerTargetHeight, pos.z - 0.5);
-        objectBox.max.set(pos.x + 0.5, pos.y, pos.z + 0.5);
-        objectBox.expandByScalar(0.01);
+        objectBox.min.set(pos.x - 0.2, pos.y - playerTargetHeight, pos.z - 0.2);
+        objectBox.max.set(pos.x + 0.2, pos.y, pos.z + 0.2);
+
         currentObjectBox = objectBox;
     } else if (ais.includes(object)) {
         currentObjectBox = new THREE.Box3().setFromObject(object);
@@ -2224,7 +2277,7 @@ function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
     const timeElapsed = clock.getElapsedTime();
-    playerTargetHeight = isCrouchingToggle ? 1.0 : 2.0;
+    playerTargetHeight = isCrouchingToggle ? 1.1 : 2.0;
     const currentMoveSpeed = isCrouchingToggle ? moveSpeed / 2 : moveSpeed;
     for (let i = debris.length - 1; i >= 0; i--) {
         const d = debris[i];
@@ -2367,16 +2420,54 @@ function animate() {
         const elevateSpeed = 5.0;
         player.position.y += elevateSpeed * delta;
         if (player.position.y >= elevatingTargetY) {
-            player.position.y = elevatingTargetY;
-            isElevating = false;
-            isLanding = true;
-            landingTimer = 1.0;
-        }
-    } else if (isLanding) {
+        player.position.y = elevatingTargetY;
+        isElevating = false;
+        isLanding = true;
+        landingTimer = 0.1;
+        isCrouchingToggle = false; // 強制的に立ち状態に
+        console.log("isLanding started. elevatingTargetY:", elevatingTargetY);
+    }    } else if (isLanding) {
         landingTimer -= delta;
         if (landingTimer <= 0) {
             isLanding = false;
             elevatingTargetObstacle = null;
+
+            // 着地地点のY座標を特定
+            let finalGroundY = 0;
+            let finalGroundObstacle = null;
+            const playerFeetYAtEndLanding = player.position.y - playerTargetHeight;
+
+            for (const obs of obstacles) {
+                const obstacleBox = new THREE.Box3().setFromObject(obs);
+                const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
+                const playerHorizontalBox = new THREE.Box2(new THREE.Vector2(player.position.x - 0.2, player.position.z - 0.2), new THREE.Vector2(player.position.x + 0.2, player.position.z + 0.2));
+                const obstacleHorizontalBox = new THREE.Box2(new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z));
+                if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
+                    if ((obs.userData.isRooftop || (!obs.userData.isWall && obs.geometry.parameters.height < 1.5)) && playerFeetYAtEndLanding >= topOfObstacle - 2.0 && playerFeetYAtEndLanding <= topOfObstacle + 1.0) {
+                        finalGroundY = topOfObstacle;
+                        finalGroundObstacle = obs;
+                        break;
+                    }
+                }
+            }
+            if (finalGroundObstacle === null && playerFeetYAtEndLanding < 0.1) {
+                finalGroundY = 0;
+            }
+
+            if (finalGroundObstacle) { // 地面が見つかったらY座標を強制設定
+                const targetY = finalGroundY + playerTargetHeight;
+                player.position.y = targetY; // lerpではなく直接設定
+                currentGroundObstacle = finalGroundObstacle; // currentGroundObstacleも更新
+
+                console.log("Player before warp: x=", player.position.x, "z=", player.position.z);
+                const obstacleCenterX = finalGroundObstacle.position.x;
+                const obstacleCenterZ = finalGroundObstacle.position.z;
+                console.log("Warp target obstacle center: x=", obstacleCenterX, "z=", obstacleCenterZ);
+
+                player.position.x = obstacleCenterX;
+                player.position.z = obstacleCenterZ;
+                console.log("Player after warp: x=", player.position.x, "z=", player.position.z);
+            }
         }
         if (finalMoveVector.length() > 0) finalMoveVector.normalize();
         const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
@@ -2406,7 +2497,7 @@ function animate() {
                 inSensorArea = true; const obs = sensorArea.userData.obstacle;
                 isElevating = true;
                 elevatingTargetObstacle = obs;
-                elevatingTargetY = (obs.position.y + obs.geometry.parameters.height / 2) + 2.1;
+                elevatingTargetY = (obs.position.y + obs.geometry.parameters.height / 2) + 2.0;
                 const ladderPos = sensorArea.userData.ladderPos;
                 if (ladderPos) {
                     player.position.x = ladderPos.x;
@@ -2441,13 +2532,12 @@ function animate() {
             currentGroundObstacle = null;
             let groundY = 0;
             const playerFeetY = player.position.y - playerTargetHeight;
-            for (const obs of obstacles) {
-                const obstacleBox = new THREE.Box3().setFromObject(obs);
-                const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
+                    for (const obs of obstacles) {
+                        const obstacleBox = new THREE.Box3().setFromObject(obs);                const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
                 const playerHorizontalBox = new THREE.Box2(new THREE.Vector2(player.position.x - 0.5, player.position.z - 0.5), new THREE.Vector2(player.position.x + 0.5, player.position.z + 0.5));
                 const obstacleHorizontalBox = new THREE.Box2(new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z));
                 if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
-                    if ((obs.userData.isRooftop || (!obs.userData.isWall && obs.geometry.parameters.height < 1.5)) && playerFeetY >= topOfObstacle - 1.5 && playerFeetY <= topOfObstacle + 0.5) {
+                    if ((obs.userData.isRooftop || (!obs.userData.isWall && obs.geometry.parameters.height < 1.5)) && playerFeetY >= topOfObstacle - 2.0 && playerFeetY <= topOfObstacle + 1.0) {
                         onGround = true;
                         currentGroundObstacle = obs;
                         groundY = topOfObstacle;
@@ -2460,12 +2550,15 @@ function animate() {
                 groundY = 0;
             }
             if (onGround) {
-                const targetY = groundY + playerTargetHeight;
-                player.position.y = THREE.MathUtils.lerp(player.position.y, targetY, 0.2);
+                if (currentGroundObstacle && currentGroundObstacle.userData.isRooftop) {
+                                    const rooftopY = currentGroundObstacle.position.y + currentGroundObstacle.geometry.parameters.height / 2;
+                                    player.position.y = THREE.MathUtils.lerp(player.position.y, rooftopY + playerTargetHeight, 0.2);                } else {
+                    const targetY = groundY + playerTargetHeight;
+                    player.position.y = THREE.MathUtils.lerp(player.position.y, targetY, 0.2);
+                }
             } else {
                 player.position.y -= GRAVITY * delta;
-            }
-        }
+            }        }
     }
     for (let i = weaponPickups.length - 1; i >= 0; i--) {
         const pickup = weaponPickups[i];
@@ -2479,10 +2572,22 @@ function animate() {
             if (pickup.userData.type === 'weaponPickup') {
                 let weaponName = '';
                 switch (pickup.userData.weaponType) {
-                    case WEAPON_MG: currentWeapon = WEAPON_MG; ammoMG = MAX_AMMO_MG; weaponName = 'MACHINEGUN'; break;
-                    case WEAPON_RR: currentWeapon = WEAPON_RR; ammoRR = MAX_AMMO_RR; weaponName = 'ROCKET LAUNCHER'; break;
-                    case WEAPON_SR: currentWeapon = WEAPON_SR; ammoSR = MAX_AMMO_SR; weaponName = 'SNIPER RIFLE'; break;
-                    case WEAPON_SG: currentWeapon = WEAPON_SG; ammoSG = MAX_AMMO_SG; weaponName = 'SHOTGUN'; break;
+                    case WEAPON_MG: 
+                        if (currentWeapon === WEAPON_MG) { ammoMG = Math.min(ammoMG + MAX_AMMO_MG, MAX_AMMO_MG * 2); } 
+                        else { currentWeapon = WEAPON_MG; ammoMG = MAX_AMMO_MG; } 
+                        weaponName = 'MACHINEGUN'; break;
+                    case WEAPON_RR: 
+                        if (currentWeapon === WEAPON_RR) { ammoRR = Math.min(ammoRR + MAX_AMMO_RR, MAX_AMMO_RR * 2); } 
+                        else { currentWeapon = WEAPON_RR; ammoRR = MAX_AMMO_RR; } 
+                        weaponName = 'ROCKET LAUNCHER'; break;
+                    case WEAPON_SR: 
+                        if (currentWeapon === WEAPON_SR) { ammoSR = Math.min(ammoSR + MAX_AMMO_SR, MAX_AMMO_SR * 2); } 
+                        else { currentWeapon = WEAPON_SR; ammoSR = MAX_AMMO_SR; } 
+                        weaponName = 'SNIPER RIFLE'; break;
+                    case WEAPON_SG: 
+                        if (currentWeapon === WEAPON_SG) { ammoSG = Math.min(ammoSG + MAX_AMMO_SG, MAX_AMMO_SG * 2); } 
+                        else { currentWeapon = WEAPON_SG; ammoSG = MAX_AMMO_SG; } 
+                        weaponName = 'SHOTGUN'; break;
                 }
                 const setSound = document.getElementById('setSound');
                 if (setSound) setSound.cloneNode(true).play();
@@ -2561,20 +2666,30 @@ function animate() {
                     ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 2 * delta);
                     aiShoot(ai, timeElapsed);
                     if (isAISeen && (timeElapsed - ai.lastHiddenTime) > 1.0) {
-                        if (findNewHidingSpot(ai)) {
+                        if (!findNewHidingSpot(ai)) { // 隠れ場所が見つからない場合でも停滞させない
+                            ai.state = 'ATTACKING'; // 強制的に攻撃状態に遷移
+                            ai.currentAttackTime = timeElapsed;
+                            ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                        } else {
                             ai.lastHiddenTime = timeElapsed;
                         }
                     }
                 } else {
-                    if (!findAndTargetWeapon(ai)) {
-                        if (isAISeen) {
+                    if (!findAndTargetWeapon(ai)) { // 武器を探してターゲットにする
+                        if (isAISeen) { // プレイヤーが見える場合
                             ai.state = 'ATTACKING';
                             ai.currentAttackTime = timeElapsed;
                             ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
-                        } else {
+                        } else { // プレイヤーが見えない場合
                             const effectiveHideDuration = HIDE_DURATION * (1.0 + (1.0 - ai.aggression) * 1.5);
                             if ((timeElapsed - ai.lastHiddenTime) >= effectiveHideDuration) {
-                                findNewHidingSpot(ai);
+                                if (!findNewHidingSpot(ai)) { // 新しい隠れ場所を探すのに失敗した場合
+                                    ai.state = 'ATTACKING'; // 強制的に攻撃状態に遷移
+                                    ai.currentAttackTime = timeElapsed;
+                                    ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                                } else {
+                                    ai.lastHiddenTime = timeElapsed;
+                                }
                             }
                         }
                     }
