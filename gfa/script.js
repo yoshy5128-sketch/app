@@ -440,7 +440,7 @@ const HIDING_SPOTS = [];
 const weaponPickups = [];
 const ladderSwitches = [];
 const respawningPickups = [];
-const RESPAWN_DELAY = 10;
+const RESPAWN_DELAY = 60;
 const AI_INITIAL_POSITION = new THREE.Vector3(0, 0, 20);
 const NUM_RANDOM_OBSTACLES = 20;
 const defaultObstaclesConfig = [
@@ -460,30 +460,39 @@ const defaultObstaclesConfig = [
 ];
 
 function getRandomSafePosition() {
-    const MAX_ATTEMPTS = 50;
+    const MAX_ATTEMPTS = 500;
     const MIN_DISTANCE_FROM_PLAYER = 15;
-    const MIN_DISTANCE_FROM_OBSTACLE = 5;
-    const MIN_DISTANCE_BETWEEN_PICKUPS = 10;
+    const MIN_DISTANCE_FROM_OBSTACLE = 4;
+    const MIN_DISTANCE_BETWEEN_PICKUPS = 5;
+    
+    console.log("getRandomSafePosition: Attempting to find a safe position.");
+    console.log(`Current settings: MAX_ATTEMPTS=${MAX_ATTEMPTS}, MIN_DISTANCE_FROM_OBSTACLE=${MIN_DISTANCE_FROM_OBSTACLE}, MIN_DISTANCE_BETWEEN_PICKUPS=${MIN_DISTANCE_BETWEEN_PICKUPS}`);
+
+    const effectiveArenaRadius = ARENA_RADIUS - ARENA_EDGE_THICKNESS - 5;
+    console.log(`Effective arena radius for item placement: ${effectiveArenaRadius}`);
+    
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const radius = Math.random() * (ARENA_RADIUS - ARENA_EDGE_THICKNESS - 5);
+        const radius = Math.random() * effectiveArenaRadius;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const newPosition = new THREE.Vector3(x, 0, z);
-        if (newPosition.distanceTo(PLAYER_INITIAL_POSITION) < MIN_DISTANCE_FROM_PLAYER) continue;
+        
+        if (newPosition.distanceTo(PLAYER_INITIAL_POSITION) < MIN_DISTANCE_FROM_PLAYER) {
+            continue;
+        }
+        
         let collisionDetected = false;
+        const itemSphere = new THREE.Sphere(newPosition, 2.0);
         for (const obstacle of obstacles) {
             const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-            const obstacleCenter = obstacleBox.getCenter(new THREE.Vector3());
-            const distance = newPosition.distanceTo(obstacleCenter);
-            const obstacleSize = obstacleBox.getSize(new THREE.Vector3());
-            const effectiveObstacleRadius = Math.max(obstacleSize.x, obstacleSize.z) / 2;
-            if (distance < MIN_DISTANCE_FROM_OBSTACLE + effectiveObstacleRadius) {
+            if (obstacleBox.intersectsSphere(itemSphere)) {
                 collisionDetected = true;
                 break;
             }
         }
         if (collisionDetected) continue;
+        
         for (const pickup of weaponPickups) {
             if (newPosition.distanceTo(pickup.position) < MIN_DISTANCE_BETWEEN_PICKUPS) {
                 collisionDetected = true;
@@ -491,12 +500,50 @@ function getRandomSafePosition() {
             }
         }
         if (collisionDetected) continue;
+        
+        console.log(`getRandomSafePosition: Found safe position at (${newPosition.x.toFixed(2)}, ${newPosition.y.toFixed(2)}, ${newPosition.z.toFixed(2)}) after ${i+1} attempts.`);
         return newPosition;
     }
+    
+    console.warn("getRandomSafePosition: Failed to find a safe position after all attempts, returning (0,0,0).");
     return new THREE.Vector3(0, 0, 0);
 }
 
+function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5) {
+        const MAX_ATTEMPTS = 100;
+        for (let i = 0; i < MAX_ATTEMPTS; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * searchRadius;
+            const x = centerPoint.x + Math.cos(angle) * radius;
+            const z = centerPoint.z + Math.sin(angle) * radius;
+            const newPosition = new THREE.Vector3(x, 0, z);
+
+            let collisionDetected = false;
+            const itemSphere = new THREE.Sphere(newPosition, 2.0);
+            for (const obstacle of obstacles) {
+                const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+                if (obstacleBox.intersectsSphere(itemSphere)) {
+                    collisionDetected = true;
+                    break;
+                }
+            }
+            if (collisionDetected) continue;
+
+            for (const pickup of weaponPickups) {
+                if (newPosition.distanceTo(pickup.position) < minDistance) {
+                    collisionDetected = true;
+                    break;
+                }
+            }
+            if (collisionDetected) continue;
+
+            return newPosition;
+        }
+        return centerPoint.clone().add(new THREE.Vector3((Math.random() > 0.5 ? 1 : -1) * 3, 0, (Math.random() > 0.5 ? 1 : -1) * 3));
+    }
+
 function createWeaponPickup(text, position, weaponType) {
+    console.log(`createWeaponPickup called for ${weaponType} at initial position: (${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`);
     if (!font) {
         const boxWidth = 1;
         const boxHeight = 0.8;
@@ -506,6 +553,7 @@ function createWeaponPickup(text, position, weaponType) {
         const box = new THREE.Mesh(geometry, material);
         box.position.copy(position);
         box.position.y = (boxHeight / 2) - FLOOR_HEIGHT;
+        console.log(`createWeaponPickup (no font): Actual mesh position after adjustments: (${box.position.x.toFixed(2)}, ${box.position.y.toFixed(2)}, ${box.position.z.toFixed(2)})`);
         box.userData = { type: 'weaponPickup', weaponType: weaponType };
         scene.add(box);
         weaponPickups.push(box);
@@ -540,24 +588,39 @@ function createWeaponPickup(text, position, weaponType) {
     pickupGroup.add(textMeshRight);
     pickupGroup.position.copy(position);
     pickupGroup.position.y = -FLOOR_HEIGHT;
+    console.log(`createWeaponPickup (with font): Actual group position after adjustments: (${pickupGroup.position.x.toFixed(2)}, ${pickupGroup.position.y.toFixed(2)}, ${pickupGroup.position.z.toFixed(2)})`);
     pickupGroup.userData = { type: 'weaponPickup', weaponType: weaponType };
     scene.add(pickupGroup);
     weaponPickups.push(pickupGroup);
     return pickupGroup;
 }
 
-function createWeaponPickups() {
-    for (let i = 0; i < gameSettings.mgCount; i++) {
-        createWeaponPickup('MG', getRandomSafePosition(), WEAPON_MG);
-    }
-    for (let i = 0; i < gameSettings.rrCount; i++) {
-        createWeaponPickup('RL', getRandomSafePosition(), WEAPON_RR);
-    }
-    for (let i = 0; i < gameSettings.srCount; i++) {
-        createWeaponPickup('SR', getRandomSafePosition(), WEAPON_SR);
-    }
-    for (let i = 0; i < gameSettings.sgCount; i++) {
-        createWeaponPickup('SG', getRandomSafePosition(), WEAPON_SG);
+function createWeaponPickups(aiList = []) {
+    const weaponTypes = [];
+    for (let i = 0; i < gameSettings.mgCount; i++) weaponTypes.push({ name: 'MG', type: WEAPON_MG });
+    for (let i = 0; i < gameSettings.rrCount; i++) weaponTypes.push({ name: 'RL', type: WEAPON_RR });
+    for (let i = 0; i < gameSettings.srCount; i++) weaponTypes.push({ name: 'SR', type: WEAPON_SR });
+    for (let i = 0; i < gameSettings.sgCount; i++) weaponTypes.push({ name: 'SG', type: WEAPON_SG });
+
+    shuffle(weaponTypes);
+
+    const availableAis = [...aiList];
+
+    for (let i = 0; i < weaponTypes.length; i++) {
+        const weapon = weaponTypes[i];
+        let position;
+
+        if (availableAis.length > 0) {
+            const aiIndex = Math.floor(Math.random() * availableAis.length);
+            const targetAi = availableAis[aiIndex];
+            
+            position = findSafePositionNear(targetAi.position, 10, 5);
+
+            availableAis.splice(aiIndex, 1);
+        } else {
+            position = getRandomSafePosition();
+        }
+        createWeaponPickup(weapon.name, position, weapon.type);
     }
 }
 
@@ -566,6 +629,7 @@ const MEDIKIT_HEIGHT = 0.8;
 const MEDIKIT_DEPTH = 1;
 
 function createMedikitPickup(position) {
+    console.log(`createMedikitPickup called at initial position: (${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`);
     const medikitGroup = new THREE.Group();
     const boxGeometry = new THREE.BoxGeometry(MEDIKIT_WIDTH, MEDIKIT_HEIGHT, MEDIKIT_DEPTH);
     const boxMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -596,6 +660,7 @@ function createMedikitPickup(position) {
     medikitGroup.position.y = -FLOOR_HEIGHT;
     medikitGroup.position.copy(position);
     medikitGroup.position.y = -FLOOR_HEIGHT + 0.01;
+    console.log(`createMedikitPickup: Actual group position after adjustments: (${medikitGroup.position.x.toFixed(2)}, ${medikitGroup.position.y.toFixed(2)}, ${medikitGroup.position.z.toFixed(2)})`);
     medikitGroup.userData = { type: 'medikitPickup' };
     scene.add(medikitGroup);
     weaponPickups.push(medikitGroup);
@@ -1747,7 +1812,7 @@ function startGame() {
     }
 }
 
-function resetWeaponPickups() {
+function resetWeaponPickups(aiList = []) {
     for (let i = weaponPickups.length - 1; i >= 0; i--) {
         if (weaponPickups[i].parent) {
             scene.remove(weaponPickups[i]);
@@ -1755,7 +1820,7 @@ function resetWeaponPickups() {
     }
     weaponPickups.length = 0;
     respawningPickups.length = 0;
-    createWeaponPickups();
+    createWeaponPickups(aiList);
 }
 
 function shuffle(array) {
@@ -1803,6 +1868,7 @@ function restartGame() {
         const allCustomMaps = JSON.parse(localStorage.getItem('allCustomMaps') || '{}');
         const selectedMapData = allCustomMaps[gameSettings.customMapName];
         if (selectedMapData) {
+            console.log("Custom map selected. selectedMapData:", selectedMapData); // 追加
             try {
                 if (selectedMapData && selectedMapData.obstacles) {
                     customSpawnPoints = selectedMapData.spawnPoints.map(p => new THREE.Vector3(p.x, 2.0, p.z));
@@ -1878,6 +1944,9 @@ function restartGame() {
         else if (index === 1) { if (ai2HPDisplay) ai2HPDisplay.textContent = `AI 2 HP: ${aiHPText}`; }
         else if (index === 2) { if (ai3HPDisplay) ai3HPDisplay.textContent = `AI 3 HP: ${aiHPText}`; }
     });
+
+    resetWeaponPickups(ais);
+
     if (ai2HPDisplay) ai2HPDisplay.style.display = (finalAICount > 1) ? 'block' : 'none';
     if (ai3HPDisplay) ai3HPDisplay.style.display = (finalAICount > 2) ? 'block' : 'none';
     const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display'];
@@ -1912,7 +1981,7 @@ function restartGame() {
     if (gameSettings.fieldState === 'reset') {
         resetObstacles();
     }
-    resetWeaponPickups();
+    // resetWeaponPickups(); // Moved to after AI creation
     if (gameSettings.gameMode === 'arcade' && gameSettings.medikitCount > 0) {
         for (let i = 0; i < gameSettings.medikitCount; i++) {
             createMedikitPickup(getRandomSafePosition());
