@@ -483,7 +483,7 @@ function getRandomSafePosition() {
         }
         
         let collisionDetected = false;
-        const itemSphere = new THREE.Sphere(newPosition, 3.0);
+        const itemSphere = new THREE.Sphere(newPosition, 4.0);
         for (const obstacle of obstacles) {
             const obstacleBox = new THREE.Box3().setFromObject(obstacle);
             if (obstacleBox.intersectsSphere(itemSphere)) {
@@ -524,7 +524,7 @@ function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5) {
             }
 
             let collisionDetected = false;
-            const itemSphere = new THREE.Sphere(newPosition, 3.0);
+            const itemSphere = new THREE.Sphere(newPosition, 4.0);
             for (const obstacle of obstacles) {
                 const obstacleBox = new THREE.Box3().setFromObject(obstacle);
                 if (obstacleBox.intersectsSphere(itemSphere)) {
