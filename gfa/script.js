@@ -468,12 +468,12 @@ function getRandomSafePosition() {
     console.log("getRandomSafePosition: Attempting to find a safe position.");
     console.log(`Current settings: MAX_ATTEMPTS=${MAX_ATTEMPTS}, MIN_DISTANCE_FROM_OBSTACLE=${MIN_DISTANCE_FROM_OBSTACLE}, MIN_DISTANCE_BETWEEN_PICKUPS=${MIN_DISTANCE_BETWEEN_PICKUPS}`);
 
-    const effectiveArenaRadius = ARENA_RADIUS - ARENA_EDGE_THICKNESS - 5;
-    console.log(`Effective arena radius for item placement: ${effectiveArenaRadius}`);
+    const WEAPON_PLACEMENT_RADIUS = ARENA_PLAY_AREA_RADIUS - 2.0;
+    console.log(`Effective arena radius for item placement: ${WEAPON_PLACEMENT_RADIUS}`);
     
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const radius = Math.random() * effectiveArenaRadius;
+        const radius = Math.random() * WEAPON_PLACEMENT_RADIUS;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const newPosition = new THREE.Vector3(x, 0, z);
@@ -483,7 +483,7 @@ function getRandomSafePosition() {
         }
         
         let collisionDetected = false;
-        const itemSphere = new THREE.Sphere(newPosition, 2.0);
+        const itemSphere = new THREE.Sphere(newPosition, 3.0);
         for (const obstacle of obstacles) {
             const obstacleBox = new THREE.Box3().setFromObject(obstacle);
             if (obstacleBox.intersectsSphere(itemSphere)) {
@@ -511,6 +511,7 @@ function getRandomSafePosition() {
 
 function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5) {
         const MAX_ATTEMPTS = 100;
+        const WEAPON_PLACEMENT_RADIUS = ARENA_PLAY_AREA_RADIUS - 2.0;
         for (let i = 0; i < MAX_ATTEMPTS; i++) {
             const angle = Math.random() * Math.PI * 2;
             const radius = Math.random() * searchRadius;
@@ -518,8 +519,12 @@ function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5) {
             const z = centerPoint.z + Math.sin(angle) * radius;
             const newPosition = new THREE.Vector3(x, 0, z);
 
+            if (newPosition.length() > WEAPON_PLACEMENT_RADIUS) {
+                continue; // アリーナの外なら再試行
+            }
+
             let collisionDetected = false;
-            const itemSphere = new THREE.Sphere(newPosition, 2.0);
+            const itemSphere = new THREE.Sphere(newPosition, 3.0);
             for (const obstacle of obstacles) {
                 const obstacleBox = new THREE.Box3().setFromObject(obstacle);
                 if (obstacleBox.intersectsSphere(itemSphere)) {
@@ -539,7 +544,9 @@ function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5) {
 
             return newPosition;
         }
-        return centerPoint.clone().add(new THREE.Vector3((Math.random() > 0.5 ? 1 : -1) * 3, 0, (Math.random() > 0.5 ? 1 : -1) * 3));
+        // フォールバック: 安全な位置が見つからない場合、とりあえずアリーナの中心を返す
+        console.warn("findSafePositionNear: Failed to find a safe position, returning arena center.");
+        return new THREE.Vector3(0, 0, 0);
     }
 
 function createWeaponPickup(text, position, weaponType) {
@@ -1579,7 +1586,7 @@ function aiCheckPickup(ai) {
             }
             scene.remove(pickup);
             weaponPickups.splice(i, 1);
-            respawningPickups.push({ weaponType: pickup.userData.weaponType, respawnTime: clock.getElapsedTime() + RESPAWN_DELAY });
+            respawningPickups.push({ type: 'weapon', weaponType: pickup.userData.weaponType, respawnTime: clock.getElapsedTime() + RESPAWN_DELAY });
             if (ai.targetWeaponPickup === pickup) {
                 ai.targetWeaponPickup = null;
                 ai.state = 'HIDING';
@@ -1904,7 +1911,7 @@ function restartGame() {
         cleanupAI(ai); // Use cleanupAI to properly remove AI and its resources
     }
     ais.length = 0;
-    const aiColors = [0x00ff00, 0x00ffff, 0xffb6c1];
+    const aiColors = [0x00ff00, 0x00ffff, 0x0FFa500];
     for (let i = 0; i < finalAICount; i++) {
         const ai = createAI(aiColors[i] || 0xff00ff);
         let aiSpawnPos;
@@ -2234,14 +2241,14 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
     setTimeout(() => {
         isAIDeathPlaying = false;
         cinematicTargetAI = null;
-        if (gameSettings.gameMode === 'arcade') {
-            playerKills++;
-            if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
-            respawnAI(ai);
-        } else {
-            cleanupAI(ai);
-        }
-        if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
+            if (gameSettings.gameMode === 'arcade') {
+                playerKills++;
+                if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
+                respawnAI(ai);
+            } else {
+                // cleanupAI(ai);
+                ai.visible = false;
+            }        if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
             if (joy) joy.style.display = 'block';
             if (fire) fire.style.display = 'block';
             if (cross) cross.style.display = 'block';
@@ -2704,6 +2711,10 @@ function animate() {
     }
     const AI_SEPARATION_FORCE = 2.0;
     ais.forEach((ai, index) => {
+        if (ai.hp <= 0 && gameSettings.gameMode !== 'arcade') {
+            ai.visible = false; // Just in case
+            return;
+        }
         const currentAISpeed = ai.isCrouching ? AI_SPEED / 2 : AI_SPEED;
         const separation_vec = new THREE.Vector3(0, 0, 0);
         ais.forEach((otherAI, otherIndex) => {
@@ -2898,6 +2909,8 @@ function animate() {
             for (let j = ais.length - 1; j >= 0; j--) {
                 const ai = ais[j];
                 if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
+                    if (ai.hp <= 0) continue; // すでに死んでいるAIにはヒットしない
+
                     hitSomething = true;
                     hitObject = ai;
                     hitType = 'ai';
@@ -2913,9 +2926,9 @@ function animate() {
                     } else {
                         findEvasionSpot(ai);
                     }
-                    if (ai.hp <= 0 && gameSettings.gameMode !== 'arcade') {
-                        ais.splice(j, 1);
-                    }
+                    // if (ai.hp <= 0 && gameSettings.gameMode !== 'arcade') {
+                    //     ais.splice(j, 1);
+                    // }
                     if (p.weaponType === WEAPON_SG) {
                         scene.remove(p.mesh);
                         projectiles.splice(i, 1);
@@ -3027,15 +3040,22 @@ function animate() {
     for (let i = 0; i < aiHPDisplays.length; i++) {
         const display = aiHPDisplays[i];
         if (!display) continue;
-        const ai = ais[i];
-        if (ai) {
+        const ai = ais[i]; // ais配列から削除されていないことを前提
+
+        if (ai && ai.hp > 0) {
             display.style.display = 'block';
-            display.textContent = `AI ${i + 1} HP: ${ai.hp < 0 ? 0 : (ai.hp === Infinity ? '∞' : ai.hp)}`;
-        } else {
+            display.textContent = `AI ${i + 1} HP: ${ai.hp === Infinity ? '∞' : ai.hp}`;
+            display.classList.remove('dead-ai-hp'); // 生きている場合はクラスを削除
+        } else if (ai && ai.hp <= 0) { // AIが存在し、HPが0以下の場合
+            display.style.display = 'block';
+            display.textContent = `AI ${i + 1} HP: 0`;
+            display.classList.add('dead-ai-hp'); // 死んでいる場合はクラスを追加
+        } else { // AIが存在しない場合 (AIの総数よりiが大きい場合)
             display.style.display = 'none';
         }
     }
-    if (ais.length === 0 && isGameRunning && !isAIDeathPlaying && gameSettings.gameMode === 'battle') {
+    const allAIsDefeated = ais.every(ai => ai.hp <= 0);
+    if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && gameSettings.gameMode === 'battle') {
         showWinScreen();
     }
     playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;

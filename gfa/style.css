@@ -122,7 +122,11 @@ canvas {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 255, 0, 0.2); /* åŠé€æ˜Žã®ç·‘è‰² */
-    mix-blend-mode: screen; /* ç”»é¢ã¨ã®ãƒ–ãƒ¬ãƒ³ãƒ‰ãƒ¢ãƒ¼ãƒ‰ */
+    mix-blend-mode: screen; /* ç”画é¢ã¨ã®ãƒ–ãƒ¬ãƒ³ãƒ‰ãƒ¢ãƒ¼ãƒ‰ */
     pointer-events: none; /* ã‚¯ãƒªãƒƒã‚¯ã‚¤ãƒ™ãƒ³ãƒˆã‚’é€éŽ */
-    display: none; /* åˆæœŸçŠ¶æ…‹ã§ã¯éžè¡¨ç¤º */
+    display: none; /* åˆæœŸçŠæ…‹ã§ã¯éžè¡¨ç¤º */
+}
+
+.dead-ai-hp {
+    text-decoration: line-through;
 }
