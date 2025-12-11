@@ -15,8 +15,15 @@ let gameSettings = {
     nightModeEnabled: false,
     nightModeLightIntensity: 0.8,
     customMapName: 'Default Custom Map',
-    gameMode: 'battle'
+    gameMode: 'battle',
+    buttonPositions: {
+        fire: { right: '20px', bottom: '120px' },
+        crouch: { right: '20px', bottom: '55px' },
+        joystick: { left: '10%', bottom: '10%' }
+    }
 };
+let originalSettings = {};
+let isPaused = false;
 
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
@@ -264,7 +271,19 @@ function loadSettings() {
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 0;
         }
+        // Add default for buttonPositions if it doesn't exist
+        if (parsedSavedSettings.buttonPositions === undefined) {
+            parsedSavedSettings.buttonPositions = {
+                fire: { right: '20px', bottom: '120px' },
+                crouch: { right: '20px', bottom: '55px' },
+                joystick: { left: '10%', bottom: '10%' }
+            };
+        } else if (parsedSavedSettings.buttonPositions.joystick === undefined) {
+            parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
+        }
+
         Object.assign(gameSettings, parsedSavedSettings);
+
         document.getElementById('player-hp').value = gameSettings.playerHP;
         document.getElementById('ai-hp').value = gameSettings.aiHP;
         const projectileSpeedSlider = document.getElementById('projectile-speed');
@@ -305,6 +324,54 @@ function loadSettings() {
         }
         if (nightModeIntensityValueSpan) {
             nightModeIntensityValueSpan.textContent = gameSettings.nightModeLightIntensity;
+        }
+
+        // Apply button positions
+        if (gameSettings.buttonPositions) {
+            const fireButton = document.getElementById('fire-button');
+            const crouchButton = document.getElementById('crouch-button');
+            const joystickZone = document.getElementById('joystick-move');
+            const previewFireButton = document.getElementById('preview-fire-button');
+            const previewCrouchButton = document.getElementById('preview-crouch-button');
+            const previewJoystickZone = document.getElementById('preview-joystick-zone');
+
+            if (fireButton && gameSettings.buttonPositions.fire) {
+                fireButton.style.right = gameSettings.buttonPositions.fire.right;
+                fireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
+                fireButton.style.left = '';
+                fireButton.style.top = '';
+            }
+            if (crouchButton && gameSettings.buttonPositions.crouch) {
+                crouchButton.style.right = gameSettings.buttonPositions.crouch.right;
+                crouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
+                crouchButton.style.left = '';
+                crouchButton.style.top = '';
+            }
+            if (joystickZone && gameSettings.buttonPositions.joystick) {
+                joystickZone.style.left = gameSettings.buttonPositions.joystick.left;
+                joystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
+                joystickZone.style.right = '';
+                joystickZone.style.top = '';
+            }
+
+            if (previewFireButton && gameSettings.buttonPositions.fire) {
+                previewFireButton.style.right = gameSettings.buttonPositions.fire.right;
+                previewFireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
+                previewFireButton.style.left = '';
+                previewFireButton.style.top = '';
+            }
+            if (previewCrouchButton && gameSettings.buttonPositions.crouch) {
+                previewCrouchButton.style.right = gameSettings.buttonPositions.crouch.right;
+                previewCrouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
+                previewCrouchButton.style.left = '';
+                previewCrouchButton.style.top = '';
+            }
+            if (previewJoystickZone && gameSettings.buttonPositions.joystick) {
+                previewJoystickZone.style.left = gameSettings.buttonPositions.joystick.left;
+                previewJoystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
+                previewJoystickZone.style.right = '';
+                previewJoystickZone.style.top = '';
+            }
         }
     }
 }
@@ -459,40 +526,37 @@ const defaultObstaclesConfig = [
     { x: 30, z: -15, width: 2, height: 1.8, depth: 2 }
 ];
 
-function getRandomSafePosition() {
+function getRandomSafePosition(itemWidth = 1, itemHeight = 1, itemDepth = 2) {
     const MAX_ATTEMPTS = 500;
     const MIN_DISTANCE_FROM_PLAYER = 15;
-    const MIN_DISTANCE_FROM_OBSTACLE = 4;
     const MIN_DISTANCE_BETWEEN_PICKUPS = 5;
-    
-    console.log("getRandomSafePosition: Attempting to find a safe position.");
-    console.log(`Current settings: MAX_ATTEMPTS=${MAX_ATTEMPTS}, MIN_DISTANCE_FROM_OBSTACLE=${MIN_DISTANCE_FROM_OBSTACLE}, MIN_DISTANCE_BETWEEN_PICKUPS=${MIN_DISTANCE_BETWEEN_PICKUPS}`);
+    const PLACEMENT_PADDING = 2.5; // Padding from obstacles
 
-    const WEAPON_PLACEMENT_RADIUS = ARENA_PLAY_AREA_RADIUS - 2.0;
-    console.log(`Effective arena radius for item placement: ${WEAPON_PLACEMENT_RADIUS}`);
-    
+    const WEAPON_PLACEMENT_RADIUS = ARENA_PLAY_AREA_RADIUS - Math.max(itemWidth, itemDepth) / 2;
+
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = Math.random() * WEAPON_PLACEMENT_RADIUS;
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
-        const newPosition = new THREE.Vector3(x, 0, z);
-        
+        const newPosition = new THREE.Vector3(x, (itemHeight / 2) - FLOOR_HEIGHT, z);
+
         if (newPosition.distanceTo(PLAYER_INITIAL_POSITION) < MIN_DISTANCE_FROM_PLAYER) {
             continue;
         }
+
+        const itemBox = new THREE.Box3().setFromCenterAndSize(newPosition, new THREE.Vector3(itemWidth + PLACEMENT_PADDING, itemHeight, itemDepth + PLACEMENT_PADDING));
         
         let collisionDetected = false;
-        const itemSphere = new THREE.Sphere(newPosition, 4.0);
         for (const obstacle of obstacles) {
             const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-            if (obstacleBox.intersectsSphere(itemSphere)) {
+            if (itemBox.intersectsBox(obstacleBox)) {
                 collisionDetected = true;
                 break;
             }
         }
         if (collisionDetected) continue;
-        
+
         for (const pickup of weaponPickups) {
             if (newPosition.distanceTo(pickup.position) < MIN_DISTANCE_BETWEEN_PICKUPS) {
                 collisionDetected = true;
@@ -501,65 +565,67 @@ function getRandomSafePosition() {
         }
         if (collisionDetected) continue;
         
-        console.log(`getRandomSafePosition: Found safe position at (${newPosition.x.toFixed(2)}, ${newPosition.y.toFixed(2)}, ${newPosition.z.toFixed(2)}) after ${i+1} attempts.`);
         return newPosition;
     }
     
     console.warn("getRandomSafePosition: Failed to find a safe position after all attempts, returning (0,0,0).");
+    return new THREE.Vector3(0, 0, 0); // Fallback
+}
+
+function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5, itemWidth = 1, itemHeight = 1, itemDepth = 2) {
+    const MAX_ATTEMPTS = 100;
+    const WEAPON_PLACEMENT_RADIUS = ARENA_PLAY_AREA_RADIUS - 2.0;
+    const PLACEMENT_PADDING = 2.5;
+
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * searchRadius;
+        const x = centerPoint.x + Math.cos(angle) * radius;
+        const z = centerPoint.z + Math.sin(angle) * radius;
+        const newPosition = new THREE.Vector3(x, (itemHeight / 2) - FLOOR_HEIGHT, z);
+
+        if (newPosition.length() > WEAPON_PLACEMENT_RADIUS) {
+            continue; // アリーナの外なら再試行
+        }
+
+        const itemBox = new THREE.Box3().setFromCenterAndSize(newPosition, new THREE.Vector3(itemWidth + PLACEMENT_PADDING, itemHeight, itemDepth + PLACEMENT_PADDING));
+        
+        let collisionDetected = false;
+        for (const obstacle of obstacles) {
+            const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+            if (itemBox.intersectsBox(obstacleBox)) {
+                collisionDetected = true;
+                break;
+            }
+        }
+        if (collisionDetected) continue;
+
+        for (const pickup of weaponPickups) {
+            if (newPosition.distanceTo(pickup.position) < minDistance) {
+                collisionDetected = true;
+                break;
+            }
+        }
+        if (collisionDetected) continue;
+
+        return newPosition;
+    }
+    // フォールバック: 安全な位置が見つからない場合、とりあえずアリーナの中心を返す
+    console.warn("findSafePositionNear: Failed to find a safe position, returning arena center.");
     return new THREE.Vector3(0, 0, 0);
 }
 
-function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5) {
-        const MAX_ATTEMPTS = 100;
-        const WEAPON_PLACEMENT_RADIUS = ARENA_PLAY_AREA_RADIUS - 2.0;
-        for (let i = 0; i < MAX_ATTEMPTS; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * searchRadius;
-            const x = centerPoint.x + Math.cos(angle) * radius;
-            const z = centerPoint.z + Math.sin(angle) * radius;
-            const newPosition = new THREE.Vector3(x, 0, z);
-
-            if (newPosition.length() > WEAPON_PLACEMENT_RADIUS) {
-                continue; // アリーナの外なら再試行
-            }
-
-            let collisionDetected = false;
-            const itemSphere = new THREE.Sphere(newPosition, 4.0);
-            for (const obstacle of obstacles) {
-                const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-                if (obstacleBox.intersectsSphere(itemSphere)) {
-                    collisionDetected = true;
-                    break;
-                }
-            }
-            if (collisionDetected) continue;
-
-            for (const pickup of weaponPickups) {
-                if (newPosition.distanceTo(pickup.position) < minDistance) {
-                    collisionDetected = true;
-                    break;
-                }
-            }
-            if (collisionDetected) continue;
-
-            return newPosition;
-        }
-        // フォールバック: 安全な位置が見つからない場合、とりあえずアリーナの中心を返す
-        console.warn("findSafePositionNear: Failed to find a safe position, returning arena center.");
-        return new THREE.Vector3(0, 0, 0);
-    }
-
 function createWeaponPickup(text, position, weaponType) {
     console.log(`createWeaponPickup called for ${weaponType} at initial position: (${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`);
+    const boxWidth = 1;
+    const boxHeight = 0.8;
+    const boxDepth = 2;
+    
     if (!font) {
-        const boxWidth = 1;
-        const boxHeight = 0.8;
-        const boxDepth = 2;
         const geometry = new THREE.BoxGeometry(boxWidth, boxHeight, boxDepth);
         const material = new THREE.MeshLambertMaterial({ color: 0x006400 });
         const box = new THREE.Mesh(geometry, material);
         box.position.copy(position);
-        box.position.y = (boxHeight / 2) - FLOOR_HEIGHT;
         console.log(`createWeaponPickup (no font): Actual mesh position after adjustments: (${box.position.x.toFixed(2)}, ${box.position.y.toFixed(2)}, ${box.position.z.toFixed(2)})`);
         box.userData = { type: 'weaponPickup', weaponType: weaponType };
         scene.add(box);
@@ -567,13 +633,10 @@ function createWeaponPickup(text, position, weaponType) {
         return box;
     }
     const pickupGroup = new THREE.Group();
-    const boxWidth = 1;
-    const boxHeight = 0.8;
-    const boxDepth = 2;
     const boxGeometry = new THREE.BoxGeometry(boxWidth, boxHeight, boxDepth);
     const boxMaterial = new THREE.MeshLambertMaterial({ color: 0x006400 });
     const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-    boxMesh.position.y = boxHeight / 2;
+    // boxMesh.position.y = boxHeight / 2; // This was causing the item to float
     pickupGroup.add(boxMesh);
     const textOptions = { font: font, size: 0.35, height: 0.2, curveSegments: 12, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelOffset: 0, bevelSegments: 5 };
     const textMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
@@ -581,7 +644,7 @@ function createWeaponPickup(text, position, weaponType) {
     textGeometryLeft.computeBoundingBox();
     textGeometryLeft.translate(-0.5 * (textGeometryLeft.boundingBox.max.x - textGeometryLeft.boundingBox.min.x), -0.5 * (textGeometryLeft.boundingBox.max.y - textGeometryLeft.boundingBox.min.y), -0.5 * (textGeometryLeft.boundingBox.max.z - textGeometryLeft.boundingBox.min.z));
     const textMeshLeft = new THREE.Mesh(textGeometryLeft, textMaterial);
-    textMeshLeft.position.y = boxHeight / 2;
+    // textMeshLeft.position.y = boxHeight / 2;
     textMeshLeft.position.x = -boxWidth / 2 + (textOptions.height / 2);
     textMeshLeft.rotation.y = -Math.PI / 2;
     pickupGroup.add(textMeshLeft);
@@ -589,12 +652,12 @@ function createWeaponPickup(text, position, weaponType) {
     textGeometryRight.computeBoundingBox();
     textGeometryRight.translate(-0.5 * (textGeometryRight.boundingBox.max.x - textGeometryRight.boundingBox.min.x), -0.5 * (textGeometryRight.boundingBox.max.y - textGeometryRight.boundingBox.min.y), -0.5 * (textGeometryRight.boundingBox.max.z - textGeometryRight.boundingBox.min.z));
     const textMeshRight = new THREE.Mesh(textGeometryRight, textMaterial);
-    textMeshRight.position.y = boxHeight / 2;
+    // textMeshRight.position.y = boxHeight / 2;
     textMeshRight.position.x = boxWidth / 2 - (textOptions.height / 2);
     textMeshRight.rotation.y = Math.PI / 2;
     pickupGroup.add(textMeshRight);
     pickupGroup.position.copy(position);
-    pickupGroup.position.y = -FLOOR_HEIGHT;
+
     console.log(`createWeaponPickup (with font): Actual group position after adjustments: (${pickupGroup.position.x.toFixed(2)}, ${pickupGroup.position.y.toFixed(2)}, ${pickupGroup.position.z.toFixed(2)})`);
     pickupGroup.userData = { type: 'weaponPickup', weaponType: weaponType };
     scene.add(pickupGroup);
@@ -613,6 +676,11 @@ function createWeaponPickups(aiList = []) {
 
     const availableAis = [...aiList];
 
+    // Define weapon box size here, as it's constant for all weapon pickups
+    const weaponBoxWidth = 1;
+    const weaponBoxHeight = 0.8;
+    const weaponBoxDepth = 2;
+
     for (let i = 0; i < weaponTypes.length; i++) {
         const weapon = weaponTypes[i];
         let position;
@@ -621,11 +689,11 @@ function createWeaponPickups(aiList = []) {
             const aiIndex = Math.floor(Math.random() * availableAis.length);
             const targetAi = availableAis[aiIndex];
             
-            position = findSafePositionNear(targetAi.position, 10, 5);
+            position = findSafePositionNear(targetAi.position, 10, 5, weaponBoxWidth, weaponBoxHeight, weaponBoxDepth);
 
             availableAis.splice(aiIndex, 1);
         } else {
-            position = getRandomSafePosition();
+            position = getRandomSafePosition(weaponBoxWidth, weaponBoxHeight, weaponBoxDepth);
         }
         createWeaponPickup(weapon.name, position, weapon.type);
     }
@@ -641,7 +709,7 @@ function createMedikitPickup(position) {
     const boxGeometry = new THREE.BoxGeometry(MEDIKIT_WIDTH, MEDIKIT_HEIGHT, MEDIKIT_DEPTH);
     const boxMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
     const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-    boxMesh.position.y = MEDIKIT_HEIGHT / 2;
+    // boxMesh.position.y = MEDIKIT_HEIGHT / 2; // This was causing the item to float
     medikitGroup.add(boxMesh);
     const crossThickness = 0.25;
     const crossLength = MEDIKIT_HEIGHT * 0.8;
@@ -649,24 +717,22 @@ function createMedikitPickup(position) {
     const verticalBarGeometry = new THREE.BoxGeometry(crossThickness, crossLength, crossThickness);
     const crossMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
     const verticalBar = new THREE.Mesh(verticalBarGeometry, crossMaterial);
-    verticalBar.position.y = 0;
+    // verticalBar.position.y = 0;
     crossGroup.add(verticalBar);
     const horizontalBarGeometry = new THREE.BoxGeometry(crossLength, crossThickness, crossThickness);
     const horizontalBar = new THREE.Mesh(horizontalBarGeometry, crossMaterial);
-    horizontalBar.position.y = 0;
+    // horizontalBar.position.y = 0;
     crossGroup.add(horizontalBar);
     const crossGroup1 = crossGroup.clone();
-    crossGroup1.position.set(MEDIKIT_WIDTH / 2 - crossThickness / 2, MEDIKIT_HEIGHT / 2, 0);
+    crossGroup1.position.set(MEDIKIT_WIDTH / 2 - crossThickness / 2, 0, 0); // Y-offset removed
     crossGroup1.rotation.y = Math.PI / 2;
     medikitGroup.add(crossGroup1);
     const crossGroup2 = crossGroup.clone();
-    crossGroup2.position.set(-MEDIKIT_WIDTH / 2 + crossThickness / 2, MEDIKIT_HEIGHT / 2, 0);
+    crossGroup2.position.set(-MEDIKIT_WIDTH / 2 + crossThickness / 2, 0, 0); // Y-offset removed
     crossGroup2.rotation.y = -Math.PI / 2;
     medikitGroup.add(crossGroup2);
     medikitGroup.position.copy(position);
-    medikitGroup.position.y = -FLOOR_HEIGHT;
-    medikitGroup.position.copy(position);
-    medikitGroup.position.y = -FLOOR_HEIGHT + 0.01;
+
     console.log(`createMedikitPickup: Actual group position after adjustments: (${medikitGroup.position.x.toFixed(2)}, ${medikitGroup.position.y.toFixed(2)}, ${medikitGroup.position.z.toFixed(2)})`);
     medikitGroup.userData = { type: 'medikitPickup' };
     scene.add(medikitGroup);
@@ -809,7 +875,7 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     scene.add(box);
     obstacles.push(box);
     let ladderFace = -1;
-    if (height > DEFAULT_OBSTACLE_HEIGHT * 1.5) {
+    if (height > 6) {
         ladderFace = createAndAttachLadder(box);
     }
     if (height >= 8) {
@@ -1673,6 +1739,11 @@ document.addEventListener('touchstart', (event) => {
     const halfWidth = window.innerWidth / 2;
     for (let i = 0; i < event.changedTouches.length; i++) {
         const touch = event.changedTouches[i];
+
+        if (touch.target.id === 'pause-button') {
+            return;
+        }
+        
         if (touch.clientX > halfWidth) {
             if (touch.target.id === 'fire-button') {
                 handleFirePress();
@@ -1786,9 +1857,11 @@ function startGame() {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const pause = document.getElementById('pause-button');
         if (joy) joy.style.display = 'block';
         if (fire) fire.style.display = 'flex';
         if (crouch) crouch.style.display = 'flex';
+        if (pause) pause.style.display = 'block';
     } else {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -1814,7 +1887,7 @@ function startGame() {
     } catch (e) {
         console.warn('Error trying to lock orientation:', e);
     }
-    if (gameSettings.fieldState === 'persist') {
+    if (gameSettings.fieldState === 'reset') {
         if (typeof resetObstacles === 'function') resetObstacles();
     }
 }
@@ -1838,6 +1911,9 @@ function shuffle(array) {
 }
 
 function restartGame() {
+    if (gameSettings.fieldState === 'reset') {
+        resetObstacles();
+    }
     gameOverScreen.style.display = 'none';
     winScreen.style.display = 'none';
     if (gameSettings.gameMode === 'arcade') {
@@ -1899,7 +1975,22 @@ function restartGame() {
         playerSpawnPos = playerSpawn ? new THREE.Vector3(playerSpawn.x, 2.0, playerSpawn.z) : PLAYER_INITIAL_POSITION;
     }
     player.position.copy(playerSpawnPos);
-    player.rotation.y = Math.atan2(player.position.x, player.position.z);
+
+    // プレイヤーがアリーナの中心を向くように角度を計算
+    // カメラはプレイヤーオブジェクトの逆向き（-Z方向）を向いているため、
+    // プレイヤー自体は中心と逆の方向を向く必要がある
+    const lookAtPoint = new THREE.Vector3(0, player.position.y, 0);
+    const direction = new THREE.Vector3().subVectors(lookAtPoint, player.position);
+    player.rotation.y = Math.atan2(direction.x, direction.z) + Math.PI;
+
+    window.justRestarted = true;
+    console.log("--- GEMINI DEBUG ---");
+    console.log("Timestamp:", new Date().toISOString());
+    const playerDir = new THREE.Vector3();
+    player.getWorldDirection(playerDir);
+    console.log("Player Position:", JSON.stringify(player.position));
+    console.log("Player Direction Vector:", JSON.stringify(playerDir));
+    console.log("--------------------");
     camera.rotation.x = 0;
     currentWeapon = WEAPON_PISTOL;
     ammoMG = 0;
@@ -1923,7 +2014,7 @@ function restartGame() {
             aiSpawnPos = aiSpawn ? new THREE.Vector3(aiSpawn.x, 0, aiSpawn.z) : defaultPos;
         }
         ai.position.copy(new THREE.Vector3(aiSpawnPos.x, -FLOOR_HEIGHT, aiSpawnPos.z));
-        ai.rotation.y = Math.atan2(ai.position.x, ai.position.z);
+        ai.lookAt(new THREE.Vector3(0, ai.position.y, 0));
         if (finalAICount === 3) {
             if (i === 0) { ai.aggression = 0.7; ai.flankAggression = 0.1; }
             else if (i === 1) { ai.aggression = 0.4; ai.flankAggression = 0.8; ai.flankPreference = 'left'; }
@@ -1972,9 +2063,11 @@ function restartGame() {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const pause = document.getElementById('pause-button');
         if (joy) joy.style.display = 'block';
         if (fire) fire.style.display = 'flex';
         if (crouch) crouch.style.display = 'flex';
+        if (pause) pause.style.display = 'block';
     }
     for (let i = projectiles.length - 1; i >= 0; i--) scene.remove(projectiles[i].mesh);
     projectiles.length = 0;
@@ -1991,7 +2084,7 @@ function restartGame() {
     // resetWeaponPickups(); // Moved to after AI creation
     if (gameSettings.gameMode === 'arcade' && gameSettings.medikitCount > 0) {
         for (let i = 0; i < gameSettings.medikitCount; i++) {
-            createMedikitPickup(getRandomSafePosition());
+            createMedikitPickup(getRandomSafePosition(MEDIKIT_WIDTH, MEDIKIT_HEIGHT, MEDIKIT_DEPTH));
         }
     }
     clock.start();
@@ -2127,7 +2220,7 @@ function startPlayerDeathSequence(projectile) {
     isPlayerDeathPlaying = true;
     isGameRunning = false;
     document.exitPointerLock();
-    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'player-weapon-display'];
+    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'player-weapon-display', 'pause-button'];
     uiToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -2266,6 +2359,8 @@ function showWinScreen() {
     isGameRunning = false;
     winScreen.style.display = 'flex';
     document.exitPointerLock();
+    const pauseBtn = document.getElementById('pause-button');
+    if(pauseBtn) pauseBtn.style.display = 'none';
 }
 
 function checkCollision(object, obstacles, ignoreObstacle = null) {
@@ -2349,7 +2444,85 @@ function findClearCameraPosition(targetPosition, obstaclesArray, projectile) {
     return bestCandidate || targetPosition.clone().add(new THREE.Vector3(0, 15, 0));
 }
 
+function showSettingsAndPause() {
+    if (!isGameRunning && !isPaused) return;
+
+    isGameRunning = false;
+    if (!isPaused) {
+        originalSettings = JSON.parse(JSON.stringify(gameSettings));
+    }
+    isPaused = true;
+
+    document.exitPointerLock();
+
+    const elementsToHide = ['joystick-move', 'fire-button', 'crouch-button', 'crosshair', 'scope-overlay', 'kill-count-display', 'player-hp-display', 'player-weapon-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'pause-button'];
+    elementsToHide.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    
+    startScreen.style.display = 'flex';
+    document.getElementById('start-game-btn').style.display = 'none';
+    document.getElementById('resume-game-btn').style.display = 'inline-block';
+}
+
+function resumeGame() {
+    const settingsChanged = JSON.stringify(originalSettings) !== JSON.stringify(gameSettings);
+
+    startScreen.style.display = 'none';
+    document.getElementById('resume-game-btn').style.display = 'none';
+    document.getElementById('start-game-btn').style.display = 'inline-block';
+
+    if (settingsChanged) {
+        restartGame();
+    } else {
+        isPaused = false;
+        
+        const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display'];
+        uiToShow.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'block';
+        });
+
+        const aiDisplays = ['ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'];
+        ais.forEach((ai, index) => {
+            const display = document.getElementById(aiDisplays[index]);
+            if (display) {
+                if (ai.hp > 0) {
+                    display.style.display = 'block';
+                } else {
+                    // Keep it hidden or show as dead based on existing logic
+                     display.style.display = 'block'; 
+                }
+            }
+        });
+        
+        if (gameSettings.gameMode === 'arcade' && document.getElementById('kill-count-display')) {
+            document.getElementById('kill-count-display').style.display = 'block';
+        }
+
+        if ('ontouchstart' in window) {
+            document.getElementById('joystick-move').style.display = 'block';
+            document.getElementById('fire-button').style.display = 'flex';
+            document.getElementById('crouch-button').style.display = 'flex';
+            document.getElementById('pause-button').style.display = 'block';
+        } else {
+            canvas.requestPointerLock();
+        }
+
+        isGameRunning = true;
+    }
+}
+
 function animate() {
+    if (window.justRestarted) {
+        window.justRestarted = false;
+        console.log("--- ANIMATE START DEBUG ---");
+        const playerDir = new THREE.Vector3();
+        player.getWorldDirection(playerDir);
+        console.log("Player Direction at Animate Start:", JSON.stringify(playerDir));
+        console.log("---------------------------");
+    }
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
     const timeElapsed = clock.getElapsedTime();
@@ -2702,9 +2875,12 @@ function animate() {
         if (timeElapsed >= respawnItem.respawnTime) {
             if (respawnItem.type === 'weapon') {
                 const weaponText = respawnItem.weaponType === WEAPON_MG ? 'MG' : respawnItem.weaponType === WEAPON_RR ? 'RL' : respawnItem.weaponType === WEAPON_SR ? 'SR' : 'SG';
-                createWeaponPickup(weaponText, getRandomSafePosition(), respawnItem.weaponType);
+                const weaponBoxWidth = 1;
+                const weaponBoxHeight = 0.8;
+                const weaponBoxDepth = 2;
+                createWeaponPickup(weaponText, getRandomSafePosition(weaponBoxWidth, weaponBoxHeight, weaponBoxDepth), respawnItem.weaponType);
             } else if (respawnItem.type === 'medikit') {
-                createMedikitPickup(getRandomSafePosition());
+                createMedikitPickup(getRandomSafePosition(MEDIKIT_WIDTH, MEDIKIT_HEIGHT, MEDIKIT_DEPTH));
             }
             respawningPickups.splice(i, 1);
         }
@@ -3107,4 +3283,147 @@ settingsLinks.forEach(link => {
     });
 });
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+// --- Button Settings Logic ---
+const buttonSettingsScreen = document.getElementById('button-settings-screen');
+const startScreenElement = document.getElementById('start-screen');
+const openButtonSettingsBtn = document.getElementById('button-setting-btn');
+const saveButtonPositionsBtn = document.getElementById('save-button-positions');
+const backToSettingsBtn = document.getElementById('back-to-settings');
+const feedbackDiv = document.getElementById('button-setting-feedback');
+
+openButtonSettingsBtn.addEventListener('click', () => {
+    startScreenElement.style.display = 'none';
+    buttonSettingsScreen.style.display = 'block';
+    feedbackDiv.style.display = 'none'; // Hide feedback on open
+});
+
+backToSettingsBtn.addEventListener('click', () => {
+    buttonSettingsScreen.style.display = 'none';
+    startScreenElement.style.display = 'block';
+});
+
+saveButtonPositionsBtn.addEventListener('click', () => {
+    const previewFireButton = document.getElementById('preview-fire-button');
+    const previewCrouchButton = document.getElementById('preview-crouch-button');
+    const previewJoystickZone = document.getElementById('preview-joystick-zone');
+
+    // Convert pixel values to percentage for responsiveness
+    const fireRight = (parseInt(previewFireButton.style.right, 10) / window.innerWidth) * 100 + '%';
+    const fireBottom = (parseInt(previewFireButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
+    const crouchRight = (parseInt(previewCrouchButton.style.right, 10) / window.innerWidth) * 100 + '%';
+    const crouchBottom = (parseInt(previewCrouchButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
+    const joystickLeft = (parseInt(previewJoystickZone.style.left, 10) / window.innerWidth) * 100 + '%';
+    const joystickBottom = (parseInt(previewJoystickZone.style.bottom, 10) / window.innerHeight) * 100 + '%';
+
+    gameSettings.buttonPositions.fire = { right: fireRight, bottom: fireBottom };
+    gameSettings.buttonPositions.crouch = { right: crouchRight, bottom: crouchBottom };
+    gameSettings.buttonPositions.joystick = { left: joystickLeft, bottom: joystickBottom };
+
+    saveSettings();
+    
+    // Apply to actual buttons immediately
+    const fireButton = document.getElementById('fire-button');
+    const crouchButton = document.getElementById('crouch-button');
+    const joystickZone = document.getElementById('joystick-move');
+
+    fireButton.style.right = fireRight;
+    fireButton.style.bottom = fireBottom;
+    crouchButton.style.right = crouchRight;
+    crouchButton.style.bottom = crouchBottom;
+    joystickZone.style.left = joystickLeft;
+    joystickZone.style.bottom = joystickBottom;
+    
+    fireButton.style.left = '';
+    fireButton.style.top = '';
+    crouchButton.style.left = '';
+    crouchButton.style.top = '';
+    joystickZone.style.right = '';
+    joystickZone.style.top = '';
+
+
+    // Show feedback
+    feedbackDiv.textContent = 'Positions Saved!';
+    feedbackDiv.style.display = 'block';
+    setTimeout(() => {
+        feedbackDiv.style.display = 'none';
+    }, 2000);
+});
+
+function makeDraggable(element, isJoystick = false) {
+    let isDragging = false;
+    let offsetX, offsetY;
+
+    const startDrag = (e) => {
+        isDragging = true;
+        const event = e.type === 'touchstart' ? e.touches[0] : e;
+        
+        const rect = element.getBoundingClientRect();
+        offsetX = event.clientX - rect.left;
+        offsetY = event.clientY - rect.top;
+
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('touchmove', onDrag, { passive: false });
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+        if (e.type === 'touchmove') e.preventDefault();
+    };
+
+    const onDrag = (e) => {
+        if (!isDragging) return;
+        const event = e.type === 'touchmove' ? e.touches[0] : e;
+        e.preventDefault(); 
+
+        let newX = event.clientX - offsetX;
+        let newY = event.clientY - offsetY;
+
+        if (isJoystick) {
+            const newLeft = newX;
+            const newBottom = window.innerHeight - newY - element.offsetHeight;
+            element.style.left = `${newLeft}px`;
+            element.style.bottom = `${newBottom}px`;
+            element.style.right = '';
+            element.style.top = '';
+        } else {
+            const newRight = window.innerWidth - newX - element.offsetWidth;
+            const newBottom = window.innerHeight - newY - element.offsetHeight;
+            element.style.left = ''; 
+            element.style.top = '';
+            element.style.right = `${newRight}px`;
+            element.style.bottom = `${newBottom}px`;
+        }
+    };
+
+    const endDrag = () => {
+        isDragging = false;
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('touchmove', onDrag);
+        document.removeEventListener('mouseup', endDrag);
+        document.removeEventListener('touchend', endDrag);
+    };
+
+    element.addEventListener('mousedown', startDrag);
+    element.addEventListener('touchstart', startDrag, { passive: false });
+}
+
+makeDraggable(document.getElementById('preview-fire-button'));
+makeDraggable(document.getElementById('preview-crouch-button'));
+makeDraggable(document.getElementById('preview-joystick-zone'), true);
+
+document.addEventListener('keydown', (event) => {
+    if (event.code === 'KeyP') {
+        showSettingsAndPause();
+    }
+});
+
+const pauseBtn = document.getElementById('pause-button');
+if (pauseBtn) {
+    pauseBtn.addEventListener('click', showSettingsAndPause);
+}
+
+const resumeGameBtn = document.getElementById('resume-game-btn');
+if (resumeGameBtn) {
+    resumeGameBtn.addEventListener('click', resumeGame);
+}
+
 animate();
