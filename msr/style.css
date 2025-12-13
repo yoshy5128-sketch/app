@@ -87,6 +87,14 @@ button#clearStops:hover {
     background-color: #c82333;
 }
 
+button#addCurrentLocationAsFirstStop { /* Style for the new button */
+    background-color: #ffc107;
+    color: #333;
+}
+button#addCurrentLocationAsFirstStop:hover {
+    background-color: #e0a800;
+}
+
 #status {
     margin-top: 10px;
     font-weight: bold;
