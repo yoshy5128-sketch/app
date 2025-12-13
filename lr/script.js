@@ -6,9 +6,13 @@ let reminders = []; // リマインダーデータを保存する配列
 let watchId; // Geolocation.watchPosition()のID
 let trackingLocation = false;
 let mapClickLatlng; // マップがクリックされたときの座標を一時的に保持
+let lastKnownPosition = null; // 最後に取得した現在地
 
 const DEFAULT_LAT = 35.681236; // 東京駅
 const DEFAULT_LNG = 139.767125;
+
+// 現在地追跡のON/OFFを制御する変数
+let followLocation = true; // 初期値は追跡ON
 
 // DOMが完全に読み込まれた後にマップを初期化
 document.addEventListener('DOMContentLoaded', initApp);
@@ -19,6 +23,7 @@ function initApp() {
     loadReminders(); // 保存されているリマインダーを読み込む
     renderReminders(); // リマインダーリストをUIに表示
     startLocationTracking(); // 現在地追跡を開始
+    document.getElementById('followLocation').checked = followLocation; // チェックボックスの初期状態を設定
 }
 
 // Leaflet Mapを初期化する関数
@@ -44,6 +49,25 @@ function initMap() {
 // イベントリスナーの設定
 function setupEventListeners() {
     document.getElementById('setReminder').addEventListener('click', setReminder);
+    document.getElementById('followLocation').addEventListener('change', (e) => {
+        followLocation = e.target.checked;
+        if (followLocation && lastKnownPosition) {
+            // 追跡がONになり、かつ現在地が分かっていれば、マップを現在地へ移動
+            map.setView(lastKnownPosition, map.getZoom());
+        }
+        document.getElementById('status').textContent = `現在地追跡: ${followLocation ? 'ON' : 'OFF'}`;
+    });
+    document.getElementById('recenterMap').addEventListener('click', () => {
+        if (lastKnownPosition) {
+            map.setView(lastKnownPosition, map.getZoom());
+            // 手動で現在地に戻った場合は、追跡もONにする
+            followLocation = true;
+            document.getElementById('followLocation').checked = true;
+            document.getElementById('status').textContent = "現在地に戻りました。追跡ON。";
+        } else {
+            document.getElementById('status').textContent = "現在地がまだ不明です。";
+        }
+    });
 }
 
 // 現在地追跡を開始
@@ -62,9 +86,13 @@ function startLocationTracking() {
                 const lng = position.coords.longitude;
                 const accuracy = position.coords.accuracy;
                 const currentPos = [lat, lng];
+                lastKnownPosition = currentPos; // 最後の現在地を保存
 
                 currentMarker.setLatLng(currentPos); // 現在地マーカーを更新
-                map.setView(currentPos, map.getZoom()); // マップビューを現在地に合わせる
+                
+                if (followLocation) { // followLocationがtrueの場合のみマップの中心を現在地へ移動
+                    map.setView(currentPos, map.getZoom());
+                }
                 document.getElementById('status').textContent = `現在地: ${lat.toFixed(4)}, ${lng.toFixed(4)} (精度: ${accuracy.toFixed(1)}m)`;
 
                 checkReminders(currentPos); // リマインダーをチェック
@@ -167,7 +195,8 @@ function checkReminders(currentPos) {
             if (distance <= reminder.radius) {
                 // リマインダーをトリガー
                 document.getElementById('status').textContent = `リマインダー発動！: ${reminder.message} が ${Math.round(distance)}m 圏内`;
-                alert(`リマインダー発動！\n「${reminder.message}」が ${Math.round(distance)}m 圏内です。`);
+                alert(`リマインダー発動！
+「${reminder.message}」が ${Math.round(distance)}m 圏内です。`);
                 reminder.triggered = true; // 一度トリガーしたら一時的に無効化
                 saveReminders(); // トリガー状態を保存
             } else {
