@@ -13,6 +13,8 @@ const DEFAULT_LNG = 139.767125;
 
 // 現在地追跡のON/OFFを制御する変数
 let followLocation = true; // 初期値は追跡ON
+// ユーザーがマップを操作中かどうかを示すフラグ
+let userInteractingWithMap = false;
 
 // DOMが完全に読み込まれた後にマップを初期化
 document.addEventListener('DOMContentLoaded', initApp);
@@ -44,6 +46,24 @@ function initMap() {
         selectedLocationMarker.setLatLng(mapClickLatlng).addTo(map);
         document.getElementById('status').textContent = `マップ上の ${mapClickLatlng.lat.toFixed(4)}, ${mapClickLatlng.lng.toFixed(4)} にリマインダーを設定できます。`;
     });
+
+    // ユーザーがマップの移動を開始したら
+    map.on('movestart zoomstart', () => {
+        userInteractingWithMap = true;
+        if (followLocation) {
+            followLocation = false;
+            document.getElementById('followLocation').checked = false;
+            document.getElementById('status').textContent = "マップ操作開始: 現在地追跡OFF";
+        }
+    });
+
+    // ユーザーがマップの移動を終了したら
+    map.on('moveend zoomend', () => {
+        userInteractingWithMap = false;
+        if (!followLocation && lastKnownPosition) {
+            document.getElementById('status').textContent += " (マップ操作終了)";
+        }
+    });
 }
 
 // イベントリスナーの設定
@@ -54,8 +74,10 @@ function setupEventListeners() {
         if (followLocation && lastKnownPosition) {
             // 追跡がONになり、かつ現在地が分かっていれば、マップを現在地へ移動
             map.setView(lastKnownPosition, map.getZoom());
+            document.getElementById('status').textContent = "現在地追跡: ON";
+        } else if (!followLocation) {
+            document.getElementById('status').textContent = "現在地追跡: OFF";
         }
-        document.getElementById('status').textContent = `現在地追跡: ${followLocation ? 'ON' : 'OFF'}`;
     });
     document.getElementById('recenterMap').addEventListener('click', () => {
         if (lastKnownPosition) {
@@ -63,9 +85,9 @@ function setupEventListeners() {
             // 手動で現在地に戻った場合は、追跡もONにする
             followLocation = true;
             document.getElementById('followLocation').checked = true;
-            document.getElementById('status').textContent = "現在地に戻りました。追跡ON。";
+            document.getElementById('status').textContent = "現在地に戻りました。追跡ON";
         } else {
-            document.getElementById('status').textContent = "現在地がまだ不明です。";
+            document.getElementById('status').textContent = "現在地がまだ不明です";
         }
     });
 }
@@ -90,7 +112,7 @@ function startLocationTracking() {
 
                 currentMarker.setLatLng(currentPos); // 現在地マーカーを更新
                 
-                if (followLocation) { // followLocationがtrueの場合のみマップの中心を現在地へ移動
+                if (followLocation && !userInteractingWithMap) { // followLocationがtrueで、かつユーザーがマップを操作中でない場合のみマップの中心を現在地へ移動
                     map.setView(currentPos, map.getZoom());
                 }
                 document.getElementById('status').textContent = `現在地: ${lat.toFixed(4)}, ${lng.toFixed(4)} (精度: ${accuracy.toFixed(1)}m)`;
@@ -102,16 +124,16 @@ function startLocationTracking() {
                 let errorMessage = "エラー: ";
                 switch (error.code) {
                     case error.PERMISSION_DENIED:
-                        errorMessage += "位置情報の利用が拒否されました。";
+                        errorMessage += "位置情報の利用が拒否されました";
                         break;
                     case error.POSITION_UNAVAILABLE:
-                        errorMessage += "位置情報を利用できません。";
+                        errorMessage += "位置情報を利用できません";
                         break;
                     case error.TIMEOUT:
-                        errorMessage += "位置情報の取得がタイムアウトしました。";
+                        errorMessage += "位置情報の取得がタイムアウトしました";
                         break;
                     default:
-                        errorMessage += "不明なエラー。";
+                        errorMessage += "不明なエラー";
                         break;
                 }
                 document.getElementById('status').textContent = errorMessage;
@@ -124,14 +146,14 @@ function startLocationTracking() {
             }
         );
     } else {
-        document.getElementById('status').textContent = "エラー: Geolocation APIがサポートされていません。";
+        document.getElementById('status').textContent = "エラー: Geolocation APIがサポートされていません";
     }
 }
 
 // リマインダーを設定
 function setReminder() {
     if (!mapClickLatlng) {
-        document.getElementById('status').textContent = "マップ上でリマインダーを設定する場所を選択してください。";
+        document.getElementById('status').textContent = "マップ上でリマインダーを設定する場所を選択してください";
         return;
     }
 
@@ -139,11 +161,11 @@ function setReminder() {
     const radius = parseInt(document.getElementById('radiusInput').value, 10);
 
     if (!message) {
-        document.getElementById('status').textContent = "リマインダーメッセージを入力してください。";
+        document.getElementById('status').textContent = "リマインダーメッセージを入力してください";
         return;
     }
     if (isNaN(radius) || radius < 1) {
-        document.getElementById('status').textContent = "有効な半径（メートル）を入力してください。";
+        document.getElementById('status').textContent = "有効な半径（メートル）を入力してください";
         return;
     }
 
@@ -162,7 +184,7 @@ function setReminder() {
     saveReminders();
     renderReminders();
     addReminderToMap(newReminder);
-    document.getElementById('status').textContent = `リマインダー "${message}" を設定しました。`;
+    document.getElementById('status').textContent = `リマインダー "${message}" を設定しました`;
 
     document.getElementById('reminderMessage').value = ''; // 入力欄をクリア
     selectedLocationMarker.remove(); // マーカーを非表示にする
@@ -195,8 +217,7 @@ function checkReminders(currentPos) {
             if (distance <= reminder.radius) {
                 // リマインダーをトリガー
                 document.getElementById('status').textContent = `リマインダー発動！: ${reminder.message} が ${Math.round(distance)}m 圏内`;
-                alert(`リマインダー発動！
-「${reminder.message}」が ${Math.round(distance)}m 圏内です。`);
+                alert(`リマインダー発動！\n「${reminder.message}」が ${Math.round(distance)}m 圏内です。`);
                 reminder.triggered = true; // 一度トリガーしたら一時的に無効化
                 saveReminders(); // トリガー状態を保存
             } else {
@@ -227,10 +248,10 @@ function loadReminders() {
                 addReminderToMap(reminder);
             });
             saveReminders(); // リセットした状態を保存
-            document.getElementById('status').textContent = `${reminders.length}件のリマインダーを読み込みました。`;
+            document.getElementById('status').textContent = `${reminders.length}件のリマインダーを読み込みました`;
         } catch (e) {
             console.error("Failed to load reminders:", e);
-            document.getElementById('status').textContent = "リマインダーの読み込みに失敗しました。";
+            document.getElementById('status').textContent = "リマインダーの読み込みに失敗しました";
             reminders = [];
         }
     } else {
@@ -244,7 +265,7 @@ function renderReminders() {
     reminderListElement.innerHTML = ''; // リストをクリア
 
     if (reminders.length === 0) {
-        reminderListElement.innerHTML = '<li>登録されたリマインダーはありません。</li>';
+        reminderListElement.innerHTML = '<li>登録されたリマインダーはありません</li>';
         return;
     }
 
@@ -274,7 +295,7 @@ function deleteReminder(event) {
         map.removeLayer(reminderCircles[idToDelete]);
         delete reminderCircles[idToDelete];
     }
-    document.getElementById('status').textContent = "リマインダーを削除しました。";
+    document.getElementById('status').textContent = "リマインダーを削除しました";
 }
 
 // 位置情報取得のエラーハンドラ
@@ -283,20 +304,20 @@ function handleLocationError(browserHasGeolocation, errorCode) {
     if (browserHasGeolocation) {
         switch (errorCode) {
             case 1: // PERMISSION_DENIED
-                message = "エラー: 位置情報の利用が拒否されました。ブラウザ設定を確認してください。";
+                message = "エラー: 位置情報の利用が拒否されました。ブラウザ設定を確認してください";
                 break;
             case 2: // POSITION_UNAVAILABLE
-                message = "エラー: 位置情報を利用できません。GPS信号を確認してください。";
+                message = "エラー: 位置情報を利用できません。GPS信号を確認してください";
                 break;
             case 3: // TIMEOUT
-                message = "エラー: 位置情報の取得がタイムアウトしました。";
+                message = "エラー: 位置情報の取得がタイムアウトしました";
                 break;
             default:
-                message = "エラー: 位置情報サービスを利用できません。";
+                message = "エラー: 位置情報サービスを利用できません";
                 break;
         }
     } else {
-        message = "エラー: お使いのブラウザは位置情報に対応していません。";
+        message = "エラー: お使いのブラウザは位置情報に対応していません";
     }
     document.getElementById("status").textContent = message;
     console.error("handleLocationError called. Code:", errorCode, "Message:", message);
