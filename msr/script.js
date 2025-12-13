@@ -311,15 +311,14 @@ function displayRoute(geojson) {
 
         map.fitBounds(routePolyline.getBounds()); // ルート全体が画面に収まるように調整
 
-        // ルートデータがsegmentsを持つことを確認
-        const routeData = geojson.features[0].properties.segments && geojson.features[0].properties.segments[0];
-        if (routeData) {
-            const distance = routeData.distance; // メートル
-            const duration = routeData.duration; // 秒
-
+        // ルートデータがproperties.summaryを持つことを確認
+        const summaryData = geojson.features[0].properties.summary; // ★ここを変更
+        if (summaryData) {
+            const distance = summaryData.distance; // メートル
+            const duration = summaryData.duration; // 秒
             updateRouteInfo(distance, duration);
         } else {
-            document.getElementById('status').textContent = "ルートデータが不足しています。";
+            document.getElementById('status').textContent = "ルートサマリーデータが不足しています。";
             updateRouteInfo(0, 0);
         }
     } else {
