@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>寄り道ルートプランナー</title>
+    <!-- Leaflet.jsのCSSを読み込み -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>寄り道ルートプランナー</h1>
+    <div id="map"></div>
+    <div class="controls">
+        <div class="checkbox-container">
+            <input type="checkbox" id="followLocation" checked>
+            <label for="followLocation">現在地を追跡</label>
+        </div>
+        <button id="recenterMap">現在地に移動</button>
+        <button id="addStop">マップの中心を通過点に追加</button>
+        <button id="calculateRoute">ルートを計算</button>
+        <button id="clearStops">全てクリア</button>
+    </div>
+    <div id="status"></div>
+    <h2>通過点リスト</h2>
+    <ul id="stopList"></ul>
+    <h2>ルート情報</h2>
+    <div id="routeInfo">
+        <p>距離: <span id="routeDistance">--</span></p>
+        <p>所要時間: <span id="routeDuration">--</span></p>
+    </div>
+
+    <!-- Leaflet.jsのJavaScriptを読み込み -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

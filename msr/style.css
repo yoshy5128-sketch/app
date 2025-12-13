@@ -1,0 +1,173 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f0f2f5;
+    color: #333;
+}
+
+h1 {
+    color: #3366cc;
+    margin-bottom: 15px;
+}
+
+#map {
+    height: 400px;
+    width: 95%;
+    max-width: 600px;
+    margin-top: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+    justify-content: center;
+    width: 95%;
+    max-width: 600px;
+}
+
+.controls button {
+    padding: 10px 15px;
+    background-color: #3366cc;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background-color 0.2s;
+    flex: 1 1 auto; /* Allow buttons to grow and shrink */
+    min-width: 120px;
+}
+
+.controls button:hover {
+    background-color: #2a52be;
+}
+
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9rem;
+    color: #555;
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+.checkbox-container input[type="checkbox"] {
+    width: auto;
+    margin-right: 5px;
+}
+
+button#recenterMap {
+    background-color: #6c757d;
+}
+button#recenterMap:hover {
+    background-color: #5a6268;
+}
+
+button#calculateRoute {
+    background-color: #28a745;
+}
+button#calculateRoute:hover {
+    background-color: #218838;
+}
+
+button#clearStops {
+    background-color: #dc3545;
+}
+button#clearStops:hover {
+    background-color: #c82333;
+}
+
+#status {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #dc3545; /* Error color */
+    text-align: center;
+    width: 95%;
+    max-width: 600px;
+}
+
+h2 {
+    color: #3366cc;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+#stopList {
+    list-style: decimal; /* 順番がわかるように */
+    padding-left: 20px;
+    width: 95%;
+    max-width: 600px;
+    margin-bottom: 20px;
+}
+
+#stopList li {
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 8px;
+    padding: 10px 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+#stopList li .stop-info {
+    flex-grow: 1;
+    font-size: 0.95rem;
+    color: #333;
+}
+
+#stopList li .stop-coords {
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 2px;
+}
+
+#stopList li button.delete-btn {
+    padding: 5px 10px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background-color 0.2s;
+    margin-left: 10px;
+}
+
+#stopList li button.delete-btn:hover {
+    background-color: #c82333;
+}
+
+#routeInfo {
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    margin-top: 10px;
+    width: 95%;
+    max-width: 600px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+#routeInfo p {
+    margin: 5px 0;
+    font-size: 1rem;
+    color: #333;
+}
+
+#routeInfo span {
+    font-weight: bold;
+    color: #3366cc;
+}
