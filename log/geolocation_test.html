@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geolocation Test</title>
+</head>
+<body>
+    <h1>Geolocation テスト</h1>
+    <p id="status">位置情報取得中...</p>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const statusElement = document.getElementById('status');
+
+            if (navigator.geolocation) {
+                statusElement.textContent = "位置情報へのアクセスを要求しています...";
+                console.log("Geolocation APIを呼び出し中...");
+
+                navigator.geolocation.watchPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
+
+                        statusElement.textContent = `緯度: ${lat.toFixed(6)}, 経度: ${lng.toFixed(6)} (精度: ${accuracy.toFixed(2)}m)`;
+                        console.log("Geolocation Success:", { lat, lng, accuracy, position });
+                    },
+                    (error) => {
+                        let errorMessage = "エラー: ";
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage += "位置情報の利用が拒否されました。ブラウザ設定を確認してください。";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage += "位置情報を利用できません。GPS信号を確認してください。";
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage += "位置情報の取得がタイムアウトしました。";
+                                break;
+                            default:
+                                errorMessage += "不明なエラーが発生しました。";
+                                break;
+                        }
+                        statusElement.textContent = errorMessage;
+                        console.error("Geolocation Error:", error.code, errorMessage, error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 5 * 60 * 1000, // 5分までキャッシュを許可
+                        timeout: 30 * 1000, // 30秒でタイムアウト
+                    }
+                );
+            } else {
+                statusElement.textContent = "エラー: お使いのブラウザは位置情報に対応していません。";
+                console.error("Geolocation is not supported by this browser.");
+            }
+        });
+    </script>
+</body>
+</html>
