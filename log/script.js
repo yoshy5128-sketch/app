@@ -57,6 +57,7 @@ function startTracking() {
 
         watchId = navigator.geolocation.watchPosition(
             (position) => {
+                console.log("Geolocation success:", position); // 成功時のログ追加
                 const pos = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude,
@@ -75,13 +76,14 @@ function startTracking() {
                 document.getElementById("status").textContent =
                     `緯度: ${pos.lat.toFixed(6)}, 経度: ${pos.lng.toFixed(6)} (精度: ${position.coords.accuracy.toFixed(2)}m)`;
             },
-            () => {
-                handleLocationError(true);
+            (error) => { // エラーコールバックにエラーオブジェクトを追加
+                console.error("Geolocation error:", error); // エラー時のログ追加
+                handleLocationError(true, error.code); // エラーコードを渡す
             },
             {
-                enableHighAccuracy: true, // 高精度を要求
-                maximumAge: 0, // キャッシュを使わない
-                timeout: 5000, // 5秒でタイムアウト
+                enableHighAccuracy: true,
+                maximumAge: 5 * 60 * 1000, // 5分（300秒）までキャッシュを許可
+                timeout: 30 * 1000, // 30秒でタイムアウト
             }
         );
     } else {
@@ -112,8 +114,26 @@ function clearLogs() {
     document.getElementById("status").textContent = "ログをクリアしました。";
 }
 
-function handleLocationError(browserHasGeolocation) {
-    document.getElementById("status").textContent = browserHasGeolocation
-        ? "エラー: 位置情報サービスを利用できません。"
-        : "エラー: お使いのブラウザは位置情報に対応していません。";
+function handleLocationError(browserHasGeolocation, errorCode) { // errorCodeを追加
+    let message = "";
+    if (browserHasGeolocation) {
+        switch (errorCode) {
+            case 1: // PERMISSION_DENIED
+                message = "エラー: 位置情報の利用が拒否されました。ブラウザ設定を確認してください。";
+                break;
+            case 2: // POSITION_UNAVAILABLE
+                message = "エラー: 位置情報を利用できません。GPS信号を確認してください。";
+                break;
+            case 3: // TIMEOUT
+                message = "エラー: 位置情報の取得がタイムアウトしました。";
+                break;
+            default:
+                message = "エラー: 位置情報サービスを利用できません。";
+                break;
+        }
+    } else {
+        message = "エラー: お使いのブラウザは位置情報に対応していません。";
+    }
+    document.getElementById("status").textContent = message;
+    console.error("handleLocationError called. Code:", errorCode, "Message:", message); // コンソールにも出力
 }
