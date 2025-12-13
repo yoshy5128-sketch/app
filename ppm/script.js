@@ -44,6 +44,15 @@ function initMap() {
         selectedLocationMarker.setLatLng(mapClickLatlng).addTo(map);
         document.getElementById('status').textContent = `マップ上の ${mapClickLatlng.lat.toFixed(4)}, ${mapClickLatlng.lng.toFixed(4)} にスポットを設定できます。`;
     });
+
+    // ユーザーがマップを操作したら、現在地追跡をOFFにする
+    map.on('dragstart zoomstart', () => {
+        if (followLocation) {
+            followLocation = false;
+            document.getElementById('followLocation').checked = false;
+            document.getElementById('status').textContent = "マップ操作開始: 現在地追跡OFF";
+        }
+    });
 }
 
 // イベントリスナーの設定
@@ -54,8 +63,10 @@ function setupEventListeners() {
         if (followLocation && lastKnownPosition) {
             // 追跡がONになり、かつ現在地が分かっていれば、マップを現在地へ移動
             map.setView(lastKnownPosition, map.getZoom());
+            document.getElementById('status').textContent = "現在地追跡: ON";
+        } else if (!followLocation) {
+            document.getElementById('status').textContent = "現在地追跡: OFF";
         }
-        document.getElementById('status').textContent = `現在地追跡: ${followLocation ? 'ON' : 'OFF'}`;
     });
     document.getElementById('recenterMap').addEventListener('click', () => {
         if (lastKnownPosition) {
