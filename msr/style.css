@@ -95,6 +95,23 @@ button#addCurrentLocationAsFirstStop:hover {
     background-color: #e0a800;
 }
 
+input#addressInput {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    flex: 1 1 auto;
+    min-width: 150px;
+}
+
+button#addStopFromAddress {
+    background-color: #17a2b8;
+}
+button#addStopFromAddress:hover {
+    background-color: #138496;
+}
+
+
 #status {
     margin-top: 10px;
     font-weight: bold;

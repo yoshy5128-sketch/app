@@ -69,7 +69,8 @@ function initMap() {
 
 // --- イベントリスナーの設定 ---
 function setupEventListeners() {
-    document.getElementById('addCurrentLocationAsFirstStop').addEventListener('click', addCurrentLocationAsFirstStop); // 新しいボタンのリスナー
+    document.getElementById('addCurrentLocationAsFirstStop').addEventListener('click', addCurrentLocationAsFirstStop);
+    document.getElementById('addStopFromAddress').addEventListener('click', addStopFromAddress); // ジオコーディングボタンのリスナー
     document.getElementById('addStop').addEventListener('click', addStopAtMapCenter);
     document.getElementById('calculateRoute').addEventListener('click', calculateRoute);
     document.getElementById('clearStops').addEventListener('click', clearAllStops);
@@ -150,13 +151,71 @@ function addCurrentLocationAsFirstStop() {
     stops.unshift(newStop); // 配列の先頭に追加
     saveStops();
     renderStops();
-    // マーカーはaddStopToMapで個別に追加されるので、ここでは何もしない
-    // addStopToMap(newStop); // これを呼び出すと既存のマーカーの順番がおかしくなるので、renderStopsで再描画
     // renderStops()が呼ばれるとaddStopToMapが呼ばれるのでOK
 
     document.getElementById('status').textContent = "現在地を最初の通過点に追加しました。";
     updateRoute(); // 通過点追加時にルート再計算を試みる
 }
+
+async function addStopFromAddress() {
+    const address = document.getElementById('addressInput').value;
+    if (!address) {
+        document.getElementById('status').textContent = "住所を入力してください。";
+        return;
+    }
+    if (ORS_API_KEY === "YOUR_OPENROUTESERVICE_API_KEY" || !ORS_API_KEY) {
+        document.getElementById('status').textContent = "OpenRouteService APIキーが設定されていません！script.jsを確認してください。";
+        return;
+    }
+
+    document.getElementById('status').textContent = `"${address}"を検索中...`;
+
+    try {
+        const geocodeUrl = `https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(address)}&size=1`;
+        const response = await fetch(geocodeUrl, {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("OpenRouteService Geocoding API Error Details:", errorText);
+            throw new Error(`ジオコーディングAPIエラー: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}...`);
+        }
+
+        const data = await response.json();
+
+        if (data.features && data.features.length > 0) {
+            const firstResult = data.features[0];
+            const name = firstResult.properties.label || firstResult.properties.name || address;
+            const coordinates = firstResult.geometry.coordinates; // [lng, lat]
+
+            const newStop = {
+                id: Date.now(),
+                lat: coordinates[1],
+                lng: coordinates[0],
+                name: name
+            };
+            stops.push(newStop);
+            saveStops();
+            renderStops();
+            // addStopToMap(newStop); // renderStopsが呼ぶ
+            map.setView([newStop.lat, newStop.lng], 15); // マップをジオコーディング結果に移動
+            document.getElementById('status').textContent = `"${name}"を通過点に追加しました。`;
+            document.getElementById('addressInput').value = ''; // 入力欄をクリア
+            updateRoute();
+        } else {
+            document.getElementById('status').textContent = `"${address}"の検索結果が見つかりませんでした。`;
+        }
+
+    } catch (error) {
+        console.error("ジオコーディングエラー:", error);
+        document.getElementById('status').textContent = `住所検索に失敗しました: ${error.message}`;
+    }
+}
+
 
 function addStopAtMapCenter() {
     const mapCenter = map.getCenter();
@@ -169,7 +228,7 @@ function addStopAtMapCenter() {
     stops.push(newStop);
     saveStops();
     renderStops();
-    addStopToMap(newStop);
+    // addStopToMap(newStop); // renderStopsが呼ぶ
     document.getElementById('status').textContent = `マップの中心を通過点に追加しました: ${mapCenter.lat.toFixed(4)}, ${mapCenter.lng.toFixed(4)}`;
     updateRoute(); // 通過点追加時にルート再計算を試みる
 }
