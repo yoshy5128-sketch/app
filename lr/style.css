@@ -59,6 +59,28 @@ h1 {
     background-color: #0056b3;
 }
 
+/* 新しいスタイル */
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 1rem;
+    color: #555;
+}
+
+.checkbox-container input[type="checkbox"] {
+    width: auto; /* 全体の input スタイルを上書き */
+    margin-right: 5px;
+}
+
+button#recenterMap {
+    background-color: #007bff; /* 現在地に戻るボタンは異なる色に */
+}
+
+button#recenterMap:hover {
+    background-color: #0056b3;
+}
+
 #status {
     margin-top: 10px;
     font-weight: bold;
