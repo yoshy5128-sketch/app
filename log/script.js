@@ -35,6 +35,7 @@ function initMap() {
 
     document.getElementById("status").textContent = "マップの準備ができました。";
     setupEventListeners();
+    loadLog(); // 起動時に前回のログを自動で読み込む
 }
 
 // イベントリスナーの設定
@@ -42,6 +43,8 @@ function setupEventListeners() {
     document.getElementById("startTracking").addEventListener("click", startTracking);
     document.getElementById("stopTracking").addEventListener("click", stopTracking);
     document.getElementById("clearLogs").addEventListener("click", clearLogs);
+    document.getElementById("saveLog").addEventListener("click", saveLog); // 追加
+    document.getElementById("loadLog").addEventListener("click", loadLog); // 追加
 }
 
 // 追跡開始
@@ -79,8 +82,8 @@ function startTracking() {
             },
             {
                 enableHighAccuracy: true,
-                maximumAge: 5 * 60 * 1000,
-                timeout: 30 * 1000,
+                maximumAge: 5 * 60 * 1000, // 5分までキャッシュを許可
+                timeout: 30 * 1000, // 30秒でタイムアウト
             }
         );
     } else {
@@ -103,11 +106,53 @@ function stopTracking() {
     document.getElementById("status").textContent = "位置情報の追跡を停止しました。";
 }
 
+// ログを保存
+function saveLog() {
+    if (path.length > 0) {
+        try {
+            localStorage.setItem('gps_log_path', JSON.stringify(path));
+            document.getElementById("status").textContent = `ログを${path.length}点保存しました。`;
+            console.log("Log saved:", path);
+        } catch (e) {
+            document.getElementById("status").textContent = "ログの保存に失敗しました。";
+            console.error("Failed to save log:", e);
+        }
+    } else {
+        document.getElementById("status").textContent = "保存するログがありません。";
+    }
+}
+
+// 前回のログを読み込む
+function loadLog() {
+    const savedPathJSON = localStorage.getItem('gps_log_path');
+    if (savedPathJSON) {
+        try {
+            const savedPath = JSON.parse(savedPathJSON);
+            if (savedPath.length > 0) {
+                path = savedPath; // path配列を更新
+                polyline.setLatLngs(path); // ポリラインを更新
+                const lastPos = path[path.length - 1];
+                marker.setLatLng(lastPos); // マーカーを最終地点に移動
+                map.setView(lastPos, map.getZoom()); // マップビューを最終地点に移動
+                document.getElementById("status").textContent = `前回のログ（${path.length}点）を読み込みました。`;
+                console.log("Log loaded:", path);
+                return;
+            }
+        } catch (e) {
+            document.getElementById("status").textContent = "ログの読み込みに失敗しました。データが破損している可能性があります。";
+            console.error("Failed to load log:", e);
+        }
+    }
+    document.getElementById("status").textContent = "保存されたログはありません。";
+}
+
+
 // ログをクリア
 function clearLogs() {
     stopTracking(); // 追跡を停止
     path = []; // 経路をクリア
     polyline.setLatLngs(path); // ポリラインをリセット
+    localStorage.removeItem('gps_log_path'); // localStorageからも削除
     document.getElementById("status").textContent = "ログをクリアしました。";
 }
 
