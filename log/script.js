@@ -52,43 +52,40 @@ function startTracking() {
     }
 
     if (navigator.geolocation) {
-        document.getElementById("status").textContent = "位置情報の追跡を開始します...";
+        document.getElementById("status").textContent = "位置情報へのアクセスを要求しています...";
+        console.log("Geolocation APIを呼び出し中...");
         tracking = true;
 
         watchId = navigator.geolocation.watchPosition(
             (position) => {
-                console.log("Geolocation success:", position); // 成功時のログ追加
+                console.log("Geolocation success:", position);
                 const pos = {
                     lat: position.coords.latitude,
                     lng: position.coords.longitude,
                 };
 
-                // マーカーの位置を更新
                 marker.setLatLng([pos.lat, pos.lng]);
-                // マップの中心を現在地に移動
                 map.panTo([pos.lat, pos.lng]);
 
-                // 経路に現在地を追加
                 path.push([pos.lat, pos.lng]);
-                // ポリラインを更新
                 polyline.setLatLngs(path);
 
                 document.getElementById("status").textContent =
                     `緯度: ${pos.lat.toFixed(6)}, 経度: ${pos.lng.toFixed(6)} (精度: ${position.coords.accuracy.toFixed(2)}m)`;
             },
-            (error) => { // エラーコールバックにエラーオブジェクトを追加
-                console.error("Geolocation error:", error); // エラー時のログ追加
-                handleLocationError(true, error.code); // エラーコードを渡す
+            (error) => {
+                console.error("Geolocation error:", error);
+                handleLocationError(true, error.code);
             },
             {
                 enableHighAccuracy: true,
-                maximumAge: 5 * 60 * 1000, // 5分（300秒）までキャッシュを許可
-                timeout: 30 * 1000, // 30秒でタイムアウト
+                maximumAge: 5 * 60 * 1000,
+                timeout: 30 * 1000,
             }
         );
     } else {
-        // ブラウザがGeolocationをサポートしていない場合
-        document.getElementById("status").textContent = "お使いのブラウザは位置情報に対応していません。";
+        document.getElementById("status").textContent = "エラー: お使いのブラウザは位置情報に対応していません。";
+        console.error("Geolocation is not supported by this browser.");
     }
 }
 
