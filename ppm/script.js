@@ -13,6 +13,8 @@ const DEFAULT_LNG = 139.767125;
 
 // 現在地追跡のON/OFFを制御する変数
 let followLocation = true; // 初期値は追跡ON
+// ユーザーがマップを操作中かどうかを示すフラグ
+let userInteractingWithMap = false;
 
 // DOMが完全に読み込まれた後にマップを初期化
 document.addEventListener('DOMContentLoaded', initApp);
@@ -45,12 +47,21 @@ function initMap() {
         document.getElementById('status').textContent = `マップ上の ${mapClickLatlng.lat.toFixed(4)}, ${mapClickLatlng.lng.toFixed(4)} にスポットを設定できます。`;
     });
 
-    // ユーザーがマップを操作したら、現在地追跡をOFFにする
-    map.on('dragstart zoomstart', () => {
+    // ユーザーがマップの移動を開始したら
+    map.on('movestart zoomstart', () => {
+        userInteractingWithMap = true;
         if (followLocation) {
             followLocation = false;
             document.getElementById('followLocation').checked = false;
             document.getElementById('status').textContent = "マップ操作開始: 現在地追跡OFF";
+        }
+    });
+
+    // ユーザーがマップの移動を終了したら
+    map.on('moveend zoomend', () => {
+        userInteractingWithMap = false;
+        if (!followLocation && lastKnownPosition) {
+            document.getElementById('status').textContent += " (マップ操作終了)";
         }
     });
 }
@@ -100,7 +111,8 @@ function startLocationTracking() {
 
                 currentMarker.setLatLng(currentPos); // 現在地マーカーを更新
                 
-                if (followLocation) { // followLocationがtrueの場合のみマップの中心を現在地へ移動
+                // followLocationがtrueで、かつユーザーがマップを操作中でない場合のみマップの中心を現在地へ移動
+                if (followLocation && !userInteractingWithMap) {
                     map.setView(currentPos, map.getZoom());
                 }
             },
