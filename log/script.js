@@ -1,0 +1,119 @@
+let map;
+let marker;
+let polyline;
+let path = []; // 移動ログを保存する配列
+let watchId; // Geolocation.watchPosition()のID
+let tracking = false;
+
+// DOMが完全に読み込まれた後にマップを初期化
+document.addEventListener('DOMContentLoaded', initMap);
+
+// Leaflet Mapを初期化する関数
+function initMap() {
+    // 初期表示の中心座標 (東京駅を仮に設定)
+    const initialPos = { lat: 35.681236, lng: 139.767125 };
+
+    // マップを初期化し、中心座標とズームレベルを設定
+    map = L.map('map').setView([initialPos.lat, initialPos.lng], 15);
+
+    // OpenStreetMapのタイルレイヤーを追加
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // 現在地を示すマーカー
+    marker = L.marker([initialPos.lat, initialPos.lng]).addTo(map);
+    marker.bindPopup("現在地").openPopup();
+
+    // 移動経路を示すポリライン
+    polyline = L.polyline(path, {
+        color: 'red',
+        weight: 3,
+        opacity: 0.7,
+        smoothFactor: 1
+    }).addTo(map);
+
+    document.getElementById("status").textContent = "マップの準備ができました。";
+    setupEventListeners();
+}
+
+// イベントリスナーの設定
+function setupEventListeners() {
+    document.getElementById("startTracking").addEventListener("click", startTracking);
+    document.getElementById("stopTracking").addEventListener("click", stopTracking);
+    document.getElementById("clearLogs").addEventListener("click", clearLogs);
+}
+
+// 追跡開始
+function startTracking() {
+    if (tracking) {
+        document.getElementById("status").textContent = "すでに追跡中です。";
+        return;
+    }
+
+    if (navigator.geolocation) {
+        document.getElementById("status").textContent = "位置情報の追跡を開始します...";
+        tracking = true;
+
+        watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const pos = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                };
+
+                // マーカーの位置を更新
+                marker.setLatLng([pos.lat, pos.lng]);
+                // マップの中心を現在地に移動
+                map.panTo([pos.lat, pos.lng]);
+
+                // 経路に現在地を追加
+                path.push([pos.lat, pos.lng]);
+                // ポリラインを更新
+                polyline.setLatLngs(path);
+
+                document.getElementById("status").textContent =
+                    `緯度: ${pos.lat.toFixed(6)}, 経度: ${pos.lng.toFixed(6)} (精度: ${position.coords.accuracy.toFixed(2)}m)`;
+            },
+            () => {
+                handleLocationError(true);
+            },
+            {
+                enableHighAccuracy: true, // 高精度を要求
+                maximumAge: 0, // キャッシュを使わない
+                timeout: 5000, // 5秒でタイムアウト
+            }
+        );
+    } else {
+        // ブラウザがGeolocationをサポートしていない場合
+        document.getElementById("status").textContent = "お使いのブラウザは位置情報に対応していません。";
+    }
+}
+
+// 追跡停止
+function stopTracking() {
+    if (!tracking) {
+        document.getElementById("status").textContent = "追跡は停止しています。";
+        return;
+    }
+    if (watchId !== undefined) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = undefined;
+    }
+    tracking = false;
+    document.getElementById("status").textContent = "位置情報の追跡を停止しました。";
+}
+
+// ログをクリア
+function clearLogs() {
+    stopTracking(); // 追跡を停止
+    path = []; // 経路をクリア
+    polyline.setLatLngs(path); // ポリラインをリセット
+    document.getElementById("status").textContent = "ログをクリアしました。";
+}
+
+function handleLocationError(browserHasGeolocation) {
+    document.getElementById("status").textContent = browserHasGeolocation
+        ? "エラー: 位置情報サービスを利用できません。"
+        : "エラー: お使いのブラウザは位置情報に対応していません。";
+}

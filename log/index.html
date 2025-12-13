@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS移動ログアプリ (OpenStreetMap & Leaflet)</title>
+    <!-- Leaflet.jsのCSSを読み込み -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoCcTO9F3vE9sO+UdEvGv4fIgI5Jj9Xmrj7z9cM="
+     crossorigin=""/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>GPS 移動ログ (OpenStreetMap & Leaflet)</h1>
+    <div id="map"></div>
+    <div id="status">位置情報取得中...</div>
+    <button id="startTracking">追跡開始</button>
+    <button id="stopTracking">追跡停止</button>
+    <button id="clearLogs">ログをクリア</button>
+
+    <!-- Leaflet.jsのJavaScriptを読み込み -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjGwZGO67yKdlMynt7HNIKWGaK1VsM="
+     crossorigin=""></script>
+    <script src="script.js"></script>
+</body>
+</html>
