@@ -63,6 +63,28 @@ h1 {
     background-color: #218838;
 }
 
+/* New styles for checkbox and recenter button */
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 1rem;
+    color: #555;
+}
+
+.checkbox-container input[type="checkbox"] {
+    width: auto; /* Override general input width */
+    margin-right: 5px;
+}
+
+button#recenterMap {
+    background-color: #007bff; /* Different color for recenter */
+}
+
+button#recenterMap:hover {
+    background-color: #0056b3;
+}
+
 #status {
     margin-top: 10px;
     font-weight: bold;

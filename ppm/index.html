@@ -14,6 +14,11 @@
     <div class="controls">
         <input type="text" id="poiName" placeholder="スポット名 (必須)">
         <textarea id="poiDescription" placeholder="詳細メモ"></textarea>
+        <div class="checkbox-container">
+            <input type="checkbox" id="followLocation" checked>
+            <label for="followLocation">現在地を追跡</label>
+        </div>
+        <button id="recenterMap">現在地に移動</button>
         <button id="addPoi">この場所をスポットに追加</button>
     </div>
     <div id="status"></div>
