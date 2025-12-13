@@ -69,6 +69,7 @@ function initMap() {
 
 // --- イベントリスナーの設定 ---
 function setupEventListeners() {
+    document.getElementById('addCurrentLocationAsFirstStop').addEventListener('click', addCurrentLocationAsFirstStop); // 新しいボタンのリスナー
     document.getElementById('addStop').addEventListener('click', addStopAtMapCenter);
     document.getElementById('calculateRoute').addEventListener('click', calculateRoute);
     document.getElementById('clearStops').addEventListener('click', clearAllStops);
@@ -132,6 +133,31 @@ function startLocationTracking() {
 }
 
 // --- 通過点の管理 ---
+function addCurrentLocationAsFirstStop() {
+    if (!lastKnownPosition) {
+        document.getElementById('status').textContent = "現在地がまだ取得できていません。しばらくお待ちください。";
+        return;
+    }
+
+    const newStop = {
+        id: Date.now(),
+        lat: lastKnownPosition[0],
+        lng: lastKnownPosition[1],
+        name: `現在地`
+    };
+
+    // 既存の通過点がある場合は一番先頭に追加
+    stops.unshift(newStop); // 配列の先頭に追加
+    saveStops();
+    renderStops();
+    // マーカーはaddStopToMapで個別に追加されるので、ここでは何もしない
+    // addStopToMap(newStop); // これを呼び出すと既存のマーカーの順番がおかしくなるので、renderStopsで再描画
+    // renderStops()が呼ばれるとaddStopToMapが呼ばれるのでOK
+
+    document.getElementById('status').textContent = "現在地を最初の通過点に追加しました。";
+    updateRoute(); // 通過点追加時にルート再計算を試みる
+}
+
 function addStopAtMapCenter() {
     const mapCenter = map.getCenter();
     const newStop = {
@@ -159,6 +185,12 @@ function renderStops() {
     const stopListElement = document.getElementById('stopList');
     stopListElement.innerHTML = '';
 
+    // マップ上の既存の通過点マーカーを全てクリア
+    for (let id in stopMarkers) {
+        map.removeLayer(stopMarkers[id]);
+    }
+    stopMarkers = {}; // オブジェクトもクリア
+
     if (stops.length === 0) {
         stopListElement.innerHTML = '<li>登録された通過点はありません。</li>';
         updateRouteInfo(0, 0); // ルート情報をクリア
@@ -174,6 +206,9 @@ function renderStops() {
         `;
         listItem.querySelector('.delete-btn').addEventListener('click', deleteStop);
         stopListElement.appendChild(listItem);
+        
+        // マップにマーカーを再追加
+        addStopToMap(stop);
     });
 }
 
@@ -183,6 +218,7 @@ function deleteStop(event) {
     saveStops();
     renderStops();
 
+    // マップ上のマーカーも削除 (renderStopsで再描画されるので不要だが、念のため)
     if (stopMarkers[idToDelete]) {
         map.removeLayer(stopMarkers[idToDelete]);
         delete stopMarkers[idToDelete];
@@ -192,13 +228,13 @@ function deleteStop(event) {
 }
 
 function clearAllStops() {
-    stops.forEach(stop => {
-        if (stopMarkers[stop.id]) {
-            map.removeLayer(stopMarkers[stop.id]);
-        }
-    });
+    // マップ上の既存の通過点マーカーを全てクリア
+    for (let id in stopMarkers) {
+        map.removeLayer(stopMarkers[id]);
+    }
+    stopMarkers = {}; // オブジェクトもクリア
+
     stops = [];
-    stopMarkers = {};
     saveStops();
     renderStops();
     if (routePolyline) {
