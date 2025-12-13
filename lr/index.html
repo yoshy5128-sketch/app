@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>場所連動リマインダー</title>
+    <!-- Leaflet.jsのCSSを読み込み -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>場所連動リマインダー</h1>
+    <div id="map"></div>
+    <div class="controls">
+        <input type="text" id="reminderMessage" placeholder="リマインダーメッセージを入力">
+        <input type="number" id="radiusInput" value="100" min="50" max="1000" step="50" placeholder="半径 (メートル)">
+        <button id="setReminder">ここにリマインダーを設定</button>
+    </div>
+    <div id="status"></div>
+    <h2>登録済みリマインダー</h2>
+    <ul id="reminderList"></ul>
+
+    <!-- Leaflet.jsのJavaScriptを読み込み -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
