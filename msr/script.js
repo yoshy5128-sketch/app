@@ -235,6 +235,7 @@ async function calculateRoute() {
 
     document.getElementById('status').textContent = "ルートを計算中...";
     const coordinates = stops.map(stop => [stop.lng, stop.lat]); // ORSは[lng, lat]の順
+    console.log("ORS API: Request coordinates:", coordinates); // デバッグログ追加
 
     const requestBody = {
         coordinates: coordinates,
@@ -244,6 +245,7 @@ async function calculateRoute() {
         format: "geojson",
         instructions: false // ルート案内は不要
     };
+    console.log("ORS API: Request body:", requestBody); // デバッグログ追加
 
     try {
         const response = await fetch("https://api.openrouteservice.org/v2/directions/driving-car/geojson", {
@@ -251,17 +253,34 @@ async function calculateRoute() {
             headers: {
                 "Accept": "application/json, application/geo+json, application/gpx+xml, application/zipped-ngx",
                 "Content-Type": "application/json",
-                "Authorization": ORS_API_KEY
+                "Authorization": ORS_API_KEY // ここに正しいAPIキーを設定する
             },
             body: JSON.stringify(requestBody)
         });
+        console.log("ORS API: Response received:", response); // デバッグログ追加
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`OpenRouteService APIエラー: ${response.status} ${response.statusText} - ${errorText}`);
+            // 詳細なエラーメッセージをコンソールに出力
+            console.error("OpenRouteService API Error Details:", errorText);
+            throw new Error(`OpenRouteService APIエラー: ${response.status} ${response.statusText} - ${errorText.substring(0, 200)}...`); // 長すぎるレスポンスを切り詰める
         }
 
         const data = await response.json();
+        console.log("ORS API: Data from response.json():", data); // デバッグログ追加
+
+        // featuresが空、または存在しない場合のエラーハンドリングを追加
+        if (!data || !data.features || data.features.length === 0) {
+            console.error("OpenRouteService APIエラー: ルートが見つからないか、データが不正です。", data);
+            document.getElementById('status').textContent = `ルートが見つかりませんでした。詳細: ${data.metadata?.query?.error || '不明なエラー'}`;
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+                routePolyline = null;
+            }
+            updateRouteInfo(0, 0);
+            return;
+        }
+
         displayRoute(data);
         document.getElementById('status').textContent = "ルートを計算しました。";
     } catch (error) {
@@ -280,7 +299,8 @@ function displayRoute(geojson) {
         map.removeLayer(routePolyline); // 既存のルートを削除
     }
 
-    if (geojson.features && geojson.features.length > 0) {
+    // ここでは calculateRoute でfeaturesの存在を確認済みなので、直接アクセス
+    if (geojson.features && geojson.features.length > 0) { 
         routePolyline = L.geoJSON(geojson, {
             style: {
                 color: '#3366cc',
@@ -291,11 +311,17 @@ function displayRoute(geojson) {
 
         map.fitBounds(routePolyline.getBounds()); // ルート全体が画面に収まるように調整
 
-        const routeData = geojson.features[0].properties.segments[0];
-        const distance = routeData.distance; // メートル
-        const duration = routeData.duration; // 秒
+        // ルートデータがsegmentsを持つことを確認
+        const routeData = geojson.features[0].properties.segments && geojson.features[0].properties.segments[0];
+        if (routeData) {
+            const distance = routeData.distance; // メートル
+            const duration = routeData.duration; // 秒
 
-        updateRouteInfo(distance, duration);
+            updateRouteInfo(distance, duration);
+        } else {
+            document.getElementById('status').textContent = "ルートデータが不足しています。";
+            updateRouteInfo(0, 0);
+        }
     } else {
         document.getElementById('status').textContent = "ルートが見つかりませんでした。";
         updateRouteInfo(0, 0);
