@@ -1,0 +1,130 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f8f8f8;
+    color: #333;
+}
+
+h1 {
+    color: #007bff;
+    margin-bottom: 10px;
+}
+
+#map {
+    height: 400px;
+    width: 95%;
+    max-width: 600px;
+    margin-top: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 15px;
+    width: 95%;
+    max-width: 600px;
+}
+
+.controls input[type="text"],
+.controls textarea {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1rem;
+    width: 100%;
+    box-sizing: border-box; /* padding and border included in width */
+}
+
+.controls textarea {
+    resize: vertical; /* Allow vertical resizing */
+    min-height: 80px;
+}
+
+.controls button {
+    padding: 10px 15px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.2s;
+}
+
+.controls button:hover {
+    background-color: #218838;
+}
+
+#status {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #dc3545; /* Error color */
+    text-align: center;
+    width: 95%;
+    max-width: 600px;
+}
+
+h2 {
+    color: #007bff;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+#poiList {
+    list-style: none;
+    padding: 0;
+    width: 95%;
+    max-width: 600px;
+}
+
+#poiList li {
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    padding: 10px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+#poiList li .poi-name {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #333;
+}
+
+#poiList li .poi-description {
+    font-size: 0.9rem;
+    color: #555;
+}
+
+#poiList li .poi-location {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+#poiList li button.delete-btn {
+    align-self: flex-end; /* Align to the right within the flex column */
+    padding: 5px 10px;
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background-color 0.2s;
+}
+
+#poiList li button.delete-btn:hover {
+    background-color: #c82333;
+}

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人スポットマップ</title>
+    <!-- Leaflet.jsのCSSを読み込み -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>個人スポットマップ</h1>
+    <div id="map"></div>
+    <div class="controls">
+        <input type="text" id="poiName" placeholder="スポット名 (必須)">
+        <textarea id="poiDescription" placeholder="詳細メモ"></textarea>
+        <button id="addPoi">この場所をスポットに追加</button>
+    </div>
+    <div id="status"></div>
+    <h2>登録済みスポット</h2>
+    <ul id="poiList"></ul>
+
+    <!-- Leaflet.jsのJavaScriptを読み込み -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
