@@ -171,7 +171,7 @@ async function addStopFromAddress() {
     document.getElementById('status').textContent = `"${address}"を検索中...`;
 
     try {
-        const geocodeUrl = `https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(address)}&size=1`;
+        const geocodeUrl = `https://api.openrouteservice.org/geocode/search?api_key=${ORS_API_KEY}&text=${encodeURIComponent(address)}&country=jp&size=1`;
         const response = await fetch(geocodeUrl, {
             method: "GET",
             headers: {
