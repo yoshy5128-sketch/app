@@ -128,7 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
         videoPlayer.playbackRate = parseFloat(event.target.value);
     });
 
-
     function formatTime(time) {
         const minutes = Math.floor(time / 60);
         const seconds = Math.floor(time % 60);
@@ -153,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
         repeatStart = null;
         repeatEnd = null;
         updateRepeatDisplay();
+        // 再生速度をリセット
         playbackRateSelect.value = '1';
         videoPlayer.playbackRate = 1;
     }
