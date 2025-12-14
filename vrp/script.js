@@ -106,7 +106,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // フルスクリーン機能
     fullscreenBtn.addEventListener('click', () => {
         if (!document.fullscreenElement) {
-            playerContainer.requestFullscreen().catch(err => {
+            playerContainer.requestFullscreen().then(() => {
+                // フルスクリーン成功後、画面を横向きに固定
+                try {
+                    screen.orientation.lock('landscape');
+                } catch (e) {
+                    console.warn('画面の向きの固定に失敗しました:', e);
+                }
+            }).catch(err => {
                 alert(`フルスクリーンモードにできませんでした: ${err.message}`);
             });
         } else {
@@ -120,6 +127,12 @@ document.addEventListener('DOMContentLoaded', () => {
             fullscreenBtn.textContent = '通常画面';
         } else {
             fullscreenBtn.textContent = 'フルスクリーン';
+            // フルスクリーン解除時に画面の向きの固定を解除
+            try {
+                screen.orientation.unlock();
+            } catch (e) {
+                // エラーは無視
+            }
         }
     });
 
