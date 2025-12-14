@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GOMP3 - MP3 Player</title>
+    <title>GOM Player - Dark Mode</title>
     
     <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
 
@@ -258,153 +258,372 @@
         }
 
         async function saveCurrentPlaylist() {
-            const name = playlistNameInput.value.trim();
-            if (!name) { messageDisplay.textContent = 'プレイリスト名を入力してください。'; return; }
-            if (!directoryHandle) { messageDisplay.textContent = 'フォルダが選択されていません。'; return; }
-            if (currentPlaylist.length === 0) { messageDisplay.textContent = 'プレイリストが空です。'; return; }
 
-            const playlists = getPlaylists();
-            playlists[name] = {
-                tracks: currentPlaylist.map(t => ({ title: t.title, artist: t.artist, fileName: t.fileName })),
-                directoryName: directoryHandle.name,
-                isShuffling
-            };
-            savePlaylists(playlists);
-            renderSavedPlaylists();
-            messageDisplay.textContent = `プレイリスト「${name}」を保存しました。`;
-            currentPlaylistName = name;
-        }
+                    const name = playlistNameInput.value.trim();
 
-        async function getFileHandleByPath(rootDirHandle, path) {
-            const parts = path.split('/');
-            const fileName = parts.pop();
-            let currentDirHandle = rootDirHandle;
-            for (const part of parts) {
-                if(!part) continue;
-                currentDirHandle = await currentDirHandle.getDirectoryHandle(part);
-            }
-            return await currentDirHandle.getFileHandle(fileName);
-        }
+                    if (!name) { messageDisplay.textContent = 'プレイリスト名を入力してください。'; return; }
 
-        async function loadNamedPlaylist(name) {
-            const playlists = getPlaylists();
-            if (!playlists[name]) return;
-            const p = playlists[name];
-            
-            directoryHandle = directoryHandles[p.directoryName];
-            if (!directoryHandle) { messageDisplay.textContent = `フォルダ「${p.directoryName}」の権限を確認中...`; directoryHandle = (await idbKeyval.get(DIR_HANDLES_KEY) || {})[p.directoryName]; if(!directoryHandle) { messageDisplay.textContent = `フォルダハンドル「${p.directoryName}」が見つかりません。`; return; } }
-            if ((await directoryHandle.queryPermission({ mode: 'read' })) !== 'granted') { if ((await directoryHandle.requestPermission({ mode: 'read' })) !== 'granted') { messageDisplay.textContent = 'フォルダへのアクセスが拒否されました。'; return; } }
-            
-            directoryHandles[p.directoryName] = directoryHandle;
-            folderStatusText.textContent = `フォルダ: ${p.directoryName}`;
-            isShuffling = p.isShuffling;
-            shuffleBtn.classList.toggle('active', isShuffling);
+                    if (currentPlaylist.length === 0) { messageDisplay.textContent = 'プレイリストが空です。'; return; }
 
-            const loadedTracks = (await Promise.all(p.tracks.map(async trackInfo => {
-                try {
-                    const fileHandle = await getFileHandleByPath(directoryHandle, trackInfo.fileName);
-                    const file = await fileHandle.getFile();
-                    return { ...trackInfo, file, url: URL.createObjectURL(file) };
-                } catch(e) { console.warn(`File not found: ${trackInfo.fileName}`, e); return null; }
-            }))).filter(Boolean);
-
-            currentPlaylist = loadedTracks;
-            currentPlaylistName = name;
-            playlistNameInput.value = name;
-            localStorage.setItem(LAST_PLAYED_KEY, name);
-            renderPlaylist();
-            if (currentPlaylist.length > 0) { currentIndex = 0; loadTrack(0); }
-            messageDisplay.textContent = `プレイリスト「${name}」をロードしました。`;
-        }
         
-        function deletePlaylist(name) {
-            const playlists = getPlaylists();
-            delete playlists[name];
-            savePlaylists(playlists);
-            renderSavedPlaylists();
-            messageDisplay.textContent = `プレイリスト「${name}」を削除しました。`;
-            if (currentPlaylistName === name) {
-                 currentPlaylist = [];
-                 renderPlaylist();
-            }
-        }
-        
-        function renderPlaylist() {
-            playlistListElement.innerHTML = '';
-            playlistStatus.textContent = `（${currentPlaylist.length}曲）`;
-            if (currentPlaylist.length === 0) { playlistListElement.innerHTML = '<li class="playlist-item">リストは空です</li>'; return; }
-            currentPlaylist.forEach((track, index) => {
-                const li = document.createElement('li');
-                li.className = 'playlist-item';
-                li.dataset.index = index;
-                if (index === currentIndex) li.classList.add('is-playing');
-                li.innerHTML = `<div><div class="playlist-title">${index + 1}. ${track.title}</div><div class="playlist-artist">${track.artist} (${track.fileName})</div></div>`;
-                li.addEventListener('click', () => { currentIndex = index; loadTrack(currentIndex, true); });
-                playlistListElement.appendChild(li);
-            });
-            const playingItem = document.querySelector('.playlist-item.is-playing');
-            if (playingItem) playingItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-        
-        async function selectDirectoryAndProcessFiles(isAdding = false) {
-            try {
-                const handle = await window.showDirectoryPicker();
-                directoryHandles[handle.name] = handle;
-                directoryHandle = handle;
-                await idbKeyval.set(DIR_HANDLES_KEY, directoryHandles);
 
-                folderStatusText.textContent = `フォルダ: ${handle.name}`;
-                if (!isAdding) playlistNameInput.value = handle.name;
+                    const playlists = getPlaylists();
 
-                await processFilesFromDirectory(handle, isAdding);
-            } catch (err) { if (err.name !== 'AbortError') messageDisplay.textContent = "フォルダ選択に失敗しました。"; }
-        }
+                    playlists[name] = {
 
-        async function getAllFileHandles(dirHandle, path = '') {
-            let files = [];
-            for await (const entry of dirHandle.values()) {
-                const newPath = path ? `${path}/${entry.name}` : entry.name;
-                if (entry.kind === 'file') {
-                    files.push({ handle: entry, path: newPath });
-                } else if (entry.kind === 'directory') {
-                    files = files.concat(await getAllFileHandles(entry, newPath));
+                        tracks: currentPlaylist.map(t => ({ 
+
+                            title: t.title, 
+
+                            artist: t.artist, 
+
+                            fileName: t.fileName, 
+
+                            directoryName: t.directoryName 
+
+                        })),
+
+                        isShuffling
+
+                    };
+
+                    savePlaylists(playlists);
+
+                    renderSavedPlaylists();
+
+                    messageDisplay.textContent = `プレイリスト「${name}」を保存しました。`;
+
+                    currentPlaylistName = name;
+
                 }
-            }
-            return files;
-        }
 
-        async function processFilesFromDirectory(handle, isAdding = false) {
-            messageDisplay.textContent = "ファイルを検索中...";
-            if (!isAdding) { currentPlaylist.forEach(t => { if(t.url) URL.revokeObjectURL(t.url); }); currentPlaylist = []; }
-            
-            let allFileInfos = [];
-            if (recursiveScanCheckbox.checked) {
-                messageDisplay.textContent = "サブフォルダを検索中...";
-                allFileInfos = await getAllFileHandles(handle);
-            } else {
-                for await (const entry of handle.values()) {
-                    if (entry.kind === 'file') {
-                        allFileInfos.push({ handle: entry, path: entry.name });
+        
+
+                async function getFileHandleByPath(rootDirHandle, path) {
+
+                    const parts = path.split('/');
+
+                    const fileName = parts.pop();
+
+                    let currentDirHandle = rootDirHandle;
+
+                    for (const part of parts) {
+
+                        if(!part) continue;
+
+                        currentDirHandle = await currentDirHandle.getDirectoryHandle(part);
+
                     }
+
+                    return await currentDirHandle.getFileHandle(fileName);
+
                 }
-            }
-            
-            const tracksToProcess = allFileInfos
-                .filter(f => f.handle.name.toLowerCase().endsWith('.mp3') && !currentPlaylist.some(t => t.fileName === f.path))
-                .map(async fileInfo => {
-                    const file = await fileInfo.handle.getFile();
-                    const tags = await readTags(file);
-                    return { file, url: URL.createObjectURL(file), title: tags.title, artist: tags.artist, fileName: fileInfo.path };
-                });
 
-            const newTracks = await Promise.all(tracksToProcess);
+        
 
-            if (!isAdding) currentPlaylist = newTracks; else currentPlaylist.push(...newTracks);
-            if (isShuffling) shuffleArray(currentPlaylist);
-            renderPlaylist();
-            if (!isAdding && currentPlaylist.length > 0) { currentIndex = 0; loadTrack(0); }
-            messageDisplay.textContent = `${newTracks.length} 曲を処理しました。`;
-        }
+                async function loadNamedPlaylist(name) {
+
+                    const playlists = getPlaylists();
+
+                    if (!playlists[name]) return;
+
+                    const p = playlists[name];
+
+        
+
+                    // 1. Find all unique directories needed for this playlist
+
+                    const requiredDirs = [...new Set(p.tracks.map(t => t.directoryName))];
+
+                    
+
+                    // 2. Verify permissions for all required directories
+
+                    try {
+
+                        for (const dirName of requiredDirs) {
+
+                            let handle = directoryHandles[dirName];
+
+                            if (!handle) {
+
+                                handle = (await idbKeyval.get(DIR_HANDLES_KEY) || {})[dirName];
+
+                                if (!handle) throw new Error(`フォルダハンドル「${dirName}」が見つかりません。`);
+
+                            }
+
+                            if ((await handle.queryPermission({ mode: 'read' })) !== 'granted') {
+
+                                if ((await handle.requestPermission({ mode: 'read' })) !== 'granted') {
+
+                                    throw new Error(`フォルダ「${dirName}」へのアクセスが拒否されました。`);
+
+                                }
+
+                            }
+
+                            directoryHandles[dirName] = handle; // Cache the handle
+
+                        }
+
+                    } catch (err) {
+
+                        messageDisplay.textContent = err.message;
+
+                        return;
+
+                    }
+
+                    
+
+                    // Set the *last used* directory as the active one for UI feedback
+
+                    directoryHandle = directoryHandles[requiredDirs[requiredDirs.length - 1]];
+
+                    folderStatusText.textContent = `フォルダ: ${p.tracks.length}曲 (${requiredDirs.length}フォルダ)`;
+
+        
+
+                    isShuffling = p.isShuffling;
+
+                    shuffleBtn.classList.toggle('active', isShuffling);
+
+        
+
+                    // 3. Load tracks using the correct handle for each
+
+                    const loadedTracks = (await Promise.all(p.tracks.map(async trackInfo => {
+
+                        try {
+
+                            const rootDirHandle = directoryHandles[trackInfo.directoryName];
+
+                            if (!rootDirHandle) throw new Error(`Handle for ${trackInfo.directoryName} not ready.`);
+
+                            
+
+                            const fileHandle = await getFileHandleByPath(rootDirHandle, trackInfo.fileName);
+
+                            const file = await fileHandle.getFile();
+
+                            return { ...trackInfo, file, url: URL.createObjectURL(file) };
+
+                        } catch(e) { console.warn(`File not found: ${trackInfo.fileName} in ${trackInfo.directoryName}`, e); return null; }
+
+                    }))).filter(Boolean);
+
+        
+
+                    currentPlaylist = loadedTracks;
+
+                    currentPlaylistName = name;
+
+                    playlistNameInput.value = name;
+
+                    localStorage.setItem(LAST_PLAYED_KEY, name);
+
+                    renderPlaylist();
+
+                    if (currentPlaylist.length > 0) { currentIndex = 0; loadTrack(0); }
+
+                    messageDisplay.textContent = `プレイリスト「${name}」をロードしました。`;
+
+                }
+
+                
+
+                function deletePlaylist(name) {
+
+                    const playlists = getPlaylists();
+
+                    delete playlists[name];
+
+                    savePlaylists(playlists);
+
+                    renderSavedPlaylists();
+
+                    messageDisplay.textContent = `プレイリスト「${name}」を削除しました。`;
+
+                    if (currentPlaylistName === name) {
+
+                         currentPlaylist = [];
+
+                         renderPlaylist();
+
+                    }
+
+                }
+
+                
+
+                function renderPlaylist() {
+
+                    playlistListElement.innerHTML = '';
+
+                    playlistStatus.textContent = `（${currentPlaylist.length}曲）`;
+
+                    if (currentPlaylist.length === 0) { playlistListElement.innerHTML = '<li class="playlist-item">リストは空です</li>'; return; }
+
+                    currentPlaylist.forEach((track, index) => {
+
+                        const li = document.createElement('li');
+
+                        li.className = 'playlist-item';
+
+                        li.dataset.index = index;
+
+                        if (index === currentIndex) li.classList.add('is-playing');
+
+                        li.innerHTML = `<div><div class="playlist-title">${index + 1}. ${track.title}</div><div class="playlist-artist">${track.artist} (${track.fileName})</div></div>`;
+
+                        li.addEventListener('click', () => { currentIndex = index; loadTrack(currentIndex, true); });
+
+                        playlistListElement.appendChild(li);
+
+                    });
+
+                    const playingItem = document.querySelector('.playlist-item.is-playing');
+
+                    if (playingItem) playingItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+                }
+
+                
+
+                async function selectDirectoryAndProcessFiles(isAdding = false) {
+
+                    try {
+
+                        const handle = await window.showDirectoryPicker();
+
+                        
+
+                        directoryHandles[handle.name] = handle;
+
+                        directoryHandle = handle;
+
+                        await idbKeyval.set(DIR_HANDLES_KEY, directoryHandles);
+
+        
+
+                        folderStatusText.textContent = `フォルダ: ${handle.name}`;
+
+                        if (!isAdding) playlistNameInput.value = handle.name;
+
+        
+
+                        await processFilesFromDirectory(handle, isAdding);
+
+                    } catch (err) { if (err.name !== 'AbortError') messageDisplay.textContent = "フォルダ選択に失敗しました。"; }
+
+                }
+
+        
+
+                async function getAllFileHandles(dirHandle, path = '') {
+
+                    let files = [];
+
+                    for await (const entry of dirHandle.values()) {
+
+                        const newPath = path ? `${path}/${entry.name}` : entry.name;
+
+                        if (entry.kind === 'file') {
+
+                            files.push({ handle: entry, path: newPath });
+
+                        } else if (entry.kind === 'directory') {
+
+                            files = files.concat(await getAllFileHandles(entry, newPath));
+
+                        }
+
+                    }
+
+                    return files;
+
+                }
+
+        
+
+                async function processFilesFromDirectory(handle, isAdding = false) {
+
+                    messageDisplay.textContent = "ファイルを検索中...";
+
+                    if (!isAdding) { currentPlaylist.forEach(t => { if(t.url) URL.revokeObjectURL(t.url); }); currentPlaylist = []; }
+
+                    
+
+                    let allFileInfos = [];
+
+                    if (recursiveScanCheckbox.checked) {
+
+                        messageDisplay.textContent = "サブフォルダを検索中...";
+
+                        allFileInfos = await getAllFileHandles(handle);
+
+                    } else {
+
+                        for await (const entry of handle.values()) {
+
+                            if (entry.kind === 'file') {
+
+                                allFileInfos.push({ handle: entry, path: entry.name });
+
+                            }
+
+                        }
+
+                    }
+
+                    
+
+                    const tracksToProcess = allFileInfos
+
+                        .filter(f => f.handle.name.toLowerCase().endsWith('.mp3') && !currentPlaylist.some(t => t.fileName === f.path && t.directoryName === handle.name))
+
+                        .map(async fileInfo => {
+
+                            const file = await fileInfo.handle.getFile();
+
+                            const tags = await readTags(file);
+
+                            return { 
+
+                                file, 
+
+                                url: URL.createObjectURL(file), 
+
+                                title: tags.title, 
+
+                                artist: tags.artist, 
+
+                                fileName: fileInfo.path,
+
+                                directoryName: handle.name 
+
+                            };
+
+                        });
+
+        
+
+                    const newTracks = await Promise.all(tracksToProcess);
+
+        
+
+                    if (!isAdding) currentPlaylist = newTracks; else currentPlaylist.push(...newTracks);
+
+                    if (isShuffling) shuffleArray(currentPlaylist);
+
+                    renderPlaylist();
+
+                    if (!isAdding && currentPlaylist.length > 0) { currentIndex = 0; loadTrack(0); }
+
+                    messageDisplay.textContent = `${newTracks.length} 曲を処理しました。`;
+
+                }
 
         function loadTrack(index, andPlay = false) {
             if (index < 0 || index >= currentPlaylist.length) return;
@@ -450,5 +669,4 @@
         document.addEventListener('DOMContentLoaded', initialize);
     </script>
 </body>
-
 </html>
