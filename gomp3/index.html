@@ -3,58 +3,159 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GOM Player - Multi Playlist (Recursive)</title>
+    <title>GOM Player - Dark Mode</title>
     
     <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
 
     <style>
         :root {
-            --primary-color: #007bff;
-            --secondary-color: #6c757d;
-            --background-color: #f4f7f6;
-            --card-color: #ffffff;
-            --text-color: #333;
+            --primary-color: #0d8bff;
+            --primary-hover-color: #3aa0ff;
+            --background-color: #121212;
+            --card-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --text-secondary-color: #888;
+            --border-color: #333;
+            --danger-color: #e53935;
             --control-size: 56px;
         }
 
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--background-color); margin: 0; padding: 0; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
-        .main-app { width: 100%; max-width: 1000px; background-color: var(--card-color); box-shadow: 0 5px 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; min-height: 100vh; }
-        .playlist-sidebar { width: 100%; padding: 15px; border-bottom: 1px solid #e0e0e0; overflow-y: auto; max-height: 50vh; display: flex; flex-direction: column; }
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: var(--background-color); 
+            color: var(--text-color);
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: flex-start; 
+            min-height: 100vh; 
+        }
         
-        h3, h4 { margin-top: 10px; margin-bottom: 8px; }
-        .folder-select-area, .save-playlist-area, .saved-playlists-area { margin: 10px 0; padding: 15px; border: 1px solid #eee; border-radius: 8px; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--card-color); }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #666; }
+
+        .main-app { 
+            width: 100%; 
+            max-width: 1200px; 
+            background-color: var(--card-color); 
+            display: flex; 
+            flex-direction: column; 
+            min-height: 100vh;
+        }
+        .playlist-sidebar { 
+            width: 100%; 
+            padding: 15px; 
+            border-bottom: 1px solid var(--border-color); 
+            overflow-y: auto; /* Let the sidebar itself scroll */
+            max-height: 55vh; /* Give sidebar enough space, but ensure it's limited */
+            background-color: #181818;
+        }
+        
+        h4 { 
+            margin-top: 15px; 
+            margin-bottom: 10px; 
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            color: var(--primary-color);
+        }
+        .folder-select-area, .save-playlist-area, .saved-playlists-area { 
+            margin: 0 0 15px 0; 
+            padding: 15px; 
+            border: 1px solid var(--border-color); 
+            border-radius: 8px; 
+            background: #242424;
+        }
         
         .folder-btn-container { display: flex; gap: 10px; margin-top: 10px; }
-        .folder-btn, .save-btn { flex-grow: 1; padding: 12px 10px; background-color: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; min-width: 100px; }
-        .folder-btn:hover, .save-btn:hover { background-color: #0056b3; }
+        .folder-btn, .save-btn { 
+            flex-grow: 1; 
+            padding: 12px 10px; 
+            background-color: var(--primary-color); 
+            color: white; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: background-color 0.2s; 
+            min-width: 80px; 
+        }
+        .folder-btn:hover, .save-btn:hover { background-color: var(--primary-hover-color); }
+        .scan-options { margin-top: 12px; text-align: left; color: var(--text-secondary-color); }
         
-        #playlist-name-input { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
+        #playlist-name-input { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid var(--border-color); 
+            background-color: #333;
+            color: var(--text-color);
+            border-radius: 4px; 
+            margin-bottom: 10px; 
+        }
         
-        #playlist-list, #saved-playlists-list { list-style: none; padding: 0; margin: 10px 0 0 0; flex-grow: 1; overflow-y: auto; }
-        .playlist-item, .saved-playlist-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; border-bottom: 1px solid #eee; cursor: pointer; }
-        .saved-playlist-item .playlist-name { flex-grow: 1; }
-        .delete-playlist-btn { background: #dc3545; color: white; border: none; border-radius: 4px; padding: 5px 8px; cursor: pointer; margin-left: 10px; }
+        #playlist-list, #saved-playlists-list { 
+            list-style: none; 
+            padding: 0; 
+            margin: 0;
+        }
+        .playlist-item, .saved-playlist-item { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 10px; 
+            border-bottom: 1px solid var(--border-color); 
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .saved-playlist-item:hover, .playlist-item:hover { background-color: #2a2a2a; }
+        
+        .saved-playlist-item .playlist-name { flex-grow: 1; margin-right: 10px; }
+        .delete-playlist-btn { background: var(--danger-color); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; margin-left: 10px; font-weight: bold; line-height: 24px; text-align: center; }
 
-        .player-main { width: 100%; padding: 20px 15px; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-grow: 1; }
-        #track-title { font-size: 1.5em; margin-bottom: 3px; }
-        #track-artist { font-size: 1em; color: var(--secondary-color); margin-bottom: 15px; }
+        .player-main { 
+            width: 100%; 
+            padding: 20px;
+            text-align: center; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            flex-grow: 1; 
+        }
+        #track-title { font-size: 1.8em; margin-bottom: 5px; font-weight: 500; }
+        #track-artist { font-size: 1.1em; color: var(--text-secondary-color); margin-bottom: 20px; }
 
         .controls { display: flex; justify-content: space-around; align-items: center; width: 100%; max-width: 320px; margin: 20px 0; }
-        .control-btn { font-size: 1.8em; padding: 15px; color: var(--secondary-color); background: none; border: none; cursor: pointer; }
+        .control-btn { font-size: 1.8em; padding: 15px; color: var(--text-secondary-color); background: none; border: none; cursor: pointer; transition: color 0.2s; }
+        .control-btn:hover { color: var(--text-color); }
         #play-pause-btn { font-size: 3em; width: var(--control-size); height: var(--control-size); display: flex; justify-content: center; align-items: center; border-radius: 50%; border: 2px solid var(--primary-color); color: var(--primary-color); }
-        .seek-bar-container { width: 100%; max-width: 400px; }
-        .time-display { display: flex; justify-content: space-between; font-size: 0.9em; color: var(--secondary-color); }
+        .seek-bar-container { width: 100%; margin-top: 15px; }
+        .time-display { display: flex; justify-content: space-between; font-size: 0.9em; color: var(--text-secondary-color); margin-top: 5px; }
         #shuffle-btn.active { color: var(--primary-color); }
 
+        #seek-bar { width: 100%; -webkit-appearance: none; appearance: none; height: 5px; background: #444; border-radius: 5px; outline: none; }
+        #seek-bar::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; background: var(--primary-color); border-radius: 50%; cursor: pointer; }
+        #seek-bar::-moz-range-thumb { width: 15px; height: 15px; background: var(--primary-color); border-radius: 50%; cursor: pointer; }
+
+
         @media (min-width: 768px) {
-            .main-app { flex-direction: row; min-height: 800px; max-height: 800px; }
-            .playlist-sidebar { width: 400px; max-height: none; border-right: 1px solid #e0e0e0; border-bottom: none; }
+            .main-app { flex-direction: row; }
+            .playlist-sidebar { width: 400px; max-height: none; /* Desktop sidebar takes full height */ border-right: 1px solid var(--border-color); border-bottom: none; }
             .player-main { flex-grow: 1; }
-            #track-title { font-size: 1.8em; }
         }
 
         .playlist-item.is-playing { background-color: var(--primary-color); color: white; }
+        .playlist-item .playlist-artist, .playlist-item.is-playing .playlist-artist { color: var(--text-secondary-color); }
         .playlist-item.is-playing .playlist-artist { color: #d1e7ff; }
+        .playlist-item > div { flex-grow: 1; }
+        .playlist-title { font-weight: 500; }
+        .playlist-artist { font-size: 0.85em; opacity: 0.8; }
     </style>
 </head>
 <body>
@@ -67,6 +168,10 @@
                 <div class="folder-btn-container">
                     <button id="new-playlist-btn" class="folder-btn">🆕 新規</button>
                     <button id="add-songs-btn" class="folder-btn">➕ 追加</button>
+                </div>
+                <div class="scan-options">
+                    <input type="checkbox" id="recursive-scan-checkbox" checked>
+                    <label for="recursive-scan-checkbox">サブフォルダも検索する</label>
                 </div>
             </div>
 
@@ -98,7 +203,7 @@
                 <button class="control-btn" id="next-btn" title="次の曲">⏭</button>
             </div>
             <div class="seek-bar-container">
-                <input type="range" id="seek-bar" value="0" min="0" max="100" style="width: 100%;">
+                <input type="range" id="seek-bar" value="0" min="0" max="100">
                 <div class="time-display"><span id="current-time">0:00</span><span id="duration">0:00</span></div>
             </div>
             <div id="message" style="margin-top: 15px;"></div>
@@ -113,7 +218,8 @@
             messageDisplay = getEl('message'), trackTitle = getEl('track-title'), trackArtist = getEl('track-artist'),
             playPauseBtn = getEl('play-pause-btn'), nextBtn = getEl('next-btn'), prevBtn = getEl('prev-btn'), seekBar = getEl('seek-bar'),
             currentTimeDisplay = getEl('current-time'), durationDisplay = getEl('duration'), playlistStatus = getEl('playlist-status'),
-            savePlaylistBtn = getEl('save-playlist-btn'), playlistNameInput = getEl('playlist-name-input'), savedPlaylistsList = getEl('saved-playlists-list');
+            savePlaylistBtn = getEl('save-playlist-btn'), playlistNameInput = getEl('playlist-name-input'), 
+            savedPlaylistsList = getEl('saved-playlists-list'), recursiveScanCheckbox = getEl('recursive-scan-checkbox');
 
         let currentPlaylist = [], currentIndex = -1, isPlaying = false, isShuffling = true,
             directoryHandle = null, directoryHandles = {}, currentPlaylistName = '';
@@ -268,12 +374,22 @@
         }
 
         async function processFilesFromDirectory(handle, isAdding = false) {
-            messageDisplay.textContent = "サブフォルダを検索中...";
+            messageDisplay.textContent = "ファイルを検索中...";
             if (!isAdding) { currentPlaylist.forEach(t => { if(t.url) URL.revokeObjectURL(t.url); }); currentPlaylist = []; }
             
-            const allFileHandles = await getAllFileHandles(handle);
+            let allFileInfos = [];
+            if (recursiveScanCheckbox.checked) {
+                messageDisplay.textContent = "サブフォルダを検索中...";
+                allFileInfos = await getAllFileHandles(handle);
+            } else {
+                for await (const entry of handle.values()) {
+                    if (entry.kind === 'file') {
+                        allFileInfos.push({ handle: entry, path: entry.name });
+                    }
+                }
+            }
             
-            const tracksToProcess = allFileHandles
+            const tracksToProcess = allFileInfos
                 .filter(f => f.handle.name.toLowerCase().endsWith('.mp3') && !currentPlaylist.some(t => t.fileName === f.path))
                 .map(async fileInfo => {
                     const file = await fileInfo.handle.getFile();
@@ -297,6 +413,7 @@
             audioPlayer.src = track.url;
             trackTitle.textContent = track.title;
             trackArtist.textContent = track.artist;
+            
             audioPlayer.load();
             renderPlaylist();
             if (andPlay) { isPlaying = true; audioPlayer.play(); playPauseBtn.textContent = '⏸'; }
