@@ -127,6 +127,23 @@
             justify-content: center; 
             align-items: center; 
             flex-grow: 1; 
+            position: relative; /* For background pseudo-element */
+            isolation: isolate; /* New stacking context */
+        }
+        .player-main::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('tape.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            filter: brightness(0.5) grayscale(20%);
+            opacity: 0.3;
+            z-index: -1;
         }
         #track-title { font-size: 1.8em; margin-bottom: 5px; font-weight: 500; }
         #track-artist { font-size: 1.1em; color: var(--text-secondary-color); margin-bottom: 20px; }
@@ -137,7 +154,7 @@
         #play-pause-btn { font-size: 3em; width: var(--control-size); height: var(--control-size); display: flex; justify-content: center; align-items: center; border-radius: 50%; border: 2px solid var(--primary-color); color: var(--primary-color); }
         .seek-bar-container { width: 100%; margin-top: 15px; }
         .time-display { display: flex; justify-content: space-between; font-size: 0.9em; color: var(--text-secondary-color); margin-top: 5px; }
-        #shuffle-btn.active { color: var(--primary-color); }
+        #shuffle-btn.active, #repeat-btn.active { color: var(--primary-color); }
 
         #seek-bar { width: 100%; -webkit-appearance: none; appearance: none; height: 5px; background: #444; border-radius: 5px; outline: none; }
         #seek-bar::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; background: var(--primary-color); border-radius: 50%; cursor: pointer; }
@@ -199,6 +216,7 @@
             <div class="controls">
                 <button class="control-btn" id="prev-btn" title="前の曲">⏮</button>
                 <button class="control-btn" id="shuffle-btn" title="シャッフル">🔀</button>
+                <button class="control-btn" id="repeat-btn" title="リピート">🔁</button>
                 <button class="control-btn" id="play-pause-btn" title="再生/一時停止">▶</button>
                 <button class="control-btn" id="next-btn" title="次の曲">⏭</button>
             </div>
@@ -215,6 +233,7 @@
         const getEl = (id) => document.getElementById(id);
         const audioPlayer = getEl('audio-player'), newPlaylistBtn = getEl('new-playlist-btn'), addSongsBtn = getEl('add-songs-btn'),
             folderStatusText = getEl('folder-status-text'), playlistListElement = getEl('playlist-list'), shuffleBtn = getEl('shuffle-btn'),
+            repeatBtn = getEl('repeat-btn'),
             messageDisplay = getEl('message'), trackTitle = getEl('track-title'), trackArtist = getEl('track-artist'),
             playPauseBtn = getEl('play-pause-btn'), nextBtn = getEl('next-btn'), prevBtn = getEl('prev-btn'), seekBar = getEl('seek-bar'),
             currentTimeDisplay = getEl('current-time'), durationDisplay = getEl('duration'), playlistStatus = getEl('playlist-status'),
@@ -222,6 +241,7 @@
             savedPlaylistsList = getEl('saved-playlists-list'), recursiveScanCheckbox = getEl('recursive-scan-checkbox');
 
         let currentPlaylist = [], currentIndex = -1, isPlaying = false, isShuffling = true,
+            repeatMode = 1, // 0: off, 1: repeat all, 2: repeat one
             directoryHandle = null, directoryHandles = {}, currentPlaylistName = '';
 
         const PLAYLISTS_COLLECTION_KEY = 'mp3_playlists_collection', DIR_HANDLES_KEY = 'mp3_dir_handles', LAST_PLAYED_KEY = 'mp3_last_played';
@@ -642,7 +662,45 @@
         nextBtn.addEventListener('click', () => { if(currentPlaylist.length === 0) return; currentIndex = (currentIndex + 1) % currentPlaylist.length; loadTrack(currentIndex, isPlaying); });
         prevBtn.addEventListener('click', () => { if(currentPlaylist.length === 0) return; if(audioPlayer.currentTime > 5) audioPlayer.currentTime=0; else { currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length; loadTrack(currentIndex, isPlaying); } });
         shuffleBtn.addEventListener('click', () => { isShuffling = !isShuffling; shuffleBtn.classList.toggle('active', isShuffling); messageDisplay.textContent = `シャッフル ${isShuffling ? 'ON' : 'OFF'}`; if(isShuffling) shuffleArray(currentPlaylist); renderPlaylist(); });
-        audioPlayer.addEventListener('ended', () => nextBtn.click());
+        
+        repeatBtn.addEventListener('click', () => {
+            repeatMode = (repeatMode + 1) % 3;
+            updateRepeatState();
+        });
+
+        function updateRepeatState() {
+            audioPlayer.loop = (repeatMode === 2);
+            if (repeatMode === 0) {
+                repeatBtn.innerHTML = '🔁';
+                repeatBtn.classList.remove('active');
+                messageDisplay.textContent = 'リピート OFF';
+            } else if (repeatMode === 1) {
+                repeatBtn.innerHTML = '🔁';
+                repeatBtn.classList.add('active');
+                messageDisplay.textContent = '全曲リピート ON';
+            } else { // repeatMode === 2
+                repeatBtn.innerHTML = '🔂';
+                repeatBtn.classList.add('active');
+                messageDisplay.textContent = '1曲リピート ON';
+            }
+        }
+
+        audioPlayer.addEventListener('ended', () => {
+            if (audioPlayer.loop) return; // Browser handles 'repeat one'
+
+            const isLastTrack = currentIndex === currentPlaylist.length - 1;
+
+            if (repeatMode === 0 && isLastTrack) {
+                // Repeat is off and it's the last track, so stop.
+                isPlaying = false;
+                playPauseBtn.textContent = '▶';
+                renderPlaylist();
+                messageDisplay.textContent = 'プレイリストの再生が終了しました。';
+            } else {
+                // Otherwise (repeat all is on, or it's not the last track), go to next.
+                nextBtn.click();
+            }
+        });
         audioPlayer.addEventListener('loadedmetadata', () => { durationDisplay.textContent = formatTime(audioPlayer.duration); seekBar.max = audioPlayer.duration; });
         audioPlayer.addEventListener('timeupdate', () => { currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime); if (!seekBar.isDragging) seekBar.value = audioPlayer.currentTime; });
         seekBar.addEventListener('input', () => audioPlayer.currentTime = seekBar.value);
@@ -663,6 +721,7 @@
                 [newPlaylistBtn, addSongsBtn, savePlaylistBtn, playlistNameInput].forEach(el => el.style.display = 'none');
             }
             shuffleBtn.classList.toggle('active', isShuffling);
+            updateRepeatState();
             renderPlaylist(); 
         }
 
