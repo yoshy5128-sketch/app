@@ -70,7 +70,7 @@ function initMap() {
 // --- イベントリスナーの設定 ---
 function setupEventListeners() {
     document.getElementById('addCurrentLocationAsFirstStop').addEventListener('click', addCurrentLocationAsFirstStop);
-    document.getElementById('addStopFromAddress').addEventListener('click', addStopFromAddress); // ジオコーディングボタンのリスナー
+    document.getElementById('addStopFromAddress').addEventListener('click', addStopFromAddress);
     document.getElementById('addStop').addEventListener('click', addStopAtMapCenter);
     document.getElementById('calculateRoute').addEventListener('click', calculateRoute);
     document.getElementById('clearStops').addEventListener('click', clearAllStops);
@@ -151,7 +151,6 @@ function addCurrentLocationAsFirstStop() {
     stops.unshift(newStop); // 配列の先頭に追加
     saveStops();
     renderStops();
-    // renderStops()が呼ばれるとaddStopToMapが呼ばれるのでOK
 
     document.getElementById('status').textContent = "現在地を最初の通過点に追加しました。";
     updateRoute(); // 通過点追加時にルート再計算を試みる
@@ -201,7 +200,6 @@ async function addStopFromAddress() {
             stops.push(newStop);
             saveStops();
             renderStops();
-            // addStopToMap(newStop); // renderStopsが呼ぶ
             map.setView([newStop.lat, newStop.lng], 15); // マップをジオコーディング結果に移動
             document.getElementById('status').textContent = `"${name}"を通過点に追加しました。`;
             document.getElementById('addressInput').value = ''; // 入力欄をクリア
@@ -228,7 +226,6 @@ function addStopAtMapCenter() {
     stops.push(newStop);
     saveStops();
     renderStops();
-    // addStopToMap(newStop); // renderStopsが呼ぶ
     document.getElementById('status').textContent = `マップの中心を通過点に追加しました: ${mapCenter.lat.toFixed(4)}, ${mapCenter.lng.toFixed(4)}`;
     updateRoute(); // 通過点追加時にルート再計算を試みる
 }
@@ -277,11 +274,6 @@ function deleteStop(event) {
     saveStops();
     renderStops();
 
-    // マップ上のマーカーも削除 (renderStopsで再描画されるので不要だが、念のため)
-    if (stopMarkers[idToDelete]) {
-        map.removeLayer(stopMarkers[idToDelete]);
-        delete stopMarkers[idToDelete];
-    }
     document.getElementById('status').textContent = "通過点を削除しました。";
     updateRoute(); // 通過点削除時にルート再計算を試みる
 }
@@ -407,7 +399,7 @@ function displayRoute(geojson) {
         map.fitBounds(routePolyline.getBounds()); // ルート全体が画面に収まるように調整
 
         // ルートデータがproperties.summaryを持つことを確認
-        const summaryData = geojson.features[0].properties.summary; // ★ここを変更
+        const summaryData = geojson.features[0].properties.summary;
         if (summaryData) {
             const distance = summaryData.distance; // メートル
             const duration = summaryData.duration; // 秒
