@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GOM Player - Multi Playlist (Recursive)</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --background-color: #f4f7f6;
+            --card-color: #ffffff;
+            --text-color: #333;
+            --control-size: 56px;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--background-color); margin: 0; padding: 0; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+        .main-app { width: 100%; max-width: 1000px; background-color: var(--card-color); box-shadow: 0 5px 20px rgba(0,0,0,0.1); display: flex; flex-direction: column; min-height: 100vh; }
+        .playlist-sidebar { width: 100%; padding: 15px; border-bottom: 1px solid #e0e0e0; overflow-y: auto; max-height: 50vh; display: flex; flex-direction: column; }
+        
+        h3, h4 { margin-top: 10px; margin-bottom: 8px; }
+        .folder-select-area, .save-playlist-area, .saved-playlists-area { margin: 10px 0; padding: 15px; border: 1px solid #eee; border-radius: 8px; }
+        
+        .folder-btn-container { display: flex; gap: 10px; margin-top: 10px; }
+        .folder-btn, .save-btn { flex-grow: 1; padding: 12px 10px; background-color: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; min-width: 100px; }
+        .folder-btn:hover, .save-btn:hover { background-color: #0056b3; }
+        
+        #playlist-name-input { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; }
+        
+        #playlist-list, #saved-playlists-list { list-style: none; padding: 0; margin: 10px 0 0 0; flex-grow: 1; overflow-y: auto; }
+        .playlist-item, .saved-playlist-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .saved-playlist-item .playlist-name { flex-grow: 1; }
+        .delete-playlist-btn { background: #dc3545; color: white; border: none; border-radius: 4px; padding: 5px 8px; cursor: pointer; margin-left: 10px; }
+
+        .player-main { width: 100%; padding: 20px 15px; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; flex-grow: 1; }
+        #track-title { font-size: 1.5em; margin-bottom: 3px; }
+        #track-artist { font-size: 1em; color: var(--secondary-color); margin-bottom: 15px; }
+
+        .controls { display: flex; justify-content: space-around; align-items: center; width: 100%; max-width: 320px; margin: 20px 0; }
+        .control-btn { font-size: 1.8em; padding: 15px; color: var(--secondary-color); background: none; border: none; cursor: pointer; }
+        #play-pause-btn { font-size: 3em; width: var(--control-size); height: var(--control-size); display: flex; justify-content: center; align-items: center; border-radius: 50%; border: 2px solid var(--primary-color); color: var(--primary-color); }
+        .seek-bar-container { width: 100%; max-width: 400px; }
+        .time-display { display: flex; justify-content: space-between; font-size: 0.9em; color: var(--secondary-color); }
+        #shuffle-btn.active { color: var(--primary-color); }
+
+        @media (min-width: 768px) {
+            .main-app { flex-direction: row; min-height: 800px; max-height: 800px; }
+            .playlist-sidebar { width: 400px; max-height: none; border-right: 1px solid #e0e0e0; border-bottom: none; }
+            .player-main { flex-grow: 1; }
+            #track-title { font-size: 1.8em; }
+        }
+
+        .playlist-item.is-playing { background-color: var(--primary-color); color: white; }
+        .playlist-item.is-playing .playlist-artist { color: #d1e7ff; }
+    </style>
+</head>
+<body>
+
+    <div class="main-app">
+        <div class="playlist-sidebar">
+            <div class="folder-select-area">
+                <h4>フォルダ操作</h4>
+                <p id="folder-status-text">フォルダを選択してください。</p>
+                <div class="folder-btn-container">
+                    <button id="new-playlist-btn" class="folder-btn">🆕 新規</button>
+                    <button id="add-songs-btn" class="folder-btn">➕ 追加</button>
+                </div>
+            </div>
+
+            <div class="save-playlist-area">
+                <h4>プレイリストを保存</h4>
+                <input type="text" id="playlist-name-input" placeholder="プレイリスト名を入力...">
+                <button id="save-playlist-btn" class="save-btn">💾 現在のリストを保存</button>
+            </div>
+            
+            <div class="saved-playlists-area">
+                <h4>保存済みプレイリスト</h4>
+                <ul id="saved-playlists-list"></ul>
+            </div>
+            
+            <h4>再生中リスト <span id="playlist-status">（0曲）</span></h4>
+            <ul class="playlist-list" id="playlist-list"></ul>
+        </div>
+        
+        <div class="player-main">
+            <h2>MP3 Player</h2>
+            <div id="track-info">
+                <div id="track-title">曲名</div>
+                <div id="track-artist">アーティスト名</div>
+            </div>
+            <div class="controls">
+                <button class="control-btn" id="prev-btn" title="前の曲">⏮</button>
+                <button class="control-btn" id="shuffle-btn" title="シャッフル">🔀</button>
+                <button class="control-btn" id="play-pause-btn" title="再生/一時停止">▶</button>
+                <button class="control-btn" id="next-btn" title="次の曲">⏭</button>
+            </div>
+            <div class="seek-bar-container">
+                <input type="range" id="seek-bar" value="0" min="0" max="100" style="width: 100%;">
+                <div class="time-display"><span id="current-time">0:00</span><span id="duration">0:00</span></div>
+            </div>
+            <div id="message" style="margin-top: 15px;"></div>
+            <audio id="audio-player"></audio>
+        </div>
+    </div>
+
+    <script>
+        const getEl = (id) => document.getElementById(id);
+        const audioPlayer = getEl('audio-player'), newPlaylistBtn = getEl('new-playlist-btn'), addSongsBtn = getEl('add-songs-btn'),
+            folderStatusText = getEl('folder-status-text'), playlistListElement = getEl('playlist-list'), shuffleBtn = getEl('shuffle-btn'),
+            messageDisplay = getEl('message'), trackTitle = getEl('track-title'), trackArtist = getEl('track-artist'),
+            playPauseBtn = getEl('play-pause-btn'), nextBtn = getEl('next-btn'), prevBtn = getEl('prev-btn'), seekBar = getEl('seek-bar'),
+            currentTimeDisplay = getEl('current-time'), durationDisplay = getEl('duration'), playlistStatus = getEl('playlist-status'),
+            savePlaylistBtn = getEl('save-playlist-btn'), playlistNameInput = getEl('playlist-name-input'), savedPlaylistsList = getEl('saved-playlists-list');
+
+        let currentPlaylist = [], currentIndex = -1, isPlaying = false, isShuffling = true,
+            directoryHandle = null, directoryHandles = {}, currentPlaylistName = '';
+
+        const PLAYLISTS_COLLECTION_KEY = 'mp3_playlists_collection', DIR_HANDLES_KEY = 'mp3_dir_handles', LAST_PLAYED_KEY = 'mp3_last_played';
+
+        const idbKeyval = {
+            db: null,
+            getDb() { if (this.db) return Promise.resolve(this.db); return new Promise((resolve, reject) => { const req = indexedDB.open('mp3-player-db', 1); req.onupgradeneeded = () => req.result.createObjectStore('keyval'); req.onsuccess = () => { this.db = req.result; resolve(this.db); }; req.onerror = () => reject(req.error); }); },
+            async get(key) { const db = await this.getDb(); return new Promise(r => db.transaction('keyval').objectStore('keyval').get(key).onsuccess = e => r(e.target.result)); },
+            async set(key, val) { const db = await this.getDb(); return new Promise(r => db.transaction('keyval', 'readwrite').objectStore('keyval').put(val, key).onsuccess = r); }
+        };
+
+        function formatTime(s) { if(isNaN(s)) return '0:00'; const m = Math.floor(s/60); return `${m}:${String(Math.floor(s%60)).padStart(2, '0')}`; }
+        function shuffleArray(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } }
+        function readTags(file) { return new Promise(r => { const d_t = file.name.replace(/\.[^/.]+$/, "") || 'Unknown'; if (window.jsmediatags) window.jsmediatags.read(file, { onSuccess: t => r({ title: t.tags.title || d_t, artist: t.tags.artist || 'Unknown' }), onError: () => r({ title: d_t, artist: 'Unknown' }) }); else r({ title: d_t, artist: 'Unknown' }); }); }
+        
+        function getPlaylists() { return JSON.parse(localStorage.getItem(PLAYLISTS_COLLECTION_KEY) || '{}'); }
+        function savePlaylists(playlists) { localStorage.setItem(PLAYLISTS_COLLECTION_KEY, JSON.stringify(playlists)); }
+
+        function renderSavedPlaylists() {
+            const playlists = getPlaylists();
+            savedPlaylistsList.innerHTML = '';
+            for (const name in playlists) {
+                const li = document.createElement('li');
+                li.className = 'saved-playlist-item';
+                li.innerHTML = `<span class="playlist-name">${name} (${playlists[name].tracks.length}曲)</span>`;
+                li.addEventListener('click', () => loadNamedPlaylist(name));
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-playlist-btn';
+                deleteBtn.textContent = '✖';
+                deleteBtn.onclick = (e) => { e.stopPropagation(); deletePlaylist(name); };
+                li.appendChild(deleteBtn);
+                savedPlaylistsList.appendChild(li);
+            }
+        }
+
+        async function saveCurrentPlaylist() {
+            const name = playlistNameInput.value.trim();
+            if (!name) { messageDisplay.textContent = 'プレイリスト名を入力してください。'; return; }
+            if (!directoryHandle) { messageDisplay.textContent = 'フォルダが選択されていません。'; return; }
+            if (currentPlaylist.length === 0) { messageDisplay.textContent = 'プレイリストが空です。'; return; }
+
+            const playlists = getPlaylists();
+            playlists[name] = {
+                tracks: currentPlaylist.map(t => ({ title: t.title, artist: t.artist, fileName: t.fileName })),
+                directoryName: directoryHandle.name,
+                isShuffling
+            };
+            savePlaylists(playlists);
+            renderSavedPlaylists();
+            messageDisplay.textContent = `プレイリスト「${name}」を保存しました。`;
+            currentPlaylistName = name;
+        }
+
+        async function getFileHandleByPath(rootDirHandle, path) {
+            const parts = path.split('/');
+            const fileName = parts.pop();
+            let currentDirHandle = rootDirHandle;
+            for (const part of parts) {
+                if(!part) continue;
+                currentDirHandle = await currentDirHandle.getDirectoryHandle(part);
+            }
+            return await currentDirHandle.getFileHandle(fileName);
+        }
+
+        async function loadNamedPlaylist(name) {
+            const playlists = getPlaylists();
+            if (!playlists[name]) return;
+            const p = playlists[name];
+            
+            directoryHandle = directoryHandles[p.directoryName];
+            if (!directoryHandle) { messageDisplay.textContent = `フォルダ「${p.directoryName}」の権限を確認中...`; directoryHandle = (await idbKeyval.get(DIR_HANDLES_KEY) || {})[p.directoryName]; if(!directoryHandle) { messageDisplay.textContent = `フォルダハンドル「${p.directoryName}」が見つかりません。`; return; } }
+            if ((await directoryHandle.queryPermission({ mode: 'read' })) !== 'granted') { if ((await directoryHandle.requestPermission({ mode: 'read' })) !== 'granted') { messageDisplay.textContent = 'フォルダへのアクセスが拒否されました。'; return; } }
+            
+            directoryHandles[p.directoryName] = directoryHandle;
+            folderStatusText.textContent = `フォルダ: ${p.directoryName}`;
+            isShuffling = p.isShuffling;
+            shuffleBtn.classList.toggle('active', isShuffling);
+
+            const loadedTracks = (await Promise.all(p.tracks.map(async trackInfo => {
+                try {
+                    const fileHandle = await getFileHandleByPath(directoryHandle, trackInfo.fileName);
+                    const file = await fileHandle.getFile();
+                    return { ...trackInfo, file, url: URL.createObjectURL(file) };
+                } catch(e) { console.warn(`File not found: ${trackInfo.fileName}`, e); return null; }
+            }))).filter(Boolean);
+
+            currentPlaylist = loadedTracks;
+            currentPlaylistName = name;
+            playlistNameInput.value = name;
+            localStorage.setItem(LAST_PLAYED_KEY, name);
+            renderPlaylist();
+            if (currentPlaylist.length > 0) { currentIndex = 0; loadTrack(0); }
+            messageDisplay.textContent = `プレイリスト「${name}」をロードしました。`;
+        }
+        
+        function deletePlaylist(name) {
+            const playlists = getPlaylists();
+            delete playlists[name];
+            savePlaylists(playlists);
+            renderSavedPlaylists();
+            messageDisplay.textContent = `プレイリスト「${name}」を削除しました。`;
+            if (currentPlaylistName === name) {
+                 currentPlaylist = [];
+                 renderPlaylist();
+            }
+        }
+        
+        function renderPlaylist() {
+            playlistListElement.innerHTML = '';
+            playlistStatus.textContent = `（${currentPlaylist.length}曲）`;
+            if (currentPlaylist.length === 0) { playlistListElement.innerHTML = '<li class="playlist-item">リストは空です</li>'; return; }
+            currentPlaylist.forEach((track, index) => {
+                const li = document.createElement('li');
+                li.className = 'playlist-item';
+                li.dataset.index = index;
+                if (index === currentIndex) li.classList.add('is-playing');
+                li.innerHTML = `<div><div class="playlist-title">${index + 1}. ${track.title}</div><div class="playlist-artist">${track.artist} (${track.fileName})</div></div>`;
+                li.addEventListener('click', () => { currentIndex = index; loadTrack(currentIndex, true); });
+                playlistListElement.appendChild(li);
+            });
+            const playingItem = document.querySelector('.playlist-item.is-playing');
+            if (playingItem) playingItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        async function selectDirectoryAndProcessFiles(isAdding = false) {
+            try {
+                const handle = await window.showDirectoryPicker();
+                directoryHandles[handle.name] = handle;
+                directoryHandle = handle;
+                await idbKeyval.set(DIR_HANDLES_KEY, directoryHandles);
+
+                folderStatusText.textContent = `フォルダ: ${handle.name}`;
+                if (!isAdding) playlistNameInput.value = handle.name;
+
+                await processFilesFromDirectory(handle, isAdding);
+            } catch (err) { if (err.name !== 'AbortError') messageDisplay.textContent = "フォルダ選択に失敗しました。"; }
+        }
+
+        async function getAllFileHandles(dirHandle, path = '') {
+            let files = [];
+            for await (const entry of dirHandle.values()) {
+                const newPath = path ? `${path}/${entry.name}` : entry.name;
+                if (entry.kind === 'file') {
+                    files.push({ handle: entry, path: newPath });
+                } else if (entry.kind === 'directory') {
+                    files = files.concat(await getAllFileHandles(entry, newPath));
+                }
+            }
+            return files;
+        }
+
+        async function processFilesFromDirectory(handle, isAdding = false) {
+            messageDisplay.textContent = "サブフォルダを検索中...";
+            if (!isAdding) { currentPlaylist.forEach(t => { if(t.url) URL.revokeObjectURL(t.url); }); currentPlaylist = []; }
+            
+            const allFileHandles = await getAllFileHandles(handle);
+            
+            const tracksToProcess = allFileHandles
+                .filter(f => f.handle.name.toLowerCase().endsWith('.mp3') && !currentPlaylist.some(t => t.fileName === f.path))
+                .map(async fileInfo => {
+                    const file = await fileInfo.handle.getFile();
+                    const tags = await readTags(file);
+                    return { file, url: URL.createObjectURL(file), title: tags.title, artist: tags.artist, fileName: fileInfo.path };
+                });
+
+            const newTracks = await Promise.all(tracksToProcess);
+
+            if (!isAdding) currentPlaylist = newTracks; else currentPlaylist.push(...newTracks);
+            if (isShuffling) shuffleArray(currentPlaylist);
+            renderPlaylist();
+            if (!isAdding && currentPlaylist.length > 0) { currentIndex = 0; loadTrack(0); }
+            messageDisplay.textContent = `${newTracks.length} 曲を処理しました。`;
+        }
+
+        function loadTrack(index, andPlay = false) {
+            if (index < 0 || index >= currentPlaylist.length) return;
+            const track = currentPlaylist[index];
+            if (audioPlayer.src) URL.revokeObjectURL(audioPlayer.src);
+            audioPlayer.src = track.url;
+            trackTitle.textContent = track.title;
+            trackArtist.textContent = track.artist;
+            audioPlayer.load();
+            renderPlaylist();
+            if (andPlay) { isPlaying = true; audioPlayer.play(); playPauseBtn.textContent = '⏸'; }
+        }
+        
+        playPauseBtn.addEventListener('click', () => { if (currentPlaylist.length === 0) return; isPlaying = !isPlaying; if (isPlaying) audioPlayer.play(); else audioPlayer.pause(); playPauseBtn.textContent = isPlaying ? '⏸' : '▶'; });
+        nextBtn.addEventListener('click', () => { if(currentPlaylist.length === 0) return; currentIndex = (currentIndex + 1) % currentPlaylist.length; loadTrack(currentIndex, isPlaying); });
+        prevBtn.addEventListener('click', () => { if(currentPlaylist.length === 0) return; if(audioPlayer.currentTime > 5) audioPlayer.currentTime=0; else { currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length; loadTrack(currentIndex, isPlaying); } });
+        shuffleBtn.addEventListener('click', () => { isShuffling = !isShuffling; shuffleBtn.classList.toggle('active', isShuffling); messageDisplay.textContent = `シャッフル ${isShuffling ? 'ON' : 'OFF'}`; if(isShuffling) shuffleArray(currentPlaylist); renderPlaylist(); });
+        audioPlayer.addEventListener('ended', () => nextBtn.click());
+        audioPlayer.addEventListener('loadedmetadata', () => { durationDisplay.textContent = formatTime(audioPlayer.duration); seekBar.max = audioPlayer.duration; });
+        audioPlayer.addEventListener('timeupdate', () => { currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime); if (!seekBar.isDragging) seekBar.value = audioPlayer.currentTime; });
+        seekBar.addEventListener('input', () => audioPlayer.currentTime = seekBar.value);
+        
+        async function initialize() {
+            if ('showDirectoryPicker' in window) {
+                newPlaylistBtn.addEventListener('click', () => selectDirectoryAndProcessFiles(false));
+                addSongsBtn.addEventListener('click', () => selectDirectoryAndProcessFiles(true));
+                savePlaylistBtn.addEventListener('click', saveCurrentPlaylist);
+                
+                directoryHandles = await idbKeyval.get(DIR_HANDLES_KEY) || {};
+                renderSavedPlaylists();
+                const lastPlayed = localStorage.getItem(LAST_PLAYED_KEY);
+                if (lastPlayed) { await loadNamedPlaylist(lastPlayed); }
+                else { messageDisplay.textContent = "ようこそ！「新規」から音楽フォルダを選択してください。"; }
+            } else {
+                folderStatusText.textContent = "お使いのブラウザはこの機能に非対応です。";
+                [newPlaylistBtn, addSongsBtn, savePlaylistBtn, playlistNameInput].forEach(el => el.style.display = 'none');
+            }
+            shuffleBtn.classList.toggle('active', isShuffling);
+            renderPlaylist(); 
+        }
+
+        document.addEventListener('DOMContentLoaded', initialize);
+    </script>
+</body>
+</html>
