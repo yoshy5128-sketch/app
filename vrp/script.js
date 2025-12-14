@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearRepeatBtn = document.getElementById('clearRepeatBtn');
     const repeatDisplay = document.getElementById('repeat-display');
     const fullscreenBtn = document.getElementById('fullscreenBtn');
+    const playbackRateSelect = document.getElementById('playbackRateSelect');
 
     let repeatStart = null;
     let repeatEnd = null;
@@ -122,6 +123,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // 再生速度の変更
+    playbackRateSelect.addEventListener('change', (event) => {
+        videoPlayer.playbackRate = parseFloat(event.target.value);
+    });
+
 
     function formatTime(time) {
         const minutes = Math.floor(time / 60);
@@ -147,5 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
         repeatStart = null;
         repeatEnd = null;
         updateRepeatDisplay();
+        playbackRateSelect.value = '1';
+        videoPlayer.playbackRate = 1;
     }
 });
