@@ -1,0 +1,124 @@
+body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+h1 {
+    font-size: 1.5em;
+    text-align: center;
+}
+
+#player-container {
+    width: 100%;
+    max-width: 800px;
+    background-color: #000; /* 黒に変更 */
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-sizing: border-box;
+}
+
+#videoPlayer {
+    width: 100%;
+    background-color: #000;
+    border-radius: 4px;
+}
+
+#controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+#playPauseBtn, #fullscreenBtn {
+    padding: 8px 12px;
+    border: none;
+    background-color: #007bff;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+#playPauseBtn:hover, #fullscreenBtn:hover {
+    background-color: #0056b3;
+}
+
+#seekBar {
+    flex-grow: 1;
+    min-width: 100px; /* シークバーが縮みすぎないように */
+}
+
+#time-display {
+    font-size: 0.9em;
+    color: white; /* 白に変更 */
+    white-space: nowrap; /* 時間表示が改行されないように */
+}
+
+#repeat-controls {
+    display: flex;
+    flex-wrap: wrap; /* 小さい画面で折り返すように */
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+#repeat-controls button {
+     padding: 8px 12px;
+     border: none;
+     background-color: #6c757d;
+     color: white;
+     border-radius: 4px;
+     cursor: pointer;
+}
+
+#repeat-controls button:hover {
+    background-color: #5a6268;
+}
+
+#repeat-display {
+    font-size: 0.9em;
+    color: white; /* 白に変更 */
+    margin-left: auto; /* 右寄せにする */
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 600px) {
+    body {
+        padding: 5px;
+    }
+
+    #player-container {
+        padding: 10px;
+    }
+
+    h1 {
+        font-size: 1.2em;
+    }
+    
+    #controls {
+        flex-direction: column;
+        align-items: stretch; /* コントロールを幅いっぱいに広げる */
+    }
+
+    #repeat-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #repeat-display {
+        margin-left: 0;
+        margin-top: 10px;
+        text-align: center;
+    }
+}
