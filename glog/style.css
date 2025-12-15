@@ -5,13 +5,12 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* スマホでのスクロールバウンス防止 */
     overscroll-behavior: none;
     background-color: #f9f9f9;
 }
 
 #map {
-    height: 55vh; /* 画面の半分強をマップに */
+    height: 55vh; 
     width: 95%;
     max-width: 800px;
     margin-top: 10px;
@@ -29,7 +28,6 @@ body {
     color: #333;
 }
 
-/* ボタン類のレイアウト調整 */
 .controls-group {
     display: flex;
     justify-content: center;
@@ -46,11 +44,9 @@ button {
     border: 1px solid #ccc;
     background-color: #fff;
     border-radius: 5px;
-    /* タッチデバイスでの操作性向上 */
     touch-action: manipulation; 
 }
 
-/* 重要なボタンの色分け */
 .btn-primary {
     background-color: #4CAF50;
     color: white;
@@ -64,6 +60,10 @@ button {
     font-weight: bold;
 }
 .btn-dimmer {
+    /* 解除ボタンをオーバーレイより上に表示するために設定 */
+    position: relative; 
+    z-index: 10001; /* オーバーレイ(9999)よりも大きい値を設定 */
+    
     background-color: #222;
     color: #ddd;
     border: none;
@@ -74,19 +74,24 @@ button {
     margin-bottom: 10px;
 }
 
-/* 省電力モード（黒い幕） */
+/* 省電力モード（黒い幕）の調整 */
 #dimmerOverlay {
-    display: none; /* 通常時は非表示 */
+    display: none; 
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    height: 100%;
-    background-color: black;
+    height: 100%; /* 画面全体を覆う */
+    
+    background-color: rgba(0, 0, 0, 0.95); /* 少し半透明にしてうっすら下が見えるように */
     color: #666;
-    z-index: 9999; /* 最前面 */
+    z-index: 9999; /* 他の要素よりは前、解除ボタンよりは奥 */
+    
     flex-direction: column;
-    justify-content: center;
+    /* メッセージがボタンの上に来るように調整 */
+    justify-content: flex-start; 
+    padding-top: 30vh; /* 画面の上から30%の位置にメッセージを表示 */
+    
     align-items: center;
     user-select: none;
 }
