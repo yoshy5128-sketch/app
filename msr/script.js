@@ -1,5 +1,5 @@
 // --- OpenRouteService API Key (ここにあなたのAPIキーを貼り付けてください) ---
-const ORS_API_KEY = "ここにコードを入れる"; 
+const ORS_API_KEY = "ここにkeyを入れる"; 
 // 例: "5b3ce3597851110001cf6248b61e2e13a9674066a506720d5885f8c8"
 
 // --- グローバル変数 ---
