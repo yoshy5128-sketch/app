@@ -117,6 +117,8 @@
         
         .saved-playlist-item .playlist-name { flex-grow: 1; margin-right: 10px; }
         .delete-playlist-btn { background: var(--danger-color); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; margin-left: 10px; font-weight: bold; line-height: 24px; text-align: center; }
+        .delete-track-btn { background: none; border: none; color: var(--text-secondary-color); cursor: pointer; font-size: 1.2em; padding: 0 5px; margin-left: 10px; }
+        .delete-track-btn:hover { color: var(--danger-color); }
 
         .player-main { 
             width: 100%; 
@@ -173,6 +175,7 @@
         .playlist-item > div { flex-grow: 1; }
         .playlist-title { font-weight: 500; }
         .playlist-artist { font-size: 0.85em; opacity: 0.8; }
+        .playlist-item.drag-over { border-bottom: 2px solid var(--primary-hover-color); }
     </style>
 </head>
 <body>
@@ -242,6 +245,7 @@
 
         let currentPlaylist = [], currentIndex = -1, isPlaying = false, isShuffling = true,
             repeatMode = 1, // 0: off, 1: repeat all, 2: repeat one
+            dragStartIndex,
             directoryHandle = null, directoryHandles = {}, currentPlaylistName = '';
 
         const PLAYLISTS_COLLECTION_KEY = 'mp3_playlists_collection', DIR_HANDLES_KEY = 'mp3_dir_handles', LAST_PLAYED_KEY = 'mp3_last_played';
@@ -477,37 +481,112 @@
 
                 
 
-                function renderPlaylist() {
+function renderPlaylist() {
+            playlistListElement.innerHTML = '';
+            playlistStatus.textContent = `（${currentPlaylist.length}曲）`;
+            if (currentPlaylist.length === 0) { 
+                playlistListElement.innerHTML = '<li class="playlist-item">リストは空です</li>';
+                audioPlayer.src = '';
+                trackTitle.textContent = '曲名';
+                trackArtist.textContent = 'アーティスト名';
+                return;
+            }
 
-                    playlistListElement.innerHTML = '';
+            currentPlaylist.forEach((track, index) => {
+                const li = document.createElement('li');
+                li.className = 'playlist-item';
+                li.dataset.index = index;
+                li.setAttribute('draggable', true);
 
-                    playlistStatus.textContent = `（${currentPlaylist.length}曲）`;
+                if (index === currentIndex) li.classList.add('is-playing');
+                
+                const trackInfoDiv = document.createElement('div');
+                trackInfoDiv.style.flexGrow = '1'; // Make info div take up space
+                trackInfoDiv.innerHTML = `<div class="playlist-title">${index + 1}. ${track.title}</div><div class="playlist-artist">${track.artist} (${track.fileName})</div>`;
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-track-btn';
+                deleteBtn.innerHTML = '✖';
+                deleteBtn.title = 'リストから削除';
+                
+                // --- Event Listeners ---
+                li.addEventListener('click', () => { currentIndex = index; loadTrack(currentIndex, true); });
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const trackIndex = parseInt(li.dataset.index, 10);
+                    
+                    if (trackIndex === currentIndex) {
+                        audioPlayer.pause();
+                        audioPlayer.src = '';
+                        isPlaying = false;
+                        playPauseBtn.textContent = '▶';
+                    }
 
-                    if (currentPlaylist.length === 0) { playlistListElement.innerHTML = '<li class="playlist-item">リストは空です</li>'; return; }
+                    currentPlaylist.splice(trackIndex, 1);
+                    if (trackIndex < currentIndex) {
+                        currentIndex--;
+                    } else if (trackIndex === currentIndex) {
+                        currentIndex = (currentPlaylist.length > 0) ? Math.min(trackIndex, currentPlaylist.length - 1) : -1;
+                        if (currentIndex !== -1) {
+                            loadTrack(currentIndex, false); 
+                        }
+                    }
+                    
+                    renderPlaylist();
+                });
 
-                    currentPlaylist.forEach((track, index) => {
+                li.addEventListener('dragstart', dragStart);
+                li.addEventListener('dragover', dragOver);
+                li.addEventListener('dragleave', dragLeave);
+                li.addEventListener('drop', dragDrop);
+                li.addEventListener('dragend', dragEnd);
 
-                        const li = document.createElement('li');
+                li.appendChild(trackInfoDiv);
+                li.appendChild(deleteBtn);
+                playlistListElement.appendChild(li);
+            });
+        }
 
-                        li.className = 'playlist-item';
+        function dragStart(e) {
+            dragStartIndex = +this.dataset.index;
+            e.dataTransfer.effectAllowed = 'move';
+        }
 
-                        li.dataset.index = index;
+        function dragOver(e) {
+            e.preventDefault();
+            this.classList.add('drag-over');
+        }
 
-                        if (index === currentIndex) li.classList.add('is-playing');
+        function dragLeave() {
+            this.classList.remove('drag-over');
+        }
+        
+        function dragEnd() {
+            document.querySelectorAll('.playlist-item').forEach(item => item.classList.remove('drag-over'));
+        }
 
-                        li.innerHTML = `<div><div class="playlist-title">${index + 1}. ${track.title}</div><div class="playlist-artist">${track.artist} (${track.fileName})</div></div>`;
+        function dragDrop(e) {
+            e.stopPropagation(); 
+            const dragEndIndex = +this.dataset.index;
+            swapTracks(dragStartIndex, dragEndIndex);
+            this.classList.remove('drag-over');
+        }
 
-                        li.addEventListener('click', () => { currentIndex = index; loadTrack(currentIndex, true); });
+        function swapTracks(fromIndex, toIndex) {
+            if (fromIndex === toIndex) return;
 
-                        playlistListElement.appendChild(li);
+            const playingTrack = (currentIndex > -1) ? currentPlaylist[currentIndex] : null;
 
-                    });
+            const item = currentPlaylist.splice(fromIndex, 1)[0];
+            currentPlaylist.splice(toIndex, 0, item);
 
-                    const playingItem = document.querySelector('.playlist-item.is-playing');
-
-                    if (playingItem) playingItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-                }
+            // Update the index of the currently playing track
+            if (playingTrack) {
+                currentIndex = currentPlaylist.findIndex(track => track.url === playingTrack.url);
+            }
+            
+            renderPlaylist();
+        }
 
                 
 
@@ -728,5 +807,4 @@
         document.addEventListener('DOMContentLoaded', initialize);
     </script>
 </body>
-
 </html>
