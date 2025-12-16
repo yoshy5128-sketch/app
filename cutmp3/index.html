@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ローカルMP3カッター (ffmpeg.wasm)</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f7f6; }
+        .container { max-width: 800px; margin: auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        h2 { color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
+        input[type="file"] { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; width: 100%; box-sizing: border-box; }
+        button { background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; margin-top: 15px; }
+        button:hover:not(:disabled) { background-color: #218838; }
+        button:disabled { background-color: #90ee90; cursor: not-allowed; }
+        .controls div { margin-bottom: 10px; }
+        .log-area { margin-top: 20px; padding: 10px; background-color: #e9ecef; border: 1px solid #dee2e6; border-radius: 5px; max-height: 150px; overflow-y: scroll; font-size: 0.8em; }
+        .processing { color: #ffc107; font-weight: bold; }
+        .success { color: #28a745; font-weight: bold; }
+        .error { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+// FFmpegインスタンスの作成
+// corePathを設定することで、ブラウザがffmpegのWebAssemblyバイナリをロードできるようにします
+const ffmpeg = FFmpeg.createFFmpeg({
+  log: true, // ログ出力を有効に
+  corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+});
+
+// 秒をHH:MM:SS.ms形式に変換するヘルパー関数
+const formatTime = (seconds) => {
+    const totalMilliseconds = seconds * 1000;
+    const ms = String(Math.floor(totalMilliseconds % 1000)).padStart(3, '0');
+    const totalSeconds = Math.floor(seconds);
+    const s = String(totalSeconds % 60).padStart(2, '0');
+    const m = String(Math.floor(totalSeconds / 60) % 60).padStart(2, '0');
+    const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+    return `${h}:${m}:${s}.${ms}`;
+};
+
+function AudioEditor() {
+  const [isReady, setIsReady] = useState(false);
+  const [audioFile, setAudioFile] = useState(null);
+  const [duration, setDuration] = useState(0);
+  const [startTime, setStartTime] = useState(0);
+  const [endTime, setEndTime] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [logMessages, setLogMessages] = useState([]);
+  const [status, setStatus] = useState('FFmpegの初期化中...');
+  
+  // ログの追加
+  const addLog = (message, type = 'info') => {
+      setLogMessages(prev => [{ message, type, timestamp: new Date().toLocaleTimeString() }, ...prev]);
+  };
+  
+  // FFmpegの初期化
+  useEffect(() => {
+    const loadFFmpeg = async () => {
+      setStatus('FFmpegバイナリをロード中...');
+      addLog('FFmpegの初期化を開始します。');
+      try {
+        if (!ffmpeg.isLoaded()) {
+          // ffmpegの実行には事前にload()が必要
+          await ffmpeg.load();
+        }
+        setIsReady(true);
+        setStatus('準備完了！MP3ファイルをアップロードしてください。');
+        addLog('FFmpegが正常にロードされました。', 'success');
+      } catch (e) {
+        setStatus('FFmpegのロードに失敗しました。コンソールを確認してください。');
+        addLog(`ロードエラー: ${e.message}`, 'error');
+      }
+    };
+    // ログリスナーの設定
+    ffmpeg.setLogger(({ message }) => {
+        addLog(`[FFmpeg Log]: ${message}`);
+    });
+    
+    loadFFmpeg();
+  }, []);
+
+  // Web Audio APIを使ってファイルの長さを取得する
+  const getDuration = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioContext.decodeAudioData(e.target.result, (buffer) => {
+          resolve(buffer.duration);
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // ファイルアップロードハンドラ
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (file && file.type === 'audio/mp3') {
+        setStatus(`ファイル「${file.name}」を読み込み中...`);
+        setAudioFile(file);
+        
+        const fileDuration = await getDuration(file);
+        setDuration(fileDuration);
+        setEndTime(fileDuration); // 終了時間を最大に設定
+        setStartTime(0);
+        setStatus(`ファイル「${file.name}」の読み込み完了。長さ: ${fileDuration.toFixed(2)}秒`);
+    } else {
+        alert('MP3ファイルを選択してください。');
+    }
+  };
+
+  // カット処理の実行関数
+  const executeCut = async () => {
+    if (!audioFile || startTime >= endTime || startTime < 0 || endTime > duration) {
+        alert('無効な時間指定です。開始時間 < 終了時間 < 全長、を確認してください。');
+        return;
+    }
+
+    setIsProcessing(true);
+    setStatus('🚀 カット処理を開始しました...');
+    const inputFileName = 'input.mp3';
+    const outputFileName = 'output.mp3';
+
+    try {
+        addLog('ファイルを仮想ファイルシステム(FS)に書き込み中...', 'processing');
+        // 1. ファイルを仮想ファイルシステム(FS)に書き込む
+        ffmpeg.FS('writeFile', inputFileName, await FFmpeg.fetchFile(audioFile));
+        
+        const ssTime = formatTime(startTime);
+        const toTime = formatTime(endTime);
+        
+        addLog(`FFmpegコマンド実行: -ss ${ssTime} -to ${toTime} -c copy`, 'processing');
+
+        // 2. FFmpegコマンドの実行
+        await ffmpeg.run(
+            '-i', inputFileName,
+            '-ss', ssTime, // シーク（開始時間）
+            '-to', toTime, // 終了時間
+            '-c', 'copy', // 再エンコードなしで高速カット
+            outputFileName
+        );
+        addLog('FFmpeg処理が完了しました。', 'success');
+
+        // 3. 処理済みファイルをFSから読み込み、Blobにする
+        const data = ffmpeg.FS('readFile', outputFileName);
+        const outputBlob = new Blob([data.buffer], { type: 'audio/mp3' });
+        
+        // 4. ダウンロードリンクを作成し、ダウンロードを促す
+        const downloadUrl = URL.createObjectURL(outputBlob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `cut_${audioFile.name}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(downloadUrl); // URLを解放
+        
+        setStatus('✅ カット済みファイルがダウンロードされました。');
+
+    } catch (error) {
+        console.error('FFmpeg処理エラー:', error);
+        setStatus('❌ 処理中にエラーが発生しました。コンソールを確認してください。');
+        addLog(`致命的なエラー: ${error.message}`, 'error');
+    } finally {
+        // 5. 仮想ファイルシステムと状態をクリーンアップ
+        try {
+            ffmpeg.FS('unlink', inputFileName);
+            ffmpeg.FS('unlink', outputFileName);
+        } catch(e) { /* ファイルが存在しない場合のエラーを無視 */ }
+        setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="container">
+      <h2>🎵 ローカルMP3カッター (Wasm powered)</h2>
+      <p>⚠️ 注意: すべての処理はブラウザ内で完結します。ファイルはアップロードされません。</p>
+      
+      <input 
+        type="file" 
+        accept="audio/mp3" 
+        onChange={handleFileUpload} 
+        disabled={!isReady || isProcessing}
+      />
+      
+      <p>ステータス: <span className={isReady && !isProcessing ? 'success' : isProcessing ? 'processing' : ''}>{status}</span></p>
+
+      {audioFile && duration > 0 && (
+        <div className="controls">
+          <h3>ファイル: {audioFile.name} (全長: {duration.toFixed(2)}秒)</h3>
+          
+          <div>
+            開始時間 (秒): 
+            <input 
+              type="number" 
+              step="0.1" 
+              value={startTime} 
+              onChange={(e) => setStartTime(Math.max(0, Math.min(Number(e.target.value), endTime)))} 
+              min="0" 
+              max={duration.toFixed(2)} 
+              disabled={isProcessing}
+            />
+          </div>
+          <div>
+            終了時間 (秒): 
+            <input 
+              type="number" 
+              step="0.1" 
+              value={endTime} 
+              onChange={(e) => setEndTime(Math.min(duration, Math.max(Number(e.target.value), startTime)))} 
+              min={startTime.toFixed(2)} 
+              max={duration.toFixed(2)} 
+              disabled={isProcessing}
+            />
+          </div>
+          
+          <p>カット後の長さ: **{(endTime - startTime).toFixed(2)}秒**</p>
+          
+          <button onClick={executeCut} disabled={isProcessing || !isReady}>
+            {isProcessing ? '処理中...お待ちください' : `✂️ ${startTime.toFixed(2)}秒から${endTime.toFixed(2)}秒までカット`}
+          </button>
+
+          <p>（注: 正確なフレーム位置でカットするため、指定した時間と若干の誤差が生じることがあります）</p>
+        </div>
+      )}
+      
+      <div className="log-area">
+        <strong>処理ログ:</strong>
+        {logMessages.map((log, index) => (
+            <p key={index} className={log.type}>[{log.timestamp}] {log.message}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<AudioEditor />, document.getElementById('root'));
+</script>
+
+</body>
+</html>
