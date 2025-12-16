@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // CDNから読み込んだFFmpegオブジェクト
         const { createFFmpeg, fetchFile } = FFmpeg;
         ffmpeg = createFFmpeg({
+            // シングルスレッド版のコアを指定して、サーバー設定(COOP/COEP)なしで動作させる
+            corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
             log: true, // ffmpegのログをコンソールに出力
             progress: ({ ratio }) => {
                 let msg = `処理中... ${Math.round(ratio * 100)}%`;
