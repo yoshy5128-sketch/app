@@ -1,0 +1,7 @@
+# netlify.toml
+[[headers]]
+  for = "/*"  # すべてのパスに適用
+  [headers.values]
+    # SharedArrayBufferを有効にするための必須ヘッダー
+    Cross-Origin-Embedder-Policy = "require-corp"
+    Cross-Origin-Opener-Policy = "same-origin"
