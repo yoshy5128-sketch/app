@@ -1,0 +1,181 @@
+body {
+    font-family: sans-serif;
+    background-color: #f0f2f5;
+    color: #333;
+    line-height: 1.6;
+    margin: 20px;
+}
+
+h1, h2 {
+    color: #0056b3;
+}
+
+.main-container {
+    display: flex;
+    gap: 20px;
+}
+
+.editor-section, .clips-section {
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.editor-section {
+    flex: 2;
+}
+
+.clips-section {
+    flex: 1;
+}
+
+#preview-video {
+    width: 100%;
+    max-width: 640px;
+    background-color: #000;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.trim-controls {
+    margin: 15px 0;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.trim-controls label {
+    font-weight: bold;
+}
+
+.trim-controls input {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+#trim-btn {
+    grid-column: span 2;
+    background-color: #28a745;
+}
+
+#trim-btn:hover {
+    background-color: #218838;
+}
+
+#status-area {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #e9ecef;
+    border-radius: 4px;
+}
+
+#clips-list {
+    list-style: none;
+    padding: 0;
+}
+
+#clips-list li {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#clips-list input {
+    width: 60px;
+    padding: 5px;
+}
+
+#clips-list video {
+    width: 120px;
+    height: 80px;
+}
+
+#concat-btn {
+    width: 100%;
+    background-color: #dc3545;
+}
+
+#concat-btn:hover {
+    background-color: #c82333;
+}
+
+/* --- スマートフォン向けのスタイル (レスポンシブ対応) --- */
+@media (max-width: 768px) {
+    body {
+        margin: 10px;
+        font-size: 14px;
+    }
+
+    h1 {
+        font-size: 1.5em;
+    }
+    
+    h2 {
+        font-size: 1.2em;
+    }
+
+    .main-container {
+        flex-direction: column;
+    }
+
+    .editor-section, .clips-section {
+        padding: 15px;
+    }
+
+    .trim-controls {
+        grid-template-columns: 1fr; /* 1列にする */
+        gap: 15px;
+    }
+
+    .trim-controls button {
+        width: 100%;
+    }
+
+    #trim-btn {
+        grid-column: auto; /* spanをリセット */
+    }
+
+    #clips-list li {
+        flex-direction: column; /* クリップ項目内を縦積みに */
+        align-items: flex-start; /* 左寄せに */
+        gap: 8px;
+    }
+
+    #clips-list video {
+        width: 100%; /* 横幅いっぱいに */
+        height: auto;
+        max-width: 240px; /* あまり大きくならないように */
+    }
+
+    #clips-list input {
+        width: 80px; /* 入力欄を少し広げる */
+    }
+}

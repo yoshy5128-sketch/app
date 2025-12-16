@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動画トリミング・結合アプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>動画トリミング・結合アプリ</h1>
+
+    <div class="main-container">
+        <div class="editor-section">
+            <h2>1. 動画を選択</h2>
+            <input type="file" id="video-input" accept="video/*">
+
+            <h2>2. プレビューとトリミング</h2>
+            <video id="preview-video" controls></video>
+            
+            <div class="trim-controls">
+                <label for="start-time">開始時間:</label>
+                <input type="text" id="start-time" value="00:00:00.000">
+                <button id="set-start-btn">現在時間を設定</button>
+                <br>
+                <label for="end-time">終了時間:</label>
+                <input type="text" id="end-time" value="00:00:00.000">
+                <button id="set-end-btn">現在時間を設定</button>
+                <br>
+                <button id="trim-btn">この範囲をトリミング</button>
+            </div>
+            
+            <div id="status-area">
+                <h3>進捗</h3>
+                <p id="status-message">準備完了</p>
+                <progress id="progress-bar" value="0" max="100" style="display: none;"></progress>
+            </div>
+        </div>
+
+        <div class="clips-section">
+            <h2>3. トリミング済みクリップ</h2>
+            <p>ファイル名の数字を変更して、結合する順番を入れ替えられます。</p>
+            <ul id="clips-list">
+                <!-- トリミングされたクリップがここに追加される -->
+            </ul>
+            <button id="concat-btn">全てのクリップを結合</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" defer></script>
+    <script src="script.js" defer></script>
+</body>
+</html>
