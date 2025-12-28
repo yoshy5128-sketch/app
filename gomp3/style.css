@@ -310,11 +310,13 @@
             background-color: #383838;
             /* display: block !important; */ /* Controlled by JS */
         }
-        .fixed-footer #progress-bar {
-            height: 100%;
-            border-radius: 4px;
-            font-size: 0.7em;
-            line-height: 18px;
+        .playlist-title {
+            color: var(--text-color); /* 白 */
+            font-weight: 500;
+        }
+        .playlist-artist {
+            color: var(--text-secondary-color); /* グレー */
+            font-size: 0.8em;
         }
         /* Override for status bar when not active */
         /*
