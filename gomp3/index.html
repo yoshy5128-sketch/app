@@ -5,806 +5,99 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GO MP3</title>
     
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GOMP3">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+
     <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
-
-    <style>
-        :root {
-            --primary-color: #0d8bff;
-            --primary-hover-color: #3aa0ff;
-            --background-color: #121212;
-            --card-color: #1e1e1e;
-            --text-color: #e0e0e0;
-            --text-secondary-color: #888;
-            --border-color: #333;
-            --danger-color: #e53935;
-            --control-size: 56px;
-        }
-
-        *, *::before, *::after {
-            box-sizing: border-box;
-        }
-
-        body { 
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            background-color: var(--background-color); 
-            color: var(--text-color);
-            margin: 0; 
-            padding: 0; 
-            display: flex; 
-            justify-content: center; 
-            align-items: flex-start; 
-            min-height: 100vh; 
-        }
-        
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: var(--card-color); }
-        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #666; }
-
-        .main-app { 
-            width: 100%; 
-            max-width: 1200px; 
-            background-color: var(--card-color); 
-            display: flex; 
-            flex-direction: column; 
-            min-height: 100vh;
-        }
-        .playlist-sidebar { 
-            width: 100%; 
-            padding: 15px; 
-            border-bottom: 1px solid var(--border-color); 
-            overflow-y: auto; /* Let the sidebar itself scroll */
-            max-height: 55vh; /* Give sidebar enough space, but ensure it's limited */
-            background-color: #181818;
-        }
-        
-        h4 { 
-            margin-top: 15px; 
-            margin-bottom: 10px; 
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 8px;
-            color: var(--primary-color);
-        }
-        .folder-select-area, .save-playlist-area, .saved-playlists-area { 
-            margin: 0 0 15px 0; 
-            padding: 15px; 
-            border: 1px solid var(--border-color); 
-            border-radius: 8px; 
-            background: #242424;
-        }
-        
-        .folder-btn-container { display: flex; gap: 10px; margin-top: 10px; }
-        .folder-btn, .save-btn { 
-            flex-grow: 1; 
-            padding: 12px 10px; 
-            background-color: var(--primary-color); 
-            color: white; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            transition: background-color 0.2s; 
-            min-width: 80px; 
-        }
-        .folder-btn:hover, .save-btn:hover { background-color: var(--primary-hover-color); }
-        .scan-options { margin-top: 12px; text-align: left; color: var(--text-secondary-color); }
-        
-        #playlist-name-input { 
-            width: 100%; 
-            padding: 10px; 
-            border: 1px solid var(--border-color); 
-            background-color: #333;
-            color: var(--text-color);
-            border-radius: 4px; 
-            margin-bottom: 10px; 
-        }
-        
-        #playlist-list, #saved-playlists-list { 
-            list-style: none; 
-            padding: 0; 
-            margin: 0;
-        }
-        .playlist-item, .saved-playlist-item { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            padding: 10px; 
-            border-bottom: 1px solid var(--border-color); 
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .saved-playlist-item:hover, .playlist-item:hover { background-color: #2a2a2a; }
-        
-        .saved-playlist-item .playlist-name { flex-grow: 1; margin-right: 10px; }
-        .delete-playlist-btn { background: var(--danger-color); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; margin-left: 10px; font-weight: bold; line-height: 24px; text-align: center; }
-        .delete-track-btn { background: none; border: none; color: var(--text-secondary-color); cursor: pointer; font-size: 1.2em; padding: 0 5px; margin-left: 10px; }
-        .delete-track-btn:hover { color: var(--danger-color); }
-
-        .player-main { 
-            width: 100%; 
-            padding: 20px;
-            text-align: center; 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: center; 
-            align-items: center; 
-            flex-grow: 1; 
-            position: relative; /* For background pseudo-element */
-            isolation: isolate; /* New stacking context */
-        }
-        .player-main::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url('tape.png');
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            filter: brightness(0.5) grayscale(20%);
-            opacity: 0.3;
-            z-index: -1;
-        }
-        #track-title { font-size: 1.8em; margin-bottom: 5px; font-weight: 500; }
-        #track-artist { font-size: 1.1em; color: var(--text-secondary-color); margin-bottom: 20px; }
-
-        .controls { display: flex; justify-content: space-around; align-items: center; width: 100%; max-width: 320px; margin: 20px 0; }
-        .control-btn { font-size: 1.8em; padding: 15px; color: var(--text-secondary-color); background: none; border: none; cursor: pointer; transition: color 0.2s; }
-        .control-btn:hover { color: var(--text-color); }
-        #play-pause-btn { font-size: 3em; width: var(--control-size); height: var(--control-size); display: flex; justify-content: center; align-items: center; border-radius: 50%; border: 2px solid var(--primary-color); color: var(--primary-color); }
-        .seek-bar-container { width: 100%; margin-top: 15px; }
-        .time-display { display: flex; justify-content: space-between; font-size: 0.9em; color: var(--text-secondary-color); margin-top: 5px; }
-        #shuffle-btn.active, #repeat-btn.active { color: var(--primary-color); }
-
-        #seek-bar { width: 100%; -webkit-appearance: none; appearance: none; height: 5px; background: #444; border-radius: 5px; outline: none; }
-        #seek-bar::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; background: var(--primary-color); border-radius: 50%; cursor: pointer; }
-        #seek-bar::-moz-range-thumb { width: 15px; height: 15px; background: var(--primary-color); border-radius: 50%; cursor: pointer; }
-
-
-        @media (min-width: 768px) {
-            .main-app { flex-direction: row; }
-            .playlist-sidebar { width: 400px; max-height: none; /* Desktop sidebar takes full height */ border-right: 1px solid var(--border-color); border-bottom: none; }
-            .player-main { flex-grow: 1; }
-        }
-
-        .playlist-item.is-playing { background-color: var(--primary-color); color: white; }
-        .playlist-item .playlist-artist, .playlist-item.is-playing .playlist-artist { color: var(--text-secondary-color); }
-        .playlist-item.is-playing .playlist-artist { color: #d1e7ff; }
-        .playlist-item > div { flex-grow: 1; }
-        .playlist-title { font-weight: 500; }
-        .playlist-artist { font-size: 0.85em; opacity: 0.8; }
-        .playlist-item.drag-over { border-bottom: 2px solid var(--primary-hover-color); }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div class="main-app">
         <div class="playlist-sidebar">
-            <div class="folder-select-area">
-                <h4>フォルダ操作</h4>
-                <p id="folder-status-text">フォルダを選択してください。</p>
-                <div class="folder-btn-container">
-                    <button id="new-playlist-btn" class="folder-btn">🆕 新規</button>
-                    <button id="add-songs-btn" class="folder-btn">➕ 追加</button>
+            <div class="tab-controls">
+                <button class="tab-btn active" data-tab="folder-ops">📁 操作</button>
+                <button class="tab-btn" data-tab="playlists">🎵 Pリスト</button>
+                <button class="tab-btn" data-tab="now-playing">▶ 再生中 <span id="playlist-status-tab">（0曲）</span></button>
+            </div>
+
+            <div id="tab-content-folder-ops" class="tab-content active">
+                <div class="folder-select-area">
+                    <p id="folder-status-text">フォルダを選択してください。</p>
+                    <div class="folder-btn-container">
+                        <button id="new-playlist-btn" class="folder-btn">🆕 新規</button>
+                        <button id="add-songs-btn" class="folder-btn">➕ 追加</button>
+                    </div>
+                    <div class="scan-options">
+                        <input type="checkbox" id="recursive-scan-checkbox" checked>
+                        <label for="recursive-scan-checkbox">サブフォルダも検索</label>
+                    </div>
                 </div>
-                <div class="scan-options">
-                    <input type="checkbox" id="recursive-scan-checkbox" checked>
-                    <label for="recursive-scan-checkbox">サブフォルダも検索する</label>
+
+                <div class="save-playlist-area">
+                    <input type="text" id="playlist-name-input" placeholder="プレイリスト名">
+                    <button id="save-playlist-btn" class="save-btn">💾 保存</button>
+                </div>
+
+                <div class="import-export-area">
+                    <p>プレイリストの入出力</p>
+                    <div class="folder-btn-container">
+                        <button id="export-playlist-btn" class="folder-btn">📤 エクスポート</button>
+                        <button id="import-playlist-btn" class="folder-btn">📥 インポート</button>
+                    </div>
+                    <input type="file" id="import-playlist-input" accept=".json" style="display: none;">
                 </div>
             </div>
 
-            <div class="save-playlist-area">
-                <h4>プレイリストを保存</h4>
-                <input type="text" id="playlist-name-input" placeholder="プレイリスト名を入力...">
-                <button id="save-playlist-btn" class="save-btn">💾 現在のリストを保存</button>
-            </div>
-            
-            <div class="saved-playlists-area">
-                <h4>保存済みプレイリスト</h4>
+            <div id="tab-content-playlists" class="tab-content">
                 <ul id="saved-playlists-list"></ul>
             </div>
             
-            <h4>再生中リスト <span id="playlist-status">（0曲）</span></h4>
-            <ul class="playlist-list" id="playlist-list"></ul>
+            <div id="tab-content-now-playing" class="tab-content">
+                <ul class="playlist-list" id="playlist-list"></ul>
+            </div>
         </div>
         
         <div class="player-main">
-            <h2>MP3 Player</h2>
+            <!-- Background image will be here, content moved to fixed-footer -->
             <div id="track-info">
                 <div id="track-title">曲名</div>
                 <div id="track-artist">アーティスト名</div>
             </div>
-            <div class="controls">
-                <button class="control-btn" id="prev-btn" title="前の曲">⏮</button>
-                <button class="control-btn" id="shuffle-btn" title="シャッフル">🔀</button>
-                <button class="control-btn" id="repeat-btn" title="リピート">🔁</button>
-                <button class="control-btn" id="play-pause-btn" title="再生/一時停止">▶</button>
-                <button class="control-btn" id="next-btn" title="次の曲">⏭</button>
-            </div>
-            <div class="seek-bar-container">
-                <input type="range" id="seek-bar" value="0" min="0" max="100">
-                <div class="time-display"><span id="current-time">0:00</span><span id="duration">0:00</span></div>
-            </div>
-            <div id="message" style="margin-top: 15px;"></div>
-            <audio id="audio-player"></audio>
         </div>
     </div>
 
-    <script>
-        const getEl = (id) => document.getElementById(id);
-        const audioPlayer = getEl('audio-player'), newPlaylistBtn = getEl('new-playlist-btn'), addSongsBtn = getEl('add-songs-btn'),
-            folderStatusText = getEl('folder-status-text'), playlistListElement = getEl('playlist-list'), shuffleBtn = getEl('shuffle-btn'),
-            repeatBtn = getEl('repeat-btn'),
-            messageDisplay = getEl('message'), trackTitle = getEl('track-title'), trackArtist = getEl('track-artist'),
-            playPauseBtn = getEl('play-pause-btn'), nextBtn = getEl('next-btn'), prevBtn = getEl('prev-btn'), seekBar = getEl('seek-bar'),
-            currentTimeDisplay = getEl('current-time'), durationDisplay = getEl('duration'), playlistStatus = getEl('playlist-status'),
-            savePlaylistBtn = getEl('save-playlist-btn'), playlistNameInput = getEl('playlist-name-input'), 
-            savedPlaylistsList = getEl('saved-playlists-list'), recursiveScanCheckbox = getEl('recursive-scan-checkbox');
-
-        let currentPlaylist = [], currentIndex = -1, isPlaying = false, isShuffling = true,
-            repeatMode = 1, // 0: off, 1: repeat all, 2: repeat one
-            dragStartIndex,
-            directoryHandle = null, directoryHandles = {}, currentPlaylistName = '';
-
-        const PLAYLISTS_COLLECTION_KEY = 'mp3_playlists_collection', DIR_HANDLES_KEY = 'mp3_dir_handles', LAST_PLAYED_KEY = 'mp3_last_played';
-
-        const idbKeyval = {
-            db: null,
-            getDb() { if (this.db) return Promise.resolve(this.db); return new Promise((resolve, reject) => { const req = indexedDB.open('mp3-player-db', 1); req.onupgradeneeded = () => req.result.createObjectStore('keyval'); req.onsuccess = () => { this.db = req.result; resolve(this.db); }; req.onerror = () => reject(req.error); }); },
-            async get(key) { const db = await this.getDb(); return new Promise(r => db.transaction('keyval').objectStore('keyval').get(key).onsuccess = e => r(e.target.result)); },
-            async set(key, val) { const db = await this.getDb(); return new Promise(r => db.transaction('keyval', 'readwrite').objectStore('keyval').put(val, key).onsuccess = r); }
-        };
-
-        function formatTime(s) { if(isNaN(s)) return '0:00'; const m = Math.floor(s/60); return `${m}:${String(Math.floor(s%60)).padStart(2, '0')}`; }
-        function shuffleArray(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } }
-        function readTags(file) { return new Promise(r => { const d_t = file.name.replace(/\.[^/.]+$/, "") || 'Unknown'; if (window.jsmediatags) window.jsmediatags.read(file, { onSuccess: t => r({ title: t.tags.title || d_t, artist: t.tags.artist || 'Unknown' }), onError: () => r({ title: d_t, artist: 'Unknown' }) }); else r({ title: d_t, artist: 'Unknown' }); }); }
-        
-        function getPlaylists() { return JSON.parse(localStorage.getItem(PLAYLISTS_COLLECTION_KEY) || '{}'); }
-        function savePlaylists(playlists) { localStorage.setItem(PLAYLISTS_COLLECTION_KEY, JSON.stringify(playlists)); }
-
-        function renderSavedPlaylists() {
-            const playlists = getPlaylists();
-            savedPlaylistsList.innerHTML = '';
-            for (const name in playlists) {
-                const li = document.createElement('li');
-                li.className = 'saved-playlist-item';
-                li.innerHTML = `<span class="playlist-name">${name} (${playlists[name].tracks.length}曲)</span>`;
-                li.addEventListener('click', () => loadNamedPlaylist(name));
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'delete-playlist-btn';
-                deleteBtn.textContent = '✖';
-                deleteBtn.onclick = (e) => { e.stopPropagation(); deletePlaylist(name); };
-                li.appendChild(deleteBtn);
-                savedPlaylistsList.appendChild(li);
-            }
-        }
-
-        async function saveCurrentPlaylist() {
-
-                    const name = playlistNameInput.value.trim();
-
-                    if (!name) { messageDisplay.textContent = 'プレイリスト名を入力してください。'; return; }
-
-                    if (currentPlaylist.length === 0) { messageDisplay.textContent = 'プレイリストが空です。'; return; }
-
-        
-
-                    const playlists = getPlaylists();
-
-                    playlists[name] = {
-
-                        tracks: currentPlaylist.map(t => ({ 
-
-                            title: t.title, 
-
-                            artist: t.artist, 
-
-                            fileName: t.fileName, 
-
-                            directoryName: t.directoryName 
-
-                        })),
-
-                        isShuffling
-
-                    };
-
-                    savePlaylists(playlists);
-
-                    renderSavedPlaylists();
-
-                    messageDisplay.textContent = `プレイリスト「${name}」を保存しました。`;
-
-                    currentPlaylistName = name;
-
-                }
-
-        
-
-                async function getFileHandleByPath(rootDirHandle, path) {
-
-                    const parts = path.split('/');
-
-                    const fileName = parts.pop();
-
-                    let currentDirHandle = rootDirHandle;
-
-                    for (const part of parts) {
-
-                        if(!part) continue;
-
-                        currentDirHandle = await currentDirHandle.getDirectoryHandle(part);
-
-                    }
-
-                    return await currentDirHandle.getFileHandle(fileName);
-
-                }
-
-        
-
-                async function loadNamedPlaylist(name) {
-
-                    const playlists = getPlaylists();
-
-                    if (!playlists[name]) return;
-
-                    const p = playlists[name];
-
-        
-
-                    // 1. Find all unique directories needed for this playlist
-
-                    const requiredDirs = [...new Set(p.tracks.map(t => t.directoryName))];
-
-                    
-
-                    // 2. Verify permissions for all required directories
-
-                    try {
-
-                        for (const dirName of requiredDirs) {
-
-                            let handle = directoryHandles[dirName];
-
-                            if (!handle) {
-
-                                handle = (await idbKeyval.get(DIR_HANDLES_KEY) || {})[dirName];
-
-                                if (!handle) throw new Error(`フォルダハンドル「${dirName}」が見つかりません。`);
-
-                            }
-
-                            if ((await handle.queryPermission({ mode: 'read' })) !== 'granted') {
-
-                                if ((await handle.requestPermission({ mode: 'read' })) !== 'granted') {
-
-                                    throw new Error(`フォルダ「${dirName}」へのアクセスが拒否されました。`);
-
-                                }
-
-                            }
-
-                            directoryHandles[dirName] = handle; // Cache the handle
-
-                        }
-
-                    } catch (err) {
-
-                        messageDisplay.textContent = err.message;
-
-                        return;
-
-                    }
-
-                    
-
-                    // Set the *last used* directory as the active one for UI feedback
-
-                    directoryHandle = directoryHandles[requiredDirs[requiredDirs.length - 1]];
-
-                    folderStatusText.textContent = `フォルダ: ${p.tracks.length}曲 (${requiredDirs.length}フォルダ)`;
-
-        
-
-                    isShuffling = p.isShuffling;
-
-                    shuffleBtn.classList.toggle('active', isShuffling);
-
-        
-
-                    // 3. Load tracks using the correct handle for each
-
-                    const loadedTracks = (await Promise.all(p.tracks.map(async trackInfo => {
-
-                        try {
-
-                            const rootDirHandle = directoryHandles[trackInfo.directoryName];
-
-                            if (!rootDirHandle) throw new Error(`Handle for ${trackInfo.directoryName} not ready.`);
-
-                            
-
-                            const fileHandle = await getFileHandleByPath(rootDirHandle, trackInfo.fileName);
-
-                            const file = await fileHandle.getFile();
-
-                            return { ...trackInfo, file, url: URL.createObjectURL(file) };
-
-                        } catch(e) { console.warn(`File not found: ${trackInfo.fileName} in ${trackInfo.directoryName}`, e); return null; }
-
-                    }))).filter(Boolean);
-
-        
-
-                    currentPlaylist = loadedTracks;
-
-                    currentPlaylistName = name;
-
-                    playlistNameInput.value = name;
-
-                    localStorage.setItem(LAST_PLAYED_KEY, name);
-
-                    renderPlaylist();
-
-                    if (currentPlaylist.length > 0) { currentIndex = 0; loadTrack(0); }
-
-                    messageDisplay.textContent = `プレイリスト「${name}」をロードしました。`;
-
-                }
-
-                
-
-                function deletePlaylist(name) {
-
-                    const playlists = getPlaylists();
-
-                    delete playlists[name];
-
-                    savePlaylists(playlists);
-
-                    renderSavedPlaylists();
-
-                    messageDisplay.textContent = `プレイリスト「${name}」を削除しました。`;
-
-                    if (currentPlaylistName === name) {
-
-                         currentPlaylist = [];
-
-                         renderPlaylist();
-
-                    }
-
-                }
-
-                
-
-function renderPlaylist() {
-            playlistListElement.innerHTML = '';
-            playlistStatus.textContent = `（${currentPlaylist.length}曲）`;
-            if (currentPlaylist.length === 0) { 
-                playlistListElement.innerHTML = '<li class="playlist-item">リストは空です</li>';
-                audioPlayer.src = '';
-                trackTitle.textContent = '曲名';
-                trackArtist.textContent = 'アーティスト名';
-                return;
-            }
-
-            currentPlaylist.forEach((track, index) => {
-                const li = document.createElement('li');
-                li.className = 'playlist-item';
-                li.dataset.index = index;
-                li.setAttribute('draggable', true);
-
-                if (index === currentIndex) li.classList.add('is-playing');
-                
-                const trackInfoDiv = document.createElement('div');
-                trackInfoDiv.style.flexGrow = '1'; // Make info div take up space
-                trackInfoDiv.innerHTML = `<div class="playlist-title">${index + 1}. ${track.title}</div><div class="playlist-artist">${track.artist} (${track.fileName})</div>`;
-                
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'delete-track-btn';
-                deleteBtn.innerHTML = '✖';
-                deleteBtn.title = 'リストから削除';
-                
-                // --- Event Listeners ---
-                li.addEventListener('click', () => { currentIndex = index; loadTrack(currentIndex, true); });
-                deleteBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const trackIndex = parseInt(li.dataset.index, 10);
-                    
-                    if (trackIndex === currentIndex) {
-                        audioPlayer.pause();
-                        audioPlayer.src = '';
-                        isPlaying = false;
-                        playPauseBtn.textContent = '▶';
-                    }
-
-                    currentPlaylist.splice(trackIndex, 1);
-                    if (trackIndex < currentIndex) {
-                        currentIndex--;
-                    } else if (trackIndex === currentIndex) {
-                        currentIndex = (currentPlaylist.length > 0) ? Math.min(trackIndex, currentPlaylist.length - 1) : -1;
-                        if (currentIndex !== -1) {
-                            loadTrack(currentIndex, false); 
-                        }
-                    }
-                    
-                    renderPlaylist();
-                });
-
-                li.addEventListener('dragstart', dragStart);
-                li.addEventListener('dragover', dragOver);
-                li.addEventListener('dragleave', dragLeave);
-                li.addEventListener('drop', dragDrop);
-                li.addEventListener('dragend', dragEnd);
-
-                li.appendChild(trackInfoDiv);
-                li.appendChild(deleteBtn);
-                playlistListElement.appendChild(li);
-            });
-        }
-
-        function dragStart(e) {
-            dragStartIndex = +this.dataset.index;
-            e.dataTransfer.effectAllowed = 'move';
-        }
-
-        function dragOver(e) {
-            e.preventDefault();
-            this.classList.add('drag-over');
-        }
-
-        function dragLeave() {
-            this.classList.remove('drag-over');
-        }
-        
-        function dragEnd() {
-            document.querySelectorAll('.playlist-item').forEach(item => item.classList.remove('drag-over'));
-        }
-
-        function dragDrop(e) {
-            e.stopPropagation(); 
-            const dragEndIndex = +this.dataset.index;
-            swapTracks(dragStartIndex, dragEndIndex);
-            this.classList.remove('drag-over');
-        }
-
-        function swapTracks(fromIndex, toIndex) {
-            if (fromIndex === toIndex) return;
-
-            const playingTrack = (currentIndex > -1) ? currentPlaylist[currentIndex] : null;
-
-            const item = currentPlaylist.splice(fromIndex, 1)[0];
-            currentPlaylist.splice(toIndex, 0, item);
-
-            // Update the index of the currently playing track
-            if (playingTrack) {
-                currentIndex = currentPlaylist.findIndex(track => track.url === playingTrack.url);
-            }
-            
-            renderPlaylist();
-        }
-
-                
-
-                async function selectDirectoryAndProcessFiles(isAdding = false) {
-
-                    try {
-
-                        const handle = await window.showDirectoryPicker();
-
-                        
-
-                        directoryHandles[handle.name] = handle;
-
-                        directoryHandle = handle;
-
-                        await idbKeyval.set(DIR_HANDLES_KEY, directoryHandles);
-
-        
-
-                        folderStatusText.textContent = `フォルダ: ${handle.name}`;
-
-                        if (!isAdding) playlistNameInput.value = handle.name;
-
-        
-
-                        await processFilesFromDirectory(handle, isAdding);
-
-                    } catch (err) { if (err.name !== 'AbortError') messageDisplay.textContent = "フォルダ選択に失敗しました。"; }
-
-                }
-
-        
-
-                async function getAllFileHandles(dirHandle, path = '') {
-
-                    let files = [];
-
-                    for await (const entry of dirHandle.values()) {
-
-                        const newPath = path ? `${path}/${entry.name}` : entry.name;
-
-                        if (entry.kind === 'file') {
-
-                            files.push({ handle: entry, path: newPath });
-
-                        } else if (entry.kind === 'directory') {
-
-                            files = files.concat(await getAllFileHandles(entry, newPath));
-
-                        }
-
-                    }
-
-                    return files;
-
-                }
-
-        
-
-                async function processFilesFromDirectory(handle, isAdding = false) {
-
-                    messageDisplay.textContent = "ファイルを検索中...";
-
-                    if (!isAdding) { currentPlaylist.forEach(t => { if(t.url) URL.revokeObjectURL(t.url); }); currentPlaylist = []; }
-
-                    
-
-                    let allFileInfos = [];
-
-                    if (recursiveScanCheckbox.checked) {
-
-                        messageDisplay.textContent = "サブフォルダを検索中...";
-
-                        allFileInfos = await getAllFileHandles(handle);
-
-                    } else {
-
-                        for await (const entry of handle.values()) {
-
-                            if (entry.kind === 'file') {
-
-                                allFileInfos.push({ handle: entry, path: entry.name });
-
-                            }
-
-                        }
-
-                    }
-
-                    
-
-                    const tracksToProcess = allFileInfos
-
-                        .filter(f => f.handle.name.toLowerCase().endsWith('.mp3') && !currentPlaylist.some(t => t.fileName === f.path && t.directoryName === handle.name))
-
-                        .map(async fileInfo => {
-
-                            const file = await fileInfo.handle.getFile();
-
-                            const tags = await readTags(file);
-
-                            return { 
-
-                                file, 
-
-                                url: URL.createObjectURL(file), 
-
-                                title: tags.title, 
-
-                                artist: tags.artist, 
-
-                                fileName: fileInfo.path,
-
-                                directoryName: handle.name 
-
-                            };
-
-                        });
-
-        
-
-                    const newTracks = await Promise.all(tracksToProcess);
-
-        
-
-                    if (!isAdding) currentPlaylist = newTracks; else currentPlaylist.push(...newTracks);
-
-                    if (isShuffling) shuffleArray(currentPlaylist);
-
-                    renderPlaylist();
-
-                    if (!isAdding && currentPlaylist.length > 0) { currentIndex = 0; loadTrack(0); }
-
-                    messageDisplay.textContent = `${newTracks.length} 曲を処理しました。`;
-
-                }
-
-        function loadTrack(index, andPlay = false) {
-            if (index < 0 || index >= currentPlaylist.length) return;
-            const track = currentPlaylist[index];
-            if (audioPlayer.src) URL.revokeObjectURL(audioPlayer.src);
-            audioPlayer.src = track.url;
-            trackTitle.textContent = track.title;
-            trackArtist.textContent = track.artist;
-            
-            audioPlayer.load();
-            renderPlaylist();
-            if (andPlay) { isPlaying = true; audioPlayer.play(); playPauseBtn.textContent = '⏸'; }
-        }
-        
-        playPauseBtn.addEventListener('click', () => { if (currentPlaylist.length === 0) return; isPlaying = !isPlaying; if (isPlaying) audioPlayer.play(); else audioPlayer.pause(); playPauseBtn.textContent = isPlaying ? '⏸' : '▶'; });
-        nextBtn.addEventListener('click', () => { if(currentPlaylist.length === 0) return; currentIndex = (currentIndex + 1) % currentPlaylist.length; loadTrack(currentIndex, isPlaying); });
-        prevBtn.addEventListener('click', () => { if(currentPlaylist.length === 0) return; if(audioPlayer.currentTime > 5) audioPlayer.currentTime=0; else { currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length; loadTrack(currentIndex, isPlaying); } });
-        shuffleBtn.addEventListener('click', () => { isShuffling = !isShuffling; shuffleBtn.classList.toggle('active', isShuffling); messageDisplay.textContent = `シャッフル ${isShuffling ? 'ON' : 'OFF'}`; if(isShuffling) shuffleArray(currentPlaylist); renderPlaylist(); });
-        
-        repeatBtn.addEventListener('click', () => {
-            repeatMode = (repeatMode + 1) % 3;
-            updateRepeatState();
-        });
-
-        function updateRepeatState() {
-            audioPlayer.loop = (repeatMode === 2);
-            if (repeatMode === 0) {
-                repeatBtn.innerHTML = '🔁';
-                repeatBtn.classList.remove('active');
-                messageDisplay.textContent = 'リピート OFF';
-            } else if (repeatMode === 1) {
-                repeatBtn.innerHTML = '🔁';
-                repeatBtn.classList.add('active');
-                messageDisplay.textContent = '全曲リピート ON';
-            } else { // repeatMode === 2
-                repeatBtn.innerHTML = '🔂';
-                repeatBtn.classList.add('active');
-                messageDisplay.textContent = '1曲リピート ON';
-            }
-        }
-
-        audioPlayer.addEventListener('ended', () => {
-            if (audioPlayer.loop) return; // Browser handles 'repeat one'
-
-            const isLastTrack = currentIndex === currentPlaylist.length - 1;
-
-            if (repeatMode === 0 && isLastTrack) {
-                // Repeat is off and it's the last track, so stop.
-                isPlaying = false;
-                playPauseBtn.textContent = '▶';
-                renderPlaylist();
-                messageDisplay.textContent = 'プレイリストの再生が終了しました。';
-            } else {
-                // Otherwise (repeat all is on, or it's not the last track), go to next.
-                nextBtn.click();
-            }
-        });
-        audioPlayer.addEventListener('loadedmetadata', () => { durationDisplay.textContent = formatTime(audioPlayer.duration); seekBar.max = audioPlayer.duration; });
-        audioPlayer.addEventListener('timeupdate', () => { currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime); if (!seekBar.isDragging) seekBar.value = audioPlayer.currentTime; });
-        seekBar.addEventListener('input', () => audioPlayer.currentTime = seekBar.value);
-        
-        async function initialize() {
-            if ('showDirectoryPicker' in window) {
-                newPlaylistBtn.addEventListener('click', () => selectDirectoryAndProcessFiles(false));
-                addSongsBtn.addEventListener('click', () => selectDirectoryAndProcessFiles(true));
-                savePlaylistBtn.addEventListener('click', saveCurrentPlaylist);
-                
-                directoryHandles = await idbKeyval.get(DIR_HANDLES_KEY) || {};
-                renderSavedPlaylists();
-                const lastPlayed = localStorage.getItem(LAST_PLAYED_KEY);
-                if (lastPlayed) { await loadNamedPlaylist(lastPlayed); }
-                else { messageDisplay.textContent = "ようこそ！「新規」から音楽フォルダを選択してください。"; }
-            } else {
-                folderStatusText.textContent = "お使いのブラウザはこの機能に非対応です。";
-                [newPlaylistBtn, addSongsBtn, savePlaylistBtn, playlistNameInput].forEach(el => el.style.display = 'none');
-            }
-            shuffleBtn.classList.toggle('active', isShuffling);
-            updateRepeatState();
-            renderPlaylist(); 
-        }
-
-        document.addEventListener('DOMContentLoaded', initialize);
-    </script>
+    <div class="fixed-footer">
+        <div class="footer-player-controls">
+            <div class="playback-info">
+                <div id="track-title-footer">曲名</div>
+                <div id="track-artist-footer">アーティスト名</div>
+            </div>
+            <div class="controls">
+                <button class="control-btn" id="prev-btn" title="前の曲">⏮</button>
+                <button class="control-btn" id="shuffle-btn" title="シャッフル">🔀</button>
+                <button class="control-btn" id="play-pause-btn" title="再生/一時停止">▶</button>
+                <button class="control-btn" id="repeat-btn" title="リピート">🔁</button>
+                <button class="control-btn" id="next-btn" title="次の曲">⏭</button>
+            </div>
+        </div>
+        <div class="seek-bar-container">
+            <input type="range" id="seek-bar" value="0" min="0" max="100">
+            <div class="time-display"><span id="current-time">0:00</span><span id="duration">0:00</span></div>
+        </div>
+        <div class="status-bar">
+            <div id="message" style="margin-top: 0;"></div>
+            <div id="progress-container" style="margin-top: 0; width: 100%; max-width: none; background-color: #333; border-radius: 0;">
+                <div id="progress-bar" style="height: 20px; width: 0%; background-color: var(--primary-color); border-radius: 0; text-align: center; line-height: 20px; color: white; font-size: 0.9em; white-space: nowrap; transition: width 0.3s ease-out;">0%</div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="audio-player"></audio>
+
+    <script src="script.js" defer></script>
 </body>
 </html>
