@@ -2,7 +2,7 @@
   "name": "GOMP3 Player",
   "short_name": "GOMP3",
   "description": "A simple MP3 player.",
-  "start_url": "/index.html",
+  "start_url": "./",
   "display": "fullscreen",
   "background_color": "#222",
   "theme_color": "#222",
