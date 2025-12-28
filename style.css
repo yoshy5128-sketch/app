@@ -1,0 +1,328 @@
+:root {
+            --primary-color: #FFA500; /* Orange */
+            --primary-color-rgb: 255, 165, 0; /* Orange RGB */
+            --primary-hover-color: #FF8C00; /* Darker Orange */
+            --background-color: #121212;
+            --card-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --text-secondary-color: #888;
+            --border-color: #333;
+            --danger-color: #e53935;
+            --control-size: 56px; /* Original control size, though many will be smaller now */
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: var(--background-color); 
+            color: var(--text-color);
+            display: flex; 
+            flex-direction: column; /* Main container is a column */
+            min-height: 100vh; /* Ensure body takes full viewport height */
+            overflow-y: hidden; /* Prevent body scroll */
+        }
+        
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--card-color); }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #666; }
+
+        .main-app { 
+            width: 100%; 
+            max-width: 1200px; 
+            background-color: var(--card-color); 
+            display: flex; 
+            flex-direction: column; 
+            flex-grow: 1; /* Allows main-app to take remaining space */
+            margin: 0 auto; /* Center main-app */
+            overflow: hidden; /* Prevent content inside main-app from scrolling out */
+        }
+        @media (min-width: 768px) {
+            .main-app { flex-direction: row; }
+        }
+
+        .playlist-sidebar { 
+            width: 100%; 
+            padding: 0; 
+            border-bottom: 1px solid var(--border-color); 
+            background-color: #181818;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1; /* Allow sidebar to take available space */
+            overflow: hidden; /* Ensure content is scrollable within */
+        }
+        @media (min-width: 768px) {
+            .playlist-sidebar { 
+                width: 400px; 
+                border-right: 1px solid var(--border-color); 
+                border-bottom: none;
+                flex-shrink: 0;
+                height: 100%;
+                flex-grow: 0; /* Reset for desktop */
+            }
+        }
+        
+        .tab-controls {
+            display: flex;
+            width: 100%;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .tab-btn {
+            flex-grow: 1;
+            padding: 10px 0px; 
+            background-color: #2a2a2a;
+            color: var(--text-secondary-color);
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            font-size: 0.85em; 
+            text-align: center;
+        }
+        .tab-btn:hover:not(.active) {
+            background-color: #3a3a3a;
+            color: var(--text-color);
+        }
+        .tab-btn.active {
+            background-color: var(--card-color);
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .tab-content {
+            padding: 10px 15px; 
+            overflow-y: auto;
+            flex-grow: 1; 
+            display: none; 
+            height: calc(100% - 41px); /* Adjusted for tab button height */
+            flex-direction: column; 
+        }
+        .tab-content.active {
+            display: flex; 
+        }
+        
+        h4 { 
+            display: none; /* Hide old h4 titles */
+        }
+        .folder-select-area, .save-playlist-area, .import-export-area { 
+            margin: 0 0 10px 0; 
+            padding: 8px; 
+            border: 1px solid var(--border-color); 
+            border-radius: 6px; 
+            background: #242424;
+        }
+        .import-export-area p {
+            margin: 0 0 8px 0;
+            font-size: 0.9em;
+            font-weight: bold;
+            color: var(--text-secondary-color);
+        }
+        
+        .folder-btn-container { display: flex; gap: 6px; margin-top: 6px; } 
+        .folder-btn, .save-btn { 
+            flex-grow: 1; 
+            padding: 6px 4px; 
+            background-color: var(--primary-color); 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: background-color 0.2s; 
+            font-size: 0.75em; 
+            min-width: unset; 
+        }
+        .scan-options { margin-top: 8px; font-size: 0.75em; } 
+        
+        #playlist-name-input { 
+            width: 100%; 
+            padding: 6px; 
+            border: 1px solid var(--border-color); 
+            background-color: #333;
+            color: var(--text-color);
+            border-radius: 4px; 
+            margin-bottom: 6px; 
+            font-size: 0.8em; 
+        }
+        
+        #playlist-list, #saved-playlists-list { 
+            list-style: none; 
+            padding: 0; 
+            margin: 0;
+            flex-grow: 1; 
+            padding-bottom: 250px; /* Increased padding to scroll past footer */
+        }
+        .playlist-item, .saved-playlist-item { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 6px 10px; 
+            border-bottom: 1px solid var(--border-color); 
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 0.85em; 
+        }
+        .playlist-item.is-playing {
+            background-color: rgba(var(--primary-color-rgb), 0.2); /* プライマリカラーの薄い背景 */
+            color: var(--primary-color); /* プライマリカラーの文字色 */
+            font-weight: bold;
+        }
+        .saved-playlist-item .playlist-name { flex-grow: 1; margin-right: 6px; } 
+        .delete-playlist-btn { width: 18px; height: 18px; font-size: 0.7em; line-height: 18px; margin-left: 6px; } 
+        .delete-track-btn { font-size: 0.9em; padding: 0 3px; margin-left: 6px; } 
+
+        .player-main { 
+            display: none; /* Player Main is always hidden now */
+        }
+        .player-main #track-title { font-size: 1.5em; margin-bottom: 3px; font-weight: 500; }
+        .player-main #track-artist { font-size: 1em; color: var(--text-secondary-color); margin-bottom: 0; }
+
+        /* Fixed Footer Styles */
+        .fixed-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #222; /* Darker background for footer */
+            border-top: 1px solid var(--border-color);
+            padding: 8px 15px; /* Compact padding */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 1000;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.5);
+            min-height: 190px; /* Increased minimum height for the footer */
+        }
+        .fixed-footer .footer-player-controls {
+            display: flex;
+            flex-direction: column; /* Stack info and controls vertically */
+            justify-content: center; /* Center items vertically in their flex context */
+            align-items: center;
+            width: 100%;
+            max-width: 500px; /* Limit width of controls */
+            margin-bottom: 5px;
+        }
+
+        .fixed-footer .playback-info {
+            display: flex;
+            flex-direction: column;
+            text-align: center; /* Center the text */
+            margin-bottom: 8px; /* Space between info and controls */
+            min-width: 0; /* Allow text to shrink */
+        }
+        #track-title-footer { font-size: 1em; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #track-artist-footer { font-size: 0.8em; color: var(--text-secondary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+
+        .fixed-footer .controls { 
+            display: flex; 
+            justify-content: center; /* Center controls */
+            align-items: center; 
+            gap: 8px; /* Smaller gap */
+            margin: 0;
+        }
+        .fixed-footer .control-btn { 
+            font-size: 1.5em; /* Slightly smaller */
+            padding: 8px; /* Smaller padding */
+            width: 40px; height: 40px; /* Fixed size */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            background-color: rgba(255,255,255,0.05); /* Subtle background */
+            color: var(--primary-color);  /* Changed to primary color */
+            border: none; 
+            cursor: pointer; 
+            transition: color 0.2s, background-color 0.2s; 
+            appearance: none; /* Reset native UI */
+            outline: none; /* Remove focus outline */
+        }
+        .fixed-footer .control-btn.active {
+             color: var(--primary-hover-color);
+        }
+        .fixed-footer .control-btn:hover, .fixed-footer .control-btn:focus { 
+            background-color: rgba(255,255,255,0.1); /* Subtle background on hover/focus */
+            color: var(--primary-hover-color); /* Darker blue on hover/focus */
+        }
+        .fixed-footer .control-btn:active { /* Add specific style for active state */
+            background-color: rgba(var(--primary-color-rgb), 0.2); /* Brighter on click */
+            color: var(--primary-hover-color);
+            box-shadow: none; /* Ensure no box-shadow */
+        }
+        .fixed-footer #play-pause-btn { 
+            font-size: 2.2em; /* Main play button larger */
+            width: 50px; height: 50px; 
+            color: var(--primary-color); 
+            border: 2px solid var(--primary-color);
+            background-color: rgba(var(--primary-color-rgb), 0.1); /* Use primary color with opacity */
+            appearance: none; /* Reset native UI */
+            outline: none; /* Remove focus outline */
+            box-shadow: none; /* Ensure no box-shadow */
+        }
+        .fixed-footer #play-pause-btn:hover, .fixed-footer #play-pause-btn:focus {
+            background-color: rgba(var(--primary-color-rgb), 0.2);
+        }
+        .fixed-footer #play-pause-btn:active {
+             background-color: rgba(var(--primary-color-rgb), 0.3);
+        }
+
+        .fixed-footer .seek-bar-container { 
+            width: 100%; 
+            max-width: 500px;
+            margin-top: 5px; 
+            margin-bottom: 5px;
+        }
+        .fixed-footer .time-display { 
+            display: flex; justify-content: space-between; 
+            font-size: 0.8em; 
+            color: var(--text-secondary-color); 
+            margin-top: 3px; 
+        }
+        .fixed-footer #seek-bar { width: 100%; height: 4px; } /* Thinner seek bar */
+        .fixed-footer #seek-bar::-webkit-slider-thumb { width: 12px; height: 12px; } /* Smaller thumb */
+        .fixed-footer #seek-bar::-moz-range-thumb { width: 12px; height: 12px; } /* Smaller thumb */
+
+        .fixed-footer .status-bar {
+            width: 100%;
+            max-width: 500px;
+            margin-top: 5px;
+        }
+        .fixed-footer #message {
+            margin-top: 0; 
+            font-size: 0.8em;
+            text-align: center;
+            min-height: 1.2em; /* Ensure it takes space even when empty */
+        }
+        .fixed-footer #progress-container {
+            margin-top: 5px;
+            border-radius: 4px;
+            overflow: hidden;
+            height: 18px;
+            background-color: #383838;
+            /* display: block !important; */ /* Controlled by JS */
+        }
+        .fixed-footer #progress-bar {
+            height: 100%;
+            border-radius: 4px;
+            font-size: 0.7em;
+            line-height: 18px;
+        }
+        /* Override for status bar when not active */
+        /*
+        .fixed-footer #progress-container[style*="display: none"] {
+            display: block !important; 
+            width: 0% !important; 
+        }
+        .fixed-footer #progress-bar[style*="width: 0%"] {
+             width: 0% !important;
+        }
+        */
