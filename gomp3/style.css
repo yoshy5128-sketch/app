@@ -171,6 +171,11 @@
             transition: background-color 0.2s;
             font-size: 0.85em; 
         }
+        .playlist-item.is-playing {
+            background-color: rgba(var(--primary-color-rgb), 0.2); /* プライマリカラーの薄い背景 */
+            color: var(--primary-color); /* プライマリカラーの文字色 */
+            font-weight: bold;
+        }
         .saved-playlist-item .playlist-name { flex-grow: 1; margin-right: 6px; } 
         .delete-playlist-btn { width: 18px; height: 18px; font-size: 0.7em; line-height: 18px; margin-left: 6px; } 
         .delete-track-btn { font-size: 0.9em; padding: 0 3px; margin-left: 6px; } 
