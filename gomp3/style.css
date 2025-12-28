@@ -1,7 +1,7 @@
 :root {
-            --primary-color: #4CAF50; /* Green */
-            --primary-color-rgb: 76, 175, 80; /* Green RGB */
-            --primary-hover-color: #388E3C; /* Darker Green */
+            --primary-color: #FFA500; /* Orange */
+            --primary-color-rgb: 255, 165, 0; /* Orange RGB */
+            --primary-hover-color: #FF8C00; /* Darker Orange */
             --background-color: #121212;
             --card-color: #1e1e1e;
             --text-color: #e0e0e0;
