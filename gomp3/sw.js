@@ -27,7 +27,16 @@ self.addEventListener('fetch', (event) => {
         if (response) {
           return response;
         }
-        return fetch(event.request);
+        // Fallback to network
+        return fetch(event.request).then((networkResponse) => {
+          // Add successful network requests to cache
+          if (networkResponse.ok && event.request.method === 'GET') {
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, networkResponse.clone());
+            });
+          }
+          return networkResponse;
+        });
       })
   );
 });
