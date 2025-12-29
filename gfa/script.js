@@ -238,8 +238,9 @@ let isElevating = false;
 let elevatingTargetY = 0;
 let elevatingTargetObstacle = null;
 let currentGroundObstacle = null;
-let isLanding = false;
-let landingTimer = 0;
+let isIgnoringTowerCollision = false;
+let ignoreTowerTimer = 0;
+let lastClimbedTower = null;
 const AUTO_AIM_RANGE = 50;
 const AUTO_AIM_ANGLE = Math.PI / 8;
 const AUTO_AIM_STRENGTH = 0.3;
@@ -2381,6 +2382,9 @@ function checkCollision(object, obstacles, ignoreObstacle = null) {
         if (obstacle === ignoreObstacle) {
             continue;
         }
+        if (obstacle.userData.isRooftop) { // Rooftop floors are not solid barriers
+            continue;
+        }
         if (ignoreObstacle && (obstacle.userData.parentTower === ignoreObstacle || obstacle.userData.parentBuildingRef === ignoreObstacle)) {
             continue;
         }
@@ -2525,6 +2529,13 @@ function animate() {
     }
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
+    if (isIgnoringTowerCollision) {
+        ignoreTowerTimer -= delta;
+        if (ignoreTowerTimer <= 0) {
+            isIgnoringTowerCollision = false;
+            lastClimbedTower = null;
+        }
+    }
     const timeElapsed = clock.getElapsedTime();
     playerTargetHeight = isCrouchingToggle ? 1.1 : 2.0;
     const currentMoveSpeed = isCrouchingToggle ? moveSpeed / 2 : moveSpeed;
@@ -2669,75 +2680,13 @@ function animate() {
         const elevateSpeed = 5.0;
         player.position.y += elevateSpeed * delta;
         if (player.position.y >= elevatingTargetY) {
-        player.position.y = elevatingTargetY;
-        isElevating = false;
-        isLanding = true;
-        landingTimer = 0.1;
-        isCrouchingToggle = false; // 強制的に立ち状態に
-        console.log("isLanding started. elevatingTargetY:", elevatingTargetY);
-    }    } else if (isLanding) {
-        landingTimer -= delta;
-        if (landingTimer <= 0) {
-            isLanding = false;
-            elevatingTargetObstacle = null;
-
-            // 着地地点のY座標を特定
-            let finalGroundY = 0;
-            let finalGroundObstacle = null;
-            const playerFeetYAtEndLanding = player.position.y - playerTargetHeight;
-
-            for (const obs of obstacles) {
-                const obstacleBox = new THREE.Box3().setFromObject(obs);
-                const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
-                const playerHorizontalBox = new THREE.Box2(new THREE.Vector2(player.position.x - 0.2, player.position.z - 0.2), new THREE.Vector2(player.position.x + 0.2, player.position.z + 0.2));
-                const obstacleHorizontalBox = new THREE.Box2(new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z));
-                if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
-                    if ((obs.userData.isRooftop || (!obs.userData.isWall && obs.geometry.parameters.height < 1.5)) && playerFeetYAtEndLanding >= topOfObstacle - 2.0 && playerFeetYAtEndLanding <= topOfObstacle + 1.0) {
-                        finalGroundY = topOfObstacle;
-                        finalGroundObstacle = obs;
-                        break;
-                    }
-                }
-            }
-            if (finalGroundObstacle === null && playerFeetYAtEndLanding < 0.1) {
-                finalGroundY = 0;
-            }
-
-            if (finalGroundObstacle) { // 地面が見つかったらY座標を強制設定
-                const targetY = finalGroundY + playerTargetHeight;
-                player.position.y = targetY; // lerpではなく直接設定
-                currentGroundObstacle = finalGroundObstacle; // currentGroundObstacleも更新
-
-                console.log("Player before warp: x=", player.position.x, "z=", player.position.z);
-                const obstacleCenterX = finalGroundObstacle.position.x;
-                const obstacleCenterZ = finalGroundObstacle.position.z;
-                console.log("Warp target obstacle center: x=", obstacleCenterX, "z=", obstacleCenterZ);
-
-                player.position.x = obstacleCenterX;
-                player.position.z = obstacleCenterZ;
-                console.log("Player after warp: x=", player.position.x, "z=", player.position.z);
-            }
-        }
-        if (finalMoveVector.length() > 0) finalMoveVector.normalize();
-        const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
-        const rightMove = finalMoveVector.x * currentMoveSpeed * delta;
-        const oldPlayerPosition = player.position.clone();
-        const forwardVector = new THREE.Vector3();
-        player.getWorldDirection(forwardVector);
-        forwardVector.y = 0;
-        forwardVector.normalize();
-        const rightVector = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forwardVector);
-        const moveX = rightVector.x * rightMove + forwardVector.x * -forwardMove;
-        const moveZ = rightVector.z * rightMove + forwardVector.z * -forwardMove;
-        player.position.z += moveZ;
-        if (checkCollision(player, obstacles, elevatingTargetObstacle)) {
-            player.position.z = oldPlayerPosition.z;
-        }
-        player.position.x += moveX;
-        if (checkCollision(player, obstacles, elevatingTargetObstacle)) {
-            player.position.x = oldPlayerPosition.x;
-        }
-    } else {
+            player.position.y = elevatingTargetY;
+            isElevating = false;
+            isIgnoringTowerCollision = true;
+            ignoreTowerTimer = 0.5; // Ignore tower collision for 0.5s
+            lastClimbedTower = elevatingTargetObstacle;
+            isCrouchingToggle = false; // 強制的に立ち状態に
+        }    } else {
         let inSensorArea = false;
         const playerBoundingBox = new THREE.Box3().setFromCenterAndSize(player.position.clone().add(new THREE.Vector3(0, playerTargetHeight / 2, 0)), new THREE.Vector3(1, playerTargetHeight, 1));
         for (const sensorArea of ladderSwitches) {
@@ -2767,10 +2716,20 @@ function animate() {
             const rightVector = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forwardVector);
             const moveX = rightVector.x * rightMove + forwardVector.x * -forwardMove;
             const moveZ = rightVector.z * rightMove + forwardVector.z * -forwardMove;
-            player.position.z += moveZ;
-            if (checkCollision(player, obstacles, currentGroundObstacle)) player.position.z = oldPlayerPosition.z;
+            
+            const ignoreObstacle = isIgnoringTowerCollision ? lastClimbedTower : currentGroundObstacle;
+
+            // Move on X axis and check for collision to allow sliding
             player.position.x += moveX;
-            if (checkCollision(player, obstacles, currentGroundObstacle)) player.position.x = oldPlayerPosition.x;
+            if (checkCollision(player, obstacles, ignoreObstacle)) {
+                player.position.x = oldPlayerPosition.x;
+            }
+
+            // Move on Z axis and check for collision to allow sliding
+            player.position.z += moveZ;
+            if (checkCollision(player, obstacles, ignoreObstacle)) {
+                player.position.z = oldPlayerPosition.z;
+            }
             const playerDistFromCenter = Math.sqrt(player.position.x * player.position.x + player.position.z * player.position.z);
             if (playerDistFromCenter > ARENA_PLAY_AREA_RADIUS) {
                 const ratio = ARENA_PLAY_AREA_RADIUS / playerDistFromCenter;
@@ -2786,7 +2745,7 @@ function animate() {
                 const playerHorizontalBox = new THREE.Box2(new THREE.Vector2(player.position.x - 0.5, player.position.z - 0.5), new THREE.Vector2(player.position.x + 0.5, player.position.z + 0.5));
                 const obstacleHorizontalBox = new THREE.Box2(new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z));
                 if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
-                    if ((obs.userData.isRooftop || (!obs.userData.isWall && obs.geometry.parameters.height < 1.5)) && playerFeetY >= topOfObstacle - 2.0 && playerFeetY <= topOfObstacle + 1.0) {
+                    if ((obs.userData.isRooftop || !obs.userData.isWall) && playerFeetY >= topOfObstacle - 2.0 && playerFeetY <= topOfObstacle + 1.0) {
                         onGround = true;
                         currentGroundObstacle = obs;
                         groundY = topOfObstacle;
