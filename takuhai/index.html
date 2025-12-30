@@ -6,43 +6,22 @@
     <title>宅配DEATH - TAKUHAI DEATH</title>
     <style>
         body { background: #1a1a1a; color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; touch-action: manipulation; }
-        
-        /* スタート画面 */
         #start-screen { position: absolute; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
         .main-visual { width: 85%; max-width: 450px; margin-bottom: 20px; border: 2px solid #ff4444; border-radius: 10px; }
         .menu-btn { width: 250px; padding: 15px; margin: 10px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 18px; font-weight: bold; cursor: pointer; }
-
-        /* ゲーム画面 */
         #game-view { display: none; position: relative; }
         #ui-panel { background: #222; padding: 12px 5px; border-bottom: 3px solid #00fbff; position: relative; }
-        
         .info-row { display: flex; justify-content: center; align-items: center; gap: 35px; margin-top: 5px; } 
         .gas-bar-bg { width: 80px; height: 12px; background: #000; border-radius: 6px; border: 1px solid #555; overflow: hidden; margin: 0 5px; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; transition: width 0.2s; }
         #msg { color: #00fbff; font-size: 12px; font-weight: bold; margin-top: 8px; height: 16px; }
-        
-        #exit-btn { 
-            position: absolute; 
-            right: 4px; 
-            top: 4px; 
-            background: #333; 
-            color: #888; 
-            border: 1px solid #444; 
-            padding: 2px 6px; 
-            font-size: 10px; 
-            border-radius: 3px; 
-            cursor: pointer;
-            line-height: 1;
-        }
+        #exit-btn { position: absolute; right: 4px; top: 4px; background: #333; color: #888; border: 1px solid #444; padding: 2px 6px; font-size: 10px; border-radius: 3px; cursor: pointer; line-height: 1; }
         #exit-btn:hover { background: #ff4444; color: #fff; border-color: #ff4444; }
-
         #game-container { background: #fff; border: 2px solid #444; display: inline-block; margin-top: 5px; position: relative; }
         canvas { display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
-
         .controls { display: grid; grid-template-areas: ". up ." "left down right"; gap: 10px; justify-content: center; margin-top: 10px; }
         .btn { width: 65px; height: 65px; background: #333; border: 2px solid #666; border-radius: 15px; color: white; font-size: 28px; display: flex; align-items: center; justify-content: center; user-select: none; }
         .btn:active { background: #00fbff; color: #000; }
-        
         #next-btn { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 40px; background: #ff4444; color: #fff; font-weight: bold; border-radius: 10px; border: none; z-index: 10; font-size: 24px; box-shadow: 0 0 20px #ff0000; }
     </style>
 </head>
@@ -91,6 +70,9 @@
 
     let currentSTG = 1;
     let player = {x:1, y:1, facingRight: true}, gas, maxGas, map, rows, cols, tileSize, gameOver;
+    
+    // 現在のステージの状態を保存する変数
+    let currentStageData = null;
 
     window.onload = () => {
         const savedSTG = localStorage.getItem('delivery_death_stg');
@@ -114,14 +96,14 @@
         generateStage(currentSTG);
     }
 
-    function getDist(x1, y1, x2, y2) {
+    function getDist(x1, y1, x2, y2, currentMap) {
         let q = [[x1, y1, 0]], v = new Set([x1+','+y1]);
         while(q.length > 0) {
             let [cx, cy, d] = q.shift();
             if(cx === x2 && cy === y2) return d;
             for(let [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0]]) {
                 let nx = cx+dx, ny = cy+dy;
-                if(nx>=0 && nx<cols && ny>=0 && ny<rows && map[ny][nx]!==1 && !v.has(nx+','+ny)) {
+                if(nx>=0 && nx<cols && ny>=0 && ny<rows && currentMap[ny][nx]!==1 && !v.has(nx+','+ny)) {
                     v.add(nx+','+ny); q.push([nx, ny, d+1]);
                 }
             }
@@ -157,35 +139,58 @@
         for(let r=1; r<rows-1; r++) for(let c=1; c<cols-1; c++) if(map[r][c]===0 && (r!==1||c!==1)) floors.push({c,r});
         floors.sort(() => Math.random() - 0.5);
         let houseCount = Math.min(4 + Math.floor(stg/1.5), 15);
-        let houses = [];
         for(let i=0; i<houseCount; i++) {
-            let f = floors[i]; map[f.r][f.c] = 3; houses.push(f);
+            let f = floors[i]; map[f.r][f.c] = 3;
         }
 
-        let totalDist = 0, curX = 1, curY = 1, tempHouses = [...houses];
+        // TSP近似による最短距離計算
+        let totalDist = 0, curX = 1, curY = 1;
+        let tempHouses = [];
+        for(let r=0; r<rows; r++) for(let c=0; c<cols; c++) if(map[r][c]===3) tempHouses.push({c,r});
+        
         while(tempHouses.length > 0) {
-            tempHouses.sort((a,b) => getDist(curX, curY, a.c, a.r) - getDist(curX, curY, b.c, b.r));
+            tempHouses.sort((a,b) => getDist(curX, curY, a.c, a.r, map) - getDist(curX, curY, b.c, b.r, map));
             let next = tempHouses.shift();
-            totalDist += getDist(curX, curY, next.c, next.r);
+            totalDist += getDist(curX, curY, next.c, next.r, map);
             curX = next.c; curY = next.r;
         }
 
         let margin = Math.max(1, 4 - Math.floor(stg/3));
         maxGas = totalDist + margin;
-        gas = maxGas;
+
+        // ステージ情報を保存（リトライ用）
+        currentStageData = {
+            map: JSON.parse(JSON.stringify(map)),
+            maxGas: maxGas,
+            totalDist: totalDist,
+            margin: margin,
+            cols: cols,
+            rows: rows
+        };
+
+        initLevel();
+    }
+
+    function initLevel() {
+        // 保存されたマップデータから復元
+        map = JSON.parse(JSON.stringify(currentStageData.map));
+        gas = currentStageData.maxGas;
+        maxGas = currentStageData.maxGas;
+        cols = currentStageData.cols;
+        rows = currentStageData.rows;
+        
         player = {x:1, y:1, facingRight: true};
         gameOver = false;
         nextBtn.style.display = 'none';
-        msgEl.innerText = `MIN: ${totalDist} / MARGIN: ${margin}`;
+        msgEl.innerText = `MIN: ${currentStageData.totalDist} / MARGIN: ${currentStageData.margin}`;
         
-        // --- 解像度対応 (HiDPI) ---
         const dpr = window.devicePixelRatio || 1;
         tileSize = Math.min(Math.floor((window.innerWidth - 20) / cols), 35);
         canvas.style.width = (cols * tileSize) + 'px';
         canvas.style.height = (rows * tileSize) + 'px';
         canvas.width = cols * tileSize * dpr;
         canvas.height = rows * tileSize * dpr;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // 描画をdpr分拡大
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         
         updateUI(); draw();
     }
@@ -197,8 +202,7 @@
                 if(map[y][x] === 1) { 
                     ctx.fillStyle = '#333'; ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize); 
                 } else { 
-                    ctx.strokeStyle = "#eee"; 
-                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = "#eee"; ctx.lineWidth = 1;
                     ctx.strokeRect(x*tileSize + 0.5, y*tileSize + 0.5, tileSize - 1, tileSize - 1); 
                 }
                 if(map[y][x] === 3) {
@@ -245,8 +249,9 @@
             gameOver = true; msgEl.innerText = "SUCCESS!"; nextBtn.style.display = 'block';
             localStorage.setItem('delivery_death_stg', currentSTG + 1);
         } else if(gas <= 0) {
-            gameOver = true; msgEl.innerText = "NO FUEL";
-            setTimeout(() => generateStage(currentSTG), 1200);
+            gameOver = true; msgEl.innerText = "NO FUEL - RETRYING...";
+            // 同じマップで再試行
+            setTimeout(() => initLevel(), 1200);
         }
     }
 
