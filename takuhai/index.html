@@ -5,46 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>宅配DEATH - TAKUHAI DEATH</title>
     <style>
-        body { background: #1a1a1a; color: #fff; font-family: 'Helvetica Neue', Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; text-align: center; margin: 0; overflow: hidden; touch-action: manipulation; }
+        body { background: #1a1a1a; color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; touch-action: manipulation; }
         
         /* スタート画面 */
-        #start-screen { position: absolute; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; box-sizing: border-box; }
-        .main-visual { width: 85%; max-width: 450px; margin-bottom: 20px; border: 3px solid #ff4444; border-radius: 10px; }
-        .menu-btn { width: 250px; padding: 15px; margin: 10px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .menu-btn:hover { background: #ff4444; color: #000; }
-        .menu-btn:disabled { border-color: #444; color: #444; cursor: not-allowed; }
+        #start-screen { position: absolute; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        .main-visual { width: 85%; max-width: 450px; margin-bottom: 20px; border: 2px solid #ff4444; border-radius: 10px; }
+        .menu-btn { width: 250px; padding: 15px; margin: 10px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 18px; font-weight: bold; cursor: pointer; }
 
         /* ゲーム画面 */
         #game-view { display: none; position: relative; }
-        #ui-panel { background: #222; padding: 15px 10px; border-bottom: 3px solid #00fbff; position: relative; }
+        #ui-panel { background: #222; padding: 12px 5px; border-bottom: 3px solid #00fbff; position: relative; }
         
-        /* ステータス行の調整（間隔を広く） */
-        .info-row { display: flex; justify-content: center; align-items: center; gap: 40px; padding-right: 60px; } 
+        /* ステータス行（間隔を広めに確保） */
+        .info-row { display: flex; justify-content: center; align-items: center; gap: 35px; margin-top: 5px; } 
         
-        .gas-bar-bg { width: 80px; height: 14px; background: #000; border-radius: 7px; border: 1px solid #555; overflow: hidden; margin: 0 5px; }
+        .gas-bar-bg { width: 80px; height: 12px; background: #000; border-radius: 6px; border: 1px solid #555; overflow: hidden; margin: 0 5px; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; transition: width 0.2s; }
-        #msg { color: #00fbff; font-size: 13px; font-weight: bold; margin-top: 10px; height: 20px; }
+        #msg { color: #00fbff; font-size: 12px; font-weight: bold; margin-top: 8px; height: 16px; }
         
-        /* 右上のEXITボタン（文字をEXITのみに） */
-        #exit-btn { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: #444; color: #eee; border: 1px solid #666; padding: 8px 12px; font-size: 12px; font-weight: bold; border-radius: 5px; cursor: pointer; }
-        #exit-btn:hover { background: #ff4444; color: #fff; }
+        /* EXITボタン（右上隅へ極小化して配置） */
+        #exit-btn { 
+            position: absolute; 
+            right: 4px; 
+            top: 4px; 
+            background: #333; 
+            color: #888; 
+            border: 1px solid #444; 
+            padding: 2px 6px; 
+            font-size: 10px; 
+            border-radius: 3px; 
+            cursor: pointer;
+            line-height: 1;
+        }
+        #exit-btn:hover { background: #ff4444; color: #fff; border-color: #ff4444; }
 
         #game-container { background: #fff; border: 2px solid #444; display: inline-block; margin-top: 5px; position: relative; }
         canvas { display: block; }
 
-        /* 操作パネル */
         .controls { display: grid; grid-template-areas: ". up ." "left down right"; gap: 10px; justify-content: center; margin-top: 10px; }
         .btn { width: 65px; height: 65px; background: #333; border: 2px solid #666; border-radius: 15px; color: white; font-size: 28px; display: flex; align-items: center; justify-content: center; user-select: none; }
         .btn:active { background: #00fbff; color: #000; }
         
-        #next-btn { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 40px; background: #ff4444; color: #fff; font-weight: bold; border: none; cursor: pointer; z-index: 10; font-size: 24px; box-shadow: 0 0 20px #ff0000; border-radius: 10px; }
+        #next-btn { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 40px; background: #ff4444; color: #fff; font-weight: bold; border-radius: 10px; border: none; z-index: 10; font-size: 24px; box-shadow: 0 0 20px #ff0000; }
     </style>
 </head>
 <body>
 
     <div id="start-screen">
-        <img src="logo.png" alt="TAKUHAI DEATH Visual" class="main-visual">
-        <div id="stg-info" style="margin-bottom: 20px; color: #ff4444; font-weight: bold; font-size: 16px;"></div>
+        <img src="logo.png" alt="Visual" class="main-visual">
+        <div id="stg-info" style="margin-bottom: 20px; color: #ff4444; font-weight: bold;"></div>
         <button class="menu-btn" onclick="startGame(true)">はじめから</button>
         <button id="continue-btn" class="menu-btn" onclick="startGame(false)">続きから再開</button>
     </div>
@@ -90,7 +99,7 @@
         const savedSTG = localStorage.getItem('delivery_death_stg');
         if (savedSTG && parseInt(savedSTG) > 1) {
             currentSTG = parseInt(savedSTG);
-            stgInfo.innerText = `RECORDS: STG ${currentSTG - 1} CLEAR`;
+            stgInfo.innerText = `RECORDS: STG ${currentSTG - 1}`;
             continueBtn.disabled = false;
         } else {
             stgInfo.innerText = "NO RECORD";
@@ -170,7 +179,7 @@
         player = {x:1, y:1, facingRight: true};
         gameOver = false;
         nextBtn.style.display = 'none';
-        msgEl.innerText = `MIN ROUTE: ${totalDist} / MARGIN: ${margin}`;
+        msgEl.innerText = `MIN: ${totalDist} / MARGIN: ${margin}`;
         
         tileSize = Math.min(Math.floor((window.innerWidth - 20) / cols), 35);
         canvas.width = cols * tileSize; canvas.height = rows * tileSize;
@@ -178,15 +187,11 @@
     }
 
     function draw() {
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
         for(let y=0; y<rows; y++) {
             for(let x=0; x<cols; x++) {
-                if(map[y][x] === 1) {
-                    ctx.fillStyle = '#333'; ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize);
-                } else {
-                    ctx.strokeStyle = "#eee"; ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize);
-                }
+                if(map[y][x] === 1) { ctx.fillStyle = '#333'; ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize); }
+                else { ctx.strokeStyle = "#eee"; ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize); }
                 if(map[y][x] === 3) {
                     ctx.font = `${tileSize*0.7}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
                     ctx.fillText('🏠', x*tileSize+tileSize/2, y*tileSize+tileSize/2);
@@ -197,8 +202,7 @@
         ctx.translate(player.x*tileSize+tileSize/2, player.y*tileSize+tileSize/2);
         if(player.facingRight) ctx.scale(-1, 1);
         ctx.font = `${tileSize*0.8}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillText('🚚', 0, 0);
-        ctx.restore();
+        ctx.fillText('🚚', 0, 0); ctx.restore();
     }
 
     function handleMove(dx, dy) {
@@ -227,13 +231,10 @@
         let count = 0;
         for(let y=0; y<rows; y++) for(let x=0; x<cols; x++) if(map[y][x] === 3) count++;
         if(count === 0) {
-            gameOver = true;
-            msgEl.innerText = "SUCCESS! GO NEXT";
-            nextBtn.style.display = 'block';
+            gameOver = true; msgEl.innerText = "SUCCESS!"; nextBtn.style.display = 'block';
             localStorage.setItem('delivery_death_stg', currentSTG + 1);
         } else if(gas <= 0) {
-            gameOver = true;
-            msgEl.innerText = "GAME OVER: NO FUEL";
+            gameOver = true; msgEl.innerText = "NO FUEL";
             setTimeout(() => generateStage(currentSTG), 1200);
         }
     }
