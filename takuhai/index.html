@@ -3,47 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>宅配DEATH - Strategy Delivery</title>
+    <title>宅配DEATH - TAKUHAI DEATH</title>
     <style>
-        body { background: #1a1a1a; color: #fff; font-family: 'Courier New', Courier, monospace; text-align: center; margin: 0; overflow: hidden; touch-action: manipulation; }
+        body { background: #1a1a1a; color: #fff; font-family: 'Helvetica Neue', Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif; text-align: center; margin: 0; overflow: hidden; touch-action: manipulation; }
         
-        /* タイトル・メニュー画面 */
-        #start-screen { position: absolute; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; border: 5px solid #ff4444; box-sizing: border-box; }
-        .title-logo { font-size: 56px; font-weight: bold; color: #ff4444; text-shadow: 4px 4px 0 #550000; margin-bottom: 10px; }
-        .sub-title { font-size: 18px; color: #00fbff; margin-bottom: 40px; letter-spacing: 5px; }
-        .menu-btn { width: 250px; padding: 15px; margin: 10px; background: #111; color: #00fbff; border: 2px solid #00fbff; border-radius: 5px; font-size: 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .menu-btn:hover { background: #00fbff; color: #000; }
-        .menu-btn:disabled { border-color: #333; color: #333; cursor: not-allowed; }
+        /* スタート画面 */
+        #start-screen { position: absolute; width: 100%; height: 100%; background: #111; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; box-sizing: border-box; }
+        .main-visual { width: 80%; max-width: 400px; margin-bottom: 20px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,251,255,0.3); }
+        .title-text { font-size: 32px; font-weight: bold; color: #ff4444; margin-bottom: 5px; }
+        .sub-title { font-size: 14px; color: #00fbff; margin-bottom: 30px; letter-spacing: 3px; }
+        .menu-btn { width: 250px; padding: 15px; margin: 10px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .menu-btn:hover { background: #ff4444; color: #000; }
+        .menu-btn:disabled { border-color: #444; color: #444; cursor: not-allowed; }
 
         /* ゲーム画面 */
-        #game-view { display: none; }
-        #ui-panel { background: #222; padding: 10px; border-bottom: 3px solid #00fbff; }
-        .info-row { display: flex; justify-content: space-around; align-items: center; font-weight: bold; }
-        .gas-bar-bg { width: 120px; height: 16px; background: #000; border-radius: 8px; border: 1px solid #555; overflow: hidden; }
+        #game-view { display: none; position: relative; }
+        #ui-panel { background: #222; padding: 10px; border-bottom: 3px solid #00fbff; position: relative; }
+        .info-row { display: flex; justify-content: space-around; align-items: center; padding-right: 80px; } /* ボタン用の余白 */
+        .gas-bar-bg { width: 100px; height: 14px; background: #000; border-radius: 7px; border: 1px solid #555; overflow: hidden; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; transition: width 0.2s; }
-        #msg { color: #00fbff; font-size: 14px; font-weight: bold; margin: 5px; height: 24px; }
+        #msg { color: #00fbff; font-size: 13px; font-weight: bold; margin: 5px; height: 20px; }
+        
+        /* 右上のEXITボタン */
+        #exit-btn { position: absolute; right: 10px; top: 10px; background: #444; color: #ccc; border: 1px solid #666; padding: 5px 8px; font-size: 10px; border-radius: 4px; cursor: pointer; }
+        #exit-btn:hover { background: #ff4444; color: #fff; }
+
         #game-container { background: #fff; border: 2px solid #444; display: inline-block; margin-top: 5px; position: relative; }
         canvas { display: block; }
 
         /* 操作パネル */
         .controls { display: grid; grid-template-areas: ". up ." "left down right"; gap: 10px; justify-content: center; margin-top: 10px; }
-        .btn { width: 70px; height: 70px; background: #333; border: 2px solid #666; border-radius: 15px; color: white; font-size: 32px; display: flex; align-items: center; justify-content: center; user-select: none; }
-        .btn:active { background: #00fbff; color: #000; border-color: #fff; }
-        #next-btn { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 40px; background: #ff4444; color: #fff; font-weight: bold; border: none; cursor: pointer; z-index: 10; font-size: 24px; box-shadow: 0 0 20px #ff0000; }
+        .btn { width: 65px; height: 65px; background: #333; border: 2px solid #666; border-radius: 15px; color: white; font-size: 28px; display: flex; align-items: center; justify-content: center; user-select: none; }
+        .btn:active { background: #00fbff; color: #000; }
+        #next-btn { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 40px; background: #ff4444; color: #fff; font-weight: bold; border: none; cursor: pointer; z-index: 10; font-size: 24px; box-shadow: 0 0 20px #ff0000; border-radius: 10px; }
     </style>
 </head>
 <body>
 
     <div id="start-screen">
-        <div class="title-logo">TAKUHAI DEATH</div>
-        <div class="sub-title">~ REVERSE CALCULATION ~</div>
-        <div id="stg-info" style="margin-bottom: 25px; color: #ff4444; font-weight: bold;"></div>
-        <button class="menu-btn" onclick="startGame(true)">はじめから (STG 1)</button>
-        <button id="continue-btn" class="menu-btn" onclick="startGame(false)">続きから (RESUME)</button>
+        <img src="logo.png" alt="宅配DEATH" class="main-visual">
+        <div class="title-text">宅配DEATH</div>
+        <div id="stg-info" style="margin-bottom: 20px; color: #aaa; font-size: 14px;"></div>
+        <button class="menu-btn" onclick="startGame(true)">はじめから</button>
+        <button id="continue-btn" class="menu-btn" onclick="startGame(false)">続きから再開</button>
     </div>
 
     <div id="game-view">
         <div id="ui-panel">
+            <button id="exit-btn" onclick="location.reload()">EXIT TO TITLE</button>
             <div class="info-row">
                 <div>STG: <span id="stg-num">1</span></div>
                 <div style="display:flex; align-items:center; gap:5px;">
@@ -51,7 +58,7 @@
                 </div>
                 <div>📦: <span id="cargo-count">--</span></div>
             </div>
-            <div id="msg">...</div>
+            <div id="msg">READY...</div>
         </div>
         <div id="game-container">
             <canvas id="gameCanvas"></canvas>
@@ -63,7 +70,6 @@
             <div class="btn" style="grid-area:down" onclick="handleMove(0,1)">▼</div>
             <div class="btn" style="grid-area:right" onclick="handleMove(1,0)">▶</div>
         </div>
-        <button onclick="location.reload()" style="margin-top:15px; background:none; border:none; color:#555; text-decoration:underline; font-size:12px; cursor:pointer;">EXIT TO TITLE</button>
     </div>
 
 <script>
@@ -83,10 +89,10 @@
         const savedSTG = localStorage.getItem('delivery_death_stg');
         if (savedSTG && parseInt(savedSTG) > 1) {
             currentSTG = parseInt(savedSTG);
-            stgInfo.innerText = `LAST CLEAR: STG ${currentSTG - 1}`;
+            stgInfo.innerText = `到達進捗: STG ${currentSTG}`;
             continueBtn.disabled = false;
         } else {
-            stgInfo.innerText = "READY TO DELIVER?";
+            stgInfo.innerText = "新規データ";
             continueBtn.disabled = true;
         }
     };
@@ -133,7 +139,6 @@
         };
         dig(1, 1);
 
-        // 分岐増強（ループ構造）
         let breakCount = Math.floor((rows * cols) / 10);
         for(let i=0; i<breakCount; i++){
             let rx = Math.floor(Math.random()*(cols-2))+1;
@@ -150,7 +155,6 @@
             let f = floors[i]; map[f.r][f.c] = 3; houses.push(f);
         }
 
-        // TSP近似による最短経路逆算
         let totalDist = 0, curX = 1, curY = 1, tempHouses = [...houses];
         while(tempHouses.length > 0) {
             tempHouses.sort((a,b) => getDist(curX, curY, a.c, a.r) - getDist(curX, curY, b.c, b.r));
@@ -159,15 +163,13 @@
             curX = next.c; curY = next.r;
         }
 
-        // 猶予歩数（STGが進むと極限まで減る）
         let margin = Math.max(1, 4 - Math.floor(stg/3));
         maxGas = totalDist + margin;
         gas = maxGas;
         player = {x:1, y:1, facingRight: true};
         gameOver = false;
         nextBtn.style.display = 'none';
-        msgEl.innerText = `ESTIMATED: ${totalDist} / MARGIN: ${margin}`;
-        msgEl.style.color = "#00fbff";
+        msgEl.innerText = `ROUTE MIN: ${totalDist} / MARGIN: ${margin}`;
         
         tileSize = Math.min(Math.floor((window.innerWidth - 20) / cols), 35);
         canvas.width = cols * tileSize; canvas.height = rows * tileSize;
@@ -182,7 +184,7 @@
                 if(map[y][x] === 1) {
                     ctx.fillStyle = '#333'; ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize);
                 } else {
-                    ctx.strokeStyle = "#ddd"; ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize);
+                    ctx.strokeStyle = "#eee"; ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize);
                 }
                 if(map[y][x] === 3) {
                     ctx.font = `${tileSize*0.7}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -192,7 +194,6 @@
         }
         ctx.save();
         ctx.translate(player.x*tileSize+tileSize/2, player.y*tileSize+tileSize/2);
-        // 右向き(facingRight=true)のとき反転させ、右に向かせる（🚚はデフォルト左）
         if(player.facingRight) ctx.scale(-1, 1);
         ctx.font = `${tileSize*0.8}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText('🚚', 0, 0);
@@ -226,12 +227,12 @@
         for(let y=0; y<rows; y++) for(let x=0; x<cols; x++) if(map[y][x] === 3) count++;
         if(count === 0) {
             gameOver = true;
-            msgEl.innerText = "MISSION COMPLETE!";
+            msgEl.innerText = "STAGE COMPLETE!";
             nextBtn.style.display = 'block';
             localStorage.setItem('delivery_death_stg', currentSTG + 1);
         } else if(gas <= 0) {
             gameOver = true;
-            msgEl.innerText = "DEAD: OUT OF GAS";
+            msgEl.innerText = "OUT OF GAS...";
             setTimeout(() => generateStage(currentSTG), 1200);
         }
     }
