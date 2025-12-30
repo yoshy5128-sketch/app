@@ -3,24 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ローカルMP3カッター (ffmpeg.wasm)</title>
+    <title>MP3 CUTTER</title>
+    
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7.3.0/dist/wavesurfer.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7.3.0/dist/plugins/regions.min.js"></script>
+
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f7f6; }
-        .container { max-width: 800px; margin: auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
-        h2 { color: #007bff; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
-        input[type="file"] { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; width: 100%; box-sizing: border-box; }
-        button { background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; transition: background-color 0.3s; margin-top: 15px; }
-        button:hover:not(:disabled) { background-color: #218838; }
-        button:disabled { background-color: #90ee90; cursor: not-allowed; }
-        .controls div { margin-bottom: 10px; }
-        .log-area { margin-top: 20px; padding: 10px; background-color: #e9ecef; border: 1px solid #dee2e6; border-radius: 5px; max-height: 150px; overflow-y: scroll; font-size: 0.8em; }
-        .processing { color: #ffc107; font-weight: bold; }
-        .success { color: #28a745; font-weight: bold; }
-        .error { color: #dc3545; font-weight: bold; }
+        /* ★★★ ダークモード基本設定 ★★★ */
+        body { 
+            font-family: 'Segoe UI', Tahoma, sans-serif; 
+            margin: 0; 
+            background: #1c1c1c; /* ダーク背景 */
+            color: #f0f0f0; /* 明るい文字色 */
+        }
+        .container { 
+            max-width: 950px; 
+            margin: 30px auto; 
+            padding: 25px; 
+            background: #2a2a2a; /* カード背景色 */
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5); /* 影を強調 */
+        }
+        h2 { 
+            text-align: center; 
+            color: #00c853; /* アクセントカラー */
+            margin-bottom: 30px; 
+            letter-spacing: 2px;
+        }
+        
+        /* ステータスバー */
+        .status-bar { 
+            padding: 10px; 
+            border-radius: 8px; 
+            margin-bottom: 20px; 
+            text-align: center; 
+            font-size: 0.9em; 
+            font-weight: bold; 
+        }
+        .status-info { background: #004d40; color: #00c853; } /* ダークグリーン系 */
+        .status-success { background: #00c853; color: #1c1c1c; font-weight: bold; }
+        .status-error { background: #b71c1c; color: #ffeb3b; }
+
+        /* ファイルドロップエリア */
+        .file-drop-area { 
+            border: 2px dashed #00c853; 
+            padding: 20px; 
+            text-align: center; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: 0.2s; 
+            background: #333333; 
+            margin-bottom: 15px; 
+            font-size: 1.1em;
+        }
+        .file-drop-area:hover { background: #3a3a3a; border-color: #38ef7d; }
+
+        /* 波形コンテナ */
+        #scroll-wrapper {
+            width: 100%; overflow-x: scroll !important; overflow-y: hidden;
+            border: 1px solid #444444; border-radius: 4px; height: 200px; 
+            -ms-overflow-style: none; scrollbar-width: none; 
+        }
+        #scroll-wrapper::-webkit-scrollbar { display: none; }
+
+        #waveform { width: fit-content; min-width: 100%; height: 100%; position: relative; overflow: visible !important; }
+        #waveform > div { overflow: visible !important; height: 100% !important; }
+
+        /* ★★★ カスタムハンドル ★★★ */
+        #handle-container {
+            width: 100%; height: 25px; position: relative; margin-top: 5px; background: #3a3a3a; 
+            border-radius: 3px; cursor: grab; overflow: hidden; 
+        }
+        #custom-handle {
+            height: 100%; background: #00796b; /* ハンドルを濃いアクセントカラーに */
+            position: absolute; top: 0; left: 0; border-radius: 3px; 
+            min-width: 40px; cursor: grab; transition: width 0.1s ease; 
+        }
+        
+        /* ズームコントロール */
+        .zoom-controls { 
+            display: flex; align-items: center; justify-content: flex-end; 
+            gap: 10px; margin-bottom: 10px; font-size: 0.9em; color: #bbbbbb; 
+        }
+        input[type="range"] { 
+            width: 150px; cursor: pointer; 
+            filter: invert(0.8); /* ダークモードでスライダーを見やすく調整 */
+        }
+        
+        /* タイム表示とコントロールパネル */
+        .controls-panel { 
+            display: grid; grid-template-columns: 1fr 1fr; gap: 20px; 
+            margin-top: 25px; padding: 20px; background: #333333; border-radius: 10px; 
+        }
+        .time-group { display: flex; flex-direction: column; gap: 15px; align-items: center; }
+        .time-box { 
+            text-align: center; 
+            font-family: 'Roboto Mono', monospace; 
+            font-size: 1.2em; 
+            background: #444444; 
+            color: #00c853; /* アクセントカラー */
+            padding: 8px; 
+            border-radius: 6px; 
+            border: 1px solid #555555; 
+            width: 90%; 
+        }
+        .time-box small { color: #aaaaaa; display: block; margin-bottom: 2px; font-size: 0.7em; }
+
+        /* ボタン */
+        .button-group-vertical { display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; }
+        .btn-main { 
+            padding: 12px 30px; 
+            border: none; 
+            border-radius: 25px; /* 丸いデザイン */
+            font-weight: bold; 
+            cursor: pointer; 
+            font-size: 1.0em; 
+            color: #1c1c1c; 
+            transition: all 0.2s; 
+            min-width: 160px; 
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+        }
+        .btn-play { 
+            background: #ffb300; /* 明るいオレンジ */
+            color: #1c1c1c; 
+        }
+        .btn-play:hover { background: #ffc107; transform: translateY(-1px); box-shadow: 0 5px 10px rgba(0,0,0,0.4); }
+        
+        .btn-region { 
+            background: #00c853; /* アクセントのグリーン */
+            color: #1c1c1c;
+            font-size: 1.0em; 
+            padding: 12px 30px; 
+            border-radius: 25px; 
+        }
+        .btn-region:hover { background: #38ef7d; transform: translateY(-1px); box-shadow: 0 5px 10px rgba(0,0,0,0.4); }
+
+        .cut-section { 
+            margin-top: 30px; 
+            text-align: center; 
+            border-top: 1px solid #444444; 
+            padding-top: 25px; 
+        }
+        .cut-section p strong { color: #00c853; }
+        
+        .btn-cut { 
+            background: #2196f3; 
+            width: 100%; 
+            max-width: 400px; 
+            padding: 18px; 
+            border-radius: 10px; 
+            font-size: 1.3em; 
+            color: white; 
+            box-shadow: 0 4px 10px rgba(33, 150, 243, 0.3);
+        }
+        .btn-cut:hover:not(:disabled) { 
+            background: #42a5f5; 
+            box-shadow: 0 6px 15px rgba(33, 150, 243, 0.5); 
+            transform: translateY(-2px);
+        }
+        .btn-cut:disabled { 
+            background: #444444; 
+            cursor: not-allowed; 
+            color: #777777; 
+            box-shadow: none;
+            transform: none;
+        }
+        .helper-text { font-size: 0.85em; color: #aaaaaa; text-align: center; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -28,224 +181,532 @@
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useEffect } = React;
-// FFmpegインスタンスの作成
-// corePathを設定することで、ブラウザがffmpegのWebAssemblyバイナリをロードできるようにします
-const ffmpeg = FFmpeg.createFFmpeg({
-  log: true, // ログ出力を有効に
-  corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
-});
+const { useState, useEffect, useRef, useCallback } = React;
 
-// 秒をHH:MM:SS.ms形式に変換するヘルパー関数
+const debounce = (func, delay) => {
+    let timeout;
+    return (...args) => {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), delay);
+    };
+};
+
+const CORE_URL = 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js';
+const ffmpeg = FFmpeg.createFFmpeg({ log: true, corePath: CORE_URL, mainName: 'main' });
+
 const formatTime = (seconds) => {
-    const totalMilliseconds = seconds * 1000;
-    const ms = String(Math.floor(totalMilliseconds % 1000)).padStart(3, '0');
-    const totalSeconds = Math.floor(seconds);
-    const s = String(totalSeconds % 60).padStart(2, '0');
-    const m = String(Math.floor(totalSeconds / 60) % 60).padStart(2, '0');
-    const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
-    return `${h}:${m}:${s}.${ms}`;
+    if (!seconds && seconds !== 0) return "00:00.00";
+    const date = new Date(seconds * 1000);
+    const mm = String(date.getUTCMinutes()).padStart(2, '0');
+    const ss = String(date.getUTCSeconds()).padStart(2, '0');
+    const ms = String(Math.floor(date.getMilliseconds() / 10)).padStart(2, '0');
+    return `${mm}:${ss}.${ms}`;
 };
 
 function AudioEditor() {
-  const [isReady, setIsReady] = useState(false);
-  const [audioFile, setAudioFile] = useState(null);
-  const [duration, setDuration] = useState(0);
-  const [startTime, setStartTime] = useState(0);
-  const [endTime, setEndTime] = useState(0);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [logMessages, setLogMessages] = useState([]);
-  const [status, setStatus] = useState('FFmpegの初期化中...');
-  
-  // ログの追加
-  const addLog = (message, type = 'info') => {
-      setLogMessages(prev => [{ message, type, timestamp: new Date().toLocaleTimeString() }, ...prev]);
-  };
-  
-  // FFmpegの初期化
-  useEffect(() => {
-    const loadFFmpeg = async () => {
-      setStatus('FFmpegバイナリをロード中...');
-      addLog('FFmpegの初期化を開始します。');
-      try {
-        if (!ffmpeg.isLoaded()) {
-          // ffmpegの実行には事前にload()が必要
-          await ffmpeg.load();
-        }
-        setIsReady(true);
-        setStatus('準備完了！MP3ファイルをアップロードしてください。');
-        addLog('FFmpegが正常にロードされました。', 'success');
-      } catch (e) {
-        setStatus('FFmpegのロードに失敗しました。コンソールを確認してください。');
-        addLog(`ロードエラー: ${e.message}`, 'error');
-      }
-    };
-    // ログリスナーの設定
-    ffmpeg.setLogger(({ message }) => {
-        addLog(`[FFmpeg Log]: ${message}`);
-    });
+    const [isFFmpegReady, setIsFFmpegReady] = useState(false);
+    const [status, setStatus] = useState('システム初期化中...');
+    const [statusType, setStatusType] = useState('status-info');
+    const [audioFile, setAudioFile] = useState(null);
+    const [startTime, setStartTime] = useState(0);
+    const [endTime, setEndTime] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
     
-    loadFFmpeg();
-  }, []);
+    const [minZoomLevel, setMinZoomLevel] = useState(10); 
+    const [maxZoomLevel, setMaxZoomLevel] = useState(500); 
+    const [currentZoomLevel, setCurrentZoomLevel] = useState(50); 
+    
+    const [loopRegionId, setLoopRegionId] = useState(null); 
 
-  // Web Audio APIを使ってファイルの長さを取得する
-  const getDuration = (file) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        audioContext.decodeAudioData(e.target.result, (buffer) => {
-          resolve(buffer.duration);
+    const scrollWrapperRef = useRef(null); 
+    const waveformContainerRef = useRef(null);
+    const customHandleRef = useRef(null); 
+    const wavesurferRef = useRef(null);
+    const wsRegionsRef = useRef(null);
+    
+    const debouncedUpdateRegionTime = useCallback(
+        debounce((region) => {
+            setStartTime(Number(region.start.toFixed(3)));
+            setEndTime(Number(region.end.toFixed(3)));
+        }, 50),
+        []
+    );
+
+    const syncHandlePosition = useCallback(() => {
+        const scrollWrapper = scrollWrapperRef.current;
+        const customHandle = customHandleRef.current;
+        const waveformContainer = waveformContainerRef.current;
+        
+        if (!scrollWrapper || !customHandle || !waveformContainer) return;
+        
+        const containerWidth = scrollWrapper.clientWidth;
+        const requiredWidth = waveformContainer.offsetWidth;
+        const scrollableWidth = requiredWidth - containerWidth;
+        
+        if (scrollableWidth <= 0) {
+            customHandle.style.opacity = 0; // スクロール不要なら非表示
+            return;
+        }
+
+        const handleWidth = customHandle.offsetWidth;
+        const maxHandleTravel = containerWidth - handleWidth;
+
+        const scrollPercent = scrollWrapper.scrollLeft / scrollableWidth;
+        const handlePosition = scrollPercent * maxHandleTravel;
+
+        customHandle.style.transform = `translateX(${handlePosition}px)`;
+        customHandle.style.opacity = 1; // スクロール必要なら表示
+
+    }, []);
+
+
+    const updateWaveformWidth = (zoomLevel) => {
+        if (wavesurferRef.current && waveformContainerRef.current) {
+            const duration = wavesurferRef.current.getDuration();
+            if (duration) {
+                const requiredWidth = Math.ceil(duration * zoomLevel);
+                waveformContainerRef.current.style.width = `${requiredWidth}px`;
+                
+                updateCustomHandle(requiredWidth);
+            }
+        }
+    };
+    
+    const updateCustomHandle = (requiredWidth) => {
+        const scrollWrapper = scrollWrapperRef.current;
+        const customHandle = customHandleRef.current;
+        
+        if (!scrollWrapper || !customHandle) return;
+        
+        const containerWidth = scrollWrapper.clientWidth;
+        
+        let handleWidth;
+        if (requiredWidth <= containerWidth) {
+            handleWidth = containerWidth; 
+            customHandle.style.cursor = 'default';
+        } else {
+            handleWidth = (containerWidth / requiredWidth) * containerWidth;
+            customHandle.style.cursor = 'grab';
+        }
+        
+        customHandle.style.width = `${Math.max(handleWidth, 40)}px`;
+
+        if (!scrollWrapper.dataset.scrollListener) {
+            scrollWrapper.addEventListener('scroll', syncHandlePosition, { passive: true });
+            scrollWrapper.dataset.scrollListener = 'true';
+        }
+        
+        syncHandlePosition(); 
+    };
+    
+    const setupHandleDrag = useCallback(() => {
+        const customHandle = customHandleRef.current;
+        const scrollWrapper = scrollWrapperRef.current;
+        
+        if (!customHandle || !scrollWrapper) return;
+        
+        let startX = 0;
+        let startHandleLeft = 0;
+        let isDown = false;
+        
+        const handleContainer = customHandleRef.current.parentNode;
+        const containerWidth = scrollWrapper.clientWidth;
+        
+        const handleDragStart = (e) => {
+            if (customHandle.style.opacity === '0') return;
+            isDown = true;
+            e.preventDefault(); 
+            e.stopPropagation(); 
+            
+            const clientX = e.touches ? e.touches[0].pageX : e.pageX;
+            startX = clientX;
+            
+            const transformMatch = customHandle.style.transform.match(/translateX\(([^)]+)px\)/);
+            startHandleLeft = transformMatch ? parseFloat(transformMatch[1]) : 0;
+
+            customHandle.style.cursor = 'grabbing';
+            customHandle.style.transition = 'none'; 
+        };
+
+        const handleDragMove = (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            
+            const clientX = e.touches ? e.touches[0].pageX : e.pageX;
+            const dragDistance = clientX - startX;
+            
+            let newHandleLeft = startHandleLeft + dragDistance;
+            
+            const handleWidth = customHandle.offsetWidth;
+            const maxHandleTravel = containerWidth - handleWidth;
+
+            const clampedLeft = Math.min(Math.max(0, newHandleLeft), maxHandleTravel);
+            
+            customHandle.style.transform = `translateX(${clampedLeft}px)`;
+
+            const scrollableWidth = waveformContainerRef.current.offsetWidth - containerWidth;
+            if (maxHandleTravel > 0) {
+                const scrollPercent = clampedLeft / maxHandleTravel;
+                scrollWrapper.scrollLeft = scrollPercent * scrollableWidth;
+            }
+        };
+
+        const handleDragEnd = () => {
+            if (!isDown) return;
+            isDown = false;
+            customHandle.style.cursor = 'grab';
+            customHandle.style.transition = 'width 0.1s ease'; 
+            
+            syncHandlePosition();
+        };
+
+        handleContainer.addEventListener('touchstart', handleDragStart, { passive: false });
+        handleContainer.addEventListener('touchmove', handleDragMove, { passive: false });
+        handleContainer.addEventListener('touchend', handleDragEnd);
+        handleContainer.addEventListener('mousedown', handleDragStart, { passive: false });
+        window.addEventListener('mousemove', handleDragMove);
+        window.addEventListener('mouseup', handleDragEnd);
+
+    }, [syncHandlePosition]); 
+    
+    useEffect(() => {
+        const ws = wavesurferRef.current;
+        if (!ws) return;
+
+        const handlePause = () => {
+            ws.un('audioprocess');
+            setLoopRegionId(null);
+        };
+
+        ws.on('pause', handlePause);
+        ws.on('finish', handlePause);
+
+        return () => {
+            ws.un('pause', handlePause);
+            ws.un('finish', handlePause);
+            ws.un('audioprocess');
+        };
+    }, []); 
+
+    const initWaveSurfer = (file) => {
+        if (wavesurferRef.current) {
+            wavesurferRef.current.destroy();
+        }
+
+        const ws = WaveSurfer.create({
+            container: waveformContainerRef.current,
+            waveColor: '#4caf50', /* 波形の色をアクセントに合わせて変更 */
+            progressColor: '#ffb300', /* 再生中の色をオレンジに */
+            cursorColor: '#ff1744',
+            barWidth: 2,
+            height: 160, 
+            autoScroll: true,
+            normalize: true,
+            minPxPerSec: 1, 
+            url: URL.createObjectURL(file),
+            scrollParent: false, 
+            hideScrollbar: true 
         });
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  };
 
-  // ファイルアップロードハンドラ
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (file && file.type === 'audio/mp3') {
-        setStatus(`ファイル「${file.name}」を読み込み中...`);
+        const wsRegions = ws.registerPlugin(WaveSurfer.Regions.create());
+        wsRegionsRef.current = wsRegions;
+        wavesurferRef.current = ws;
+
+        ws.on('ready', () => {
+            const duration = ws.getDuration();
+            
+            setTimeout(() => {
+                const containerWidth = scrollWrapperRef.current.clientWidth;
+                const calculatedMinZoom = Math.max(1, Math.ceil(containerWidth / duration));
+                
+                setMinZoomLevel(calculatedMinZoom);
+                setCurrentZoomLevel(calculatedMinZoom); 
+                ws.zoom(calculatedMinZoom); 
+                
+                updateWaveformWidth(calculatedMinZoom);
+                setupHandleDrag();
+                
+                scrollWrapperRef.current.scrollLeft = 0;
+                syncHandlePosition(); 
+
+                setEndTime(duration);
+                setStatus(`読み込み完了: ${file.name}`);
+                setStatusType('status-success');
+
+                wsRegions.clearRegions();
+                const initialRegion = wsRegions.addRegion({
+                    start: duration * 0.1,
+                    end: duration * 0.9,
+                    color: 'rgba(0, 200, 83, 0.3)', /* リージョンの色をアクセントに合わせて変更 */
+                    drag: true,
+                    resize: true 
+                });
+                
+                setLoopRegionId(initialRegion.id);
+
+                wsRegions.on('region-updated', (region) => {
+                    debouncedUpdateRegionTime(region);
+                });
+                
+                wsRegions.on('region-clicked', (region, e) => {
+                    e.stopPropagation();
+                    ws.play(region.start, region.end); 
+                });
+
+
+                setStartTime(Number(initialRegion.start.toFixed(3)));
+                setEndTime(Number(initialRegion.end.toFixed(3)));
+
+            }, 50); 
+        });
+        ws.on('play', () => setIsPlaying(true));
+        ws.on('pause', () => setIsPlaying(false));
+        ws.on('finish', () => setIsPlaying(false));
+    };
+
+
+    const handleZoomChange = (e) => {
+        const newZoom = Number(e.target.value);
+        setCurrentZoomLevel(newZoom);
+        if (wavesurferRef.current) {
+            wavesurferRef.current.zoom(newZoom);
+            updateWaveformWidth(newZoom);
+            
+            if (newZoom === minZoomLevel) {
+                scrollWrapperRef.current.scrollLeft = 0;
+                syncHandlePosition(); 
+            }
+            syncHandlePosition();
+        }
+    };
+    
+    useEffect(() => { 
+        const load = async () => {
+            try {
+                if (!ffmpeg.isLoaded()) await ffmpeg.load();
+                setIsFFmpegReady(true);
+                setStatus('準備完了。MP3ファイルを選択してください。');
+                setStatusType('status-info');
+            } catch (e) {
+                setStatus('❌ FFmpegの起動に失敗しました。再読み込みしてください。');
+                setStatusType('status-error');
+            }
+        };
+        load();
+        
+        return () => {
+            if (wavesurferRef.current) wavesurferRef.current.destroy();
+        };
+    }, []);
+    
+    const togglePlay = () => {
+        if (wavesurferRef.current) {
+            if (isPlaying && loopRegionId) {
+                wavesurferRef.current.un('audioprocess');
+                setLoopRegionId(null);
+            }
+            wavesurferRef.current.playPause();
+        }
+    };
+
+    const playRegionLoop = () => {
+        const ws = wavesurferRef.current;
+        const regions = wsRegionsRef.current.getRegions();
+        
+        if (!ws || !regions || Object.keys(regions).length === 0) return;
+
+        const region = regions[Object.keys(regions)[0]]; 
+
+        if (isPlaying && loopRegionId === region.id) {
+            ws.pause();
+            setLoopRegionId(null);
+            ws.un('audioprocess');
+            return;
+        }
+
+        setLoopRegionId(region.id); 
+        
+        ws.setTime(region.start); 
+        
+        const loopId = region.id;
+        const handleAudioProcess = (currentTime) => {
+            if (currentTime >= region.end) {
+                ws.setTime(region.start);
+            }
+        };
+        
+        ws.un('audioprocess');
+        ws.on('audioprocess', handleAudioProcess);
+        
+        ws.play(); 
+    };
+
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
         setAudioFile(file);
+        setStatus('波形を解析中... (ファイル形式チェック中)');
+        setStatusType('status-info');
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const audioData = evt.target.result;
+            const ac = new (window.AudioContext || window.webkitAudioContext)();
+            
+            ac.decodeAudioData(audioData, 
+                (buffer) => {
+                    initWaveSurfer(file); 
+                    ac.close();
+                }, 
+                (err) => {
+                    console.error("AudioContext Decode Error:", err);
+                    setStatus('❌ エラー: 音声データの解析に失敗しました。別のファイルで試すか、再エンコードしてください。');
+                    setStatusType('status-error');
+                    ac.close();
+                }
+            );
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    const executeCut = async () => {
+        if (!audioFile || !isFFmpegReady || startTime >= endTime) return;
         
-        const fileDuration = await getDuration(file);
-        setDuration(fileDuration);
-        setEndTime(fileDuration); // 終了時間を最大に設定
-        setStartTime(0);
-        setStatus(`ファイル「${file.name}」の読み込み完了。長さ: ${fileDuration.toFixed(2)}秒`);
-    } else {
-        alert('MP3ファイルを選択してください。');
-    }
-  };
-
-  // カット処理の実行関数
-  const executeCut = async () => {
-    if (!audioFile || startTime >= endTime || startTime < 0 || endTime > duration) {
-        alert('無効な時間指定です。開始時間 < 終了時間 < 全長、を確認してください。');
-        return;
-    }
-
-    setIsProcessing(true);
-    setStatus('🚀 カット処理を開始しました...');
-    const inputFileName = 'input.mp3';
-    const outputFileName = 'output.mp3';
-
-    try {
-        addLog('ファイルを仮想ファイルシステム(FS)に書き込み中...', 'processing');
-        // 1. ファイルを仮想ファイルシステム(FS)に書き込む
-        ffmpeg.FS('writeFile', inputFileName, await FFmpeg.fetchFile(audioFile));
+        setIsProcessing(true);
+        setStatus('カット処理中... (画面を閉じないでください)');
+        setStatusType('status-info');
         
-        const ssTime = formatTime(startTime);
-        const toTime = formatTime(endTime);
-        
-        addLog(`FFmpegコマンド実行: -ss ${ssTime} -to ${toTime} -c copy`, 'processing');
+        if (isPlaying) {
+             wavesurferRef.current.pause();
+        }
 
-        // 2. FFmpegコマンドの実行
-        await ffmpeg.run(
-            '-i', inputFileName,
-            '-ss', ssTime, // シーク（開始時間）
-            '-to', toTime, // 終了時間
-            '-c', 'copy', // 再エンコードなしで高速カット
-            outputFileName
-        );
-        addLog('FFmpeg処理が完了しました。', 'success');
-
-        // 3. 処理済みファイルをFSから読み込み、Blobにする
-        const data = ffmpeg.FS('readFile', outputFileName);
-        const outputBlob = new Blob([data.buffer], { type: 'audio/mp3' });
-        
-        // 4. ダウンロードリンクを作成し、ダウンロードを促す
-        const downloadUrl = URL.createObjectURL(outputBlob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `cut_${audioFile.name}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(downloadUrl); // URLを解放
-        
-        setStatus('✅ カット済みファイルがダウンロードされました。');
-
-    } catch (error) {
-        console.error('FFmpeg処理エラー:', error);
-        setStatus('❌ 処理中にエラーが発生しました。コンソールを確認してください。');
-        addLog(`致命的なエラー: ${error.message}`, 'error');
-    } finally {
-        // 5. 仮想ファイルシステムと状態をクリーンアップ
         try {
-            ffmpeg.FS('unlink', inputFileName);
-            ffmpeg.FS('unlink', outputFileName);
-        } catch(e) { /* ファイルが存在しない場合のエラーを無視 */ }
-        setIsProcessing(false);
-    }
-  };
+            const inputName = 'input.mp3';
+            const outputName = 'output.mp3';
+            
+            ffmpeg.FS('writeFile', inputName, await FFmpeg.fetchFile(audioFile));
 
-  return (
-    <div className="container">
-      <h2>🎵 ローカルMP3カッター (Wasm powered)</h2>
-      <p>⚠️ 注意: すべての処理はブラウザ内で完結します。ファイルはアップロードされません。</p>
-      
-      <input 
-        type="file" 
-        accept="audio/mp3" 
-        onChange={handleFileUpload} 
-        disabled={!isReady || isProcessing}
-      />
-      
-      <p>ステータス: <span className={isReady && !isProcessing ? 'success' : isProcessing ? 'processing' : ''}>{status}</span></p>
+            await ffmpeg.run(
+                '-i', inputName,
+                '-ss', startTime.toString(),
+                '-to', endTime.toString(),
+                '-c', 'copy',
+                outputName
+            );
 
-      {audioFile && duration > 0 && (
-        <div className="controls">
-          <h3>ファイル: {audioFile.name} (全長: {duration.toFixed(2)}秒)</h3>
-          
-          <div>
-            開始時間 (秒): 
-            <input 
-              type="number" 
-              step="0.1" 
-              value={startTime} 
-              onChange={(e) => setStartTime(Math.max(0, Math.min(Number(e.target.value), endTime)))} 
-              min="0" 
-              max={duration.toFixed(2)} 
-              disabled={isProcessing}
-            />
-          </div>
-          <div>
-            終了時間 (秒): 
-            <input 
-              type="number" 
-              step="0.1" 
-              value={endTime} 
-              onChange={(e) => setEndTime(Math.min(duration, Math.max(Number(e.target.value), startTime)))} 
-              min={startTime.toFixed(2)} 
-              max={duration.toFixed(2)} 
-              disabled={isProcessing}
-            />
-          </div>
-          
-          <p>カット後の長さ: **{(endTime - startTime).toFixed(2)}秒**</p>
-          
-          <button onClick={executeCut} disabled={isProcessing || !isReady}>
-            {isProcessing ? '処理中...お待ちください' : `✂️ ${startTime.toFixed(2)}秒から${endTime.toFixed(2)}秒までカット`}
-          </button>
+            const data = ffmpeg.FS('readFile', outputName);
+            const blob = new Blob([data.buffer], { type: 'audio/mp3' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `cut_${audioFile.name}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
 
-          <p>（注: 正確なフレーム位置でカットするため、指定した時間と若干の誤差が生じることがあります）</p>
+            setStatus('ダウンロード完了！');
+            setStatusType('status-success');
+        } catch (e) {
+            console.error(e);
+            setStatus('❌ 処理中にエラーが発生しました。コンソールを確認してください。');
+            setStatusType('status-error');
+        } finally {
+            try {
+                ffmpeg.FS('unlink', 'input.mp3');
+                ffmpeg.FS('unlink', 'output.mp3');
+            } catch(e) {}
+            setIsProcessing(false);
+        }
+    };
+
+    return (
+        <div className="container">
+            <h2>MP3 CUTTER</h2>
+            
+            <div className={`status-bar ${statusType}`}>{status}</div>
+
+            <div className="file-drop-area">
+                <input 
+                    type="file" 
+                    accept="audio/*" 
+                    onChange={handleFileUpload} 
+                    style={{display: 'none'}} 
+                    id="fileInput"
+                    disabled={!isFFmpegReady || isProcessing}
+                />
+                <label htmlFor="fileInput" style={{cursor: 'pointer', display: 'block', width: '100%'}}>
+                    {audioFile ? `📂 ${audioFile.name}` : 'MP3ファイルをドロップまたはクリックしてロード'}
+                </label>
+            </div>
+
+            {audioFile && (
+                <>
+                    <div className="zoom-controls">
+                        <label>🔍 ズーム:</label>
+                        <input 
+                            type="range" 
+                            min={minZoomLevel} 
+                            max={maxZoomLevel} 
+                            value={currentZoomLevel} 
+                            onChange={handleZoomChange} 
+                        />
+                    </div>
+                    
+                    <div id="scroll-wrapper" ref={scrollWrapperRef}>
+                        <div id="waveform" ref={waveformContainerRef}></div>
+                    </div>
+                    
+                    <div id="handle-container">
+                        <div id="custom-handle" ref={customHandleRef}></div>
+                    </div>
+
+                    <p className="helper-text">
+                        波形下の太いバーをスワイプして、表示範囲を移動してください。
+                    </p>
+
+                    <div className="controls-panel">
+                        <div className="time-group">
+                            <div className="time-box">
+                                <small>START</small>
+                                {formatTime(startTime)}
+                            </div>
+                            <div className="time-box">
+                                <small>END</small>
+                                {formatTime(endTime)}
+                            </div>
+                        </div>
+
+                        <div className="button-group-vertical">
+                            <button className="btn-main btn-play" onClick={togglePlay} disabled={!wavesurferRef.current || isProcessing}>
+                                {isPlaying && !loopRegionId ? '⏸ PAUSE' : '▶️ PLAY ALL'}
+                            </button>
+                            <button 
+                                className="btn-main btn-region" 
+                                onClick={playRegionLoop} 
+                                disabled={!wavesurferRef.current || isProcessing}
+                            >
+                                {isPlaying && loopRegionId ? '⏹ STOP LOOP' : '🔁 LOOP REGION'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="cut-section">
+                        <p>Duration: <strong>{((endTime - startTime) || 0).toFixed(2)} sec</strong></p>
+                        <button className="btn-main btn-cut" onClick={executeCut} disabled={isProcessing || startTime >= endTime}>
+                            {isProcessing ? 'PROCESSING...' : '✂️ CUT & DOWNLOAD'}
+                        </button>
+                    </div>
+                </>
+            )}
         </div>
-      )}
-      
-      <div className="log-area">
-        <strong>処理ログ:</strong>
-        {logMessages.map((log, index) => (
-            <p key={index} className={log.type}>[{log.timestamp}] {log.message}</p>
-        ))}
-      </div>
-    </div>
-  );
+    );
 }
 
-ReactDOM.render(<AudioEditor />, document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<AudioEditor />);
 </script>
-
 </body>
 </html>

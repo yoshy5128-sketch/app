@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SWF Player</title>
+    <script src="ruffle.js"></script> </head>
+<body>
+    <div id="container"></div> <script>
+        window.RufflePlayer = window.RufflePlayer || {};
+        const ruffle = window.RufflePlayer.newest();
+        const player = ruffle.createPlayer();
+        const container = document.getElementById("container");
+        container.appendChild(player);
+        
+        // 再生したいSWFファイルを指定
+        player.load("your_file.swf");
+    </script>
+</body>
+</html>
