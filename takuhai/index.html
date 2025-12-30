@@ -16,14 +16,11 @@
         #game-view { display: none; position: relative; }
         #ui-panel { background: #222; padding: 12px 5px; border-bottom: 3px solid #00fbff; position: relative; }
         
-        /* ステータス行（間隔を広めに確保） */
         .info-row { display: flex; justify-content: center; align-items: center; gap: 35px; margin-top: 5px; } 
-        
         .gas-bar-bg { width: 80px; height: 12px; background: #000; border-radius: 6px; border: 1px solid #555; overflow: hidden; margin: 0 5px; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; transition: width 0.2s; }
         #msg { color: #00fbff; font-size: 12px; font-weight: bold; margin-top: 8px; height: 16px; }
         
-        /* EXITボタン（右上隅へ極小化して配置） */
         #exit-btn { 
             position: absolute; 
             right: 4px; 
@@ -40,7 +37,7 @@
         #exit-btn:hover { background: #ff4444; color: #fff; border-color: #ff4444; }
 
         #game-container { background: #fff; border: 2px solid #444; display: inline-block; margin-top: 5px; position: relative; }
-        canvas { display: block; }
+        canvas { display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
 
         .controls { display: grid; grid-template-areas: ". up ." "left down right"; gap: 10px; justify-content: center; margin-top: 10px; }
         .btn { width: 65px; height: 65px; background: #333; border: 2px solid #666; border-radius: 15px; color: white; font-size: 28px; display: flex; align-items: center; justify-content: center; user-select: none; }
@@ -181,19 +178,32 @@
         nextBtn.style.display = 'none';
         msgEl.innerText = `MIN: ${totalDist} / MARGIN: ${margin}`;
         
+        // --- 解像度対応 (HiDPI) ---
+        const dpr = window.devicePixelRatio || 1;
         tileSize = Math.min(Math.floor((window.innerWidth - 20) / cols), 35);
-        canvas.width = cols * tileSize; canvas.height = rows * tileSize;
+        canvas.style.width = (cols * tileSize) + 'px';
+        canvas.style.height = (rows * tileSize) + 'px';
+        canvas.width = cols * tileSize * dpr;
+        canvas.height = rows * tileSize * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // 描画をdpr分拡大
+        
         updateUI(); draw();
     }
 
     function draw() {
-        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cols * tileSize, rows * tileSize);
         for(let y=0; y<rows; y++) {
             for(let x=0; x<cols; x++) {
-                if(map[y][x] === 1) { ctx.fillStyle = '#333'; ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize); }
-                else { ctx.strokeStyle = "#eee"; ctx.strokeRect(x*tileSize, y*tileSize, tileSize, tileSize); }
+                if(map[y][x] === 1) { 
+                    ctx.fillStyle = '#333'; ctx.fillRect(x*tileSize, y*tileSize, tileSize, tileSize); 
+                } else { 
+                    ctx.strokeStyle = "#eee"; 
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x*tileSize + 0.5, y*tileSize + 0.5, tileSize - 1, tileSize - 1); 
+                }
                 if(map[y][x] === 3) {
-                    ctx.font = `${tileSize*0.7}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+                    ctx.font = `bold ${tileSize*0.7}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`; 
+                    ctx.textAlign = "center"; ctx.textBaseline = "middle";
                     ctx.fillText('🏠', x*tileSize+tileSize/2, y*tileSize+tileSize/2);
                 }
             }
@@ -201,7 +211,8 @@
         ctx.save();
         ctx.translate(player.x*tileSize+tileSize/2, player.y*tileSize+tileSize/2);
         if(player.facingRight) ctx.scale(-1, 1);
-        ctx.font = `${tileSize*0.8}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = `bold ${tileSize*0.8}px "Apple Color Emoji", "Segoe UI Emoji", sans-serif`; 
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText('🚚', 0, 0); ctx.restore();
     }
 
