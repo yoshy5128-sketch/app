@@ -267,6 +267,7 @@
             appearance: none; /* Reset native UI */
             outline: none; /* Remove focus outline */
             box-shadow: none; /* Ensure no box-shadow */
+            overflow: hidden;
         }
         .fixed-footer #play-pause-btn:hover, .fixed-footer #play-pause-btn:focus {
             background-color: rgba(var(--primary-color-rgb), 0.2);
