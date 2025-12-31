@@ -1,0 +1,15 @@
+{
+  "name": "GunFightArena",
+  "short_name": "GFA",
+  "description": "Simple FPS Shooting",
+  "start_url": "./",
+  "display": "fullscreen",
+  "background_color": "#222",
+  "theme_color": "#222",
+      "icons": [
+      {
+        "src": "icon.png",
+        "sizes": "191x191", 
+        "type": "image/png"
+      }
+    ]}
