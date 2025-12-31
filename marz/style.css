@@ -1,0 +1,209 @@
+body {
+    margin: 0;
+    overflow: hidden; /* Prevent scrolling on mobile */
+    background-color: #333; /* Dark background for the whole page */
+}
+
+#restart-btn {
+    position: absolute;
+    top: 65%; /* Adjust as needed to be below the text */
+    left: 50%;
+    transform: translate(-50%, -50%); /* Center horizontally and vertically */
+    padding: 15px 30px;
+    font-size: 1.5em;
+    background-color: #007bff; /* Blue color for restart */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    z-index: 100; /* Ensure it's above the canvas */
+}
+
+#restart-btn:active {
+    background-color: #0056b3;
+}
+
+#show-map-btn, #bgm-toggle-btn {
+    position: absolute;
+    top: 20px; /* Adjust as needed */
+    padding: 10px 20px;
+    font-size: 1em;
+    background-color: #555; /* Dark gray */
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 100;
+}
+
+#show-map-btn {
+    right: 140px; /* Position to the left of bgm-toggle-btn */
+}
+
+#bgm-toggle-btn {
+    right: 20px; /* Position in top-right corner */
+}
+
+#show-map-btn:active, #bgm-toggle-btn:active {
+    background-color: #777;
+}
+
+canvas {
+    display: block;
+    background-color: black;
+    width: 100vw; /* Make canvas fill 100% of viewport width */
+    height: calc(100vh - 80px); /* Adjust height to leave space for mobile controls */
+    /* For a fixed aspect ratio, we might need JavaScript or a more complex CSS solution.
+       For now, let's prioritize filling the screen vertically as much as possible. */
+}
+
+#mobile-controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(0, 0, 0, 0.7); /* Slightly darker, more opaque background */
+    display: flex;
+    justify-content: space-around; /* Distribute items evenly with space around them */
+    align-items: center; /* Center items vertically */
+    padding: 10px 0; /* Add padding top/bottom, no side padding as justify-content handles spacing */
+    box-sizing: border-box; /* Include padding in width calculation */
+    z-index: 100;
+}
+
+#mobile-controls .left-group,
+#mobile-controls .right-group {
+    display: flex;
+    gap: 15px; /* Increased space between buttons within a group */
+}
+
+#mobile-controls button {
+    padding: 18px 30px; /* Slightly larger buttons */
+    font-size: 1.6em; /* Slightly larger font */
+    background-color: #444; /* Slightly lighter button background */
+    color: white;
+    border: 2px solid #666; /* Lighter border */
+    border-radius: 10px; /* More rounded corners */
+    cursor: pointer;
+    user-select: none; /* Prevent text selection on touch */
+    -webkit-tap-highlight-color: rgba(0,0,0,0); /* Remove tap highlight on iOS */
+    flex-shrink: 0; /* Prevent buttons from shrinking */
+}
+
+#mobile-controls button:active {
+    background-color: #666; /* Active state color */
+}
+
+/* Media query for smaller screens (e.g., phones in portrait mode) */
+@media (max-width: 600px) {
+    canvas {
+        height: calc(100vh - 100px); /* Adjust canvas height for smaller screens */
+    }
+    #mobile-controls button {
+        padding: 12px 20px; /* Smaller buttons for smaller screens */
+        font-size: 1.2em;
+    }
+}
+
+/* New styles for start page and readme page */
+body.start-page, body.readme-page {
+    margin: 0;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-image: url('start.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: white; /* Default text color for start/readme pages */
+    font-family: 'Arial', sans-serif; /* A common, readable font */
+    text-align: center;
+}
+
+.container {
+    background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent dark background for content */
+    padding: 40px 60px;
+    border-radius: 15px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+    max-width: 90%;
+}
+
+/* New styles for readme page container to enable scrolling */
+body.readme-page .container {
+    max-height: 90vh; /* Limit height to 90% of viewport height */
+    overflow-y: auto; /* Enable vertical scrolling */
+    padding: 40px 60px; /* Keep padding */
+    box-sizing: border-box; /* Include padding in height calculation */
+}
+
+.game-title {
+    font-family: 'Georgia', serif; /* More classic/horror-like font for title */
+    font-size: 4em;
+    margin-bottom: 40px;
+    text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.9);
+    color: #e0e0e0; /* Slightly off-white for a weathered look */
+    /* Simulating the rock/horror effect with text-shadow and color */
+    /* For actual cracked rock, an image or more complex CSS would be needed */
+}
+
+.button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.start-button, .readme-button, .back-button {
+    display: inline-block;
+    padding: 18px 40px;
+    font-size: 1.8em;
+    font-weight: bold;
+    text-decoration: none;
+    color: white;
+    background-color: #8b0000; /* Dark red for horror theme */
+    border: 3px solid #ff4500; /* Orange-red border */
+    border-radius: 10px;
+    transition: background-color 0.3s ease, border-color 0.3s ease, transform 0.2s ease;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.start-button:hover, .readme-button:hover, .back-button:hover {
+    background-color: #a00000; /* Slightly lighter red on hover */
+    border-color: #ffa07a; /* Lighter orange-red on hover */
+    transform: translateY(-3px);
+}
+
+.start-button:active, .readme-button:active, .back-button:active {
+    background-color: #6a0000;
+    border-color: #cd5c5c;
+    transform: translateY(0);
+}
+
+/* Styles for readme page specific elements */
+body.readme-page h1 {
+    font-size: 2.5em;
+    margin-bottom: 30px;
+    color: #e0e0e0;
+    text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.7);
+}
+
+body.readme-page p {
+    font-size: 1em;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.back-button {
+    margin-top: 30px;
+    background-color: #444; /* Darker button for back */
+    border-color: #666;
+}
+
+.back-button:hover {
+    background-color: #555;
+    border-color: #888;
+}

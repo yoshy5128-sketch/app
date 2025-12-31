@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D迷路ゲーム</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <canvas id="maze-canvas"></canvas>
+    <button id="restart-btn" style="display: none;">リスタート</button>
+    <button id="show-map-btn" style="display: none;">マップ表示</button>
+    <button id="bgm-toggle-btn" style="display: none;">BGM ON/OFF</button>
+    <script src="maze.js"></script>
+    <div id="mobile-controls">
+        <div class="left-group">
+            <button id="left-btn">◀</button>
+            <button id="right-btn">▶</button>
+        </div>
+        <div class="right-group">
+            <button id="backward-btn">▼</button>
+            <button id="forward-btn">▲</button>
+        </div>
+    </div>
+</body>
+</html>
