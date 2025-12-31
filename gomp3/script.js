@@ -698,7 +698,6 @@
             trackTitleFooter.textContent = track.title;
             trackArtistFooter.textContent = track.artist; // Fix: Display actual artist name
             
-            audioPlayer.load();
             renderPlaylist();
             
             if (andPlay) { 
