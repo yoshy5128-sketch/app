@@ -55,13 +55,11 @@
             // Playback controls
             playPauseBtn.addEventListener('click', () => { 
                 if (currentPlaylist.length === 0) return; 
-                isPlaying = !isPlaying; 
                 if (isPlaying) {
-                    audioPlayer.play();
-                } else {
                     audioPlayer.pause();
+                } else {
+                    audioPlayer.play();
                 }
-                playPauseBtn.textContent = isPlaying ? '⏸' : '▶'; 
             });
             nextBtn.addEventListener('click', () => { 
                 if(currentPlaylist.length === 0) return; 
@@ -95,10 +93,12 @@
 
             audioPlayer.addEventListener('play', () => {
                 isPlaying = true;
-                playPauseBtn.textContent = '⏸';
+                playPauseBtn.classList.add('is-playing');
+                playPauseBtn.textContent = '';
             });
             audioPlayer.addEventListener('pause', () => {
                 isPlaying = false;
+                playPauseBtn.classList.remove('is-playing');
                 playPauseBtn.textContent = '▶';
             });
             audioPlayer.addEventListener('ended', () => {
@@ -108,6 +108,7 @@
 
                 if (repeatMode === 0 && isLastTrack) {
                     isPlaying = false;
+                    playPauseBtn.classList.remove('is-playing');
                     playPauseBtn.textContent = '▶';
                     renderPlaylist();
                     messageDisplay.textContent = 'プレイリストの再生が終了しました。';

@@ -276,6 +276,26 @@
              background-color: rgba(var(--primary-color-rgb), 0.3);
         }
 
+        .fixed-footer #play-pause-btn.is-playing {
+            position: relative;
+        }
+        .fixed-footer #play-pause-btn.is-playing::before,
+        .fixed-footer #play-pause-btn.is-playing::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 4px;
+            height: 18px;
+            background-color: var(--primary-color);
+            transform: translateY(-50%);
+        }
+        .fixed-footer #play-pause-btn.is-playing::before {
+            left: 15px;
+        }
+        .fixed-footer #play-pause-btn.is-playing::after {
+            right: 15px;
+        }
+
         .fixed-footer .seek-bar-container { 
             width: 100%; 
             max-width: 500px;
