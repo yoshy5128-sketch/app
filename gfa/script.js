@@ -2385,9 +2385,13 @@ function checkCollision(object, obstacles, ignoreObstacle = null) {
         if (obstacle.userData.isRooftop) { // Rooftop floors are not solid barriers
             continue;
         }
-        if (ignoreObstacle && (obstacle.userData.parentTower === ignoreObstacle || obstacle.userData.parentBuildingRef === ignoreObstacle)) {
-            continue;
-        }
+        // The current 'ignoreObstacle' logic is designed to ignore only the specific object passed.
+        // It should NOT ignore objects that are merely children or parts of the ignored object,
+        // unless those parts are explicitly handled (like isRooftop floors).
+        // Removing the broad parent/building reference ignore condition.
+        // if (ignoreObstacle && (obstacle.userData.parentTower === ignoreObstacle || obstacle.userData.parentBuildingRef === ignoreObstacle)) {
+        //    continue;
+        // }
         const obstacleBox = new THREE.Box3().setFromObject(obstacle);
         if (currentObjectBox.intersectsBox(obstacleBox)) {
             return true;
