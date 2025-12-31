@@ -5,23 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>宅配DEATH - TAKUHAI DEATH</title>
     <style>
-        body { background: #1a1a1a; color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; touch-action: manipulation; }
+        body { background: #1a1a1a; color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; touch-action: manipulation; transition: background-color 0.1s; }
+        
+        /* フラッシュエフェクト用クラス */
+        .flash-red { background-color: #ff0000 !important; }
+
         #start-screen { position: absolute; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
         .main-visual { width: 85%; max-width: 450px; margin-bottom: 20px; border: 2px solid #ff4444; border-radius: 10px; }
         .menu-btn { width: 250px; padding: 15px; margin: 10px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 18px; font-weight: bold; cursor: pointer; }
+
         #game-view { display: none; position: relative; }
         #ui-panel { background: #222; padding: 12px 5px; border-bottom: 3px solid #00fbff; position: relative; }
+        
         .info-row { display: flex; justify-content: center; align-items: center; gap: 35px; margin-top: 5px; } 
         .gas-bar-bg { width: 80px; height: 12px; background: #000; border-radius: 6px; border: 1px solid #555; overflow: hidden; margin: 0 5px; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; transition: width 0.2s; }
         #msg { color: #00fbff; font-size: 12px; font-weight: bold; margin-top: 8px; height: 16px; }
+        
         #exit-btn { position: absolute; right: 4px; top: 4px; background: #333; color: #888; border: 1px solid #444; padding: 2px 6px; font-size: 10px; border-radius: 3px; cursor: pointer; line-height: 1; }
-        #exit-btn:hover { background: #ff4444; color: #fff; border-color: #ff4444; }
+        #exit-btn:hover { background: #ff4444; color: #fff; }
+
         #game-container { background: #fff; border: 2px solid #444; display: inline-block; margin-top: 5px; position: relative; }
         canvas { display: block; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; }
+
         .controls { display: grid; grid-template-areas: ". up ." "left down right"; gap: 10px; justify-content: center; margin-top: 10px; }
         .btn { width: 65px; height: 65px; background: #333; border: 2px solid #666; border-radius: 15px; color: white; font-size: 28px; display: flex; align-items: center; justify-content: center; user-select: none; }
         .btn:active { background: #00fbff; color: #000; }
+        
         #next-btn { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 20px 40px; background: #ff4444; color: #fff; font-weight: bold; border-radius: 10px; border: none; z-index: 10; font-size: 24px; box-shadow: 0 0 20px #ff0000; }
     </style>
 </head>
@@ -70,8 +80,6 @@
 
     let currentSTG = 1;
     let player = {x:1, y:1, facingRight: true}, gas, maxGas, map, rows, cols, tileSize, gameOver;
-    
-    // 現在のステージの状態を保存する変数
     let currentStageData = null;
 
     window.onload = () => {
@@ -143,7 +151,6 @@
             let f = floors[i]; map[f.r][f.c] = 3;
         }
 
-        // TSP近似による最短距離計算
         let totalDist = 0, curX = 1, curY = 1;
         let tempHouses = [];
         for(let r=0; r<rows; r++) for(let c=0; c<cols; c++) if(map[r][c]===3) tempHouses.push({c,r});
@@ -158,7 +165,6 @@
         let margin = Math.max(1, 4 - Math.floor(stg/3));
         maxGas = totalDist + margin;
 
-        // ステージ情報を保存（リトライ用）
         currentStageData = {
             map: JSON.parse(JSON.stringify(map)),
             maxGas: maxGas,
@@ -172,7 +178,6 @@
     }
 
     function initLevel() {
-        // 保存されたマップデータから復元
         map = JSON.parse(JSON.stringify(currentStageData.map));
         gas = currentStageData.maxGas;
         maxGas = currentStageData.maxGas;
@@ -193,6 +198,20 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         
         updateUI(); draw();
+    }
+
+    // 失敗時のフラッシュエフェクト
+    function triggerFlash() {
+        let count = 0;
+        const interval = setInterval(() => {
+            document.body.classList.toggle('flash-red');
+            count++;
+            if (count >= 6) { // 3回点滅
+                clearInterval(interval);
+                document.body.classList.remove('flash-red');
+                initLevel(); // エフェクト後にリトライ
+            }
+        }, 100);
     }
 
     function draw() {
@@ -249,9 +268,9 @@
             gameOver = true; msgEl.innerText = "SUCCESS!"; nextBtn.style.display = 'block';
             localStorage.setItem('delivery_death_stg', currentSTG + 1);
         } else if(gas <= 0) {
-            gameOver = true; msgEl.innerText = "NO FUEL - RETRYING...";
-            // 同じマップで再試行
-            setTimeout(() => initLevel(), 1200);
+            gameOver = true; 
+            msgEl.innerText = "DEAD: OUT OF FUEL";
+            triggerFlash(); // フラッシュさせてからリトライ
         }
     }
 
