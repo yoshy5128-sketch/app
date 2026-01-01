@@ -1731,12 +1731,11 @@ if (document.getElementById('joystick-move')) {
     const moveManager = nipplejs.create({ zone: document.getElementById('joystick-move'), mode: 'static', position: { left: '50%', top: '50%' }, color: 'blue' });
     moveManager.on('move', function (evt, data) {
         if (!isGameRunning) return;
-        const angleRad = data.angle.radian;
-        const distance = Math.min(data.distance / 40, 1.0);
-        // Invert the Y-axis: nipple.js 'up' (positive sin) corresponds to game's 'forward' (negative forwardMove).
-        joystickMoveVector.set(Math.cos(angleRad) * distance, -Math.sin(angleRad) * distance);
+        joystickMoveVector.set(data.vector.x, data.vector.y);
+        console.log(`[JOYSTICK] data.vector.y: ${data.vector.y}, joystickMoveVector.y: ${joystickMoveVector.y}`);
     }).on('end', function () {
         joystickMoveVector.set(0, 0);
+        console.log('[JOYSTICK] end: joystickMoveVector.y: 0');
     });
 }
 const keySet = new Set();
@@ -2740,6 +2739,19 @@ function animate() {
     if (keySet.has('KeyA')) keyboardMoveVector.x -= 1;
     if (keySet.has('KeyD')) keyboardMoveVector.x += 1;
     let finalMoveVector = joystickMoveVector.length() > 0 ? joystickMoveVector.clone() : keyboardMoveVector.clone();
+    console.log(`[ANIMATE] finalMoveVector.y: ${finalMoveVector.y}`);
+
+    if (finalMoveVector.length() > 0) finalMoveVector.normalize();
+    const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
+    const rightMove = finalMoveVector.x * currentMoveSpeed * delta;
+    console.log(`[ANIMATE] forwardMove: ${forwardMove}`);
+
+    const moveDirection = new THREE.Vector3(rightMove, 0, -forwardMove);
+    console.log(`[ANIMATE] moveDirection.z (before rotate): ${moveDirection.z}`);
+
+    moveDirection.applyQuaternion(player.quaternion);
+    console.log(`[ANIMATE] moveDirection.z (after rotate): ${moveDirection.z}, player.rotation.y: ${player.rotation.y}`);
+
     if (isElevating) {
         const elevateSpeed = 5.0;
         player.position.y += elevateSpeed * delta;
