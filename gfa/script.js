@@ -1733,7 +1733,8 @@ if (document.getElementById('joystick-move')) {
         if (!isGameRunning) return;
         const angleRad = data.angle.radian;
         const distance = Math.min(data.distance / 40, 1.0);
-        joystickMoveVector.set(Math.cos(angleRad) * distance, Math.sin(angleRad) * distance);
+        // Invert the Y-axis because nipple.js considers 'up' as positive, but our game's forward movement is driven by a negative value.
+        joystickMoveVector.set(Math.cos(angleRad) * distance, -Math.sin(angleRad) * distance);
     }).on('end', function () {
         joystickMoveVector.set(0, 0);
     });
