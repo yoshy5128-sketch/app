@@ -1017,16 +1017,9 @@ const AI_INITIAL_POSITIONS = [
     new THREE.Vector3(-20, 0, -20),
 ];
 resetObstacles();
-let playerBody, playerHead, playerModel;
+let playerModel;
 let isPlayerDeathPlaying = false;
-const playerMaterial = new THREE.MeshLambertMaterial({ color: 0x0000ff });
-playerBody = new THREE.Mesh(new THREE.BoxGeometry(1.0, BODY_HEIGHT, 1.0), playerMaterial);
-playerHead = new THREE.Mesh(new THREE.SphereGeometry(HEAD_RADIUS, 16, 16), playerMaterial);
-playerBody.position.y = BODY_HEIGHT / 2;
-playerHead.position.y = BODY_HEIGHT + HEAD_RADIUS;
-playerModel = new THREE.Group();
-playerModel.add(playerBody);
-playerModel.add(playerHead);
+playerModel = createCharacterModel(0x0000ff); // Player's color
 player.add(playerModel);
 playerModel.visible = false;
 const AI_SPEED = 15.0;
@@ -1060,17 +1053,82 @@ function cleanupAI(aiObject) {
 
 const ais = [];
 
-function createAI(color) {
-    const bodyGeometry = new THREE.BoxGeometry(1.0, BODY_HEIGHT, 1.0);
-    const headGeometry = new THREE.SphereGeometry(HEAD_RADIUS, 16, 16);
+function createCharacterModel(color) {
     const material = new THREE.MeshLambertMaterial({ color: color });
-    const body = new THREE.Mesh(bodyGeometry, material);
-    const head = new THREE.Mesh(headGeometry, material);
-    body.position.y = BODY_HEIGHT / 2;
-    head.position.y = BODY_HEIGHT + HEAD_RADIUS;
-    const aiObject = new THREE.Group();
-    aiObject.add(body);
-    aiObject.add(head);
+    const gunMaterial = new THREE.MeshLambertMaterial({ color: 0x111111 });
+
+    // Proportions to keep the same total height, with model's feet at y=0
+    const torsoHeight = BODY_HEIGHT * 0.5;
+    const legSegmentHeight = BODY_HEIGHT * 0.25;
+    const torsoY = (legSegmentHeight * 2) + (torsoHeight / 2);
+    const headY = (legSegmentHeight * 2) + torsoHeight + HEAD_RADIUS;
+
+    // Body and Head
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, torsoHeight, 1.0), material);
+    body.position.y = torsoY;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_RADIUS, 16, 16), material);
+    head.position.y = headY;
+
+    // Arms and Gun
+    const aimGroup = new THREE.Group();
+    const gunLength = 2.0;
+    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, gunLength), gunMaterial);
+    gun.position.z = gunLength / 2;
+    aimGroup.position.y = (legSegmentHeight * 2) + torsoHeight * 0.7;
+    aimGroup.add(gun);
+    const armGeomShort = new THREE.BoxGeometry(0.25, 0.25, 0.8);
+    const armGeomLong = new THREE.BoxGeometry(0.25, 0.25, 1.2);
+    const leftArm = new THREE.Mesh(armGeomShort, material);
+    leftArm.position.set(-0.3, 0, 0.2);
+    leftArm.rotation.y = Math.PI / 6;
+    const rightArm = new THREE.Mesh(armGeomLong, material);
+    rightArm.position.set(0.3, 0, 0.6);
+    rightArm.rotation.y = -Math.PI / 6;
+    aimGroup.add(leftArm, rightArm);
+
+    // Legs (Thigh + Shin)
+    const legWidth = 0.3;
+    const thighGeom = new THREE.BoxGeometry(legWidth, legSegmentHeight, legWidth);
+    const shinGeom = new THREE.BoxGeometry(legWidth, legSegmentHeight, legWidth);
+    const leftHip = new THREE.Object3D();
+    leftHip.position.set(-0.4, legSegmentHeight * 2, 0);
+    const rightHip = new THREE.Object3D();
+    rightHip.position.set(0.4, legSegmentHeight * 2, 0);
+    const leftThigh = new THREE.Mesh(thighGeom, material);
+    leftThigh.position.y = -legSegmentHeight / 2;
+    leftHip.add(leftThigh);
+    const rightThigh = new THREE.Mesh(thighGeom, material);
+    rightThigh.position.y = -legSegmentHeight / 2;
+    rightHip.add(rightThigh);
+    const leftKnee = new THREE.Object3D();
+    leftKnee.position.y = -legSegmentHeight;
+    leftHip.add(leftKnee);
+    const rightKnee = new THREE.Object3D();
+    rightKnee.position.y = -legSegmentHeight;
+    rightHip.add(rightKnee);
+    const leftShin = new THREE.Mesh(shinGeom, material);
+    leftShin.position.y = -legSegmentHeight / 2;
+    leftKnee.add(leftShin);
+    const rightShin = new THREE.Mesh(shinGeom, material);
+    rightShin.position.y = -legSegmentHeight / 2;
+    rightKnee.add(rightShin);
+
+    const characterModel = new THREE.Group();
+    characterModel.add(body, head, aimGroup, leftHip, rightHip);
+    characterModel.userData.parts = {
+        aimGroup: aimGroup,
+        leftHip: leftHip,
+        rightHip: rightHip,
+        leftKnee: leftKnee,
+        rightKnee: rightKnee
+    };
+    return characterModel;
+}
+
+function createAI(color) {
+    const aiObject = createCharacterModel(color);
+
+    // AI-specific properties
     aiObject.position.y = -FLOOR_HEIGHT;
     aiObject.lastHiddenTime = 0;
     aiObject.lastAttackTime = 0;
@@ -1090,6 +1148,7 @@ function createAI(color) {
     aiObject.aggression = Math.random();
     aiObject.flankAggression = Math.random();
     aiObject.lastFlankTime = 0;
+
     return aiObject;
 }
 
@@ -2995,6 +3054,51 @@ function animate() {
             const ratio = ARENA_PLAY_AREA_RADIUS / aiDistFromCenter;
             ai.position.x *= ratio;
             ai.position.z *= ratio;
+        }
+
+        // Animate AI limbs
+        if (ai.userData.parts) {
+            const parts = ai.userData.parts;
+
+            // Aiming: Make the aimGroup look at the player's head position.
+            const playerHeadPos = new THREE.Vector3();
+            player.getWorldPosition(playerHeadPos);
+            playerHeadPos.y += playerTargetHeight; // Aim directly at the player's head height
+            parts.aimGroup.lookAt(playerHeadPos);
+
+            // Leg Animation
+            const isMoving = (ai.state === 'MOVING' || ai.state === 'FLANKING' || ai.state === 'EVADING') &&
+                             (ai.targetPosition && ai.position.distanceTo(ai.targetPosition) > ARRIVAL_THRESHOLD);
+
+            if (ai.isCrouching) {
+                // Crouch pose
+                const crouchAngle = Math.PI / 2.5;
+                parts.leftHip.rotation.x = crouchAngle;
+                parts.rightHip.rotation.x = crouchAngle;
+                parts.leftKnee.rotation.x = -crouchAngle;
+                parts.rightKnee.rotation.x = -crouchAngle;
+            } else if (isMoving) {
+                // Walking animation
+                const walkSpeed = 10;
+                const hipAmplitude = Math.PI / 4;
+                const kneeAmplitude = Math.PI / 3;
+
+                const swing = Math.sin(timeElapsed * walkSpeed) * hipAmplitude;
+                
+                parts.leftHip.rotation.x = swing;
+                parts.rightHip.rotation.x = -swing;
+                
+                // Bend the knee based on the hip's swing
+                parts.leftKnee.rotation.x = Math.max(0, (Math.cos(timeElapsed * walkSpeed) + 1) / 2 * kneeAmplitude);
+                parts.rightKnee.rotation.x = Math.max(0, (Math.cos(timeElapsed * walkSpeed + Math.PI) + 1) / 2 * kneeAmplitude);
+
+            } else {
+                // Idle pose (straight legs)
+                parts.leftHip.rotation.x = 0;
+                parts.rightHip.rotation.x = 0;
+                parts.leftKnee.rotation.x = 0;
+                parts.rightKnee.rotation.x = 0;
+            }
         }
     });
     for (let i = projectiles.length - 1; i >= 0; i--) {
