@@ -1733,7 +1733,8 @@ if (document.getElementById('joystick-move')) {
         if (!isGameRunning) return;
         const angleRad = data.angle.radian;
         const distance = Math.min(data.distance / 40, 1.0);
-        joystickMoveVector.set(Math.cos(angleRad) * distance, Math.sin(angleRad) * distance);
+        // Invert the Y-axis: nipple.js 'up' (positive sin) corresponds to game's 'forward' (negative forwardMove).
+        joystickMoveVector.set(Math.cos(angleRad) * distance, -Math.sin(angleRad) * distance);
     }).on('end', function () {
         joystickMoveVector.set(0, 0);
     });
@@ -2777,8 +2778,8 @@ function animate() {
             forwardVector.y = 0;
             forwardVector.normalize();
             const rightVector = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forwardVector);
-            const moveX = rightVector.x * rightMove + forwardVector.x * forwardMove;
-            const moveZ = rightVector.z * rightMove + forwardVector.z * forwardMove;
+            const moveX = rightVector.x * rightMove + forwardVector.x * -forwardMove;
+            const moveZ = rightVector.z * rightMove + forwardVector.z * -forwardMove;
             
             const ignoreObstacle = isIgnoringTowerCollision ? lastClimbedTower : currentGroundObstacle;
 
