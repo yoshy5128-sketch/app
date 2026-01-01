@@ -1728,14 +1728,28 @@ const lookSpeed = 0.006;
 let keyboardMoveVector = new THREE.Vector2(0, 0);
 let joystickMoveVector = new THREE.Vector2(0, 0);
 if (document.getElementById('joystick-move')) {
-    const moveManager = nipplejs.create({ zone: document.getElementById('joystick-move'), mode: 'static', position: { left: '50%', top: '50%' }, color: 'blue' });
+    const joystickZone = document.getElementById('joystick-move');
+    const moveManager = nipplejs.create({
+        zone: joystickZone,
+        mode: 'dynamic',
+        position: { left: '50%', top: '50%' },
+        color: 'blue',
+        size: 150,
+        restOpacity: 0.7
+    });
+
+    moveManager.on('start', function () {
+        if (!isGameRunning) return;
+        joystickMoveVector.set(0, 0);
+    });
+
     moveManager.on('move', function (evt, data) {
         if (!isGameRunning) return;
         joystickMoveVector.set(data.vector.x, data.vector.y);
-        console.log(`[JOYSTICK] data.vector.y: ${data.vector.y}, joystickMoveVector.y: ${joystickMoveVector.y}`);
-    }).on('end', function () {
+    });
+
+    moveManager.on('end', function () {
         joystickMoveVector.set(0, 0);
-        console.log('[JOYSTICK] end: joystickMoveVector.y: 0');
     });
 }
 const keySet = new Set();
