@@ -203,6 +203,18 @@ let isPaused = false;
                 restartGame();
             });
         }
+        // --- cancelScopeButton のイベントリスナーをここに追加 ---
+        if (cancelScopeButton) {
+            cancelScopeButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                cancelScope();
+            });
+            cancelScopeButton.addEventListener('touchstart', (event) => {
+                event.stopPropagation();
+                cancelScope();
+            });
+        }
+        // --- ここまで ---
     });
 })();
 
@@ -1748,6 +1760,7 @@ function handleFirePress() {
                 isScoping = true;
                 scopeOverlay.style.display = 'block';
                 cancelScopeButton.style.display = 'flex';
+                cancelScopeButton.style.backgroundColor = 'blue'; // 一時的に追加
                 document.getElementById('crosshair').style.display = 'none';
                 if (gameSettings.nightModeEnabled) {
                     document.getElementById('night-vision-overlay').style.display = 'block';
@@ -1764,10 +1777,11 @@ function handleFirePress() {
 }
 
 function cancelScope() {
-    if (!isScoping) return;
+
     isScoping = false;
     scopeOverlay.style.display = 'none';
     cancelScopeButton.style.display = 'none';
+    cancelScopeButton.style.backgroundColor = ''; // 色を元に戻す
     document.getElementById('crosshair').style.display = 'block';
     document.getElementById('night-vision-overlay').style.display = 'none';
     new TWEEN.Tween(camera).to({ fov: 75 }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
@@ -2129,16 +2143,7 @@ document.addEventListener('mousedown', (event) => {
 document.addEventListener('mouseup', (event) => { if (!isGameRunning) return; if (event.button === 0) { handleFireRelease(); } });
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 
-if (cancelScopeButton) {
-    cancelScopeButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        cancelScope();
-    });
-    cancelScopeButton.addEventListener('touchstart', (event) => {
-        event.stopPropagation();
-        cancelScope();
-    });
-}
+
 
 let isLooking = false;
 let lookTouchId = -1;
