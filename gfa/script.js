@@ -2269,6 +2269,17 @@ function startGame() {
         const el = document.getElementById(id);
         if (el) el.style.display = 'block';
     });
+    // 新しく追加したコンテナの表示制御
+    const teamKillsContainer = document.getElementById('team-kills-container');
+    const aiHpContainer = document.getElementById('ai-hp-container');
+
+    if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        if (teamKillsContainer) teamKillsContainer.style.display = 'flex';
+        if (aiHpContainer) aiHpContainer.style.display = 'block';
+    } else {
+        if (teamKillsContainer) teamKillsContainer.style.display = 'none';
+        if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
+    }
     if ('ontouchstart' in window) {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -2527,22 +2538,33 @@ function restartGame() {
 
     resetWeaponPickups(ais);
 
-    if (ai2HPDisplay) ai2HPDisplay.style.display = (finalAICount > 1) ? 'block' : 'none';
-    if (ai3HPDisplay) ai3HPDisplay.style.display = (finalAICount > 2) ? 'block' : 'none';
+    // AI HPの個別表示制御はコンテナに任せるため削除
+
     const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display']; // 共通UI
 
     if (gameSettings.gameMode === 'arcade') {
-        gameUI.push('kill-count-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // アーケードモードのAI HP表示も追加
+        gameUI.push('kill-count-display'); // アーケードモードのキル表示のみ追加
     } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
-        gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // チームモードのAI HP表示
+        // AI HP表示はコンテナで制御するため、gameUI配列には追加しない
         if (gameSettings.gameMode === 'teamArcade') {
-            gameUI.push('game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display');
+            gameUI.push('game-timer-display');
         }
     }
     gameUI.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'block';
     });
+    // 新しく追加したコンテナの表示制御
+    const teamKillsContainer = document.getElementById('team-kills-container');
+    const aiHpContainer = document.getElementById('ai-hp-container');
+
+    if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        if (teamKillsContainer) teamKillsContainer.style.display = 'flex';
+        if (aiHpContainer) aiHpContainer.style.display = 'block';
+    } else {
+        if (teamKillsContainer) teamKillsContainer.style.display = 'none';
+        if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
+    }
     if ('ontouchstart' in window) {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');

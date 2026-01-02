@@ -147,3 +147,17 @@ canvas {
     transition: opacity 1s ease-out;
     opacity: 0 !important;
 }
+
+/* UI文字サイズ調整 */
+#team-kills-container,
+#ai-hp-container {
+    font-size: 0.8em; /* KILLS表示とAI HP表示全体を小さく */
+}
+
+#player-team-kills-display,
+#enemy-team-kills-display,
+#ai-hp-display,
+#ai2-hp-display,
+#ai3-hp-display {
+    font-size: 0.8em !important; /* 他のスタイルで上書きされないように!important */
+}
