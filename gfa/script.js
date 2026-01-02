@@ -16,6 +16,7 @@ let gameSettings = {
     nightModeLightIntensity: 0.8,
     customMapName: 'Default Custom Map',
     gameMode: 'battle',
+    gameDuration: 180, // 3分間 (180秒)
     buttonPositions: {
         fire: { right: '20px', bottom: '120px' },
         crouch: { right: '20px', bottom: '55px' },
@@ -27,10 +28,42 @@ let isPaused = false;
 
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
+        // ここにDOM要素への割り当てを移動
+        playerGunSound = document.getElementById('playerGunSound');
+        mgGunSound = document.getElementById('mgGunSound');
+        rrGunSound = document.getElementById('rrGunSound');
+        srGunSound = document.getElementById('srGunSound');
+        aimgGunSound = document.getElementById('aimgGunSound');
+        aiGunSound = document.getElementById('aiGunSound');
+        explosionSound = document.getElementById('explosionSound');
+        startScreen = document.getElementById('start-screen');
+        gameOverScreen = document.getElementById('game-over-screen');
+        aiSrGunSound = document.getElementById('aiSrGunSound');
+        playerSgSound = document.getElementById('playerSgSound');
+        aiSgSound = document.getElementById('aiSgSound');
+        winScreen = document.getElementById('win-screen');
+        playerHPDisplay = document.getElementById('player-hp-display');
+        playerWeaponDisplay = document.getElementById('player-weapon-display'); // 追加
+        aiHPDisplay = document.getElementById('ai-hp-display');
+        ai2HPDisplay = document.getElementById('ai2-hp-display');
+        ai3HPDisplay = document.getElementById('ai3-hp-display');
+        redFlashOverlay = document.getElementById('red-flash-overlay');
+        // red-flash-overlayをbodyの最後に移動させて常に最前面に表示されるようにする
+        if (redFlashOverlay && redFlashOverlay.parentNode !== document.body) {
+            document.body.appendChild(redFlashOverlay);
+        }
+        scopeOverlay = document.getElementById('scope-overlay');
+        cancelScopeButton = document.getElementById('cancel-scope-button');
+        killCountDisplay = document.getElementById('kill-count-display');
+        gameTimerDisplay = document.getElementById('game-timer-display');
+        playerTeamKillsDisplay = document.getElementById('player-team-kills-display');
+        enemyTeamKillsDisplay = document.getElementById('enemy-team-kills-display');
+
         const editorLink = document.getElementById('map-editor-link');
         if (editorLink && 'ontouchstart' in window) {
             editorLink.href = 'map_editor_sp.html';
         }
+        
         loadSettings();
         updateCustomMapSelector();
         const playerHpSelect = document.getElementById('player-hp');
@@ -129,14 +162,42 @@ let isPaused = false;
         const customMapSelector = document.getElementById('custom-map-selector');
         if (customMapSelector) {
             customMapSelector.addEventListener('change', () => {
-                gameSettings.customMapName = customMapSelector.value;
+                const selectedMapName = customMapSelector.value;
+                gameSettings.customMapName = selectedMapName;
                 saveSettings();
+                // マップ選択時に保存された設定を自動読み込み
+                if (selectedMapName && selectedMapName !== '') {
+                    loadMapSettings(selectedMapName);
+                }
+            });
+        }
+        const saveMapSettingsBtn = document.getElementById('save-map-settings-btn');
+        if (saveMapSettingsBtn) {
+            saveMapSettingsBtn.addEventListener('click', () => {
+                const selectedMapName = customMapSelector ? customMapSelector.value : '';
+                saveMapSettings(selectedMapName);
+            });
+        }
+        const loadMapSettingsBtn = document.getElementById('load-map-settings-btn');
+        if (loadMapSettingsBtn) {
+            loadMapSettingsBtn.addEventListener('click', () => {
+                const selectedMapName = customMapSelector ? customMapSelector.value : '';
+                if (selectedMapName && selectedMapName !== '') {
+                    loadMapSettings(selectedMapName);
+                } else {
+                    alert('マップが選択されていません。');
+                }
             });
         }
         const loadSelectedCustomMapBtn = document.getElementById('load-selected-custom-map-btn');
         if (loadSelectedCustomMapBtn) {
             loadSelectedCustomMapBtn.addEventListener('click', () => {
                 gameSettings.mapType = 'custom';
+                const selectedMapName = customMapSelector ? customMapSelector.value : '';
+                // マップ読み込み時に保存された設定を自動適用
+                if (selectedMapName && selectedMapName !== '') {
+                    loadMapSettings(selectedMapName);
+                }
                 saveSettings();
                 startGame();
                 restartGame();
@@ -167,9 +228,14 @@ function updateCustomMapSelector() {
             option.textContent = mapName;
             customMapSelector.appendChild(option);
         });
-        customMapSelector.value = gameSettings.customMapName || mapNames[0];
+        const selectedMapName = gameSettings.customMapName || mapNames[0];
+        customMapSelector.value = selectedMapName;
         if (document.getElementById('load-selected-custom-map-btn')) {
             document.getElementById('load-selected-custom-map-btn').disabled = false;
+        }
+        // 選択されているマップの設定を自動的に読み込む
+        if (selectedMapName && selectedMapName !== '') {
+            loadMapSettings(selectedMapName);
         }
     }
 }
@@ -283,38 +349,6 @@ function loadSettings() {
             parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
         }
 
-        Object.assign(gameSettings, parsedSavedSettings);
-
-        document.getElementById('player-hp').value = gameSettings.playerHP;
-        document.getElementById('ai-hp').value = gameSettings.aiHP;
-        const projectileSpeedSlider = document.getElementById('projectile-speed');
-        const projectileSpeedValueSpan = document.getElementById('projectile-speed-value');
-        if (projectileSpeedSlider) {
-            projectileSpeedSlider.value = gameSettings.projectileSpeedMultiplier;
-        }
-        if (projectileSpeedValueSpan) {
-            projectileSpeedValueSpan.textContent = gameSettings.projectileSpeedMultiplier + 'x';
-        }
-        document.getElementById('mg-count').value = gameSettings.mgCount;
-        document.getElementById('rr-count').value = gameSettings.rrCount;
-        document.getElementById('sr-count').value = gameSettings.srCount;
-        if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
-        if (document.getElementById('medikit-count')) document.getElementById('medikit-count').value = gameSettings.medikitCount;
-        document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
-            radio.checked = (radio.value === String(gameSettings.aiCount));
-        });
-        document.querySelectorAll('input[name="field-state"]').forEach(radio => {
-            radio.checked = (radio.value === gameSettings.fieldState);
-        });
-        document.querySelectorAll('input[name="map-type"]').forEach(radio => {
-            radio.checked = (radio.value === gameSettings.mapType);
-        });
-        document.querySelectorAll('input[name="auto-aim"]').forEach(radio => {
-            radio.checked = (radio.value === String(gameSettings.autoAim));
-        });
-        document.querySelectorAll('input[name="night-mode"]').forEach(radio => {
-            radio.checked = (radio.value === String(gameSettings.nightModeEnabled));
-        });
         document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
             radio.checked = (radio.value === gameSettings.gameMode);
         });
@@ -377,26 +411,243 @@ function loadSettings() {
     }
 }
 
-const playerGunSound = document.getElementById('playerGunSound');
-const mgGunSound = document.getElementById('mgGunSound');
-const rrGunSound = document.getElementById('rrGunSound');
-const srGunSound = document.getElementById('srGunSound');
-const aimgGunSound = document.getElementById('aimgGunSound');
-const aiGunSound = document.getElementById('aiGunSound');
-const explosionSound = document.getElementById('explosionSound');
-const startScreen = document.getElementById('start-screen');
-const gameOverScreen = document.getElementById('game-over-screen');
-const aiSrGunSound = document.getElementById('aiSrGunSound');
-const playerSgSound = document.getElementById('playerSgSound');
-const aiSgSound = document.getElementById('aiSgSound');
-const winScreen = document.getElementById('win-screen');
-const playerHPDisplay = document.getElementById('player-hp-display');
-const aiHPDisplay = document.getElementById('ai-hp-display');
-const redFlashOverlay = document.getElementById('red-flash-overlay');
-const scopeOverlay = document.getElementById('scope-overlay');
-const cancelScopeButton = document.getElementById('cancel-scope-button');
-const killCountDisplay = document.getElementById('kill-count-display');
+// マップごとの設定を保存する関数
+function saveMapSettings(mapName) {
+    if (!mapName || mapName === '') {
+        alert('マップが選択されていません。');
+        return;
+    }
+    
+    // 現在の設定をコピーして保存（customMapNameは除外）
+    const settingsToSave = { ...gameSettings };
+    delete settingsToSave.customMapName; // マップ名はキーとして使用するので除外
+    
+    const key = `mapSettings_${mapName}`;
+    localStorage.setItem(key, JSON.stringify(settingsToSave));
+    alert(`設定を保存しました: ${mapName}`);
+}
+
+// マップごとの設定を読み込む関数
+function loadMapSettings(mapName) {
+    if (!mapName || mapName === '') {
+        return;
+    }
+    
+    const key = `mapSettings_${mapName}`;
+    const savedSettings = localStorage.getItem(key);
+    if (!savedSettings) {
+        return; // 保存された設定がない場合は何もしない
+    }
+    
+    try {
+        const parsedSavedSettings = JSON.parse(savedSettings);
+        
+        // デフォルト値の設定
+        if (parsedSavedSettings.gameMode === undefined) {
+            parsedSavedSettings.gameMode = 'battle';
+        }
+        if (parsedSavedSettings.nightModeLightIntensity === undefined) {
+            parsedSavedSettings.nightModeLightIntensity = 0.8;
+        }
+        if (parsedSavedSettings.medikitCount === undefined) {
+            parsedSavedSettings.medikitCount = 0;
+        }
+        if (parsedSavedSettings.buttonPositions === undefined) {
+            parsedSavedSettings.buttonPositions = {
+                fire: { right: '20px', bottom: '120px' },
+                crouch: { right: '20px', bottom: '55px' },
+                joystick: { left: '10%', bottom: '10%' }
+            };
+        } else if (parsedSavedSettings.buttonPositions.joystick === undefined) {
+            parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
+        }
+        
+        // gameSettingsに適用
+        Object.assign(gameSettings, parsedSavedSettings);
+        
+        // UIに反映
+        document.getElementById('player-hp').value = gameSettings.playerHP;
+        document.getElementById('ai-hp').value = gameSettings.aiHP;
+        const projectileSpeedSlider = document.getElementById('projectile-speed');
+        const projectileSpeedValueSpan = document.getElementById('projectile-speed-value');
+        if (projectileSpeedSlider) {
+            projectileSpeedSlider.value = gameSettings.projectileSpeedMultiplier;
+        }
+        if (projectileSpeedValueSpan) {
+            projectileSpeedValueSpan.textContent = gameSettings.projectileSpeedMultiplier + 'x';
+        }
+        document.getElementById('mg-count').value = gameSettings.mgCount;
+        document.getElementById('rr-count').value = gameSettings.rrCount;
+        document.getElementById('sr-count').value = gameSettings.srCount;
+        if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
+        if (document.getElementById('medikit-count')) document.getElementById('medikit-count').value = gameSettings.medikitCount;
+        document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
+            radio.checked = (radio.value === String(gameSettings.aiCount));
+        });
+        document.querySelectorAll('input[name="field-state"]').forEach(radio => {
+            radio.checked = (radio.value === gameSettings.fieldState);
+        });
+        document.querySelectorAll('input[name="map-type"]').forEach(radio => {
+            radio.checked = (radio.value === gameSettings.mapType);
+        });
+        document.querySelectorAll('input[name="auto-aim"]').forEach(radio => {
+            radio.checked = (radio.value === String(gameSettings.autoAim));
+        });
+        document.querySelectorAll('input[name="night-mode"]').forEach(radio => {
+            radio.checked = (radio.value === String(gameSettings.nightModeEnabled));
+        });
+        document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
+            radio.checked = (radio.value === gameSettings.gameMode);
+        });
+        const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
+        const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
+        if (nightModeIntensitySlider) {
+            nightModeIntensitySlider.value = gameSettings.nightModeLightIntensity;
+        }
+        if (nightModeIntensityValueSpan) {
+            nightModeIntensityValueSpan.textContent = gameSettings.nightModeLightIntensity;
+        }
+        
+        // ボタン位置を適用
+        if (gameSettings.buttonPositions) {
+            const fireButton = document.getElementById('fire-button');
+            const crouchButton = document.getElementById('crouch-button');
+            const joystickZone = document.getElementById('joystick-move');
+            const previewFireButton = document.getElementById('preview-fire-button');
+            const previewCrouchButton = document.getElementById('preview-crouch-button');
+            const previewJoystickZone = document.getElementById('preview-joystick-zone');
+            
+            if (fireButton && gameSettings.buttonPositions.fire) {
+                fireButton.style.right = gameSettings.buttonPositions.fire.right;
+                fireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
+                fireButton.style.left = '';
+                fireButton.style.top = '';
+            }
+            if (crouchButton && gameSettings.buttonPositions.crouch) {
+                crouchButton.style.right = gameSettings.buttonPositions.crouch.right;
+                crouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
+                crouchButton.style.left = '';
+                crouchButton.style.top = '';
+            }
+            if (joystickZone && gameSettings.buttonPositions.joystick) {
+                joystickZone.style.left = gameSettings.buttonPositions.joystick.left;
+                joystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
+                joystickZone.style.right = '';
+                joystickZone.style.top = '';
+            }
+            
+            if (previewFireButton && gameSettings.buttonPositions.fire) {
+                previewFireButton.style.right = gameSettings.buttonPositions.fire.right;
+                previewFireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
+                previewFireButton.style.left = '';
+                previewFireButton.style.top = '';
+            }
+            if (previewCrouchButton && gameSettings.buttonPositions.crouch) {
+                previewCrouchButton.style.right = gameSettings.buttonPositions.crouch.right;
+                previewCrouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
+                previewCrouchButton.style.left = '';
+                previewCrouchButton.style.top = '';
+            }
+            if (previewJoystickZone && gameSettings.buttonPositions.joystick) {
+                previewJoystickZone.style.left = gameSettings.buttonPositions.joystick.left;
+                previewJoystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
+                previewJoystickZone.style.right = '';
+                previewJoystickZone.style.top = '';
+            }
+        }
+        
+        // グローバル設定も更新
+        saveSettings();
+    } catch (e) {
+        console.error('設定の読み込みに失敗しました:', e);
+    }
+}
+
+let playerGunSound;
+let mgGunSound;
+let rrGunSound;
+let srGunSound;
+let aimgGunSound;
+let aiGunSound;
+let explosionSound;
+let startScreen;
+let gameOverScreen;
+let aiSrGunSound;
+let playerSgSound;
+let aiSgSound;
+let winScreen;
+let playerHPDisplay;
+let playerWeaponDisplay; // 追加
+let aiHPDisplay;
+let ai2HPDisplay; // 追加
+let ai3HPDisplay; // 追加
+let redFlashOverlay;
+let scopeOverlay;
+let cancelScopeButton;
+let killCountDisplay;
 let playerKills = 0;
+let playerTeamKills = 0;
+let enemyTeamKills = 0;
+let gameTimer = 0;
+let gameTimerInterval = null;
+let gameTimerDisplay;
+let playerTeamKillsDisplay;
+let enemyTeamKillsDisplay;
+
+// --- タイマー関連関数 ---
+function updateTimerDisplay() {
+    if (gameTimerDisplay) {
+        const minutes = Math.floor(gameTimer / 60);
+        const seconds = gameTimer % 60;
+        gameTimerDisplay.textContent = `TIME: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+}
+
+function startTimer() {
+    if (gameTimerInterval) {
+        clearInterval(gameTimerInterval);
+    }
+    gameTimerInterval = setInterval(() => {
+        if (!isGameRunning || isPaused) {
+            return;
+        }
+        gameTimer--;
+        updateTimerDisplay();
+        if (gameTimer <= 0) {
+            clearInterval(gameTimerInterval);
+            gameTimerInterval = null;
+            // ゲーム終了処理と勝敗判定
+            isGameRunning = false;
+            document.exitPointerLock();
+
+            // UI要素を非表示にする
+            const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display'];
+            uiToHide.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            
+            if (playerTeamKills > enemyTeamKills) {
+                showWinScreen();
+            } else if (enemyTeamKills > playerTeamKills) {
+                showGameOver();
+            } else {
+                // 引き分けの場合
+                // 専用の引き分け画面を作成するか、ゲームオーバー画面を再利用
+                // 今はshowGameOver()で代用
+                showGameOver(); 
+            }
+        }
+    }, 1000);
+}
+
+function stopTimer() {
+    if (gameTimerInterval) {
+        clearInterval(gameTimerInterval);
+        gameTimerInterval = null;
+    }
+}
+// --- ここまで ---
 
 function createMuzzleFlash(position, intensity, distance, duration = 150, lightColor = 0xffffff) {
     const flashLight = new THREE.PointLight(lightColor, intensity, distance);
@@ -1116,6 +1367,8 @@ function createCharacterModel(color) {
     const characterModel = new THREE.Group();
     characterModel.add(body, head, aimGroup, leftHip, rightHip);
     characterModel.userData.parts = {
+        body: body,
+        head: head,
         aimGroup: aimGroup,
         leftHip: leftHip,
         rightHip: rightHip,
@@ -1148,6 +1401,7 @@ function createAI(color) {
     aiObject.aggression = Math.random();
     aiObject.flankAggression = Math.random();
     aiObject.lastFlankTime = 0;
+    aiObject.lastPosition = new THREE.Vector3(); // <= これを追加
 
     return aiObject;
 }
@@ -1300,7 +1554,11 @@ function findObstacleAvoidanceSpot(ai, currentMoveDirection, originalTargetPosit
 }
 
 function findAndTargetWeapon(ai) {
-    const needsUpgrade = (ai.currentWeapon === WEAPON_PISTOL || (ai.currentWeapon === WEAPON_MG && ai.ammoMG < 10) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 1) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 1));
+    // 味方AIはより積極的に武器を拾いに行く
+    const isTeammate = gameSettings.gameMode === 'team' && ai.team === 'player';
+    const needsUpgrade = isTeammate 
+        ? (ai.currentWeapon === WEAPON_PISTOL || (ai.currentWeapon === WEAPON_MG && ai.ammoMG < 30) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 3) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 3))
+        : (ai.currentWeapon === WEAPON_PISTOL || (ai.currentWeapon === WEAPON_MG && ai.ammoMG < 10) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 1) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 1));
     if (!needsUpgrade || weaponPickups.length === 0 || ai.targetWeaponPickup) {
         return false;
     }
@@ -1329,7 +1587,7 @@ const projectiles = [];
 const debris = [];
 const projectileSpeed = 50;
 
-function createProjectile(startPos, direction, color, size = 0.1, isRocket = false, source = 'unknown', speed = projectileSpeed, isSniper = false, weaponType = null) {
+function createProjectile(startPos, direction, color, size = 0.1, isRocket = false, source = 'unknown', speed = projectileSpeed, isSniper = false, weaponType = null, shooter = null) {
     const finalSpeed = speed * (gameSettings.projectileSpeedMultiplier || 1.0);
     let bulletGeometry;
     const bulletLength = size * 5;
@@ -1345,7 +1603,7 @@ function createProjectile(startPos, direction, color, size = 0.1, isRocket = fal
     scene.add(bullet);
     const velocity = direction.clone().normalize().multiplyScalar(finalSpeed);
     const projectileLife = (weaponType === WEAPON_SG) ? SHOTGUN_RANGE / finalSpeed : Infinity;
-    projectiles.push({ mesh: bullet, velocity: velocity, isRocket: isRocket, source: source, isSniper: isSniper, weaponType: weaponType, life: projectileLife });
+    projectiles.push({ mesh: bullet, velocity: velocity, isRocket: isRocket, source: source, isSniper: isSniper, weaponType: weaponType, life: projectileLife, shooter: shooter });
 }
 
 function createExplosionEffect(position) {
@@ -1619,20 +1877,91 @@ function shoot() {
 function aiShoot(ai, timeElapsed) {
     if (!isGameRunning || playerHP <= 0) return;
     const startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0));
-    const playerHeadPos = player.position.clone();
-    const playerBodyPos = player.position.clone();
-    playerBodyPos.y = player.position.y - (playerTargetHeight / 2);
+    
     let targetPosition = null;
-    if (checkLineOfSight(startPosition, playerHeadPos, obstacles)) {
-        targetPosition = playerHeadPos;
-    } else if (checkLineOfSight(startPosition, playerBodyPos, obstacles)) {
-        targetPosition = playerBodyPos;
+    let distanceToTarget = 0;
+    
+    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+
+    // チームモードまたはチームアーケードモードの場合
+    if (isTeamModeOrTeamArcade && ai.team === 'player') {
+        // 最も近い敵AIを探す
+        let closestEnemyAI = null;
+        let closestDistance = Infinity;
+        for (const enemyAI of ais) {
+            if (enemyAI === ai || enemyAI.team !== 'enemy' || enemyAI.hp <= 0) continue;
+            const distance = ai.position.distanceTo(enemyAI.position);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestEnemyAI = enemyAI;
+            }
+        }
+        if (closestEnemyAI) {
+            const enemyHeadPos = closestEnemyAI.children[1].getWorldPosition(new THREE.Vector3());
+            const enemyBodyPos = closestEnemyAI.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0));
+            if (checkLineOfSight(startPosition, enemyHeadPos, obstacles)) {
+                targetPosition = enemyHeadPos;
+            } else if (checkLineOfSight(startPosition, enemyBodyPos, obstacles)) {
+                targetPosition = enemyBodyPos;
+            }
+            distanceToTarget = closestDistance;
+        }
+    } else if (isTeamModeOrTeamArcade && ai.team === 'enemy') {
+        // チームモードの敵AIはプレイヤーと味方AIをバランスよく狙う
+        const targets = [];
+        
+        // プレイヤーをターゲット候補に追加
+        const playerHeadPos = player.position.clone();
+        const playerBodyPos = player.position.clone();
+        playerBodyPos.y = player.position.y - (playerTargetHeight / 2);
+        if (playerHP > 0) {
+            if (checkLineOfSight(startPosition, playerHeadPos, obstacles)) {
+                targets.push({ position: playerHeadPos, distance: ai.position.distanceTo(player.position), type: 'player' });
+            } else if (checkLineOfSight(startPosition, playerBodyPos, obstacles)) {
+                targets.push({ position: playerBodyPos, distance: ai.position.distanceTo(player.position), type: 'player' });
+            }
+        }
+        
+        // 味方AIをターゲット候補に追加
+        for (const teammateAI of ais) {
+            if (teammateAI === ai || teammateAI.team !== 'player' || teammateAI.hp <= 0) continue;
+            const teammateHeadPos = teammateAI.children[1].getWorldPosition(new THREE.Vector3());
+            const teammateBodyPos = teammateAI.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0));
+            const distance = ai.position.distanceTo(teammateAI.position);
+            if (checkLineOfSight(startPosition, teammateHeadPos, obstacles)) {
+                targets.push({ position: teammateHeadPos, distance: distance, type: 'teammate' });
+            } else if (checkLineOfSight(startPosition, teammateBodyPos, obstacles)) {
+                targets.push({ position: teammateBodyPos, distance: distance, type: 'teammate' });
+            }
+        }
+        
+        // 最も近いターゲットを選択（プレイヤーと味方AIをバランスよく）
+        if (targets.length > 0) {
+            // 距離の近い順にソート
+            targets.sort((a, b) => a.distance - b.distance);
+            // 50%の確率で最も近いターゲット、50%の確率でランダムに選択
+            const selectedTarget = Math.random() < 0.5 ? targets[0] : targets[Math.floor(Math.random() * targets.length)];
+            targetPosition = selectedTarget.position;
+            distanceToTarget = selectedTarget.distance;
+        }
+    } else {
+        // 通常モードまたは敵AIはプレイヤーを狙う
+        const playerHeadPos = player.position.clone();
+        const playerBodyPos = player.position.clone();
+        playerBodyPos.y = player.position.y - (playerTargetHeight / 2);
+        if (checkLineOfSight(startPosition, playerHeadPos, obstacles)) {
+            targetPosition = playerHeadPos;
+        } else if (checkLineOfSight(startPosition, playerBodyPos, obstacles)) {
+            targetPosition = playerBodyPos;
+        }
+        distanceToTarget = ai.position.distanceTo(player.position);
     }
+    
     if (targetPosition === null) {
         return;
     }
     const direction = new THREE.Vector3().subVectors(targetPosition, startPosition);
-    const distanceToPlayer = direction.length();
+    const distanceToPlayer = distanceToTarget;
     direction.normalize();
     let canAIShoot = false;
     let aiProjectileColor = 0xffff00;
@@ -1680,10 +2009,10 @@ function aiShoot(ai, timeElapsed) {
                 const randomAngleY = (Math.random() - 0.5) * SHOTGUN_SPREAD_ANGLE;
                 spreadDirection.applyAxisAngle(upVector, angleOffset + randomAngleX);
                 spreadDirection.applyAxisAngle(rightVector, randomAngleY);
-                createProjectile(startPosition, spreadDirection, aiProjectileColor, aiProjectileSize, false, 'ai', aiProjectileSpeed, false, WEAPON_SG);
+                createProjectile(startPosition, spreadDirection, aiProjectileColor, aiProjectileSize, false, 'ai', aiProjectileSpeed, false, WEAPON_SG, ai);
             }
         } else {
-            createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR);
+            createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR, null, ai);
         }
         ai.lastAttackTime = timeElapsed;
         if (ai.currentWeapon === WEAPON_MG) {
@@ -1715,8 +2044,15 @@ function aiCheckPickup(ai) {
             respawningPickups.push({ type: 'weapon', weaponType: pickup.userData.weaponType, respawnTime: clock.getElapsedTime() + RESPAWN_DELAY });
             if (ai.targetWeaponPickup === pickup) {
                 ai.targetWeaponPickup = null;
-                ai.state = 'HIDING';
-                ai.lastHiddenTime = clock.getElapsedTime();
+                // 味方AIは積極的に攻撃するため、武器を拾った後もATTACKING状態を維持
+                if (gameSettings.gameMode === 'team' && ai.team === 'player') {
+                    ai.state = 'ATTACKING';
+                    ai.currentAttackTime = clock.getElapsedTime();
+                    ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                } else {
+                    ai.state = 'HIDING';
+                    ai.lastHiddenTime = clock.getElapsedTime();
+                }
             }
             break;
         }
@@ -1919,9 +2255,15 @@ function startGame() {
             if (pointLight) pointLight.intensity = 0;
         });
     }
-    const gameUI = ['crosshair', 'player-hp-display', 'ai-hp-display', 'player-weapon-display'];
+    const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display']; // 共通UI
+
     if (gameSettings.gameMode === 'arcade') {
-        gameUI.push('kill-count-display');
+        gameUI.push('kill-count-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // アーケードモードのAI HP表示も追加
+    } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // チームモードのAI HP表示
+        if (gameSettings.gameMode === 'teamArcade') {
+            gameUI.push('game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display');
+        }
     }
     gameUI.forEach(id => {
         const el = document.getElementById(id);
@@ -1962,9 +2304,11 @@ function startGame() {
         console.warn('Error trying to lock orientation:', e);
     }
     if (gameSettings.fieldState === 'reset') {
-        if (typeof resetObstacles === 'function') resetObstacles();
-    }
-}
+            if (typeof resetObstacles === 'function') resetObstacles();
+            // 強制的に表示設定 (デバッグ目的)
+            if (playerHPDisplay) playerHPDisplay.style.display = 'block';
+            if (playerWeaponDisplay) playerWeaponDisplay.style.display = 'block';
+        }}
 
 function resetWeaponPickups(aiList = []) {
     for (let i = weaponPickups.length - 1; i >= 0; i--) {
@@ -2038,9 +2382,29 @@ function restartGame() {
         }
     }
     playerHP = gameSettings.playerHP === 'Infinity' ? Infinity : parseInt(gameSettings.playerHP, 10);
-    playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
+    if (playerHPDisplay) { // nullチェックを追加
+        playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
+    }
     playerKills = 0;
     if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
+
+    // --- 新しいゲームモードの追加 ---
+    const isTeamArcadeMode = gameSettings.gameMode === 'teamArcade';
+    if (isTeamArcadeMode) {
+        playerTeamKills = 0;
+        enemyTeamKills = 0;
+        if (playerTeamKillsDisplay) playerTeamKillsDisplay.textContent = `PLAYER TEAM KILLS: ${playerTeamKills}`;
+        if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.textContent = `ENEMY TEAM KILLS: ${enemyTeamKills}`;
+        gameTimer = gameSettings.gameDuration; // gameDurationを初期タイマー値に設定
+        updateTimerDisplay(); // タイマー表示を初期化
+        startTimer(); // タイマー開始
+    } else {
+        stopTimer(); // チームアーケードモード以外ではタイマーを停止
+        if (gameTimerDisplay) gameTimerDisplay.style.display = 'none';
+        if (playerTeamKillsDisplay) playerTeamKillsDisplay.style.display = 'none';
+        if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.style.display = 'none';
+    }
+    // --- ここまで ---
     let playerSpawnPos;
     if (availableSpawnPoints.length > 0) {
         playerSpawnPos = availableSpawnPoints.pop();
@@ -2072,13 +2436,35 @@ function restartGame() {
     ammoSR = 0;
     ammoSG = 0;
     let finalAICount = gameSettings.aiCount;
+    const isTeamMode = gameSettings.gameMode === 'team';
+    if (isTeamMode || isTeamArcadeMode) { // 変更
+        finalAICount = 3; // チームモードおよびチームアーケードモードでは常に3体（1体味方 + 2体敵）
+    }
     for (const ai of ais) {
         cleanupAI(ai); // Use cleanupAI to properly remove AI and its resources
     }
     ais.length = 0;
     const aiColors = [0x00ff00, 0x00ffff, 0x0FFa500];
+    const teamColors = {
+        player: 0x4169E1, // 味方AIは青系
+        enemy: [0x00ff00, 0xff4444] // 敵AIは緑と赤
+    };
     for (let i = 0; i < finalAICount; i++) {
-        const ai = createAI(aiColors[i] || 0xff00ff);
+        let aiColor;
+        let aiTeam = 'enemy'; // デフォルトは敵
+        if (isTeamMode || isTeamArcadeMode) { // 変更
+            if (i === 0) {
+                aiTeam = 'player'; // 最初の1体は味方
+                aiColor = teamColors.player;
+            } else {
+                aiTeam = 'enemy'; // 残り2体は敵
+                aiColor = teamColors.enemy[i - 1];
+            }
+        } else {
+            aiColor = aiColors[i] || 0xff00ff;
+        }
+        const ai = createAI(aiColor);
+        ai.team = aiTeam; // チームプロパティを設定
         let aiSpawnPos;
         if (availableSpawnPoints.length > 0) {
             aiSpawnPos = availableSpawnPoints.pop();
@@ -2089,7 +2475,7 @@ function restartGame() {
         }
         ai.position.copy(new THREE.Vector3(aiSpawnPos.x, -FLOOR_HEIGHT, aiSpawnPos.z));
         ai.lookAt(new THREE.Vector3(0, ai.position.y, 0));
-        if (finalAICount === 3) {
+        if (finalAICount === 3 && !isTeamMode) {
             if (i === 0) { ai.aggression = 0.7; ai.flankAggression = 0.1; }
             else if (i === 1) { ai.aggression = 0.4; ai.flankAggression = 0.8; ai.flankPreference = 'left'; }
             else { ai.aggression = 0.5; ai.flankAggression = 0.8; ai.flankPreference = 'right'; }
@@ -2107,27 +2493,51 @@ function restartGame() {
     const ai3HPDisplay = document.getElementById('ai3-hp-display');
     ais.forEach((ai, index) => {
         ai.hp = aiHP;
-        ai.state = 'HIDING';
+        // 味方AIは積極的に攻撃するため、初期状態をATTACKINGにする
+        if (isTeamMode && ai.team === 'player') {
+            ai.state = 'ATTACKING';
+            ai.currentAttackTime = 0;
+            ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+            ai.aggression = 0.9; // 味方AIは高攻撃性
+            ai.flankAggression = 0.8;
+        } else {
+            ai.state = 'HIDING';
+        }
         ai.currentWeapon = WEAPON_PISTOL;
         ai.ammoMG = 0; ai.ammoRR = 0; ai.ammoSR = 0;
         ai.targetWeaponPickup = null;
         ai.lastHiddenTime = 0; ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false;
-        if (index === 0) { if (ai1HPDisplay) ai1HPDisplay.textContent = `AI 1 HP: ${aiHPText}`; }
-        else if (index === 1) { if (ai2HPDisplay) ai2HPDisplay.textContent = `AI 2 HP: ${aiHPText}`; }
-        else if (index === 2) { if (ai3HPDisplay) ai3HPDisplay.textContent = `AI 3 HP: ${aiHPText}`; }
+        if (isTeamMode) {
+            if (index === 0) { // 味方AI
+                if (ai1HPDisplay) ai1HPDisplay.textContent = `Teammate HP: ${aiHPText}`;
+                if (ai1HPDisplay) ai1HPDisplay.style.color = 'cyan'; // 味方はシアン色
+            } else if (index === 1) { // 敵AI 1
+                if (ai2HPDisplay) ai2HPDisplay.textContent = `Enemy 1 HP: ${aiHPText}`;
+                if (ai2HPDisplay) ai2HPDisplay.style.color = 'limegreen';
+            } else if (index === 2) { // 敵AI 2
+                if (ai3HPDisplay) ai3HPDisplay.textContent = `Enemy 2 HP: ${aiHPText}`;
+                if (ai3HPDisplay) ai3HPDisplay.style.color = 'orange';
+            }
+        } else {
+            if (index === 0) { if (ai1HPDisplay) ai1HPDisplay.textContent = `AI 1 HP: ${aiHPText}`; if (ai1HPDisplay) ai1HPDisplay.style.color = 'limegreen'; }
+            else if (index === 1) { if (ai2HPDisplay) ai2HPDisplay.textContent = `AI 2 HP: ${aiHPText}`; if (ai2HPDisplay) ai2HPDisplay.style.color = 'cyan'; }
+            else if (index === 2) { if (ai3HPDisplay) ai3HPDisplay.textContent = `AI 3 HP: ${aiHPText}`; if (ai3HPDisplay) ai3HPDisplay.style.color = 'orange'; }
+        }
     });
 
     resetWeaponPickups(ais);
 
     if (ai2HPDisplay) ai2HPDisplay.style.display = (finalAICount > 1) ? 'block' : 'none';
     if (ai3HPDisplay) ai3HPDisplay.style.display = (finalAICount > 2) ? 'block' : 'none';
-    const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display'];
+    const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display']; // 共通UI
+
     if (gameSettings.gameMode === 'arcade') {
-        gameUI.push('kill-count-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display');
-    } else {
-        if (finalAICount > 0) gameUI.push('ai-hp-display');
-        if (finalAICount > 1) gameUI.push('ai2-hp-display');
-        if (finalAICount > 2) gameUI.push('ai3-hp-display');
+        gameUI.push('kill-count-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // アーケードモードのAI HP表示も追加
+    } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // チームモードのAI HP表示
+        if (gameSettings.gameMode === 'teamArcade') {
+            gameUI.push('game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display');
+        }
     }
     gameUI.forEach(id => {
         const el = document.getElementById(id);
@@ -2166,80 +2576,30 @@ function restartGame() {
     keySet.clear();
     joystickMoveVector.set(0, 0);
     isMouseButtonDown = false;
+    isScoping = false; // スコープ状態もリセット
+    isElevating = false; // 昇降状態もリセット
     isGameRunning = true;
-    scene.remove(playerBody);
-    scene.remove(playerHead);
+    isPaused = false; // ゲームが一時停止状態ではないことを明確にする
+    document.exitPointerLock(); // 念のためポインターロックを解除し、再取得の機会を与える
+    
+    // 既存のplayerModelがplayerに追加されている場合、まず削除する
+    if (playerModel && playerModel.parent) {
+        player.remove(playerModel);
+    }
+    playerModel = createCharacterModel(0x0000ff); // Player's color
     player.add(playerModel);
-    playerModel.visible = false;
+    if (playerModel) { // 念のためnullチェック
+        playerModel.visible = false; // プレイヤーモデルは非表示に保つ
+    }
+    // playerBodyとplayerHeadをplayerModelのuserDataから取得
+    playerBody = playerModel.userData.parts.body;
+    playerHead = playerModel.userData.parts.head;
 }
 
 function startAIDeathSequence(impactVelocity, ai) {
     aiFallDownCinematicSequence(impactVelocity, ai);
 }
 
-function playerFallDownCinematicSequence(projectile) {
-    createRedSmokeEffect(player.position);
-    const playerDeathLocation = player.position.clone();
-    const targetCameraPosition = findClearCameraPosition(playerDeathLocation, obstacles, projectile);
-    cinematicCamera.position.copy(targetCameraPosition);
-    cinematicCamera.lookAt(playerDeathLocation.clone().add(new THREE.Vector3(0, 1, 0)));
-    cinematicCamera.fov = 75;
-    cinematicCamera.aspect = window.innerWidth / window.innerHeight;
-    cinematicCamera.updateProjectionMatrix();
-    new TWEEN.Tween(cinematicCamera).to({ fov: 30 }, 2000).easing(TWEEN.Easing.Quadratic.InOut).start();
-    playerModel.visible = true;
-    player.remove(playerModel);
-    scene.add(playerModel);
-    playerModel.position.copy(player.position);
-    const fallDuration = 1.0;
-    const fallRotationAxisAngle = Math.PI / 2;
-    const finalRotation = playerModel.rotation.clone();
-    finalRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
-    new TWEEN.Tween(playerModel.rotation).to({ x: finalRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
-    
-    // 新しい目標Y座標を計算
-    let deathGroundY = -FLOOR_HEIGHT; // デフォルトは地面
-    const playerFeetYAtDeath = player.position.y - playerTargetHeight;
-
-    for (const obs of obstacles) {
-        // 壁と屋上は区別しない。プレイヤーの足元の判定を優先
-        if (obs.userData.isWall) continue; // 壁は地面としてカウントしない
-
-        const obstacleBox = new THREE.Box3().setFromObject(obs);
-        const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
-        
-        // プレイヤーの水平位置と障害物の水平位置が重なっているかを確認
-        const playerHorizontalBox = new THREE.Box2(
-            new THREE.Vector2(player.position.x - 0.2, player.position.z - 0.2), 
-            new THREE.Vector2(player.position.x + 0.2, player.position.z + 0.2)
-        );
-        const obstacleHorizontalBox = new THREE.Box2(
-            new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), 
-            new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z)
-        );
-
-        if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
-            // プレイヤーの足元が障害物の上または少し上にある場合
-            // topOfObstacle - 0.1: 少しの誤差を許容
-            // topOfObstacle + 2.0: プレイヤーがジャンプ中などの高い位置から死亡した場合も考慮
-            if (playerFeetYAtDeath >= topOfObstacle - 0.1 && playerFeetYAtDeath <= topOfObstacle + 2.0) {
-                // 最も高い着地点を優先
-                if (topOfObstacle > deathGroundY) {
-                    deathGroundY = topOfObstacle;
-                }
-            }
-        }
-    }
-    const finalPlayerYPosition = deathGroundY + (BODY_HEIGHT / 2); // 死亡時のオブジェクトの中心Y座標
-    new TWEEN.Tween(playerModel.position).to({ y: finalPlayerYPosition }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.In).start();
-    playerModel.userData.deathType = 'fallDown';
-    setTimeout(() => {
-        isPlayerDeathPlaying = false;
-        showGameOver();
-        playerModel.userData = {};
-        scene.remove(playerModel);
-    }, fallDuration * 1000 + 1500);
-}
 
 function respawnAI(ai) {
     const aiHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
@@ -2289,18 +2649,184 @@ function respawnAI(ai) {
     scene.add(ai);
 }
 
+function respawnPlayer() {
+    playerHP = gameSettings.playerHP === 'Infinity' ? Infinity : parseInt(gameSettings.playerHP, 10);
+    if (playerHPDisplay) { // nullチェックを追加
+        playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
+    }
+
+    // プレイヤーの入力状態を完全にリセット
+    keySet.clear();
+    joystickMoveVector.set(0, 0);
+    isMouseButtonDown = false;
+    isScoping = false; // スコープ状態もリセット
+    cancelScope(); // もしスコープ中だったら解除
+
+    let playerSpawnPos = new THREE.Vector3();
+    let foundSafeSpawn = false;
+    const MAX_RESPAWN_ATTEMPTS = 20; // 試行回数を増やす
+    const R = ARENA_PLAY_AREA_RADIUS - 5;
+    
+    for (let attempts = 0; attempts < MAX_RESPAWN_ATTEMPTS; attempts++) {
+        // ランダムなリスポーン地点を生成
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * R;
+        playerSpawnPos.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+
+        const originalPlayerPosition = player.position.clone(); // 現在のプレイヤー位置を保存
+        const originalPlayerRotation = player.rotation.clone(); // 現在のプレイヤー回転を保存
+        
+        player.position.copy(playerSpawnPos); // 候補位置に一時的に移動させて衝突チェック
+        // 衝突チェックのために一旦モデルも移動
+        playerModel.position.set(0, playerTargetHeight, 0); // playerModelはplayerの子として移動するので、相対位置を設定
+
+        // 候補位置での地面のY座標を検出
+        const groundYAtSpawn = getGroundY(player.position, playerTargetHeight * 2); // playerTargetHeightはplayerの高さなので、playerBodyHeightを考慮
+        player.position.y = groundYAtSpawn; // 地面に合わせる
+
+        // 障害物との衝突チェック
+        if (!checkCollision(player, obstacles)) {
+            foundSafeSpawn = true;
+            break;
+        } else {
+            // 衝突する場合は、プレイヤー位置を元に戻し、別のスポーン地点を試す
+            player.position.copy(originalPlayerPosition);
+            player.rotation.copy(originalPlayerRotation);
+            playerModel.position.set(0, playerTargetHeight, 0); // モデルの位置も戻す
+        }
+    }
+
+    if (!foundSafeSpawn) {
+        console.error("Could not find a safe spawn point after multiple attempts. Spawning at default (0, 0, 0).");
+        playerSpawnPos.set(0, 0, 0); // 緊急時のデフォルト
+        player.position.copy(playerSpawnPos);
+        const groundYAtDefaultSpawn = getGroundY(player.position, playerTargetHeight * 2);
+        player.position.y = groundYAtDefaultSpawn;
+    }
+    
+    // プレイヤーの位置と向きを設定
+    // player.position.copy(playerSpawnPos); // ループ内で既に設定済み
+    player.rotation.y = Math.atan2(0 - player.position.x, 0 - player.position.z) + Math.PI; // 中心を向く
+    camera.rotation.x = 0; // カメラの縦回転をリセット
+    currentWeapon = WEAPON_PISTOL;
+    ammoMG = 0;
+    ammoRR = 0;
+    ammoSR = 0;
+    ammoSG = 0;
+
+    // playerModelの表示状態を確実に更新
+    if (playerModel) {
+        if (!playerModel.parent) { // もしplayerModelがシーンから削除されていたらplayerに追加
+            player.add(playerModel);
+        }
+        // playerModel.visible = true; // 常に表示
+        playerModel.visible = false; // <-- ここに明示的に追加
+        playerModel.position.set(0, playerTargetHeight, 0); // playerModelはplayerの子なので相対位置を設定
+    }
+}
+
 function startPlayerDeathSequence(projectile) {
     if (isPlayerDeathPlaying || playerHP > 0) return;
     isPlayerDeathPlaying = true;
-    isGameRunning = false;
+    isGameRunning = false; // 一時的にゲームを停止
     document.exitPointerLock();
-    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'player-weapon-display', 'pause-button'];
+
+    // プレイヤーをシーンから削除
+    if (player) player.traverse((object) => { object.visible = false; }); 
+
+    // UIを非表示
+    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button'];
     uiToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
-    playerModel.visible = true;
-    playerFallDownCinematicSequence(projectile);
+
+    // 死亡時の地面Y座標を計算し、プレイヤーモデルをそこに固定
+    const playerFeetYAtDeath = player.position.y - playerTargetHeight; // プレイヤーの足元のY座標
+    const groundYAtDeath = getGroundY(player.position, playerTargetHeight); // その時点の地面のY座標 (オブジェクトの中心Y座標として)
+    playerModel.position.y = groundYAtDeath; // プレイヤーモデルのY座標を地面に固定
+
+    // 倒れるアニメーション
+    const fallDuration = 1.0;
+    const fallRotationAxisAngle = Math.PI / 2;
+    const finalRotation = playerModel.rotation.clone();
+    finalRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
+    new TWEEN.Tween(playerModel.rotation).to({ x: finalRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
+
+    // カメラをプレイヤーの少し後ろ、少し上に移動させ、倒れたプレイヤーモデルを映す
+    const cameraOffset = new THREE.Vector3(0, 5, -8); // プレイヤーの後ろ上方からの視点
+    cameraOffset.applyQuaternion(player.quaternion); // プレイヤーの向きに合わせてオフセットを適用
+    camera.position.copy(player.position).add(cameraOffset);
+    camera.lookAt(player.position.clone().add(new THREE.Vector3(0, 1, 0))); // プレイヤーの中心やや上を見る
+
+    const redFlashOverlay = document.getElementById('red-flash-overlay');
+    if (redFlashOverlay) {
+        // 初期状態をリセットし、表示をブロック
+        redFlashOverlay.className = ''; // クラスを全てクリア
+        redFlashOverlay.style.opacity = '0'; // 明示的に透明に
+        redFlashOverlay.style.backgroundColor = 'rgba(0,0,0,0)'; // 明示的に透明な黒に
+        redFlashOverlay.style.display = 'block';
+
+        // 赤フラッシュを開始
+        setTimeout(() => {
+            redFlashOverlay.classList.add('red-flash'); // 赤フラッシュクラスを追加
+        }, 50);
+
+        // 黒画面への移行
+        setTimeout(() => {
+            redFlashOverlay.classList.remove('red-flash'); // 赤フラッシュクラスを削除
+            redFlashOverlay.classList.add('fade-to-black'); // 黒画面クラスを追加
+        }, 300); // 赤フラッシュ表示時間
+
+        // 黒画面からフェードアウト
+        setTimeout(() => {
+            redFlashOverlay.classList.remove('fade-to-black'); // 黒画面クラスを削除
+            redFlashOverlay.classList.add('fade-out'); // フェードアウトクラスを追加
+        }, 1300); // 黒画面表示時間
+
+        // オーバーレイを完全に非表示にする
+        setTimeout(() => {
+            redFlashOverlay.style.display = 'none';
+            redFlashOverlay.className = ''; // クラスをクリアしてリセット
+            redFlashOverlay.style.opacity = '0'; // 明示的に透明に
+            redFlashOverlay.style.backgroundColor = 'rgba(0,0,0,0)'; // 明示的に透明な黒に
+        }, 2300); // フェードアウト完了後
+
+
+    }
+
+    // 3秒後にリスポーンまたはゲームオーバー画面へ
+    setTimeout(() => { // このsetTimeoutは全体の演出時間に合わせて調整
+        isPlayerDeathPlaying = false;
+        // プレイヤーモデルの回転をリセット
+        playerModel.rotation.set(0, 0, 0); 
+        // playerModelがplayerの子として正しく配置されるようにリセット
+        playerModel.position.set(0, playerTargetHeight, 0); 
+
+        // カメラをリセット (通常のプレイヤー視点に戻す)
+        camera.position.set(0, 0, 0); // 相対位置としてリセット
+        camera.rotation.set(0, 0, 0); // 相対角度としてリセット
+        
+        if (gameSettings.gameMode === 'teamArcade') {
+            respawnPlayer(); // プレイヤーをリスポーン地点に移動
+            isGameRunning = true; // ゲームを再開
+            if (player) player.traverse((object) => { object.visible = true; }); // プレイヤーをシーンに再追加
+            // UIを再表示
+            const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
+            if ('ontouchstart' in window) {
+                uiToShow.push('joystick-move', 'fire-button', 'crouch-button');
+            } else {
+                canvas.requestPointerLock();
+            }
+            uiToShow.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'block';
+            });
+        } else {
+            // teamArcade以外のモードではゲームオーバー画面へ
+            showGameOver();
+        }
+    }, 3000); // 3秒後にリスポーンまたはゲームオーバー
 }
 
 function findFlankingSpot(ai, timeElapsed) {
@@ -2383,6 +2909,7 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
     isAIDeathPlaying = true;
     ai.targetWeaponPickup = null; // Clear target weapon pickup when AI dies
     cinematicTargetAI = ai;
+    if (player) player.visible = false; // AI死亡時はプレイヤーを非表示
     const joy = document.getElementById('joystick-move');
     const fire = document.getElementById('fire-button');
     const cross = document.getElementById('crosshair');
@@ -2412,13 +2939,30 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
                 playerKills++;
                 if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
                 respawnAI(ai);
-            } else {
-                // cleanupAI(ai);
+            } else if (gameSettings.gameMode === 'teamArcade') { // teamArcadeモードの場合
+                // 倒されたAIが敵チームならプレイヤーチームのキルを増やす
+                if (ai.team === 'enemy') {
+                    playerTeamKills++;
+                    if (playerTeamKillsDisplay) playerTeamKillsDisplay.textContent = `PLAYER TEAM KILLS: ${playerTeamKills}`;
+                }
+                // 倒されたAIが味方チームなら敵チームのキルを増やす
+                else if (ai.team === 'player') {
+                    enemyTeamKills++;
+                    if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.textContent = `ENEMY TEAM KILLS: ${enemyTeamKills}`;
+                }
+                respawnAI(ai); // 無限復活
+            } else { // battleモードまたは通常のteamモード
                 ai.visible = false;
             }        if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
             if (joy) joy.style.display = 'block';
             if (fire) fire.style.display = 'block';
             if (cross) cross.style.display = 'block';
+            if (player) {
+                player.traverse((object) => { object.visible = true; }); // AI死亡演出終了時はプレイヤーを再表示
+                if (playerModel) {
+                    playerModel.visible = false; // プレイヤーモデルは非表示に保つ
+                }
+            }
         }
     }, fallDuration * 1000 + 500);
 }
@@ -2474,6 +3018,9 @@ function checkCollision(object, obstacles, ignoreObstacle = null) {
 }
 
 function checkPartCollision(part) {
+    if (part.userData && part.userData.isDeadPart === true) {
+        return false; // 死亡したパーツは衝突判定を行わない
+    }
     const partBBox = new THREE.Box3().setFromObject(part);
     for (const obstacle of obstacles) {
         const obstacleBBox = new THREE.Box3().setFromObject(obstacle);
@@ -2523,6 +3070,82 @@ function findClearCameraPosition(targetPosition, obstaclesArray, projectile) {
         }
     }
     return bestCandidate || targetPosition.clone().add(new THREE.Vector3(0, 15, 0));
+}
+
+// 指定された位置の真下にある最適な地面のY座標を返すヘルパー関数
+function getGroundY(position, objectBodyHeight) {
+    let currentGroundY = -FLOOR_HEIGHT; // デフォルトはステージの最下部
+
+    // プレイヤーの足元の水平位置
+    const horizontalBox = new THREE.Box2(
+        new THREE.Vector2(position.x - 0.2, position.z - 0.2), 
+        new THREE.Vector2(position.x + 0.2, position.z + 0.2)
+    );
+    const feetY = position.y - objectBodyHeight / 2; // オブジェクトの足元のY座標
+
+    for (const obs of obstacles) {
+        // 壁は地面としてカウントしない
+        if (obs.userData.isWall) continue;
+        
+        const obstacleBox = new THREE.Box3().setFromObject(obs);
+        const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
+        
+        // 障害物の水平位置
+        const obstacleHorizontalBox = new THREE.Box2(
+            new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), 
+            new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z)
+        );
+
+        if (horizontalBox.intersectsBox(obstacleHorizontalBox)) {
+            // プレイヤーの足元が障害物の上または少し上にある場合
+            if (feetY >= topOfObstacle - 0.1) { // わずかな誤差を許容
+                // 最も高い着地点を優先
+                if (topOfObstacle > currentGroundY) {
+                    currentGroundY = topOfObstacle;
+                }
+            }
+        }
+    }
+    return currentGroundY + objectBodyHeight / 2; // オブジェクトの中心Y座標としての着地位置
+}
+
+// プレイヤーが障害物にめり込んでいる場合に、外側に押し出す関数
+function resolvePlayerCollision(playerObj, obstaclesArray, pushOutDistance = 0.5) {
+    const playerBoundingBox = new THREE.Box3().setFromObject(playerObj);
+    let resolved = false;
+
+    for (const obstacle of obstaclesArray) {
+        // 壁や屋上に関わらず、すべての物理的な障害物を考慮
+        // isRooftopやisWallは直接衝突判定に使うべきではない場合もあるので注意が必要
+        // 今回はプレイヤーモデルが「めり込んでいる」状況を解決するため、すべての物体として扱う
+        
+        const obstacleBoundingBox = new THREE.Box3().setFromObject(obstacle);
+
+        if (playerBoundingBox.intersectsBox(obstacleBoundingBox)) {
+            // 衝突が発生した場合、押し出しベクトルを計算
+            const overlap = playerBoundingBox.intersect(obstacleBoundingBox);
+            const dx = Math.min(playerBoundingBox.max.x - overlap.min.x, overlap.max.x - playerBoundingBox.min.x);
+            const dy = Math.min(playerBoundingBox.max.y - overlap.min.y, overlap.max.y - playerBoundingBox.min.y);
+            const dz = Math.min(playerBoundingBox.max.z - overlap.min.z, overlap.max.z - playerBoundingBox.min.z);
+
+            let pushVector = new THREE.Vector3();
+            if (dx < dy && dx < dz) {
+                pushVector.x = (playerBoundingBox.getCenter(new THREE.Vector3()).x < obstacleBoundingBox.getCenter(new THREE.Vector3()).x) ? -dx : dx;
+            } else if (dy < dx && dy < dz) {
+                pushVector.y = (playerBoundingBox.getCenter(new THREE.Vector3()).y < obstacleBoundingBox.getCenter(new THREE.Vector3()).y) ? -dy : dy;
+            } else {
+                pushVector.z = (playerBoundingBox.getCenter(new THREE.Vector3()).z < obstacleBoundingBox.getCenter(new THREE.Vector3()).z) ? -dz : dz;
+            }
+            // 少し余分に押し出す
+            playerObj.position.add(pushVector.normalize().multiplyScalar(pushOutDistance + 0.1)); 
+            resolved = true;
+            // 複数の障害物と衝突している可能性があるので、breakせずに全ての衝突を解消しようとする
+            // または、一度押し出したら、次のフレームで再度チェックする方が良い場合もある
+            // 今回は単純化のため、一つの衝突解決で終了
+            break; 
+        }
+    }
+    return resolved;
 }
 
 function showSettingsAndPause() {
@@ -2614,6 +3237,7 @@ function animate() {
         }
     }
     const timeElapsed = clock.getElapsedTime();
+    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
     playerTargetHeight = isCrouchingToggle ? 1.1 : 2.0;
     const currentMoveSpeed = isCrouchingToggle ? moveSpeed / 2 : moveSpeed;
     for (let i = debris.length - 1; i >= 0; i--) {
@@ -2675,57 +3299,17 @@ function animate() {
         renderer.render(scene, cinematicCamera);
         return;
     }
-    if (isPlayerDeathPlaying) {
-        const focusPos = new THREE.Vector3();
-        let partsInFocus = 0;
-        const tempVector = new THREE.Vector3();
-        if (playerModel.userData.deathType === 'fallDown') {
-            cinematicCamera.lookAt(playerModel.position.clone().add(new THREE.Vector3(0, 1, 0)));
-            focusPos.add(playerModel.getWorldPosition(tempVector));
-            partsInFocus++;
-        } else {
-            const parts = [playerBody, playerHead];
-            for (const part of parts) {
-                if (part && part.userData.velocity) {
-                    part.userData.velocity.y -= GRAVITY * delta;
-                    const velocity = part.userData.velocity;
-                    const oldPos = part.position.clone();
-                    part.position.y += velocity.y * delta;
-                    if (checkPartCollision(part)) { part.position.y = oldPos.y; velocity.y *= -0.5; }
-                    part.position.x += velocity.x * delta;
-                    if (checkPartCollision(part)) { part.position.x = oldPos.x; velocity.x *= -0.5; }
-                    part.position.z += velocity.z * delta;
-                    if (checkPartCollision(part)) { part.position.z = oldPos.z; velocity.z *= -0.5; }
-                    part.rotation.x += part.userData.angularVelocity.x * delta;
-                    part.rotation.y += part.userData.angularVelocity.y * delta;
-                    part.rotation.z += part.userData.angularVelocity.z * delta;
-                    if (part.position.y < -FLOOR_HEIGHT) {
-                        part.position.y = -FLOOR_HEIGHT;
-                        part.userData.velocity.y *= -0.4;
-                        part.userData.velocity.x *= 0.8;
-                        part.userData.velocity.z *= 0.8;
-                        part.userData.angularVelocity.multiplyScalar(0.8);
-                    }
-                    focusPos.add(part.getWorldPosition(tempVector));
-                    partsInFocus++;
-                }
-            }
-        }
-        if (partsInFocus > 0) {
-            focusPos.divideScalar(partsInFocus);
-        }
-        cinematicCamera.lookAt(focusPos);
-        cinematicCamera.updateProjectionMatrix();
-        TWEEN.update();
-        renderer.render(scene, cinematicCamera);
-        return;
-    }
+
     if (!isGameRunning) {
         renderer.render(scene, camera);
         return;
     }
-    const weaponDisplay = document.getElementById('player-weapon-display');
-    if (weaponDisplay) {
+
+    // プレイヤーモデルを常に非表示にする
+    if (playerModel) {
+        playerModel.visible = false;
+    }
+    if (playerWeaponDisplay) { // グローバル変数を使用し、nullチェック
         let weaponName = currentWeapon;
         let ammoCount = '∞';
         switch (currentWeapon) {
@@ -2735,7 +3319,7 @@ function animate() {
             case WEAPON_SG: weaponName = 'Shotgun'; ammoCount = ammoSG; break;
             case WEAPON_PISTOL: weaponName = 'Pistol'; break;
         }
-        weaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`;
+        playerWeaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`; // playerWeaponDisplayを使用
     }
     if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG)) {
         shoot();
@@ -2756,6 +3340,13 @@ function animate() {
     console.log(`[ANIMATE] finalMoveVector.y: ${finalMoveVector.y}`);
 
     if (finalMoveVector.length() > 0) finalMoveVector.normalize();
+    // リスポーン直後の移動を強制的に停止させる
+    if (window.justRestarted || isPlayerDeathPlaying || isElevating) {
+        finalMoveVector.set(0, 0); // 移動を強制的にキャンセル
+        keyboardMoveVector.set(0, 0); // 念のためキーボード移動もリセット
+        joystickMoveVector.set(0, 0); // 念のためジョイスティック移動もリセット
+        // isPlayerDeathPlayingはプレイヤー死亡中、isElevatingは梯子昇降中なので、その間は移動させない
+    }
     const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
     const rightMove = finalMoveVector.x * currentMoveSpeed * delta;
     console.log(`[ANIMATE] forwardMove: ${forwardMove}`);
@@ -2942,6 +3533,9 @@ function animate() {
         }
         const currentAISpeed = ai.isCrouching ? AI_SPEED / 2 : AI_SPEED;
         const separation_vec = new THREE.Vector3(0, 0, 0);
+
+        // ais.forEachループ内で一度だけ定義
+        const isTeammateInTeamModeOrArcade = isTeamModeOrTeamArcade && ai.team === 'player';
         ais.forEach((otherAI, otherIndex) => {
             if (index === otherIndex) return;
             const distance = ai.position.distanceTo(otherAI.position);
@@ -2962,13 +3556,68 @@ function animate() {
         ai.scale.y = ai.isCrouching ? 0.7 : 1.0;
         ai.position.y = -FLOOR_HEIGHT - (ai.isCrouching ? (BODY_HEIGHT + HEAD_RADIUS * 2) * 0.15 : 0);
         if (ai.state === 'ATTACKING' || isMoving) {
-            ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 5 * delta);
+            let targetAngle;
+            if (isTeamModeOrTeamArcade && ai.team === 'player') { // isTeamModeOrTeamArcadeを使用
+                // 味方AIは最も近い敵AIの方向を向く
+                let closestEnemyAI = null;
+                let closestDistance = Infinity;
+                for (const enemyAI of ais) {
+                    if (enemyAI === ai || enemyAI.team !== 'enemy' || enemyAI.hp <= 0) continue;
+                    const distance = ai.position.distanceTo(enemyAI.position);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestEnemyAI = enemyAI;
+                    }
+                }
+                if (closestEnemyAI) {
+                    targetAngle = Math.atan2(closestEnemyAI.position.x - ai.position.x, closestEnemyAI.position.z - ai.position.z);
+                } else {
+                    // 敵AIがいない場合はプレイヤーを向く（フォールバック）
+                    targetAngle = Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z);
+                }
+            } else {
+                // 敵AI（team/teamArcadeモード）または通常のAI（battle/arcadeモード）はプレイヤーを向く
+                targetAngle = Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z);
+            }
+            ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, targetAngle, 5 * delta);
         }
         switch (ai.state) {
             case 'HIDING':
                 ai.avoiding = false;
+                // const isTeammate = gameSettings.gameMode === 'team' && ai.team === 'player'; // この行は削除
+                // const isTeammateInTeamModeOrArcade = isTeamModeOrTeamArcade && ai.team === 'player'; // この行は削除
+                if (isTeammateInTeamModeOrArcade) { // isTeammateInTeamModeOrArcadeを使用
+                    // 味方AIは積極的に攻撃する（HIDING状態を回避）
+                    if (!findAndTargetWeapon(ai)) {
+                        ai.state = 'ATTACKING';
+                        ai.currentAttackTime = timeElapsed;
+                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                    }
+                    break;
+                }
                 if (ai.currentWeapon === WEAPON_SR && ai.ammoSR > 0) {
-                    ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 2 * delta);
+                    let targetAngle;
+                    if (isTeammateInTeamModeOrArcade) {
+                        // 味方AIは最も近い敵AIの方向を向く
+                        let closestEnemyAI = null;
+                        let closestDistance = Infinity;
+                        for (const enemyAI of ais) {
+                            if (enemyAI === ai || enemyAI.team !== 'enemy' || enemyAI.hp <= 0) continue;
+                            const distance = ai.position.distanceTo(enemyAI.position);
+                            if (distance < closestDistance) {
+                                closestDistance = distance;
+                                closestEnemyAI = enemyAI;
+                            }
+                        }
+                        if (closestEnemyAI) {
+                            targetAngle = Math.atan2(closestEnemyAI.position.x - ai.position.x, closestEnemyAI.position.z - ai.position.z);
+                        } else {
+                            targetAngle = Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z);
+                        }
+                    } else {
+                        targetAngle = Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z);
+                    }
+                    ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, targetAngle, 2 * delta);
                     aiShoot(ai, timeElapsed);
                     if (isAISeen && (timeElapsed - ai.lastHiddenTime) > 1.0) {
                         if (!findNewHidingSpot(ai)) { // 隠れ場所が見つからない場合でも停滞させない
@@ -3002,15 +3651,25 @@ function animate() {
                 break;
             case 'MOVING':
                 ai.avoiding = false;
-                if (isAISeen) {
-                    ai.targetWeaponPickup = null;
-                    ai.state = 'ATTACKING';
-                    ai.currentAttackTime = timeElapsed;
-                    ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
-                } else if (isArrived && !isAISeen && isBehindObstacle(ai)) {
-                    ai.state = 'HIDING';
-                    ai.lastHiddenTime = timeElapsed;
-                    ai.targetWeaponPickup = null;
+                if (isTeammateInTeamModeOrArcade) {
+                    // 味方AIは武器を拾った後、すぐに攻撃状態に移行
+                    if (isArrived) {
+                        ai.targetWeaponPickup = null;
+                        ai.state = 'ATTACKING';
+                        ai.currentAttackTime = timeElapsed;
+                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                    }
+                } else {
+                    if (isAISeen) {
+                        ai.targetWeaponPickup = null;
+                        ai.state = 'ATTACKING';
+                        ai.currentAttackTime = timeElapsed;
+                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                    } else if (isArrived && !isAISeen && isBehindObstacle(ai)) {
+                        ai.state = 'HIDING';
+                        ai.lastHiddenTime = timeElapsed;
+                        ai.targetWeaponPickup = null;
+                    }
                 }
                 break;
             case 'FLANKING':
@@ -3087,16 +3746,36 @@ function animate() {
         if (ai.userData.parts) {
             const parts = ai.userData.parts;
 
-            // Aiming: Make the aimGroup look at the player's head position.
-            const playerHeadPos = new THREE.Vector3();
-            player.getWorldPosition(playerHeadPos);
-            playerHeadPos.y += playerTargetHeight; // Aim directly at the player's head height
-            parts.aimGroup.lookAt(playerHeadPos);
+            // Aiming: Make the aimGroup look at the target
+            let targetHeadPos = new THREE.Vector3();
+            if (isTeamModeOrTeamArcade && ai.team === 'player') { // isTeamModeOrTeamArcadeを使用
+                // 味方AIは最も近い敵AIを向く
+                let closestEnemyAI = null;
+                let closestDistance = Infinity;
+                for (const enemyAI of ais) {
+                    if (enemyAI === ai || enemyAI.team !== 'enemy' || enemyAI.hp <= 0) continue;
+                    const distance = ai.position.distanceTo(enemyAI.position);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestEnemyAI = enemyAI;
+                    }
+                }
+                if (closestEnemyAI) {
+                    closestEnemyAI.children[1].getWorldPosition(targetHeadPos);
+                } else {
+                    // 敵AIがいない場合はプレイヤーを向く
+                    player.getWorldPosition(targetHeadPos);
+                    targetHeadPos.y += playerTargetHeight;
+                }
+            } else {
+                // 通常モードまたは敵AIはプレイヤーを向く
+                player.getWorldPosition(targetHeadPos);
+                targetHeadPos.y += playerTargetHeight;
+            }
+            parts.aimGroup.lookAt(targetHeadPos);
 
-            // Leg Animation
-            const isMoving = (ai.state === 'MOVING' || ai.state === 'FLANKING' || ai.state === 'EVADING') &&
-                             (ai.targetPosition && ai.position.distanceTo(ai.targetPosition) > ARRIVAL_THRESHOLD);
-
+                            // Leg Animation
+                            const actuallyMoving = ai.position.distanceTo(ai.lastPosition) > 0.001; // 実際に動いているかを判定
             if (ai.isCrouching) {
                 // Crouch pose
                 const crouchAngle = Math.PI / 2.5;
@@ -3104,7 +3783,7 @@ function animate() {
                 parts.rightHip.rotation.x = crouchAngle;
                 parts.leftKnee.rotation.x = -crouchAngle;
                 parts.rightKnee.rotation.x = -crouchAngle;
-            } else if (isMoving) {
+            } else if (actuallyMoving) { // isMoving の代わりに actuallyMoving を使用
                 // Walking animation
                 const walkSpeed = 10;
                 const hipAmplitude = Math.PI / 4;
@@ -3127,6 +3806,9 @@ function animate() {
                 parts.rightKnee.rotation.x = 0;
             }
         }
+        // AIの現在の位置を保存して次フレームで比較できるようにする
+        ai.lastPosition.copy(ai.position);
+
     });
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const p = projectiles[i];
@@ -3180,6 +3862,11 @@ function animate() {
                 const ai = ais[j];
                 if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
                     if (ai.hp <= 0) continue; // すでに死んでいるAIにはヒットしない
+                    
+                    // チームモードの場合、味方AIには当たらない
+                    if (gameSettings.gameMode === 'team' && ai.team === 'player') {
+                        continue;
+                    }
 
                     hitSomething = true;
                     hitObject = ai;
@@ -3208,33 +3895,74 @@ function animate() {
             if (hitSomething) break;
         }
         if (!hitSomething && p.source === 'ai') {
-            const playerPos = player.position;
-            const playerBoundingBox = new THREE.Box3();
-            const playerBottomY = playerPos.y - playerTargetHeight;
-            const playerTopY = playerPos.y;
-            playerBoundingBox.min.set(playerPos.x - 0.5, playerBottomY, playerPos.z - 0.5);
-            playerBoundingBox.max.set(playerPos.x + 0.5, playerTopY, playerPos.z + 0.5);
-            if (playerBoundingBox.intersectsSphere(bulletSphere)) {
-                hitSomething = true;
-                hitObject = player;
-                hitType = 'player';
-                let damageAmount = 1;
-                if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
-                else if (p.isSniper || p.isRocket) damageAmount = playerHP;
-                if (playerHP !== Infinity) {
-                    playerHP -= damageAmount;
-                    screenShakeDuration = SHAKE_DURATION_MAX;
-                    redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-                    setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+            const shooterAI = p.shooter;
+            const shooterTeam = shooterAI ? shooterAI.team : 'enemy';
+            
+            // チームモードまたはチームアーケードモードの場合、AIの弾が他のAIに当たる処理
+            if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && shooterAI) {
+                for (let j = ais.length - 1; j >= 0; j--) {
+                    const ai = ais[j];
+                    if (ai === shooterAI || ai.hp <= 0) continue; // 自分自身や死んでいるAIには当たらない
+                    
+                    // 同じチームには当たらない
+                    if (ai.team === shooterTeam) continue;
+                    
+                    if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
+                        hitSomething = true;
+                        hitObject = ai;
+                        hitType = 'ai';
+                        let damageAmount = 1;
+                        if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
+                        else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
+                        if (ai.hp !== Infinity) {
+                            ai.hp -= damageAmount;
+                            createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+                        }
+                        if (ai.hp <= 0) {
+                            aiFallDownCinematicSequence(p.velocity, ai);
+                        } else {
+                            findEvasionSpot(ai);
+                        }
+                        if (p.weaponType === WEAPON_SG) {
+                            scene.remove(p.mesh);
+                            projectiles.splice(i, 1);
+                        }
+                        break;
+                    }
                 }
-                if (playerHP <= 0 && !isPlayerDeathPlaying) {
-                    startPlayerDeathSequence(p);
+                if (hitSomething) break;
+            }
+            
+            // プレイヤーに当たる処理（敵AIのみ、または通常モード）
+            if (!hitSomething && (gameSettings.gameMode !== 'team' || shooterTeam === 'enemy')) {
+                const playerPos = player.position;
+                const playerBoundingBox = new THREE.Box3();
+                const playerBottomY = playerPos.y - playerTargetHeight;
+                const playerTopY = playerPos.y;
+                playerBoundingBox.min.set(playerPos.x - 0.5, playerBottomY, playerPos.z - 0.5);
+                playerBoundingBox.max.set(playerPos.x + 0.5, playerTopY, playerPos.z + 0.5);
+                if (playerBoundingBox.intersectsSphere(bulletSphere)) {
+                    hitSomething = true;
+                    hitObject = player;
+                    hitType = 'player';
+                    let damageAmount = 1;
+                    if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
+                    else if (p.isSniper || p.isRocket) damageAmount = playerHP;
+                    if (playerHP !== Infinity) {
+                        playerHP -= damageAmount;
+                        screenShakeDuration = SHAKE_DURATION_MAX;
+                        redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+                        setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+                    }
+                    if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                        startPlayerDeathSequence(p);
+                    }
+                    if (p.weaponType === WEAPON_SG) {
+                        projectiles.splice(i, 1);
+                        scene.remove(p.mesh);
+                    }
+                    break;
                 }
-                if (p.weaponType === WEAPON_SG) {
-                    projectiles.splice(i, 1);
-                    scene.remove(p.mesh);
-                }
-                break;
             }
         }
         if (hitSomething) {
@@ -3306,7 +4034,7 @@ function animate() {
             projectiles.splice(i, 1);
         }
     }
-    const aiHPDisplays = [document.getElementById('ai-hp-display'), document.getElementById('ai2-hp-display'), document.getElementById('ai3-hp-display')];
+    const aiHPDisplays = [aiHPDisplay, ai2HPDisplay, ai3HPDisplay]; // グローバル変数を使用
     for (let i = 0; i < aiHPDisplays.length; i++) {
         const display = aiHPDisplays[i];
         if (!display) continue;
@@ -3314,25 +4042,70 @@ function animate() {
 
         if (ai && ai.hp > 0) {
             display.style.display = 'block';
-            display.textContent = `AI ${i + 1} HP: ${ai.hp === Infinity ? '∞' : ai.hp}`;
+            if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
+                if (i === 0) {
+                    display.textContent = `Teammate HP: ${ai.hp === Infinity ? '∞' : ai.hp}`;
+                    display.style.color = 'cyan';
+                } else if (i === 1) {
+                    display.textContent = `Enemy 1 HP: ${ai.hp === Infinity ? '∞' : ai.hp}`;
+                    display.style.color = 'limegreen';
+                } else if (i === 2) {
+                    display.textContent = `Enemy 2 HP: ${ai.hp === Infinity ? '∞' : ai.hp}`;
+                    display.style.color = 'orange';
+                }
+            } else {
+                display.textContent = `AI ${i + 1} HP: ${ai.hp === Infinity ? '∞' : ai.hp}`;
+                if (i === 0) display.style.color = 'limegreen';
+                else if (i === 1) display.style.color = 'cyan';
+                else if (i === 2) display.style.color = 'orange';
+            }
             display.classList.remove('dead-ai-hp'); // 生きている場合はクラスを削除
         } else if (ai && ai.hp <= 0) { // AIが存在し、HPが0以下の場合
             display.style.display = 'block';
-            display.textContent = `AI ${i + 1} HP: 0`;
+            if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
+                if (i === 0) {
+                    display.textContent = `Teammate HP: 0`;
+                    display.style.color = 'cyan';
+                } else if (i === 1) {
+                    display.textContent = `Enemy 1 HP: 0`;
+                    display.style.color = 'limegreen';
+                } else if (i === 2) {
+                    display.textContent = `Enemy 2 HP: 0`;
+                    display.style.color = 'orange';
+                }
+            } else {
+                display.textContent = `AI ${i + 1} HP: 0`;
+                if (i === 0) display.style.color = 'limegreen';
+                else if (i === 1) display.style.color = 'cyan';
+                else if (i === 2) display.style.color = 'orange';
+            }
             display.classList.add('dead-ai-hp'); // 死んでいる場合はクラスを追加
         } else { // AIが存在しない場合 (AIの総数よりiが大きい場合)
             display.style.display = 'none';
         }
     }
-    const allAIsDefeated = ais.every(ai => ai.hp <= 0);
-    if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && gameSettings.gameMode === 'battle') {
-        showWinScreen();
+    // チームモードの場合、敵チーム全滅で勝利
+    if (gameSettings.gameMode === 'team') {
+        const enemyAIsDefeated = ais.filter(ai => ai.team === 'enemy').every(ai => ai.hp <= 0);
+        if (enemyAIsDefeated && ais.filter(ai => ai.team === 'enemy').length > 0 && isGameRunning && !isAIDeathPlaying) {
+            showWinScreen();
+        }
+    } else {
+        const allAIsDefeated = ais.every(ai => ai.hp <= 0);
+        if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && gameSettings.gameMode === 'battle') {
+            showWinScreen();
+        }
     }
-    playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
+    if (playerHPDisplay) { // nullチェックを追加
+        playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
+    }
     if (gameSettings.gameMode === 'arcade') {
         if (killCountDisplay) killCountDisplay.style.display = 'block';
         if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
-    } else {
+    } else if (gameSettings.gameMode === 'teamArcade') { // teamArcadeモードの場合
+        if (killCountDisplay) killCountDisplay.style.display = 'none'; // 個人のキル数は表示しない
+    }
+    else {
         if (killCountDisplay) killCountDisplay.style.display = 'none';
     }
     if (screenShakeDuration > 0) {

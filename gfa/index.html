@@ -86,7 +86,7 @@
                 <input type="radio" name="ai-count" value="1"> 1 AI
             </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-count" value="2"> 2 AIs
+                <input type="radio" name="ai-count" value="2" checked> 2 AIs
             </label>
             <label style="display: block;">
                 <input type="radio" name="ai-count" value="3"> 3 AIs
@@ -116,7 +116,8 @@
             <h2 style="margin-top: 20px;">Load Custom Map</h2>
             <select id="custom-map-selector" style="font-size: 1em; padding: 5px; width: 100%; max-width: 300px; margin-bottom: 10px;"></select>
             <div style="text-align: center;">
-                <button id="load-selected-custom-map-btn" style="padding: 10px 20px; font-size: 1em; background-color: #00aaff; color: white; border: none; border-radius: 5px; cursor: pointer;">Load Selected Map</button>
+                <button id="load-map-settings-btn" style="padding: 10px 20px; font-size: 1em; background-color: #f39c12; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Load Settings</button>
+                <button id="save-map-settings-btn" style="padding: 10px 20px; font-size: 1em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Save Setting</button>
             </div>
 
 
@@ -124,8 +125,14 @@
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="game-mode" value="battle" checked> Battle Mode (AIを全滅させたら勝利)
             </label>
-            <label style="display: block;">
+            <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="game-mode" value="arcade"> Arcade Mode (AIを倒したキル数を競う - AIは無限復活)
+            </label>
+            <label style="display: block;">
+                <input type="radio" name="game-mode" value="team"> Team Deathmatch (2V2 - プレイヤー+AI1体 VS AI2体)
+            </label>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (Arcade) (キル数を競う - 無限復活, 3分間)
             </label>
             
             <h2 style="margin-top: 20px;">Auto-aim</h2>
@@ -226,15 +233,19 @@
         <a href="#" class="settings-link" data-screen-to-hide="win-screen" style="margin-top: 10px; color: white; font-size: 0.8em;">Setting</a>
     </div>
 
-    <div id="kill-count-display" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); color: yellow; font-size: 1.8em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 5px; z-index: 20; display: none;">KILLS: 0</div>
-    <div id="player-hp-display" style="position: fixed; top: 10px; right: 10px; color: red; font-size: 1.5em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20;">HP: 3</div>
-    <div id="player-weapon-display" style="position: fixed; top: 60px; right: 10px; color: white; font-size: 1em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 5px; z-index: 20; text-align: right;">Weapon: pistol<br>Ammo: ∞</div>
-    <div id="ai-hp-display" style="position: fixed; top: 10px; left: 10px; color: limegreen; font-size: 1.5em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20;">AI 1 HP: 3</div>
-    <div id="ai2-hp-display" style="position: fixed; top: 50px; left: 10px; color: cyan; font-size: 1.5em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">AI 2 HP: 3</div>
-    <div id="ai3-hp-display" style="position: fixed; top: 90px; left: 10px; color: orange; font-size: 1.5em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">AI 3 HP: 3</div>
-    <div id="red-flash-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: transparent; z-index: 1000; pointer-events: none; transition: background-color 0.1s ease-out;"></div>
+    <div id="kill-count-display" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); color: yellow; font-size: 1.2em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 5px; z-index: 20; display: none;">KILLS: 0</div>
+    <div id="game-timer-display" style="position: fixed; top: 10px; left: 10px; color: white; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">TIME: 03:00</div>
+    <div id="player-team-kills-display" style="position: fixed; top: 50px; left: 10px; color: cyan; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">PLAYER TEAM KILLS: 0</div>
+    <div id="enemy-team-kills-display" style="position: fixed; top: 90px; left: 10px; color: red; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">ENEMY TEAM KILLS: 0</div>
+    <div id="ai-hp-display" style="position: fixed; top: 130px; left: 10px; color: limegreen; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20;">AI 1 HP: 3</div>
+    <div id="ai2-hp-display" style="position: fixed; top: 170px; left: 10px; color: cyan; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">AI 2 HP: 3</div>
+    <div id="ai3-hp-display" style="position: fixed; top: 210px; left: 10px; color: orange; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">AI 3 HP: 3</div>
+    <div id="red-flash-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0); pointer-events: none; opacity: 0;"></div>
 <div id="weapon-get-display" style="position: fixed; top: 80%; left: 50%; transform: translateX(-50%); color: white; font-size: 2em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 10px 20px; border-radius: 10px; z-index: 1100; display: none; text-shadow: 0 0 10px #0ff;"></div>
     <div id="pause-button" style="position: fixed; top: 10px; left: 180px; color: white; font-size: 2em; z-index: 101; cursor: pointer; display: none; background-color: rgba(0,0,0,0.5); border-radius: 50%; width: 40px; height: 40px; text-align: center; line-height: 40px; -webkit-user-select: none; user-select: none;">★</div>
+
+    <div id="player-hp-display" style="position: fixed; top: 10px; right: 10px; color: white; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">HP: </div>
+    <div id="player-weapon-display" style="position: fixed; top: 50px; right: 10px; color: white; font-size: 0.9em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">Weapon: <br>Ammo: </div>
 
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
