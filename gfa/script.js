@@ -246,6 +246,78 @@ let isPaused = false;
             });
         }
         // --- ここまで ---
+        const startGameBtn = document.getElementById('start-game-btn');
+        if (startGameBtn) {
+            startGameBtn.style.backgroundColor = 'red';
+        }
+    // ReadMeリンクの追加
+    const gunFightSettingsTitle = document.querySelector('#start-screen h1');
+    if (gunFightSettingsTitle) {
+        const readmeLinkDiv = document.createElement('div');
+        readmeLinkDiv.style.textAlign = 'center';
+        readmeLinkDiv.style.marginTop = '10px';
+        const readmeLink = document.createElement('a');
+        readmeLink.href = '#';
+        readmeLink.textContent = 'ReadMe (説明書)';
+        readmeLink.style.color = 'lightblue';
+        readmeLink.style.textDecoration = 'underline';
+        readmeLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('readme-screen').style.display = 'flex';
+        });
+        readmeLinkDiv.appendChild(readmeLink);
+        gunFightSettingsTitle.after(readmeLinkDiv);
+    }
+
+    // ReadMeページの追加
+    const readmeScreen = document.createElement('div');
+    readmeScreen.id = 'readme-screen';
+    readmeScreen.style.cssText = `
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.9);
+        color: white;
+        z-index: 1000;
+        overflow-y: auto;
+        padding: 20px;
+        box-sizing: border-box;
+        flex-direction: column;
+        align-items: center;
+    `;
+    readmeScreen.innerHTML = `
+        <div style="max-width: 800px; width: 100%; text-align: left;">
+            <h1 style="text-align: center; color: lightgreen;">GunFightArenaへようこそ</h1>
+            <p>1V3から2V2のチームデスマッチまで、存分にGunFightが楽しめるシンプルかつ超エキサイティングなFPS！それがこのGunFightArenaだ！</p>
+            <p>まずはプレイヤーと敵AIのHP（体力）を決めて、ProjectileSpeed（弾の速さ）を決めよう！×2の最速が一番エキサイティングだぞ！</p>
+            <p>WeaponCountは、アリーナ内に配置できる各武器の数だ。武器は取った後も復活するぞ！<br>Medikitは、HPが1回復する。アリーナに配置する数を決めよう！但し、1V3のアーケードモードのみで配置可だ。</p>
+            <p>AICountで敵AIの数を決めよう！チームデスマッチでは、AIが1体味方になるが、その際にも必ず3AIsを選ぶようにしよう！</p>
+            <p>FieldStateで、障害物が破壊された状態からのリスタートが選べるぞ！Keepの場合はどんどん隠れる場所がなくなっていくぞ！</p>
+            <p>MapTypeでは、アプリ内蔵のデフォルトマップか、シンプルだが毎回障害物の配置が異なるランダムマップか、自作のカスタムマップかをそれぞれ選べるぞ！</p>
+            <p>強力なOpen Map Editerで自作のカスタムマップをゼロから作製可能！簡単にマップをカスタマイズして、より一層熱いバトルが楽しめるぞ！</p>
+            <p>LoadCustomMapで自作のマップデータを読み込もう！一度読み込んだら、次からはここからマップを呼び出せるぞ！面倒な細かい設定も各マップごとにセーブ可能！</p>
+            <p>GameModeで、さまざまな形式の熱いバトルを楽しもう！尚、プレイ時間はチームデスマッチのみで有効だ！さらには、Auto-aimのアシスト機能付き！</p>
+            <p>NightModeとは、まさに暗闇での夜戦モード！緊張感たっぷりの熱い戦いが楽しめる。LightIntensityでアリーナの明るさを調整できるぞ！</p>
+            <p>ButtonSettingでスマートフォンのボタン位置調整が可能！自分に合ったポジションでバトルに挑もう！</p>
+            <p>チームデスマッチでは、味方AIからのFollow（フォロー）が受けられる。味方AIに近づいてFollowボタンを押すと、味方AIがプレイヤーを先導し、敵を発見した際には、攻撃もしてくれるぞ！見通しの効かないマップでは強力なアシストとなってくれるはずだ！さらには敵と遭遇した際に再度ボタンを押してFollowを外せば、縦横無尽に動き回って大活躍してくれるぞ！味方AIが攻撃している間にプレイヤーは敵の背後に回り込んで攻撃といった戦術も可能だ！但し、フレンドリーファイアにはくれぐれも注意。後ろから味方を撃ってしまわないように！</p>
+            <div style="text-align: center; margin-top: 30px;">
+                <button id="readme-back-button" style="padding: 15px 30px; font-size: 1.2em; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">戻る</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(readmeScreen);
+
+    const readmeBackButton = document.getElementById('readme-back-button');
+    if (readmeBackButton) {
+        readmeBackButton.addEventListener('click', () => {
+            document.getElementById('readme-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+        });
+    }
     });
 })();
 
