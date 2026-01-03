@@ -83,6 +83,42 @@ let isPaused = false;
         const autoAimRadios = document.querySelectorAll('input[name="auto-aim"]');
         const nightModeRadios = document.querySelectorAll('input[name="night-mode"]');
         const gameModeRadios = document.querySelectorAll('input[name="game-mode"]');
+        if (gameModeRadios.length > 0) { // gameModeRadiosが存在することを確認
+
+            // ゲームモードラジオボタンの親要素を特定し、その後にプレイ時間設定を追加
+            const teamArcadeRadio = document.querySelector('input[name="game-mode"][value="teamArcade"]');
+            if (teamArcadeRadio) {
+                const teamArcadeParentLabel = teamArcadeRadio.parentNode; // これが<label>要素
+
+                const gameDurationDiv = document.createElement('div');
+                gameDurationDiv.id = 'game-duration-setting';
+                gameDurationDiv.style.marginTop = '10px';
+                gameDurationDiv.innerHTML = `
+                    <label style="display: block;">プレイ時間 (チームデスマッチ):</label>
+                    <label style="display: inline-block; margin-right: 10px;">
+                        <input type="radio" name="game-duration" value="180" checked> 3分
+                    </label>
+                    <label style="display: inline-block; margin-right: 10px;">
+                        <input type="radio" name="game-duration" value="300"> 5分
+                    </label>
+                    <label style="display: inline-block;">
+                        <input type="radio" name="game-duration" value="600"> 10分
+                    </label>
+                `;
+                teamArcadeParentLabel.after(gameDurationDiv); // teamArcadeのlabelの直後に挿入
+
+                // game-durationラジオボタンのイベントリスナーを設定
+                const gameDurationRadios = document.querySelectorAll('input[name="game-duration"]');
+                gameDurationRadios.forEach(radio => {
+                    radio.addEventListener('change', () => {
+                        if (radio.checked) {
+                            gameSettings.gameDuration = parseInt(radio.value, 10);
+                            saveSettings();
+                        }
+                    });
+                });
+            }
+        }
         if (playerHpSelect) playerHpSelect.addEventListener('change', () => { gameSettings.playerHP = playerHpSelect.value; saveSettings(); });
         if (aiHpSelect) aiHpSelect.addEventListener('change', () => { gameSettings.aiHP = aiHpSelect.value; saveSettings(); });
         const projectileSpeedSlider = document.getElementById('projectile-speed');
@@ -580,6 +616,12 @@ function loadMapSettings(mapName) {
                         previewFollowButton.style.top = '';
                     }
                 }
+                
+                // gameDurationのラジオボタンをロードする
+                const gameDurationRadios = document.querySelectorAll('input[name="game-duration"]');
+                gameDurationRadios.forEach(radio => {
+                    radio.checked = (parseInt(radio.value, 10) === gameSettings.gameDuration);
+                });
                 
                 // グローバル設定も更新
                 saveSettings();
@@ -2840,6 +2882,16 @@ function startPlayerDeathSequence(projectile) {
     isGameRunning = false; // 一時的にゲームを停止
     document.exitPointerLock();
 
+    isFollowingPlayerMode = false;
+    if (followStatusDisplay) {
+        followStatusDisplay.style.display = 'none';
+        followStatusDisplay.classList.remove('blinking');
+    }
+    if (followButton && 'ontouchstart' in window) {
+        followButton.classList.remove('blinking');
+        followButton.textContent = 'FOLLOW';
+    }
+
     // プレイヤーをシーンから削除
     if (player) player.traverse((object) => { object.visible = false; }); 
 
@@ -3701,8 +3753,35 @@ function animate() {
             ai.targetPosition.copy(targetFollowPos);
             ai.state = 'FOLLOWING'; 
             
-            // AIの回転をプレイヤーの方向に向ける (またはプレイヤーの目標位置を向く)
-            let targetAngle = Math.atan2(ai.targetPosition.x - ai.position.x, ai.targetPosition.z - ai.position.z);
+            // AIの回転をプレイヤーの方向に向ける
+            let targetAngle;
+            let closestEnemyAI = null;
+            let closestDistance = Infinity;
+
+            // 最も近い敵AIを探す
+            for (const enemyAI of ais) {
+                if (enemyAI === ai || enemyAI.team !== 'enemy' || enemyAI.hp <= 0) continue;
+                // AIから敵AIへの視線が通るかチェック
+                const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
+                const enemyHeadPos = enemyAI.children[1].getWorldPosition(new THREE.Vector3());
+                if (checkLineOfSight(aiHeadPos, enemyHeadPos, obstacles)) {
+                    const distance = ai.position.distanceTo(enemyAI.position);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestEnemyAI = enemyAI;
+                    }
+                }
+            }
+
+            if (closestEnemyAI) {
+                // 敵AIが見つかったら敵AIの方向を向く
+                targetAngle = Math.atan2(closestEnemyAI.position.x - ai.position.x, closestEnemyAI.position.z - ai.position.z);
+                aiShoot(ai, timeElapsed); // 敵が見えたら射撃する
+            } else {
+                // 敵AIが見つからない場合はプレイヤーの進行方向を向くように調整
+                targetAngle = Math.atan2(ai.targetPosition.x - ai.position.x, ai.targetPosition.z - ai.position.z);
+            }
+            
             ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, targetAngle, 5 * delta);
         } else if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && ai.state === 'FOLLOWING') {
             // AIチームメイトだが追従モードがOFFになり、かつ現在の状態がFOLLOWINGの場合、HIDINGに戻す
@@ -3844,35 +3923,28 @@ function animate() {
                 break;
             case 'FOLLOWING': // 新しい追従状態
                 ai.avoiding = false;
-                // AIチームメイトが敵AIを視認できる場合は攻撃に移行
-                if (isEnemyAISeenByTeammate) {
-                    ai.state = 'ATTACKING';
-                    ai.currentAttackTime = timeElapsed;
-                    ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                // 常にプレイヤーへの追従移動ロジックを実行する
+                const oldAIPosition_follow = ai.position.clone();
+                let moveDirection_follow = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
+                const moveVectorDelta_follow = moveDirection_follow.clone().multiplyScalar(currentAISpeed * delta);
+                moveVectorDelta_follow.add(separation_vec); // AI間の分離力も考慮
+                moveDirection_follow = moveVectorDelta_follow.normalize(); // Normalize after adding separation_vec
+
+                raycaster.set(oldAIPosition_follow.clone().add(new THREE.Vector3(0, 1.0, 0)), moveDirection_follow);
+                const intersects = raycaster.intersectObjects(obstacles, true);
+
+                if (intersects.length > 0 && intersects[0].distance < AVOIDANCE_RAY_DISTANCE && !ai.avoiding && ai.state !== 'EVADING') {
+                    // 移動する前に障害物を検知したら回避
+                    findObstacleAvoidanceSpot(ai, moveDirection_follow, ai.targetPosition);
                 } else {
-                    // MOVING状態の移動・回避ロジックを統合
-                    const oldAIPosition_follow = ai.position.clone();
-                    let moveDirection_follow = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
-                    const moveVectorDelta_follow = moveDirection_follow.clone().multiplyScalar(currentAISpeed * delta);
-                    moveVectorDelta_follow.add(separation_vec); // AI間の分離力も考慮
-                    moveDirection_follow = moveVectorDelta_follow.normalize(); // Normalize after adding separation_vec
-
-                    raycaster.set(oldAIPosition_follow.clone().add(new THREE.Vector3(0, 1.0, 0)), moveDirection_follow);
-                    const intersects = raycaster.intersectObjects(obstacles, true);
-
-                    if (intersects.length > 0 && intersects[0].distance < AVOIDANCE_RAY_DISTANCE && !ai.avoiding && ai.state !== 'EVADING') {
-                        // 移動する前に障害物を検知したら回避
+                    // 障害物がなければ移動
+                    const finalMove_follow = moveDirection_follow.multiplyScalar(currentAISpeed * delta);
+                    ai.position.add(finalMove_follow);
+                    
+                    // 移動後に衝突した場合の最終的な回避
+                    if (checkCollision(ai, obstacles)) {
+                        ai.position.copy(oldAIPosition_follow);
                         findObstacleAvoidanceSpot(ai, moveDirection_follow, ai.targetPosition);
-                    } else {
-                        // 障害物がなければ移動
-                        const finalMove_follow = moveDirection_follow.multiplyScalar(currentAISpeed * delta);
-                        ai.position.add(finalMove_follow);
-                        
-                        // 移動後に衝突した場合の最終的な回避
-                        if (checkCollision(ai, obstacles)) {
-                            ai.position.copy(oldAIPosition_follow);
-                            findObstacleAvoidanceSpot(ai, moveDirection_follow, ai.targetPosition);
-                        }
                     }
                 }
                 break; // FOLLOWING状態の処理終了
@@ -4377,6 +4449,7 @@ if (startBtn) {
         gameSettings.fieldState = document.querySelector('input[name="field-state"]:checked').value;
         gameSettings.mapType = document.querySelector('input[name="map-type"]:checked').value;
         gameSettings.aiCount = parseInt(document.querySelector('input[name="ai-count"]:checked').value, 10);
+        gameSettings.gameDuration = parseInt(document.querySelector('input[name="game-duration"]:checked').value, 10);
         initializeAudio();
         startGame();
         restartGame();
