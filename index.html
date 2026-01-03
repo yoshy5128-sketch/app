@@ -1,271 +1,226 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <title>GunFight Arena</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="./manifest.json">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APPLABO</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 2em;
+      text-align: center;
+    }
+    h1 {
+      color: #333;
+      font-size: 3em;
+      margin-bottom: 0.2em;
+    }
+    p {
+      color: #666;
+      font-size: 1.2em;
+      margin-bottom: 2em;
+    }
+    .apps-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 1200px; /* 全体の最大幅を設定 */
+      margin: 0 auto;
+      text-align: center;
+    }
+    .apps-title {
+      font-size: 1.6em;
+      color: #444;
+      border-bottom: 2px solid #e0e0e0;
+      margin-bottom: 1em;
+      padding-bottom: 0.2em;
+      font-weight: 700;
+      width: 100%;
+    }
+    .app-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5em;
+      list-style: none;
+      padding: 0;
+      justify-content: center;
+      margin: 0;
+      width: 100%;
+    }
+    .app-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+      padding: 1.5em;
+      width: 280px; /* 固定幅にすることで列を安定させる */
+      display: flex;
+      flex-direction: column; /* 中身を縦に並べる */
+      text-align: center;
+      transition: box-shadow 0.2s, transform 0.2s;
+      box-sizing: border-box;
+    }
+    .app-card:hover {
+      box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+      transform: translateY(-2px);
+    }
+    .app-name {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #222;
+      margin-bottom: 0.5em;
+      min-height: 2.4em; /* タイトルの高さを最低2行分確保して揃える */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .app-desc {
+      color: #555;
+      font-size: 0.95em;
+      margin-bottom: 1.5em;
+      flex-grow: 1; /* ここが重要：説明文が短くても余白を埋めてボタンを下に押し下げる */
+      line-height: 1.4;
+    }
+    .app-link {
+      display: inline-block;
+      padding: 0.6em 1.2em;
+      border-radius: 6px;
+      background: #007acc;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.2s;
+      margin-top: auto; /* ボタンを常に一番下に配置 */
+    }
+    .app-link:hover {
+      background: #005fa3;
+    }
 
-    <script src="https://unpkg.com/nipplejs@0.8.4/dist/nipplejs.js"></script> 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
+    /* レスポンシブ対応 */
+    @media (max-width: 650px) {
+      body {
+        padding: 1em;
+      }
+      .app-card {
+        width: 100%; /* スマホでは1列にする */
+        max-width: 350px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div id="start-screen">
-        <div style="padding: 20px; background-color: rgba(0,0,0,0.8); border-radius: 10px; text-align: left;">
-            <h1 style="text-align: center;">Gun Fight Settings</h1>
 
-            <h2 style="margin-top: 20px;">HP Settings</h2>
-            <label for="player-hp">Player HP:</label>
-            <select id="player-hp" style="font-size: 1em; padding: 5px;">
-                <option value="3">3</option>
-                <option value="10">10</option>
-                <option value="Infinity">Infinite</option>
-            </select>
-            <br>
-            <label for="ai-hp" style="margin-top: 10px; display: inline-block;">AI HP:</label>
-            <select id="ai-hp" style="font-size: 1em; padding: 5px;">
-                <option value="3">3</option>
-                <option value="10">10</option>
-                <option value="Infinity">Infinite</option>
-            </select>
+  <h1>APPLABO</h1>
+  <p>ここにあるのはスマホ向けのWEBアプリです。<br>※一部PC対応もあり</p>
 
-            <h2 style="margin-top: 20px;">Projectile Speed</h2>
-            <div id="projectile-speed-setting" style="margin-top: 10px;">
-                <input type="range" id="projectile-speed" min="0.5" max="2.0" step="0.05" value="1.5" style="width: 100%;">
-                <span id="projectile-speed-value">1.5x</span>
-            </div>
+  <div style="text-align: center; margin-bottom: 2em;">
+    <img src="qr.png" alt="QRコード" style="width: 45vw; max-width: 200px;">
+    <p style="color:#555; font-size:0.9em; margin-top:0.5em;">このQRコードをスマホで読み取ってください</p>
+  </div>
 
-            <h2 style="margin-top: 20px;">Weapon Count</h2>
-            <label for="mg-count">Machine Guns (MG):</label>
-            <select id="mg-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-            </select>
-            <br>
-            <label for="rr-count" style="margin-top: 10px; display: inline-block;">Rocket Launchers (RR):</label>
-            <select id="rr-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-            </select>
-            <br>
-            <label for="sr-count" style="margin-top: 10px; display: inline-block;">Sniper Rifles (SR):</label>
-            <select id="sr-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-            </select>
-            <br>
-            <label for="sg-count" style="margin-top: 10px; display: inline-block;">Shotguns (SG):</label>
-            <select id="sg-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-            </select>
+  <section class="apps-section">
+    <div class="apps-title">アプリ一覧</div>
+    <ul class="app-list">
+      
+      <li class="app-card">
+        <div class="app-name">Gunfight Arena</div>
+        <div class="app-desc">シンプルでスピーディーかつ、エキサイティングなFPSシューティング PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/gfa/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">MediKit (ArcadeMode Only)</h2>
-            <select id="medikit-count" style="font-size: 1em; padding: 5px;">
-                <option value="0" selected>0</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-            </select>
+      <li class="app-card">
+        <div class="app-name">GO MP3</div>
+        <div class="app-desc">複数のフォルダにあるMP3データをソングリスト形式で管理可能。Chromeのみ対応 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/gomp3/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">AI Count</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-count" value="1"> 1 AI
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-count" value="2" checked> 2 AIs
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="ai-count" value="3"> 3 AIs
-            </label>
+      <li class="app-card">
+        <div class="app-name">CutMP3</div>
+        <div class="app-desc">MP3ファイルのトリミング加工が可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/cutmp3/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Field State</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="field-state" value="reset" checked> Reset obstacles every round
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="field-state" value="persist"> Keep obstacles destroyed
-            </label>
-            
-            <h2 style="margin-top: 20px;">Map Type</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="map-type" value="default" checked> Default Map
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="map-type" value="random"> Random Map
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="map-type" value="custom"> Custom Map (from Editor)
-            </label>
-            <div style="text-align: center; margin-top: 15px;">
-                <a id="map-editor-link" href="map_editor_sp.html" style="color: #00aaff; text-decoration: none;">- Open Map Editor -</a>
-            </div>
-            <h2 style="margin-top: 20px;">Load Custom Map</h2>
-            <select id="custom-map-selector" style="font-size: 1em; padding: 5px; width: 100%; max-width: 300px; margin-bottom: 10px;"></select>
-            <div style="text-align: center;">
-                <button id="load-map-settings-btn" style="padding: 10px 20px; font-size: 1em; background-color: #f39c12; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Load Settings</button>
-                <button id="save-map-settings-btn" style="padding: 10px 20px; font-size: 1em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Save Setting</button>
-            </div>
+      <li class="app-card">
+        <div class="app-name">区間リピート動画プレイヤー</div>
+        <div class="app-desc">区間リピート再生が可能な動画プレイヤー 再生スピード変更可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/vrp/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
+      <li class="app-card">
+        <div class="app-name">Excelいらづ</div>
+        <div class="app-desc">Excelファイルの編集・保存が可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/excel/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Game Mode</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="battle" checked> Battle Mode (AIを全滅させたら勝利)
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="arcade"> Arcade Mode (AIを倒したキル数を競う - AIは無限復活)
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="game-mode" value="team"> Team Deathmatch (2V2 - プレイヤー+AI1体 VS AI2体)
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (Arcade) (キル数を競う - 無限復活, 3分間)
-            </label>
-            
-            <h2 style="margin-top: 20px;">Auto-aim</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="auto-aim" value="true"> ON
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="auto-aim" value="false" checked> OFF
-            </label>
-            
-            <h2 style="margin-top: 20px;">Night Mode</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="night-mode" value="true"> ON
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="night-mode" value="false" checked> OFF
-            </label>
-            <div id="night-mode-intensity-setting" style="margin-top: 10px;">
-                <label for="night-mode-intensity">Night Mode Light Intensity:</label>
-                <input type="range" id="night-mode-intensity" min="0" max="2" step="0.1" value="0.8" style="width: 100%;">
-                <span id="night-mode-intensity-value">0.8</span>
-            </div>
+      <li class="app-card">
+        <div class="app-name">宅配DEATH</div>
+        <div class="app-desc">ギリギリのガソリンを使って最短ルートで宅配せよ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/takuhai/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Button Setting</h2>
-            <div style="text-align: center; margin-top: 10px;">
-                <button id="button-setting-btn" style="padding: 10px 20px; font-size: 1em; background-color: #00aaff; color: white; border: none; border-radius: 5px; cursor: pointer;">Open Button Settings</button>
-            </div>
+      <li class="app-card">
+        <div class="app-name">Shapes Fight</div>
+        <div class="app-desc">いつでもどこでもサクッと気軽にShooting FPS PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/shapesfight/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <div style="text-align: center; margin-top: 30px;">
-                <button id="start-game-btn" style="padding: 15px 30px; font-size: 1.5em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Start Game</button>
-                <button id="resume-game-btn" style="padding: 15px 30px; font-size: 1.5em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; display: none;">Resume Game</button>
-            </div>
-        </div>
-    </div>
+      <li class="app-card">
+        <div class="app-name">MARZ HELL</div>
+        <div class="app-desc">ここは絶望に苛まれた迷宮MARZ。門番たちの目を掻い潜りながらエリアからの脱出を目指せ！PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/marz/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-    <div id="button-settings-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 200;">
-        <h1 style="color: white; text-align: center; margin-top: 50px;">Button Positions</h1>
-        <p style="color: white; text-align: center;">Drag the buttons to your desired positions.</p>
-        
-        <div id="button-setting-feedback" style="color: limegreen; text-align: center; margin-bottom: 10px; font-size: 1.2em; display: none;"></div>
+      <li class="app-card">
+        <div class="app-name">バッティングマシン・シミュレーター</div>
+        <div class="app-desc">スピードの緩急から変化球まで自由自在に投げてくるバッティングマシンに挑め！ PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/batt" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-        <div id="preview-joystick-zone" style="position: absolute; left: 10%; bottom: 10%; width: 150px; height: 150px; background-color: rgba(0, 150, 255, 0.4); border-radius: 50%; cursor: move; border: 2px dashed white;">
-            <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: white; text-align: center;">Move</div>
-        </div>
-        <div id="preview-fire-button" style="position: absolute; right: 20px; bottom: 120px; width: 80px; height: 80px; z-index: 10; background-color: rgba(255, 0, 0, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 18px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">Shoot</div>
-        <div id="preview-crouch-button" style="position: absolute; right: 20px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(100, 100, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">Crouch</div>
+      <li class="app-card">
+        <div class="app-name">ピッチング・シミュレーター</div>
+        <div class="app-desc">豪腕投手となり、さまざまな球種を投げ分けてAI打者と対戦！PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/pitch/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-        <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);">
-            <button id="save-button-positions" style="padding: 15px 30px; font-size: 1.5em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Save</button>
-            <button id="back-to-settings" style="padding: 15px 30px; font-size: 1.5em; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">Back</button>
-        </div>
-    </div>
+      <li class="app-card">
+        <div class="app-name">Life Simulater</div>
+        <div class="app-desc">あなたは人生という道を寿命が尽きるまで歩みはじめます。PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/life/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
+      <li class="app-card">
+        <div class="app-name">石切りゲーム</div>
+        <div class="app-desc">平たい石を川に投げて何回ジャンプさせられるか？！ PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/stone/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-    <div id="joystick-move"></div>
-    <div id="fire-button">Shoot</div>
-    <!-- Add this new crouch button -->
-    <div id="crouch-button" style="position: fixed; right: 20px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(100, 100, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(100, 100, 255, 0.5);">Crouch</div>
-    
-    <div id="crosshair">
-        <div class="cross-line" id="line-h"></div>
-        <div class="cross-line" id="line-v"></div>
-    </div>
+      <li class="app-card">
+        <div class="app-name">あっちむいてホイ！</div>
+        <div class="app-desc">じゃんけんして指先で方向を指すアレ。スワイプで方向を指せ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/hoi/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-    <div id="scope-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 150; display: none; pointer-events: none;">
-        <div id="night-vision-overlay"></div>
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100vmin; height: 100vmin; border-radius: 50%; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.95);"></div>
-        <div style="position: absolute; background-color: black; width: 2px; height: 30%; top: 10%; left: 50%; transform: translateX(-50%);"></div>
-        <div style="position: absolute; background-color: black; width: 2px; height: 30%; bottom: 10%; left: 50%; transform: translateX(-50%);"></div>
-        <div style="position: absolute; background-color: black; height: 2px; width: 30%; left: 10%; top: 50%; transform: translateY(-50%);"></div>
-        <div style="position: absolute; background-color: black; height: 2px; width: 30%; right: 10%; top: 50%; transform: translateY(-50%);"></div>
-        <div id="cancel-scope-button" style="position: absolute; left: 20px; top: 50%; transform: translateY(-50%); width: 60px; height: 60px; border-radius: 50%; background-color: rgba(255, 255, 255, 0.5); color: black; font-size: 30px; display: flex; justify-content: center; align-items: center; cursor: pointer; pointer-events: auto; display: none;">
-            ×
-        </div>
-    </div>
-    
-    <audio id="playerGunSound" src="pgun.mp3" preload="auto"></audio>
-    <audio id="mgGunSound" src="mg.mp3" preload="auto"></audio>
-    <audio id="rrGunSound" src="rr.mp3" preload="auto"></audio>
-    <audio id="srGunSound" src="pss.mp3" preload="auto"></audio>
-    <audio id="aimgGunSound" src="aimg.mp3" preload="auto"></audio>
-    <audio id="aiGunSound" src="aigun.mp3" preload="auto"></audio>
-    <audio id="explosionSound" src="bom.mp3" preload="auto"></audio>
-    <audio id="setSound" src="set.mp3" preload="auto"></audio>
-    <audio id="aiSrGunSound" src="ss.mp3" preload="auto"></audio>
-    <audio id="playerSgSound" src="sgun.mp3" preload="auto"></audio>
-    <audio id="aiSgSound" src="aisgun.mp3" preload="auto"></audio>
-    
-    <div id="game-over-screen" class="end-screen">
-        YOU LOSE
-        <button class="restart-button">RESTART</button>
-        <a href="#" class="settings-link" data-screen-to-hide="game-over-screen" style="margin-top: 10px; color: white; font-size: 0.8em;">Setting</a>
-    </div>
-    
-    <div id="win-screen" class="end-screen">
-        YOU WIN
-        <button class="restart-button">RESTART</button>
-        <a href="#" class="settings-link" data-screen-to-hide="win-screen" style="margin-top: 10px; color: white; font-size: 0.8em;">Setting</a>
-    </div>
+      <li class="app-card">
+        <div class="app-name">Bomber Simulater</div>
+        <div class="app-desc">爆撃シミュレーター 地上の物体をすべて破壊せよ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/bomber/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-    <div id="kill-count-display" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); color: yellow; font-size: 1.2em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 5px; z-index: 20; display: none;">KILLS: 0</div>
-    <div id="game-timer-display" style="position: fixed; top: 10px; left: 10px; color: white; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">TIME: 03:00</div>
-    <!-- KILLS表示をまとめるコンテナ -->
-    <div id="team-kills-container" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); display: flex; justify-content: center; z-index: 20;">
-        <div id="player-team-kills-display" style="color: cyan; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-right: 10px;">PLAYER TEAM KILLS: 0</div>
-        <div id="enemy-team-kills-display" style="color: red; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none;">ENEMY TEAM KILLS: 0</div>
-    </div>
-    <!-- AI HP表示をまとめるコンテナ -->
-    <div id="ai-hp-container" style="position: fixed; top: 50px; left: 10px; z-index: 20;">
-        <div id="ai-hp-display" style="color: limegreen; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none;">AI 1 HP: 3</div>
-        <div id="ai2-hp-display" style="color: cyan; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 2 HP: 3</div>
-        <div id="ai3-hp-display" style="color: orange; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 3 HP: 3</div>
-    </div>
-    <div id="red-flash-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0); pointer-events: none; opacity: 0;"></div>
-<div id="weapon-get-display" style="position: fixed; top: 80%; left: 50%; transform: translateX(-50%); color: white; font-size: 2em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 10px 20px; border-radius: 10px; z-index: 1100; display: none; text-shadow: 0 0 10px #0ff;"></div>
-    <div id="pause-button" style="position: fixed; top: 10px; left: 180px; color: white; font-size: 2em; z-index: 101; cursor: pointer; display: none; background-color: rgba(0,0,0,0.5); border-radius: 50%; width: 40px; height: 40px; text-align: center; line-height: 40px; -webkit-user-select: none; user-select: none;">★</div>
+      <li class="app-card">
+        <div class="app-name">マニュアル車シミュレーター</div>
+        <div class="app-desc">マニュアル車のギアチェンジを楽しめる（まだ未完成）PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/manual/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-    <div id="player-hp-display" style="position: fixed; top: 10px; right: 10px; color: white; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">HP: </div>
-    <div id="player-weapon-display" style="position: fixed; top: 50px; right: 10px; color: white; font-size: 0.9em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">Weapon: <br>Ammo: </div>
+      <li class="app-card">
+        <div class="app-name">積み木爆破シミュレーター</div>
+        <div class="app-desc">積み木を爆破して粉々にせよ！3秒で爆発する通常爆弾と4連鎖爆弾で壊しまくれ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/tsumi" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
+    </ul>
+  </section>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
-    <script src="script.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').then(registration => {
-              console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            }, err => {
-              console.log('ServiceWorker registration failed: ', err);
-            });
-          });
-        }
-    </script>
 </body>
 </html>
