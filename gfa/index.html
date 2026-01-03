@@ -111,12 +111,12 @@
                 <input type="radio" name="map-type" value="custom"> Custom Map (from Editor)
             </label>
             <div style="text-align: center; margin-top: 15px;">
-                <a id="map-editor-link" href="map_editor_sp.html" style="color: #00aaff; text-decoration: none;">- Open Map Editor -</a>
+                <button id="map-editor-button" style="padding: 10px 20px; font-size: 1em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Open Map Editor</button>
             </div>
             <h2 style="margin-top: 20px;">Load Custom Map</h2>
             <select id="custom-map-selector" style="font-size: 1em; padding: 5px; width: 100%; max-width: 300px; margin-bottom: 10px;"></select>
             <div style="text-align: center;">
-                <button id="load-map-settings-btn" style="padding: 10px 20px; font-size: 1em; background-color: #f39c12; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Load Settings</button>
+
                 <button id="save-map-settings-btn" style="padding: 10px 20px; font-size: 1em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Save Setting</button>
             </div>
 
@@ -152,11 +152,11 @@
             </label>
             <div id="night-mode-intensity-setting" style="margin-top: 10px;">
                 <label for="night-mode-intensity">Night Mode Light Intensity:</label>
-                <input type="range" id="night-mode-intensity" min="0" max="2" step="0.1" value="0.8" style="width: 100%;">
+                <input type="range" id="night-mode-intensity" min="0" max="2" step="0.1" value="2" style="width: 100%;">
                 <span id="night-mode-intensity-value">0.8</span>
             </div>
 
-            <h2 style="margin-top: 20px;">Button Setting</h2>
+            <h2 style="margin-top: 20px;">Button Setting(For.SmartPhone)</h2>
             <div style="text-align: center; margin-top: 10px;">
                 <button id="button-setting-btn" style="padding: 10px 20px; font-size: 1em; background-color: #00aaff; color: white; border: none; border-radius: 5px; cursor: pointer;">Open Button Settings</button>
             </div>
@@ -179,6 +179,8 @@
         </div>
         <div id="preview-fire-button" style="position: absolute; right: 20px; bottom: 120px; width: 80px; height: 80px; z-index: 10; background-color: rgba(255, 0, 0, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 18px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">Shoot</div>
         <div id="preview-crouch-button" style="position: absolute; right: 20px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(100, 100, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">Crouch</div>
+        <!-- Add this new preview follow button -->
+        <div id="preview-follow-button" style="position: absolute; right: 20px; bottom: 190px; width: 60px; height: 60px; z-index: 10; background-color: rgba(0, 150, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">FOLLOW</div>
 
         <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);">
             <button id="save-button-positions" style="padding: 15px 30px; font-size: 1.5em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Save</button>
@@ -191,6 +193,8 @@
     <div id="fire-button">Shoot</div>
     <!-- Add this new crouch button -->
     <div id="crouch-button" style="position: fixed; right: 20px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(100, 100, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(100, 100, 255, 0.5);">Crouch</div>
+    <!-- Add this new follow button for smartphones -->
+    <div id="follow-button" style="position: fixed; right: 20px; bottom: 190px; width: 60px; height: 60px; z-index: 10; background-color: rgba(0, 150, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(0, 150, 255, 0.5); display: none;">FOLLOW</div>
     
     <div id="crosshair">
         <div class="cross-line" id="line-h"></div>
@@ -240,6 +244,7 @@
         <div id="player-team-kills-display" style="color: cyan; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-right: 10px;">PLAYER TEAM KILLS: 0</div>
         <div id="enemy-team-kills-display" style="color: red; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none;">ENEMY TEAM KILLS: 0</div>
     </div>
+    <div id="follow-status-display" style="position: fixed; top: 50px; left: 50%; transform: translateX(-50%); color: limegreen; font-size: 1.5em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 5px 10px; border-radius: 5px; z-index: 20; display: none;">FOLLOW</div>
     <!-- AI HP表示をまとめるコンテナ -->
     <div id="ai-hp-container" style="position: fixed; top: 50px; left: 10px; z-index: 20;">
         <div id="ai-hp-display" style="color: limegreen; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none;">AI 1 HP: 3</div>

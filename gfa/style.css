@@ -161,3 +161,14 @@ canvas {
 #ai3-hp-display {
     font-size: 0.8em !important; /* 他のスタイルで上書きされないように!important */
 }
+
+/* FOLLOW表示の点滅アニメーション */
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+}
+
+/* FOLLOW表示のスタイル */
+#follow-status-display.blinking {
+    animation: blink 1s linear infinite;
+}

@@ -13,14 +13,15 @@ let gameSettings = {
     aiCount: 2,
     autoAim: false,
     nightModeEnabled: false,
-    nightModeLightIntensity: 0.8,
+    nightModeLightIntensity: 2.0,
     customMapName: 'Default Custom Map',
     gameMode: 'battle',
     gameDuration: 180, // 3分間 (180秒)
     buttonPositions: {
         fire: { right: '20px', bottom: '120px' },
         crouch: { right: '20px', bottom: '55px' },
-        joystick: { left: '10%', bottom: '10%' }
+        joystick: { left: '10%', bottom: '10%' },
+        follow: { right: '20px', bottom: '190px' }
     }
 };
 let originalSettings = {};
@@ -48,6 +49,8 @@ let isPaused = false;
         ai2HPDisplay = document.getElementById('ai2-hp-display');
         ai3HPDisplay = document.getElementById('ai3-hp-display');
         redFlashOverlay = document.getElementById('red-flash-overlay');
+        followStatusDisplay = document.getElementById('follow-status-display'); // 追加
+        followButton = document.getElementById('follow-button'); // 追加
         // red-flash-overlayをbodyの最後に移動させて常に最前面に表示されるようにする
         if (redFlashOverlay && redFlashOverlay.parentNode !== document.body) {
             document.body.appendChild(redFlashOverlay);
@@ -59,9 +62,11 @@ let isPaused = false;
         playerTeamKillsDisplay = document.getElementById('player-team-kills-display');
         enemyTeamKillsDisplay = document.getElementById('enemy-team-kills-display');
 
-        const editorLink = document.getElementById('map-editor-link');
-        if (editorLink && 'ontouchstart' in window) {
-            editorLink.href = 'map_editor_sp.html';
+        const editorButton = document.getElementById('map-editor-button');
+        if (editorButton) {
+            editorButton.addEventListener('click', () => {
+                window.location.href = 'map_editor_sp.html';
+            });
         }
         
         loadSettings();
@@ -178,17 +183,7 @@ let isPaused = false;
                 saveMapSettings(selectedMapName);
             });
         }
-        const loadMapSettingsBtn = document.getElementById('load-map-settings-btn');
-        if (loadMapSettingsBtn) {
-            loadMapSettingsBtn.addEventListener('click', () => {
-                const selectedMapName = customMapSelector ? customMapSelector.value : '';
-                if (selectedMapName && selectedMapName !== '') {
-                    loadMapSettings(selectedMapName);
-                } else {
-                    alert('マップが選択されていません。');
-                }
-            });
-        }
+
         const loadSelectedCustomMapBtn = document.getElementById('load-selected-custom-map-btn');
         if (loadSelectedCustomMapBtn) {
             loadSelectedCustomMapBtn.addEventListener('click', () => {
@@ -319,6 +314,7 @@ let currentGroundObstacle = null;
 let isIgnoringTowerCollision = false;
 let ignoreTowerTimer = 0;
 let lastClimbedTower = null;
+let isFollowingPlayerMode = false; // AI追従モードフラグ
 const AUTO_AIM_RANGE = 50;
 const AUTO_AIM_ANGLE = Math.PI / 8;
 const AUTO_AIM_STRENGTH = 0.3;
@@ -345,7 +341,7 @@ function loadSettings() {
             parsedSavedSettings.gameMode = 'battle';
         }
         if (parsedSavedSettings.nightModeLightIntensity === undefined) {
-            parsedSavedSettings.nightModeLightIntensity = 0.8;
+            parsedSavedSettings.nightModeLightIntensity = 2.0;
         }
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 0;
@@ -464,117 +460,133 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 0;
         }
-        if (parsedSavedSettings.buttonPositions === undefined) {
-            parsedSavedSettings.buttonPositions = {
-                fire: { right: '20px', bottom: '120px' },
-                crouch: { right: '20px', bottom: '55px' },
-                joystick: { left: '10%', bottom: '10%' }
-            };
-        } else if (parsedSavedSettings.buttonPositions.joystick === undefined) {
-            parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
-        }
+                if (parsedSavedSettings.buttonPositions === undefined) {
+                    parsedSavedSettings.buttonPositions = {
+                        fire: { right: '20px', bottom: '120px' },
+                        crouch: { right: '20px', bottom: '55px' },
+                        joystick: { left: '10%', bottom: '10%' },
+                        follow: { right: '20px', bottom: '190px' } // 追加
+                    };
+                } else if (parsedSavedSettings.buttonPositions.joystick === undefined) {
+                    parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
+                } else if (parsedSavedSettings.buttonPositions.follow === undefined) { // 追加
+                    parsedSavedSettings.buttonPositions.follow = { right: '20px', bottom: '190px' }; // 追加
+                }
+                
+                // gameSettingsに適用
+                Object.assign(gameSettings, parsedSavedSettings);
+                
+                // UIに反映
+                document.getElementById('player-hp').value = gameSettings.playerHP;
+                document.getElementById('ai-hp').value = gameSettings.aiHP;
+                const projectileSpeedSlider = document.getElementById('projectile-speed');
+                const projectileSpeedValueSpan = document.getElementById('projectile-speed-value');
+                if (projectileSpeedSlider) {
+                    projectileSpeedSlider.value = gameSettings.projectileSpeedMultiplier;
+                }
+                if (projectileSpeedValueSpan) {
+                    projectileSpeedValueSpan.textContent = gameSettings.projectileSpeedMultiplier + 'x';
+                }
+                document.getElementById('mg-count').value = gameSettings.mgCount;
+                document.getElementById('rr-count').value = gameSettings.rrCount;
+                document.getElementById('sr-count').value = gameSettings.srCount;
+                if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
+                if (document.getElementById('medikit-count')) document.getElementById('medikit-count').value = gameSettings.medikitCount;
+                document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
+                    radio.checked = (radio.value === String(gameSettings.aiCount));
+                });
+                document.querySelectorAll('input[name="field-state"]').forEach(radio => {
+                    radio.checked = (radio.value === gameSettings.fieldState);
+                });
+                document.querySelectorAll('input[name="map-type"]').forEach(radio => {
+                    radio.checked = (radio.value === gameSettings.mapType);
+                });
+                document.querySelectorAll('input[name="auto-aim"]').forEach(radio => {
+                    radio.checked = (radio.value === String(gameSettings.autoAim));
+                });
+                document.querySelectorAll('input[name="night-mode"]').forEach(radio => {
+                    radio.checked = (radio.value === String(gameSettings.nightModeEnabled));
+                });
+                document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
+                    radio.checked = (radio.value === gameSettings.gameMode);
+                });
+                const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
+                const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
+                if (nightModeIntensitySlider) {
+                    nightModeIntensitySlider.value = gameSettings.nightModeLightIntensity;
+                }
+                if (nightModeIntensityValueSpan) {
+                    nightModeIntensityValueSpan.textContent = gameSettings.nightModeLightIntensity;
+                }
+                
+                // ボタン位置を適用
+                if (gameSettings.buttonPositions) {
+                    const fireButton = document.getElementById('fire-button');
+                    const crouchButton = document.getElementById('crouch-button');
+                    const joystickZone = document.getElementById('joystick-move');
+                    const followButton = document.getElementById('follow-button'); // 追加
+                    const previewFireButton = document.getElementById('preview-fire-button');
+                    const previewCrouchButton = document.getElementById('preview-crouch-button');
+                    const previewJoystickZone = document.getElementById('preview-joystick-zone');
+                    const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
         
-        // gameSettingsに適用
-        Object.assign(gameSettings, parsedSavedSettings);
+                    if (fireButton && gameSettings.buttonPositions.fire) {
+                        fireButton.style.right = gameSettings.buttonPositions.fire.right;
+                        fireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
+                        fireButton.style.left = '';
+                        fireButton.style.top = '';
+                    }
+                    if (crouchButton && gameSettings.buttonPositions.crouch) {
+                        crouchButton.style.right = gameSettings.buttonPositions.crouch.right;
+                        crouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
+                        crouchButton.style.left = '';
+                        crouchButton.style.top = '';
+                    }
+                    if (joystickZone && gameSettings.buttonPositions.joystick) {
+                        joystickZone.style.left = gameSettings.buttonPositions.joystick.left;
+                        joystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
+                        joystickZone.style.right = '';
+                        joystickZone.style.top = '';
+                    }
+                    if (followButton && gameSettings.buttonPositions.follow) { // 追加
+                        followButton.style.right = gameSettings.buttonPositions.follow.right;
+                        followButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
+                        followButton.style.left = '';
+                        followButton.style.top = '';
+                    }
         
-        // UIに反映
-        document.getElementById('player-hp').value = gameSettings.playerHP;
-        document.getElementById('ai-hp').value = gameSettings.aiHP;
-        const projectileSpeedSlider = document.getElementById('projectile-speed');
-        const projectileSpeedValueSpan = document.getElementById('projectile-speed-value');
-        if (projectileSpeedSlider) {
-            projectileSpeedSlider.value = gameSettings.projectileSpeedMultiplier;
-        }
-        if (projectileSpeedValueSpan) {
-            projectileSpeedValueSpan.textContent = gameSettings.projectileSpeedMultiplier + 'x';
-        }
-        document.getElementById('mg-count').value = gameSettings.mgCount;
-        document.getElementById('rr-count').value = gameSettings.rrCount;
-        document.getElementById('sr-count').value = gameSettings.srCount;
-        if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
-        if (document.getElementById('medikit-count')) document.getElementById('medikit-count').value = gameSettings.medikitCount;
-        document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
-            radio.checked = (radio.value === String(gameSettings.aiCount));
-        });
-        document.querySelectorAll('input[name="field-state"]').forEach(radio => {
-            radio.checked = (radio.value === gameSettings.fieldState);
-        });
-        document.querySelectorAll('input[name="map-type"]').forEach(radio => {
-            radio.checked = (radio.value === gameSettings.mapType);
-        });
-        document.querySelectorAll('input[name="auto-aim"]').forEach(radio => {
-            radio.checked = (radio.value === String(gameSettings.autoAim));
-        });
-        document.querySelectorAll('input[name="night-mode"]').forEach(radio => {
-            radio.checked = (radio.value === String(gameSettings.nightModeEnabled));
-        });
-        document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
-            radio.checked = (radio.value === gameSettings.gameMode);
-        });
-        const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
-        const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
-        if (nightModeIntensitySlider) {
-            nightModeIntensitySlider.value = gameSettings.nightModeLightIntensity;
-        }
-        if (nightModeIntensityValueSpan) {
-            nightModeIntensityValueSpan.textContent = gameSettings.nightModeLightIntensity;
-        }
-        
-        // ボタン位置を適用
-        if (gameSettings.buttonPositions) {
-            const fireButton = document.getElementById('fire-button');
-            const crouchButton = document.getElementById('crouch-button');
-            const joystickZone = document.getElementById('joystick-move');
-            const previewFireButton = document.getElementById('preview-fire-button');
-            const previewCrouchButton = document.getElementById('preview-crouch-button');
-            const previewJoystickZone = document.getElementById('preview-joystick-zone');
-            
-            if (fireButton && gameSettings.buttonPositions.fire) {
-                fireButton.style.right = gameSettings.buttonPositions.fire.right;
-                fireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
-                fireButton.style.left = '';
-                fireButton.style.top = '';
-            }
-            if (crouchButton && gameSettings.buttonPositions.crouch) {
-                crouchButton.style.right = gameSettings.buttonPositions.crouch.right;
-                crouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
-                crouchButton.style.left = '';
-                crouchButton.style.top = '';
-            }
-            if (joystickZone && gameSettings.buttonPositions.joystick) {
-                joystickZone.style.left = gameSettings.buttonPositions.joystick.left;
-                joystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
-                joystickZone.style.right = '';
-                joystickZone.style.top = '';
-            }
-            
-            if (previewFireButton && gameSettings.buttonPositions.fire) {
-                previewFireButton.style.right = gameSettings.buttonPositions.fire.right;
-                previewFireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
-                previewFireButton.style.left = '';
-                previewFireButton.style.top = '';
-            }
-            if (previewCrouchButton && gameSettings.buttonPositions.crouch) {
-                previewCrouchButton.style.right = gameSettings.buttonPositions.crouch.right;
-                previewCrouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
-                previewCrouchButton.style.left = '';
-                previewCrouchButton.style.top = '';
-            }
-            if (previewJoystickZone && gameSettings.buttonPositions.joystick) {
-                previewJoystickZone.style.left = gameSettings.buttonPositions.joystick.left;
-                previewJoystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
-                previewJoystickZone.style.right = '';
-                previewJoystickZone.style.top = '';
+                    if (previewFireButton && gameSettings.buttonPositions.fire) {
+                        previewFireButton.style.right = gameSettings.buttonPositions.fire.right;
+                        previewFireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
+                        previewFireButton.style.left = '';
+                        previewFireButton.style.top = '';
+                    }
+                    if (previewCrouchButton && gameSettings.buttonPositions.crouch) {
+                        previewCrouchButton.style.right = gameSettings.buttonPositions.crouch.right;
+                        previewCrouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
+                        previewCrouchButton.style.left = '';
+                        previewCrouchButton.style.top = '';
+                    }
+                    if (previewJoystickZone && gameSettings.buttonPositions.joystick) {
+                        previewJoystickZone.style.left = gameSettings.buttonPositions.joystick.left;
+                        previewJoystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
+                        previewJoystickZone.style.right = '';
+                        previewJoystickZone.style.top = '';
+                    }
+                    if (previewFollowButton && gameSettings.buttonPositions.follow) { // 追加
+                        previewFollowButton.style.right = gameSettings.buttonPositions.follow.right;
+                        previewFollowButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
+                        previewFollowButton.style.left = '';
+                        previewFollowButton.style.top = '';
+                    }
+                }
+                
+                // グローバル設定も更新
+                saveSettings();
+            } catch (e) {
+                console.error('設定の読み込みに失敗しました:', e);
             }
         }
-        
-        // グローバル設定も更新
-        saveSettings();
-    } catch (e) {
-        console.error('設定の読み込みに失敗しました:', e);
-    }
-}
-
 let playerGunSound;
 let mgGunSound;
 let rrGunSound;
@@ -594,6 +606,8 @@ let aiHPDisplay;
 let ai2HPDisplay; // 追加
 let ai3HPDisplay; // 追加
 let redFlashOverlay;
+let followStatusDisplay; // 追加
+let followButton; // 追加
 let scopeOverlay;
 let cancelScopeButton;
 let killCountDisplay;
@@ -1760,7 +1774,6 @@ function handleFirePress() {
                 isScoping = true;
                 scopeOverlay.style.display = 'block';
                 cancelScopeButton.style.display = 'flex';
-                cancelScopeButton.style.backgroundColor = 'blue'; // 一時的に追加
                 document.getElementById('crosshair').style.display = 'none';
                 if (gameSettings.nightModeEnabled) {
                     document.getElementById('night-vision-overlay').style.display = 'block';
@@ -1781,7 +1794,6 @@ function cancelScope() {
     isScoping = false;
     scopeOverlay.style.display = 'none';
     cancelScopeButton.style.display = 'none';
-    cancelScopeButton.style.backgroundColor = ''; // 色を元に戻す
     document.getElementById('crosshair').style.display = 'block';
     document.getElementById('night-vision-overlay').style.display = 'none';
     new TWEEN.Tween(camera).to({ fov: 75 }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
@@ -2058,14 +2070,16 @@ function aiCheckPickup(ai) {
             respawningPickups.push({ type: 'weapon', weaponType: pickup.userData.weaponType, respawnTime: clock.getElapsedTime() + RESPAWN_DELAY });
             if (ai.targetWeaponPickup === pickup) {
                 ai.targetWeaponPickup = null;
-                // 味方AIは積極的に攻撃するため、武器を拾った後もATTACKING状態を維持
-                if (gameSettings.gameMode === 'team' && ai.team === 'player') {
-                    ai.state = 'ATTACKING';
-                    ai.currentAttackTime = clock.getElapsedTime();
-                    ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
-                } else {
-                    ai.state = 'HIDING';
-                    ai.lastHiddenTime = clock.getElapsedTime();
+                // 味方AIで追従モードONの場合、ai.stateを変更しない
+                if (!(gameSettings.gameMode === 'team' && ai.team === 'player' && isFollowingPlayerMode)) {
+                    if (gameSettings.gameMode === 'team' && ai.team === 'player') {
+                        ai.state = 'ATTACKING';
+                        ai.currentAttackTime = clock.getElapsedTime();
+                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                    } else {
+                        ai.state = 'HIDING';
+                        ai.lastHiddenTime = clock.getElapsedTime();
+                    }
                 }
             }
             break;
@@ -2108,6 +2122,27 @@ document.addEventListener('keydown', (event) => {
     keySet.add(event.code);
     if (event.code === 'KeyC') {
         isCrouchingToggle = !isCrouchingToggle;
+    } else if (event.code === 'KeyF') { // Fキーで追従モードをトグル
+        isFollowingPlayerMode = !isFollowingPlayerMode;
+        console.log(`AI Following Mode: ${isFollowingPlayerMode ? 'ON' : 'OFF'}`);
+        if (followStatusDisplay) {
+            if (isFollowingPlayerMode) {
+                followStatusDisplay.style.display = 'block';
+                followStatusDisplay.classList.add('blinking');
+            } else {
+                followStatusDisplay.style.display = 'none';
+                followStatusDisplay.classList.remove('blinking');
+            }
+        }
+        if (followButton && 'ontouchstart' in window) { // スマホ版ボタンも連動
+            if (isFollowingPlayerMode) {
+                followButton.classList.add('blinking');
+                followButton.textContent = 'FOLLOWING';
+            } else {
+                followButton.classList.remove('blinking');
+                followButton.textContent = 'FOLLOW';
+            }
+        }
     }
 });
 document.addEventListener('keyup', (event) => { if (!isGameRunning) return; keySet.delete(event.code); });
@@ -2218,6 +2253,35 @@ if (crouchButton) {
     }, { passive: false });
 }
 
+// followButton のイベントリスナーを追加
+const followButtonElement = document.getElementById('follow-button');
+if (followButtonElement) {
+    followButtonElement.addEventListener('touchstart', (event) => {
+        if (!isGameRunning) return;
+        isFollowingPlayerMode = !isFollowingPlayerMode;
+        console.log(`AI Following Mode: ${isFollowingPlayerMode ? 'ON' : 'OFF'}`);
+        if (followStatusDisplay) {
+            if (isFollowingPlayerMode) {
+                followStatusDisplay.style.display = 'block';
+                followStatusDisplay.classList.add('blinking');
+            } else {
+                followStatusDisplay.style.display = 'none';
+                followStatusDisplay.classList.remove('blinking');
+            }
+        }
+        if (followButton && 'ontouchstart' in window) { // スマホ版ボタンも連動
+            if (isFollowingPlayerMode) {
+                followButton.classList.add('blinking');
+                followButton.textContent = 'FOLLOWING';
+            } else {
+                followButton.classList.remove('blinking');
+                followButton.textContent = 'FOLLOW';
+            }
+        }
+        event.preventDefault();
+    }, { passive: false });
+}
+
 function initializeAudio() {
     const allAudio = document.querySelectorAll('audio');
     allAudio.forEach(audio => {
@@ -2290,17 +2354,30 @@ function startGame() {
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
         const pause = document.getElementById('pause-button');
+        const followBtn = document.getElementById('follow-button'); // 追加
+
         if (joy) joy.style.display = 'block';
         if (fire) fire.style.display = 'flex';
         if (crouch) crouch.style.display = 'flex';
         if (pause) pause.style.display = 'block';
+
+        if (followBtn) { // Followボタンの表示制御
+            if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                followBtn.style.display = 'flex';
+            } else {
+                followBtn.style.display = 'none';
+            }
+        }
     } else {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const followBtn = document.getElementById('follow-button'); // 追加
+
         if (joy) joy.style.display = 'none';
         if (fire) fire.style.display = 'none';
         if (crouch) crouch.style.display = 'none';
+        if (followBtn) followBtn.style.display = 'none'; // 追加
     }
     const element = document.documentElement;
     try {
@@ -2405,17 +2482,21 @@ function restartGame() {
     if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
 
     // --- 新しいゲームモードの追加 ---
-    const isTeamArcadeMode = gameSettings.gameMode === 'teamArcade';
-    if (isTeamArcadeMode) {
+    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'team';
+    if (isTeamModeOrTeamArcade) {
         playerTeamKills = 0;
         enemyTeamKills = 0;
         if (playerTeamKillsDisplay) playerTeamKillsDisplay.textContent = `PLAYER TEAM KILLS: ${playerTeamKills}`;
         if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.textContent = `ENEMY TEAM KILLS: ${enemyTeamKills}`;
-        gameTimer = gameSettings.gameDuration; // gameDurationを初期タイマー値に設定
-        updateTimerDisplay(); // タイマー表示を初期化
-        startTimer(); // タイマー開始
+        if (gameSettings.gameMode === 'teamArcade') { // teamArcadeモードの場合のみタイマーを開始
+            gameTimer = gameSettings.gameDuration; // gameDurationを初期タイマー値に設定
+            updateTimerDisplay(); // タイマー表示を初期化
+            startTimer(); // タイマー開始
+        } else {
+            stopTimer(); // teamモードではタイマーを停止
+        }
     } else {
-        stopTimer(); // チームアーケードモード以外ではタイマーを停止
+        stopTimer(); // チームモード以外ではタイマーを停止
         if (gameTimerDisplay) gameTimerDisplay.style.display = 'none';
         if (playerTeamKillsDisplay) playerTeamKillsDisplay.style.display = 'none';
         if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.style.display = 'none';
@@ -2453,7 +2534,7 @@ function restartGame() {
     ammoSG = 0;
     let finalAICount = gameSettings.aiCount;
     const isTeamMode = gameSettings.gameMode === 'team';
-    if (isTeamMode || isTeamArcadeMode) { // 変更
+    if (isTeamMode || isTeamModeOrTeamArcade) { // 変更
         finalAICount = 3; // チームモードおよびチームアーケードモードでは常に3体（1体味方 + 2体敵）
     }
     for (const ai of ais) {
@@ -2468,7 +2549,7 @@ function restartGame() {
     for (let i = 0; i < finalAICount; i++) {
         let aiColor;
         let aiTeam = 'enemy'; // デフォルトは敵
-        if (isTeamMode || isTeamArcadeMode) { // 変更
+        if (isTeamMode || isTeamModeOrTeamArcade) { // 変更
             if (i === 0) {
                 aiTeam = 'player'; // 最初の1体は味方
                 aiColor = teamColors.player;
@@ -2550,6 +2631,7 @@ function restartGame() {
     if (gameSettings.gameMode === 'arcade') {
         gameUI.push('kill-count-display'); // アーケードモードのキル表示のみ追加
     } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        gameUI.push('player-team-kills-display', 'enemy-team-kills-display'); // 追加
         // AI HP表示はコンテナで制御するため、gameUI配列には追加しない
         if (gameSettings.gameMode === 'teamArcade') {
             gameUI.push('game-timer-display');
@@ -3018,7 +3100,15 @@ function checkCollision(object, obstacles, ignoreObstacle = null) {
 
         currentObjectBox = objectBox;
     } else if (ais.includes(object)) {
-        currentObjectBox = new THREE.Box3().setFromObject(object);
+        const aiPos = object.position;
+        const aiBodyHeight = BODY_HEIGHT + (HEAD_RADIUS * 2); 
+        const aiCollisionHeight = object.isCrouching ? aiBodyHeight * 0.7 : aiBodyHeight; 
+        const aiCollisionWidth = 0.5; 
+        const aiCollisionDepth = 0.5; 
+
+        objectBox.min.set(aiPos.x - aiCollisionWidth / 2, aiPos.y, aiPos.z - aiCollisionDepth / 2);
+        objectBox.max.set(aiPos.x + aiCollisionWidth / 2, aiPos.y + aiCollisionHeight, aiPos.z + aiCollisionDepth / 2);
+        currentObjectBox = objectBox;
     } else {
         return false;
     }
@@ -3137,38 +3227,64 @@ function getGroundY(position, objectBodyHeight) {
 }
 
 // プレイヤーが障害物にめり込んでいる場合に、外側に押し出す関数
-function resolvePlayerCollision(playerObj, obstaclesArray, pushOutDistance = 0.5) {
-    const playerBoundingBox = new THREE.Box3().setFromObject(playerObj);
+function resolvePlayerCollision(playerObj, obstaclesArray, pushOutDistance = 0.05) { // pushOutDistanceを少し小さく設定
+    let playerBoundingBox;
+    if (playerObj === player) {
+        const pos = playerObj.position;
+        playerBoundingBox = new THREE.Box3();
+        // checkCollision と同じロジックでバウンディングボックスを定義
+        playerBoundingBox.min.set(pos.x - 0.2, pos.y - playerTargetHeight, pos.z - 0.2);
+        playerBoundingBox.max.set(pos.x + 0.2, pos.y, pos.z + 0.2);
+    } else {
+        // AIなどの場合は既存のロジックを維持
+        playerBoundingBox = new THREE.Box3().setFromObject(playerObj);
+    }
+
     let resolved = false;
 
     for (const obstacle of obstaclesArray) {
-        // 壁や屋上に関わらず、すべての物理的な障害物を考慮
-        // isRooftopやisWallは直接衝突判定に使うべきではない場合もあるので注意が必要
-        // 今回はプレイヤーモデルが「めり込んでいる」状況を解決するため、すべての物体として扱う
-        
+        // 梯子昇降中のタワーや、屋上床は衝突判定から除外
+        if (obstacle.userData.isRooftop) continue;
+        // 梯子を登っている最中は、そのタワーとは衝突しないようにする
+        if (obstacle.userData.isTower && playerObj === player && isIgnoringTowerCollision && obstacle === lastClimbedTower) {
+            continue;
+        }
+
         const obstacleBoundingBox = new THREE.Box3().setFromObject(obstacle);
 
         if (playerBoundingBox.intersectsBox(obstacleBoundingBox)) {
-            // 衝突が発生した場合、押し出しベクトルを計算
             const overlap = playerBoundingBox.intersect(obstacleBoundingBox);
-            const dx = Math.min(playerBoundingBox.max.x - overlap.min.x, overlap.max.x - playerBoundingBox.min.x);
-            const dy = Math.min(playerBoundingBox.max.y - overlap.min.y, overlap.max.y - playerBoundingBox.min.y);
-            const dz = Math.min(playerBoundingBox.max.z - overlap.min.z, overlap.max.z - playerBoundingBox.min.z);
+            
+            const overlapX = overlap.max.x - overlap.min.x;
+            const overlapY = overlap.max.y - overlap.min.y;
+            const overlapZ = overlap.max.z - overlap.min.z;
 
+            // X-Z平面での最小オーバーラップ軸を見つける
+            // プレイヤーが障害物の上にいる場合（Y軸のオーバーラップが大きい場合）は、XまたはZで押し出す。
+            // 逆に、Y軸のオーバーラップが小さい場合は、垂直方向の衝突とみなし、ここでは水平方向の解決を優先する。
+            let minHorizontalOverlap = Math.min(overlapX, overlapZ);
             let pushVector = new THREE.Vector3();
-            if (dx < dy && dx < dz) {
-                pushVector.x = (playerBoundingBox.getCenter(new THREE.Vector3()).x < obstacleBoundingBox.getCenter(new THREE.Vector3()).x) ? -dx : dx;
-            } else if (dy < dx && dy < dz) {
-                pushVector.y = (playerBoundingBox.getCenter(new THREE.Vector3()).y < obstacleBoundingBox.getCenter(new THREE.Vector3()).y) ? -dy : dy;
-            } else {
-                pushVector.z = (playerBoundingBox.getCenter(new THREE.Vector3()).z < obstacleBoundingBox.getCenter(new THREE.Vector3()).z) ? -dz : dz;
+
+            // プレイヤーの中心と障害物の中心を比較して押し出す方向を決定
+            const playerCenter = playerBoundingBox.getCenter(new THREE.Vector3());
+            const obstacleCenter = obstacleBoundingBox.getCenter(new THREE.Vector3());
+
+            if (minHorizontalOverlap === overlapX && overlapX > 0.001) { // わずかなオーバーラップも考慮
+                const pushAmount = overlapX / 2 + pushOutDistance;
+                pushVector.x = (playerCenter.x < obstacleCenter.x) ? -pushAmount : pushAmount;
+            } 
+            else if (minHorizontalOverlap === overlapZ && overlapZ > 0.001) { // わずかなオーバーラップも考慮
+                const pushAmount = overlapZ / 2 + pushOutDistance;
+                pushVector.z = (playerCenter.z < obstacleCenter.z) ? -pushAmount : pushAmount;
             }
-            // 少し余分に押し出す
-            playerObj.position.add(pushVector.normalize().multiplyScalar(pushOutDistance + 0.1)); 
-            resolved = true;
-            // 複数の障害物と衝突している可能性があるので、breakせずに全ての衝突を解消しようとする
-            // または、一度押し出したら、次のフレームで再度チェックする方が良い場合もある
-            // 今回は単純化のため、一つの衝突解決で終了
+            
+            if (pushVector.lengthSq() > 0) { // 押し出しベクトルが0でなければ適用
+                playerObj.position.add(pushVector);
+                resolved = true;
+            }
+            // 複数衝突する場合でも、一度解決を試みる
+            // ただし、一度に複数の衝突を解決しようとすると、かえって不安定になる可能性があるため、
+            // ここでは一つの衝突解決でbreakし、animateループで再度チェックするアプローチとする
             break; 
         }
     }
@@ -3427,16 +3543,20 @@ function animate() {
             
             const ignoreObstacle = isIgnoringTowerCollision ? lastClimbedTower : currentGroundObstacle;
 
-            // Move on X axis and check for collision to allow sliding
+            // まず、プレイヤーのXとZの位置を更新
             player.position.x += moveX;
-            if (checkCollision(player, obstacles, ignoreObstacle)) {
-                player.position.x = oldPlayerPosition.x;
-            }
-
-            // Move on Z axis and check for collision to allow sliding
             player.position.z += moveZ;
+
+            // 新しい位置で衝突があるかチェックし、あれば解決を試みる
             if (checkCollision(player, obstacles, ignoreObstacle)) {
-                player.position.z = oldPlayerPosition.z;
+                // 衝突解決を試みる。resolvePlayerCollisionはplayer.positionを直接変更する
+                const collisionResolved = resolvePlayerCollision(player, obstacles, 0.05); // 押し出し距離は微調整
+
+                // もし衝突解決後もまだ衝突している場合は、元の位置に戻す
+                // これはresolvePlayerCollisionが全ての衝突を一度に解決できない場合のフォールバック
+                if (!collisionResolved || checkCollision(player, obstacles, ignoreObstacle)) {
+                    player.position.copy(oldPlayerPosition); 
+                }
             }
             const playerDistFromCenter = Math.sqrt(player.position.x * player.position.x + player.position.z * player.position.z);
             if (playerDistFromCenter > ARENA_PLAY_AREA_RADIUS) {
@@ -3563,7 +3683,32 @@ function animate() {
 
         // ais.forEachループ内で一度だけ定義
         const isTeammateInTeamModeOrArcade = isTeamModeOrTeamArcade && ai.team === 'player';
-        ais.forEach((otherAI, otherIndex) => {
+
+        // FOLLOWING_PLAYER ロジック
+        if (isTeammateInTeamModeOrArcade && isFollowingPlayerMode) {
+            const playerPos = player.position.clone();
+            const playerDir = new THREE.Vector3();
+            player.getWorldDirection(playerDir); 
+
+            const FOLLOW_DISTANCE = 8; 
+            
+            const playerBackward = playerDir.clone().negate();
+            let targetFollowPos = playerPos.clone().add(playerBackward.multiplyScalar(FOLLOW_DISTANCE));
+            
+            targetFollowPos.y = -FLOOR_HEIGHT;
+
+            // 追従モード中は常に目標位置を更新し、FOLLOWING状態を維持
+            ai.targetPosition.copy(targetFollowPos);
+            ai.state = 'FOLLOWING'; 
+            
+            // AIの回転をプレイヤーの方向に向ける (またはプレイヤーの目標位置を向く)
+            let targetAngle = Math.atan2(ai.targetPosition.x - ai.position.x, ai.targetPosition.z - ai.position.z);
+            ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, targetAngle, 5 * delta);
+        } else if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && ai.state === 'FOLLOWING') {
+            // AIチームメイトだが追従モードがOFFになり、かつ現在の状態がFOLLOWINGの場合、HIDINGに戻す
+            ai.state = 'HIDING';
+            ai.lastHiddenTime = timeElapsed;
+        }        ais.forEach((otherAI, otherIndex) => {
             if (index === otherIndex) return;
             const distance = ai.position.distanceTo(otherAI.position);
             if (distance < MIN_DISTANCE_BETWEEN_AIS_AT_SPOT) {
@@ -3574,12 +3719,33 @@ function animate() {
         });
         separation_vec.multiplyScalar(delta * AI_SEPARATION_FORCE);
         aiCheckPickup(ai);
-        const isAISeen = isVisibleToPlayer(ai);
+        const isAISeen = isVisibleToPlayer(ai); // プレイヤーからAIが見えるかどうかの判定
+
+        // 新しいフラグ: AIチームメイトが敵AIを視認しているか
+        let isEnemyAISeenByTeammate = false;
+        if (isTeammateInTeamModeOrArcade) {
+            for (const enemyAI of ais) {
+                if (enemyAI.team === 'enemy' && enemyAI.hp > 0) {
+                    // AIから敵AIへの視線が通るかチェック
+                    const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
+                    const enemyHeadPos = enemyAI.children[1].getWorldPosition(new THREE.Vector3());
+                    if (checkLineOfSight(aiHeadPos, enemyHeadPos, obstacles)) {
+                        isEnemyAISeenByTeammate = true;
+                        break;
+                    }
+                }
+            }
+        }
         const distanceToTarget = ai.position.distanceTo(ai.targetPosition);
         const isArrived = distanceToTarget < ARRIVAL_THRESHOLD;
         const isMoving = !isArrived;
-        if (ai.state === 'HIDING') { ai.isCrouching = true; }
-        else { ai.isCrouching = false; }
+                if (ai.state === 'HIDING') { 
+                    ai.isCrouching = true; 
+                } else if (ai.state === 'FOLLOWING') { // FOLLOWING状態ではしゃがまない
+                    ai.isCrouching = false;
+                } else { 
+                    ai.isCrouching = false; 
+                }
         ai.scale.y = ai.isCrouching ? 0.7 : 1.0;
         ai.position.y = -FLOOR_HEIGHT - (ai.isCrouching ? (BODY_HEIGHT + HEAD_RADIUS * 2) * 0.15 : 0);
         if (ai.state === 'ATTACKING' || isMoving) {
@@ -3612,8 +3778,8 @@ function animate() {
             case 'HIDING':
                 ai.avoiding = false;
                 // const isTeammate = gameSettings.gameMode === 'team' && ai.team === 'player'; // この行は削除
-                // const isTeammateInTeamModeOrArcade = isTeamModeOrTeamArcade && ai.team === 'player'; // この行は削除
-                if (isTeammateInTeamModeOrArcade) { // isTeammateInTeamModeOrArcadeを使用
+                // const isTeammateInTeamModeOrArcade = isTeammateInTeamModeOrArcade && ai.team === 'player'; // この行は削除
+                if (isTeammateInTeamModeOrArcade) {
                     // 味方AIは積極的に攻撃する（HIDING状態を回避）
                     if (!findAndTargetWeapon(ai)) {
                         ai.state = 'ATTACKING';
@@ -3676,6 +3842,40 @@ function animate() {
                     }
                 }
                 break;
+            case 'FOLLOWING': // 新しい追従状態
+                ai.avoiding = false;
+                // AIチームメイトが敵AIを視認できる場合は攻撃に移行
+                if (isEnemyAISeenByTeammate) {
+                    ai.state = 'ATTACKING';
+                    ai.currentAttackTime = timeElapsed;
+                    ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                } else {
+                    // MOVING状態の移動・回避ロジックを統合
+                    const oldAIPosition_follow = ai.position.clone();
+                    let moveDirection_follow = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
+                    const moveVectorDelta_follow = moveDirection_follow.clone().multiplyScalar(currentAISpeed * delta);
+                    moveVectorDelta_follow.add(separation_vec); // AI間の分離力も考慮
+                    moveDirection_follow = moveVectorDelta_follow.normalize(); // Normalize after adding separation_vec
+
+                    raycaster.set(oldAIPosition_follow.clone().add(new THREE.Vector3(0, 1.0, 0)), moveDirection_follow);
+                    const intersects = raycaster.intersectObjects(obstacles, true);
+
+                    if (intersects.length > 0 && intersects[0].distance < AVOIDANCE_RAY_DISTANCE && !ai.avoiding && ai.state !== 'EVADING') {
+                        // 移動する前に障害物を検知したら回避
+                        findObstacleAvoidanceSpot(ai, moveDirection_follow, ai.targetPosition);
+                    } else {
+                        // 障害物がなければ移動
+                        const finalMove_follow = moveDirection_follow.multiplyScalar(currentAISpeed * delta);
+                        ai.position.add(finalMove_follow);
+                        
+                        // 移動後に衝突した場合の最終的な回避
+                        if (checkCollision(ai, obstacles)) {
+                            ai.position.copy(oldAIPosition_follow);
+                            findObstacleAvoidanceSpot(ai, moveDirection_follow, ai.targetPosition);
+                        }
+                    }
+                }
+                break; // FOLLOWING状態の処理終了
             case 'MOVING':
                 ai.avoiding = false;
                 if (isTeammateInTeamModeOrArcade) {
@@ -3978,8 +4178,29 @@ function animate() {
                     if (playerHP !== Infinity) {
                         playerHP -= damageAmount;
                         screenShakeDuration = SHAKE_DURATION_MAX;
-                        redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-                        setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+                        if (redFlashOverlay) {
+                            // 死亡アニメーション用のクラスを一旦クリアし、初期状態をリセット
+                            redFlashOverlay.classList.remove('fade-to-black', 'fade-out', 'red-flash');
+                            redFlashOverlay.style.opacity = '0'; // 初期状態を透明に
+                            redFlashOverlay.style.backgroundColor = 'rgba(0,0,0,0)'; // 背景色をリセット
+                            redFlashOverlay.style.display = 'block'; // 表示を有効に
+
+                            // 短時間後に赤フラッシュクラスを追加し、アニメーションを開始
+                            // red-flashクラスがopacityを制御する場合、ここでのopacity設定は不要か、調整が必要
+                            // CSS側のred-flashアニメーションがopacity: 1; を持つことを前提とする
+                            setTimeout(() => {
+                                redFlashOverlay.classList.add('red-flash');
+                                redFlashOverlay.style.opacity = '1'; 
+                            }, 10); // 短い遅延でクラス追加をトリガー
+
+                            // 一定時間後に赤フラッシュクラスを削除し、透明に戻す
+                            setTimeout(() => {
+                                redFlashOverlay.classList.remove('red-flash');
+                                redFlashOverlay.style.opacity = '0'; // 透明に戻す
+                                // フェードアウトが完了するまで待ってからdisplayをnoneにする
+                                setTimeout(() => { redFlashOverlay.style.display = 'none'; }, 500); 
+                            }, 300); // フラッシュの継続時間（ms）
+                        }
                     }
                     if (playerHP <= 0 && !isPlayerDeathPlaying) {
                         startPlayerDeathSequence(p);
@@ -4201,6 +4422,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const previewFireButton = document.getElementById('preview-fire-button');
     const previewCrouchButton = document.getElementById('preview-crouch-button');
     const previewJoystickZone = document.getElementById('preview-joystick-zone');
+    const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
 
     // Convert pixel values to percentage for responsiveness
     const fireRight = (parseInt(previewFireButton.style.right, 10) / window.innerWidth) * 100 + '%';
@@ -4209,10 +4431,13 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const crouchBottom = (parseInt(previewCrouchButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
     const joystickLeft = (parseInt(previewJoystickZone.style.left, 10) / window.innerWidth) * 100 + '%';
     const joystickBottom = (parseInt(previewJoystickZone.style.bottom, 10) / window.innerHeight) * 100 + '%';
+    const followRight = (parseInt(previewFollowButton.style.right, 10) / window.innerWidth) * 100 + '%'; // 追加
+    const followBottom = (parseInt(previewFollowButton.style.bottom, 10) / window.innerHeight) * 100 + '%'; // 追加
 
     gameSettings.buttonPositions.fire = { right: fireRight, bottom: fireBottom };
     gameSettings.buttonPositions.crouch = { right: crouchRight, bottom: crouchBottom };
     gameSettings.buttonPositions.joystick = { left: joystickLeft, bottom: joystickBottom };
+    gameSettings.buttonPositions.follow = { right: followRight, bottom: followBottom }; // 追加
 
     saveSettings();
     
@@ -4220,6 +4445,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const fireButton = document.getElementById('fire-button');
     const crouchButton = document.getElementById('crouch-button');
     const joystickZone = document.getElementById('joystick-move');
+    const followButton = document.getElementById('follow-button'); // 追加
 
     fireButton.style.right = fireRight;
     fireButton.style.bottom = fireBottom;
@@ -4227,6 +4453,10 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     crouchButton.style.bottom = crouchBottom;
     joystickZone.style.left = joystickLeft;
     joystickZone.style.bottom = joystickBottom;
+    if (followButton) { // 追加
+        followButton.style.right = followRight;
+        followButton.style.bottom = followBottom;
+    }
     
     fireButton.style.left = '';
     fireButton.style.top = '';
@@ -4234,15 +4464,11 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     crouchButton.style.top = '';
     joystickZone.style.right = '';
     joystickZone.style.top = '';
-
-
-    // Show feedback
-    feedbackDiv.textContent = 'Positions Saved!';
-    feedbackDiv.style.display = 'block';
-    setTimeout(() => {
-        feedbackDiv.style.display = 'none';
-    }, 2000);
-});
+    if (followButton) { // 追加
+        followButton.style.left = '';
+        followButton.style.top = '';
+    }
+}); // 閉じ括弧を追加
 
 function makeDraggable(element, isJoystick = false) {
     let isDragging = false;
@@ -4303,6 +4529,7 @@ function makeDraggable(element, isJoystick = false) {
 makeDraggable(document.getElementById('preview-fire-button'));
 makeDraggable(document.getElementById('preview-crouch-button'));
 makeDraggable(document.getElementById('preview-joystick-zone'), true);
+makeDraggable(document.getElementById('preview-follow-button')); // 追加
 
 document.addEventListener('keydown', (event) => {
     if (event.code === 'KeyP') {
