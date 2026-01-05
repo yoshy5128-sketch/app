@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FM Radio Selector</title>
+    <style>
+        body { font-family: "Helvetica Neue", Arial, sans-serif; background: #2c3e50; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .menu-card { background: #34495e; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); width: 320px; text-align: center; }
+        h1 { font-size: 1.2rem; margin-bottom: 20px; color: #ecf0f1; }
+        .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        button { 
+            padding: 15px; border: none; border-radius: 8px; background: #3498db; color: white; 
+            font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
+        }
+        button:hover { background: #2980b9; transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+        .footer { margin-top: 20px; font-size: 12px; color: #bdc3c7; }
+    </style>
+</head>
+<body>
+
+<div class="menu-card">
+    <h1>FM Radio Controller</h1>
+    <div class="grid">
+        <button onclick="openRadio('FMT')">TOKYO FM</button>
+        <button onclick="openRadio('813')">J-WAVE</button>
+        <button onclick="openRadio('NACK5')">NACK5</button>
+        <button onclick="openRadio('BAYFM78')">bayfm78</button>
+        <button onclick="openRadio('YFM')">FMヨコハマ</button>
+        <button onclick="openRadio('INT')">InterFM897</button>
+    </div>
+    <p class="footer">ボタンを押すと再生ウィンドウが開きます</p>
+</div>
+
+<script>
+    let radioWindow = null;
+
+    function openRadio(id) {
+        const url = `https://radiko.jp/#!/live/${id}`;
+        const w = 400;
+        const h = 600;
+        const left = (window.screen.width / 2) - (w / 2);
+        const top = (window.screen.height / 2) - (h / 2);
+
+        // すでにウィンドウが開いている場合は、そのウィンドウのURLを更新してフォーカス
+        if (radioWindow && !radioWindow.closed) {
+            radioWindow.location.href = url;
+            radioWindow.focus();
+        } else {
+            // 新しく小さなウィンドウを開く
+            radioWindow = window.open(url, 'radioPlayer', `width=${w},height=${h},top=${top},left=${left},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`);
+        }
+    }
+</script>
+
+</body>
+</html>
