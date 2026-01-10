@@ -2,183 +2,129 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Ultimate GPS Explorer</title>
+    <title>3D Real Map Explorer</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; touch-action: none; }
-        canvas { display: block; }
-        /* 情報表示パネル */
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
         #ui {
-            position: absolute; top: 10px; left: 10px; color: #00ffff;
-            background: rgba(0, 20, 40, 0.7); padding: 10px; border-radius: 8px;
-            font-size: 11px; pointer-events: none; z-index: 100; border: 1px solid #00ffff;
+            position: absolute; top: 10px; left: 10px; color: #fff;
+            background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px;
+            font-size: 11px; z-index: 100; pointer-events: none;
         }
-        /* ボタンエリア */
-        #controls {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 10px; z-index: 200;
-        }
-        button {
-            padding: 15px 20px; font-size: 14px; background: #00ffff;
-            border: none; border-radius: 8px; font-weight: bold; color: #000;
-        }
-        /* デバッグ用移動ボタン */
-        #debug-panel {
-            position: absolute; bottom: 100px; right: 20px;
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; z-index: 200;
-        }
-        .debug-btn { background: #ff00ff; color: white; padding: 10px; font-size: 12px; border: none; border-radius: 4px; }
+        #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 200; }
+        button { padding: 15px 25px; background: #22ccff; border: none; border-radius: 30px; font-weight: bold; }
+        #debug { position: absolute; bottom: 80px; right: 10px; display: flex; flex-direction: column; gap: 5px; }
+        .d-btn { background: #ff44aa; color: white; border: none; padding: 10px; border-radius: 5px; }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <b>GPS SYSTEM ACTIVE</b><br>
-        Status: <span id="status">Wait...</span><br>
-        Lat: <span id="lat">0</span> / Lon: <span id="lon">0</span><br>
-        Pos: X:<span id="posx">0</span> Z:<span id="posz">0</span><br>
-        <small>スワイプで視点変更 / 2本指でズーム</small>
-    </div>
+<div id="ui">
+    <b>REAL MAP ENGINE</b><br>
+    Lat: <span id="lat">--</span> / Lon: <span id="lon">--</span><br>
+    Tile: <span id="tile-info">--</span>
+</div>
 
-    <div id="controls">
-        <button id="btn-start">GPSを開始 (要HTTPS)</button>
-    </div>
+<div id="controls"><button id="btn-start">マップ探索を開始</button></div>
 
-    <div id="debug-panel">
-        <div></div><button class="debug-btn" onclick="debugMove(0, 0.0001)">↑</button><div></div>
-        <button class="debug-btn" onclick="debugMove(-0.0001, 0)">←</button>
-        <button class="debug-btn" onclick="debugMove(0, -0.0001)">↓</button>
-        <button class="debug-btn" onclick="debugMove(0.0001, 0)">→</button>
-    </div>
+<div id="debug">
+    <button class="d-btn" onclick="debugMove(0, 0.0005)">↑北</button>
+    <button class="d-btn" onclick="debugMove(0, -0.0005)">↓南</button>
+    <button class="d-btn" onclick="debugMove(0.0005, 0)">→東</button>
+    <button class="d-btn" onclick="debugMove(-0.0005, 0)">←西</button>
+</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-    <script>
-        let scene, camera, renderer, player, startPos = null, currentPos = { lat: 35.6895, lon: 139.6917 };
-        let isDragging = false, prevX = 0, prevY = 0;
+<script>
+    let scene, camera, renderer, player, mapMesh;
+    let currentPos = { lat: 35.6895, lon: 139.6917 }; // 初期値: 東京
+    const ZOOM = 18; // 地図のズームレベル（18は詳細な街路レベル）
 
-        // 1. 3Dシーン初期化
-        function init3D() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x000510);
-            scene.fog = new THREE.Fog(0x000510, 20, 150);
+    function init() {
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            document.body.appendChild(renderer.domElement);
+        // プレイヤーアバター
+        player = new THREE.Group();
+        const marker = new THREE.Mesh(new THREE.SphereGeometry(0.5), new THREE.MeshBasicMaterial({color: 0xff0000}));
+        player.add(marker);
+        scene.add(player);
 
-            // プレイヤーアバター
-            player = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 2, 8), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true }));
-            body.rotation.x = Math.PI / 2; 
-            player.add(body);
-            scene.add(player);
+        player.add(camera);
+        camera.position.set(0, 15, 10);
+        camera.lookAt(0,0,0);
 
-            // カメラをプレイヤーの子要素にする（プレイヤーの向きに追従）
-            player.add(camera);
-            camera.position.set(0, 8, 12);
-            camera.lookAt(0, 0, 0);
+        // 地図を貼るための板（1辺100メートルと仮定）
+        const geo = new THREE.PlaneGeometry(100, 100);
+        const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        mapMesh = new THREE.Mesh(geo, mat);
+        mapMesh.rotation.x = -Math.PI / 2;
+        scene.add(mapMesh);
 
-            // グリッドとランドマーク
-            scene.add(new THREE.GridHelper(2000, 100, 0x004444, 0x002222));
-            for(let i=0; i<40; i++) {
-                const mesh = new THREE.Mesh(
-                    new THREE.BoxGeometry(2, Math.random()*15, 2),
-                    new THREE.MeshBasicMaterial({ color: 0x5555ff, wireframe: true })
-                );
-                mesh.position.set(Math.random()*400-200, 0, Math.random()*400-200);
-                scene.add(mesh);
-            }
+        updateMapTile(currentPos.lat, currentPos.lon);
+        setupTouch();
+        animate();
+    }
 
-            // イベント登録
-            setupInteractions();
-            animate();
-        }
+    // 緯度経度からOSMのタイル番号(x, y)を計算
+    function lon2tile(lon, zoom) { return (Math.floor((lon + 180) / 360 * Math.pow(2, zoom))); }
+    function lat2tile(lat, zoom) {
+        return (Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom)));
+    }
 
-        // 2. 視点操作（スワイプ）の実装
-        function setupInteractions() {
-            window.addEventListener('touchstart', (e) => {
-                if (e.target.tagName === 'BUTTON') return;
-                isDragging = true;
-                prevX = e.touches[0].clientX;
-                prevY = e.touches[0].clientY;
-            }, { passive: false });
+    // 地図画像を更新
+    function updateMapTile(lat, lon) {
+        const x = lon2tile(lon, ZOOM);
+        const y = lat2tile(lat, ZOOM);
+        const url = `https://tile.openstreetmap.org/${ZOOM}/${x}/${y}.png`;
+        
+        document.getElementById('tile-info').innerText = `${ZOOM}/${x}/${y}`;
+        document.getElementById('lat').innerText = lat.toFixed(5);
+        document.getElementById('lon').innerText = lon.toFixed(5);
 
-            window.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
-                const dx = e.touches[0].clientX - prevX;
-                const dy = e.touches[0].clientY - prevY;
-
-                player.rotation.y -= dx * 0.01; // プレイヤーの向き（左右）
-                camera.position.y += dy * 0.05; // カメラの高さ（上下）
-                camera.position.y = Math.max(2, Math.min(30, camera.position.y));
-                camera.lookAt(0, 0, 0);
-
-                prevX = e.touches[0].clientX;
-                prevY = e.touches[0].clientY;
-                e.preventDefault();
-            }, { passive: false });
-
-            window.addEventListener('touchend', () => isDragging = false);
-        }
-
-        // 3. 位置更新ロジック
-        function updatePos(lat, lon) {
-            if (!startPos) startPos = { lat, lon };
-            currentPos = { lat, lon };
-
-            const x = (lon - startPos.lon) * 91000;
-            const z = -(lat - startPos.lat) * 111000;
-
-            player.position.set(x, 0, z);
-
-            document.getElementById('lat').innerText = lat.toFixed(5);
-            document.getElementById('lon').innerText = lon.toFixed(5);
-            document.getElementById('posx').innerText = x.toFixed(1);
-            document.getElementById('posz').innerText = z.toFixed(1);
-        }
-
-        // 4. GPS開始
-        document.getElementById('btn-start').addEventListener('click', () => {
-            init3D();
-            document.getElementById('btn-start').style.display = 'none';
-            document.getElementById('status').innerText = "GPS Requesting...";
-
-            if (navigator.geolocation) {
-                navigator.geolocation.watchPosition(
-                    (p) => {
-                        document.getElementById('status').innerText = "GPS Active";
-                        updatePos(p.coords.latitude, p.coords.longitude);
-                    },
-                    (e) => {
-                        document.getElementById('status').innerText = "Manual/Debug Mode";
-                        updatePos(currentPos.lat, currentPos.lon); // デフォルト位置
-                    },
-                    { enableHighAccuracy: true }
-                );
-            }
+        new THREE.TextureLoader().load(url, (tex) => {
+            mapMesh.material.map = tex;
+            mapMesh.material.needsUpdate = true;
         });
+    }
 
-        // 5. デバッグ移動
-        function debugMove(dLon, dLat) {
-            if (!scene) init3D();
-            document.getElementById('btn-start').style.display = 'none';
-            updatePos(currentPos.lat + dLat, currentPos.lon + dLon);
-        }
+    function debugMove(dLon, dLat) {
+        currentPos.lat += dLat;
+        currentPos.lon += dLon;
+        updateMapTile(currentPos.lat, currentPos.lon);
+    }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
-        }
-
-        window.addEventListener('resize', () => {
-            if (!camera) return;
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+    function setupTouch() {
+        let isDown = false, px = 0;
+        window.addEventListener('touchstart', e => { isDown = true; px = e.touches[0].clientX; });
+        window.addEventListener('touchmove', e => {
+            if(!isDown) return;
+            player.rotation.y -= (e.touches[0].clientX - px) * 0.01;
+            px = e.touches[0].clientX;
         });
-    </script>
+        window.addEventListener('touchend', () => isDown = false);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+    }
+
+    document.getElementById('btn-start').onclick = () => {
+        init();
+        document.getElementById('btn-start').style.display = 'none';
+        if(navigator.geolocation) {
+            navigator.geolocation.watchPosition(p => {
+                currentPos.lat = p.coords.latitude;
+                currentPos.lon = p.coords.longitude;
+                updateMapTile(currentPos.lat, currentPos.lon);
+            });
+        }
+    };
+</script>
 </body>
 </html>
