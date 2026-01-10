@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>GPS 3D Explorer - Prototyper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        body { margin: 0; overflow: hidden; background: #050510; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { display: block; }
+        #ui {
+            position: absolute; top: 15px; left: 15px; color: #00ffcc;
+            background: rgba(0, 20, 40, 0.8); padding: 15px; border-radius: 12px;
+            border: 1px solid #00ffcc; font-size: 13px; pointer-events: none; z-index: 100;
+        }
+        #controls {
+            position: absolute; bottom: 20px; width: 100%; display: flex;
+            justify-content: center; gap: 10px; z-index: 200;
+        }
+        button {
+            padding: 12px 20px; font-size: 14px; cursor: pointer;
+            background: #00ffcc; border: none; border-radius: 5px; font-weight: bold;
+        }
+        #debug-tools {
+            position: absolute; bottom: 80px; right: 20px; display: flex; flex-direction: column; gap: 5px;
+        }
+        .debug-btn { background: #ff00ff; color: white; padding: 8px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <b>LOCATION RADAR</b><br>
+        Status: <span id="status">Waiting...</span><br>
+        Lat: <span id="lat">0.0000</span> / Lon: <span id="lon">0.0000</span><br>
+        X: <span id="posx">0</span> / Z: <span id="posz">0</span>
+    </div>
+
+    <div id="controls">
+        <button id="btn-gps">GPS追跡を開始</button>
+    </div>
+
+    <div id="debug-tools">
+        <div style="color:#ff00ff; font-size:10px; text-align:center;">DEBUG MOVE</div>
+        <button class="debug-btn" onclick="debugMove(0, -0.0001)">NORTH (↑)</button>
+        <button class="debug-btn" onclick="debugMove(0, 0.0001)">SOUTH (↓)</button>
+        <button class="debug-btn" onclick="debugMove(-0.0001, 0)">WEST (←)</button>
+        <button class="debug-btn" onclick="debugMove(0.0001, 0)">EAST (→)</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        let scene, camera, renderer, player, grid;
+        let startCoords = null;
+        let currentCoords = { lat: 0, lon: 0 };
+        const items = [];
+
+        // 1. 3Dシーンのセットアップ
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020205);
+            scene.fog = new THREE.Fog(0x020205, 20, 150);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // プレイヤーアバター
+            const playerGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+            const playerMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true });
+            player = new THREE.Mesh(playerGeo, playerMat);
+            player.position.y = 1;
+            scene.add(player);
+
+            // カメラをプレイヤーに追従させる設定
+            player.add(camera);
+            camera.position.set(0, 10, 15);
+            camera.lookAt(0, 0, 0);
+
+            // 地面のグリッド（擬似地図）
+            grid = new THREE.GridHelper(2000, 100, 0x003333, 0x001111);
+            scene.add(grid);
+
+            // ランドマーク（宝箱やタワー）をランダム配置
+            createLandmarks();
+
+            animate();
+        }
+
+        function createLandmarks() {
+            for (let i = 0; i < 50; i++) {
+                const isTower = Math.random() > 0.8;
+                const geo = isTower ? new THREE.BoxGeometry(2, 20, 2) : new THREE.OctahedronGeometry(1);
+                const mat = new THREE.MeshBasicMaterial({ color: isTower ? 0xff00ff : 0xffff00, wireframe: true });
+                const mesh = new THREE.Mesh(geo, mat);
+                
+                mesh.position.set(Math.random() * 400 - 200, isTower ? 10 : 1, Math.random() * 400 - 200);
+                scene.add(mesh);
+                items.push(mesh);
+            }
+        }
+
+        // 2. 位置情報の計算
+        function updateLocation(lat, lon) {
+            if (!startCoords) {
+                startCoords = { lat, lon };
+                document.getElementById('status').innerText = "Fixed (Active)";
+            }
+            currentCoords = { lat, lon };
+
+            // 緯度経度をメートルに近似変換 (1度 ≒ 111,000m)
+            const x = (lon - startCoords.lon) * 91000;  // 経度方向
+            const z = -(lat - startCoords.lat) * 111000; // 緯度方向
+
+            player.position.x = x;
+            player.position.z = z;
+
+            document.getElementById('lat').innerText = lat.toFixed(6);
+            document.getElementById('lon').innerText = lon.toFixed(6);
+            document.getElementById('posx').innerText = x.toFixed(1);
+            document.getElementById('posz').innerText = z.toFixed(1);
+
+            // 接近判定
+            items.forEach(item => {
+                const dist = player.position.distanceTo(item.position);
+                if(dist < 5) item.material.color.set(0xff0000); // 近くにあると赤くなる
+            });
+        }
+
+        // 3. GPS制御
+        document.getElementById('btn-gps').addEventListener('click', () => {
+            init3D();
+            document.getElementById('btn-gps').disabled = true;
+            document.getElementById('status').innerText = "Requesting GPS...";
+
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(
+                    (pos) => {
+                        updateLocation(pos.coords.latitude, pos.coords.longitude);
+                    },
+                    (err) => {
+                        let msg = "GPS Error: ";
+                        if(err.code == 1) msg += "許可が拒否されました (HTTPSが必要です)";
+                        else if(err.code == 2) msg += "位置が特定できません";
+                        else msg += "タイムアウト";
+                        alert(msg);
+                        document.getElementById('status').innerText = "Manual Mode";
+                        // 失敗しても遊べるようにデフォルト座標をセット
+                        if(!startCoords) updateLocation(35.6895, 139.6917); 
+                    },
+                    { enableHighAccuracy: true, maximumAge: 0 }
+                );
+            } else {
+                alert("Geolocation非対応ブラウザです");
+            }
+        });
+
+        // デバッグ用移動関数（GPSが動かない時用）
+        function debugMove(dLon, dLat) {
+            if(!startCoords) {
+                init3D();
+                updateLocation(35.6895, 139.6917);
+                document.getElementById('btn-gps').disabled = true;
+            }
+            updateLocation(currentCoords.lat + dLat, currentCoords.lon + dLon);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // プレイヤーを少し回転させて生存確認
+            player.rotation.y += 0.01;
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            if(camera) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+    </script>
+</body>
+</html>
