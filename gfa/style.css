@@ -172,16 +172,4 @@ canvas {
     animation: blink 1s linear infinite;
 }
 
-/* PCの場合（768px以上）はモバイル用のボタンを非表示にする */
-@media (min-width: 768px) {
-    #fire-button, 
-    #preview-fire-button,
-    #joystick-move,
-    #preview-joystick-zone,
-    #crouch-button,
-    #preview-crouch-button,
-    #follow-button,
-    #preview-follow-button {
-        display: none !important;
-    }
-}
+

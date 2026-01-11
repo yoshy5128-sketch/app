@@ -27,8 +27,7 @@ let gameSettings = {
 let originalSettings = {};
 let isPaused = false;
 
-// グローバルスコープで isMobileDevice を定義
-const isMobileDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.matchMedia('(pointer: coarse)').matches;
+
 
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
@@ -648,7 +647,7 @@ function loadMapSettings(mapName) {
 
 
                     if (fireButton) {
-                        if (isMobileDevice) {
+                        if ('ontouchstart' in window) {
                             if (gameSettings.buttonPositions.fire) {
                                 fireButton.style.right = gameSettings.buttonPositions.fire.right;
                                 fireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
@@ -663,7 +662,7 @@ function loadMapSettings(mapName) {
                         }
                     }
                     if (crouchButton) {
-                        if (isMobileDevice) {
+                        if ('ontouchstart' in window) {
                             if (gameSettings.buttonPositions.crouch) {
                                 crouchButton.style.right = gameSettings.buttonPositions.crouch.right;
                                 crouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
@@ -678,7 +677,7 @@ function loadMapSettings(mapName) {
                         }
                     }
                     if (joystickZone) {
-                        if (isMobileDevice) {
+                        if ('ontouchstart' in window) {
                             if (gameSettings.buttonPositions.joystick) {
                                 joystickZone.style.left = gameSettings.buttonPositions.joystick.left;
                                 joystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
@@ -693,7 +692,7 @@ function loadMapSettings(mapName) {
                         }
                     }
                     if (followButton) { // 追加
-                        if (isMobileDevice) {
+                        if ('ontouchstart' in window) {
                             if (gameSettings.buttonPositions.follow) {
                                 followButton.style.right = gameSettings.buttonPositions.follow.right;
                                 followButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
@@ -2351,7 +2350,7 @@ document.addEventListener('keydown', (event) => {
                 followStatusDisplay.classList.remove('blinking');
             }
         }
-        if (followButton && isMobileDevice) { // スマホ版ボタンも連動
+        if (followButton && ('ontouchstart' in window)) { // スマホ版ボタンも連動
             if (isFollowingPlayerMode) {
                 followButton.classList.add('blinking');
                 followButton.textContent = 'FOLLOWING';
@@ -2486,7 +2485,7 @@ if (followButtonElement) {
                 followStatusDisplay.classList.remove('blinking');
             }
         }
-        if (followButton && isMobileDevice) { // スマホ版ボタンも連動
+        if (followButton && ('ontouchstart' in window)) { // スマホ版ボタンも連動
             if (isFollowingPlayerMode) {
                 followButton.classList.add('blinking');
                 followButton.textContent = 'FOLLOWING';
@@ -2575,7 +2574,7 @@ function startGame() {
     }
     const element = document.documentElement;
 
-    if (isMobileDevice) {
+    if ('ontouchstart' in window) {
         console.log('startGame(): Mobile device detected. Setting UI to block/flex.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -2892,7 +2891,7 @@ function restartGame() {
         if (teamKillsContainer) teamKillsContainer.style.display = 'none';
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
-    if (isMobileDevice) {
+    if ('ontouchstart' in window) {
         console.log('restartGame(): Mobile device detected. Setting UI to block/flex.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -3097,7 +3096,7 @@ function startPlayerDeathSequence(projectile) {
         followStatusDisplay.style.display = 'none';
         followStatusDisplay.classList.remove('blinking');
     }
-    if (followButton && isMobileDevice) { // ここを isMobileDevice に変更
+    if (followButton && ('ontouchstart' in window)) { // ここを isMobileDevice に変更
         followButton.classList.remove('blinking');
         followButton.textContent = 'FOLLOW';
     }
@@ -3184,7 +3183,7 @@ function startPlayerDeathSequence(projectile) {
                 if (player) player.traverse((object) => { object.visible = true; }); // プレイヤーをシーンに再追加
                 // UIを再表示
                 const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
-                if (isMobileDevice) {
+                if ('ontouchstart' in window) {
                     uiToShow.push('joystick-move', 'fire-button', 'crouch-button');
                 } else {
                     canvas.requestPointerLock();
@@ -3596,7 +3595,7 @@ function resumeGame() {
             document.getElementById('kill-count-display').style.display = 'block';
         }
 
-        if (isMobileDevice) {
+        if ('ontouchstart' in window) {
             console.log('resumeGame(): Mobile device detected. Setting UI to block/flex.');
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
