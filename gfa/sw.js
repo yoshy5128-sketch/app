@@ -1,11 +1,11 @@
-const CACHE_NAME = 'gunfight-arena-cache-v1';
+const CACHE_NAME = 'gunfight-arena-cache-v2';
 const urlsToCache = [
   './',
   './index.html',
   './script.js',
-  // Note: Add other crucial assets like sounds or map files here if needed
-  // e.g., './gun.mp3', './map/000.json'
-  './icon.png' 
+  './icon.png',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 // Install a service worker
