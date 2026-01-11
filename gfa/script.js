@@ -13,7 +13,7 @@ let gameSettings = {
     aiCount: 2,
     autoAim: false,
     nightModeEnabled: false,
-    nightModeLightIntensity: 2.0,
+    nightModeLightIntensity: 3.0,
     customMapName: 'Default Custom Map',
     gameMode: 'battle',
     gameDuration: 180, // 3分間 (180秒)
@@ -26,6 +26,9 @@ let gameSettings = {
 };
 let originalSettings = {};
 let isPaused = false;
+
+// グローバルスコープで isMobileDevice を定義
+const isMobileDevice = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.matchMedia('(pointer: coarse)').matches;
 
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
@@ -298,12 +301,13 @@ let isPaused = false;
             <p>AICountで敵AIの数を決めよう！チームデスマッチでは、AIが1体味方になるが、その際にも必ず3AIsを選ぶようにしよう！</p>
             <p>FieldStateで、障害物が破壊された状態からのリスタートが選べるぞ！Keepの場合はどんどん隠れる場所がなくなっていくぞ！</p>
             <p>MapTypeでは、アプリ内蔵のデフォルトマップか、シンプルだが毎回障害物の配置が異なるランダムマップか、自作のカスタムマップかをそれぞれ選べるぞ！</p>
-            <p>強力なOpen Map Editerで自作のカスタムマップをゼロから作製可能！簡単にマップをカスタマイズして、より一層熱いバトルが楽しめるぞ！</p>
-            <p>LoadCustomMapで自作のマップデータを読み込もう！一度読み込んだら、次からはここからマップを呼び出せるぞ！面倒な細かい設定も各マップごとにセーブ可能！</p>
+            <p>強力なMap Editerで自作のカスタムマップをゼロから作成可能！マップを簡単にカスタマイズして、より一層熱いバトルが楽しめる！</p>
+            <p>LoadCustomMapで自作のマップデータを読み込もう！一度読み込んだら、次からはここからマップを呼び出せるぞ！スマホのボタン設定なども各マップごとにセーブ可能！</p>
             <p>GameModeで、さまざまな形式の熱いバトルを楽しもう！尚、プレイ時間はチームデスマッチのみで有効だ！さらには、Auto-aimのアシスト機能付き！</p>
             <p>NightModeとは、まさに暗闇での夜戦モード！緊張感たっぷりの熱い戦いが楽しめる。LightIntensityでアリーナの明るさを調整できるぞ！</p>
-            <p>ButtonSettingでスマートフォンのボタン位置調整が可能！ゲーム中は★マークを押してポーズかけて調整できる。自分に合ったポジションでバトルに挑もう！</p>
-            <p>チームデスマッチでは、味方AIからのFollow（フォロー）が受けられる。味方AIに近づいてFollowボタンを押すと、味方AIがプレイヤーを先導し、敵を発見した際には、攻撃もしてくれるぞ！見通しの効かないマップでは強力なアシストとなってくれるはずだ！もし敵と遭遇した際に再度ボタンを押してFollowを外せば、味方AIが縦横無尽に駆け回って大活躍してくれるぞ！さらには味方AIが攻撃している間にプレイヤーが敵の背後に回り込んで攻撃といった戦術も可能だ！但し、フレンドリーファイアにはくれぐれも注意。フォロー中に後ろから味方AIを撃ってしまわないように！</p>
+            <p>ButtonSettingでスマートフォンのボタン位置調整が可能！ゲーム中は★マークを押してポーズかけて調整できる。自分に合ったボタンポジションでバトルに挑もう！</p>
+            <p>チームデスマッチでは、味方AIからのFollow（フォロー）が受けられる。Followボタンを押すと、味方AIがプレイヤーをフォローし、敵を発見した際には、攻撃もしてくれるぞ！もし敵と遭遇した際には再度ボタンを押してFollowを外すことで、味方AIが積極的に攻撃してくれるぞ！チームワークで敵の背後に回り込み、攻撃するといった戦術も可能だ！但し、フレンドリーファイアにはくれぐれも注意！</p>
+<p>■PCでの操作：W=前進　S＝後進　A=左移動　D＝右移動　F=AIフォロー　C＝しゃがむ　マウス＝視点移動　左クリック＝武器発射　右クリック＝狙撃解除</p>
             <div style="text-align: center; margin-top: 30px;">
                 <button id="readme-back-button" style="padding: 15px 30px; font-size: 1.2em; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">戻る</button>
             </div>
@@ -444,6 +448,7 @@ function saveSettings() {
 }
 
 function loadSettings() {
+    console.log('loadSettings() called');
     const savedSettings = localStorage.getItem('gameSettings');
     if (savedSettings) {
         const parsedSavedSettings = JSON.parse(savedSettings);
@@ -640,31 +645,70 @@ function loadMapSettings(mapName) {
                     const previewJoystickZone = document.getElementById('preview-joystick-zone');
                     const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
         
-                    if (fireButton && gameSettings.buttonPositions.fire) {
-                        fireButton.style.right = gameSettings.buttonPositions.fire.right;
-                        fireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
-                        fireButton.style.left = '';
-                        fireButton.style.top = '';
+
+
+                    if (fireButton) {
+                        if (isMobileDevice) {
+                            if (gameSettings.buttonPositions.fire) {
+                                fireButton.style.right = gameSettings.buttonPositions.fire.right;
+                                fireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
+                                fireButton.style.left = '';
+                                fireButton.style.top = '';
+                                fireButton.style.display = 'flex'; // モバイルなら表示
+                                console.log('loadSettings(): fireButton display set to flex (mobile)');
+                            }
+                        } else {
+                            fireButton.style.display = 'none'; // PCなら非表示
+                            console.log('loadSettings(): fireButton display set to none (PC)');
+                        }
                     }
-                    if (crouchButton && gameSettings.buttonPositions.crouch) {
-                        crouchButton.style.right = gameSettings.buttonPositions.crouch.right;
-                        crouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
-                        crouchButton.style.left = '';
-                        crouchButton.style.top = '';
+                    if (crouchButton) {
+                        if (isMobileDevice) {
+                            if (gameSettings.buttonPositions.crouch) {
+                                crouchButton.style.right = gameSettings.buttonPositions.crouch.right;
+                                crouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
+                                crouchButton.style.left = '';
+                                crouchButton.style.top = '';
+                                crouchButton.style.display = 'flex'; // モバイルなら表示
+                                console.log('loadSettings(): crouchButton display set to flex (mobile)');
+                            }
+                        } else {
+                            crouchButton.style.display = 'none'; // PCなら非表示
+                            console.log('loadSettings(): crouchButton display set to none (PC)');
+                        }
                     }
-                    if (joystickZone && gameSettings.buttonPositions.joystick) {
-                        joystickZone.style.left = gameSettings.buttonPositions.joystick.left;
-                        joystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
-                        joystickZone.style.right = '';
-                        joystickZone.style.top = '';
+                    if (joystickZone) {
+                        if (isMobileDevice) {
+                            if (gameSettings.buttonPositions.joystick) {
+                                joystickZone.style.left = gameSettings.buttonPositions.joystick.left;
+                                joystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
+                                joystickZone.style.right = '';
+                                joystickZone.style.top = '';
+                                joystickZone.style.display = 'block'; // モバイルなら表示
+                                console.log('loadSettings(): joystickZone display set to block (mobile)');
+                            }
+                        } else {
+                            joystickZone.style.display = 'none'; // PCなら非表示
+                            console.log('loadSettings(): joystickZone display set to none (PC)');
+                        }
                     }
-                    if (followButton && gameSettings.buttonPositions.follow) { // 追加
-                        followButton.style.right = gameSettings.buttonPositions.follow.right;
-                        followButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
-                        followButton.style.left = '';
-                        followButton.style.top = '';
+                    if (followButton) { // 追加
+                        if (isMobileDevice) {
+                            if (gameSettings.buttonPositions.follow) {
+                                followButton.style.right = gameSettings.buttonPositions.follow.right;
+                                followButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
+                                followButton.style.left = '';
+                                followButton.style.top = '';
+                                console.log('loadSettings(): followButton display updated (mobile)');
+                                // followButtonの表示/非表示はstartGame()内のゲームモード判定に任せる
+                            }
+                        } else {
+                            followButton.style.display = 'none'; // PCなら非表示
+                            console.log('loadSettings(): followButton display set to none (PC)');
+                        }
                     }
         
+                    // プレビューボタンも同様に処理
                     if (previewFireButton && gameSettings.buttonPositions.fire) {
                         previewFireButton.style.right = gameSettings.buttonPositions.fire.right;
                         previewFireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
@@ -2307,7 +2351,7 @@ document.addEventListener('keydown', (event) => {
                 followStatusDisplay.classList.remove('blinking');
             }
         }
-        if (followButton && 'ontouchstart' in window) { // スマホ版ボタンも連動
+        if (followButton && isMobileDevice) { // スマホ版ボタンも連動
             if (isFollowingPlayerMode) {
                 followButton.classList.add('blinking');
                 followButton.textContent = 'FOLLOWING';
@@ -2442,7 +2486,7 @@ if (followButtonElement) {
                 followStatusDisplay.classList.remove('blinking');
             }
         }
-        if (followButton && 'ontouchstart' in window) { // スマホ版ボタンも連動
+        if (followButton && isMobileDevice) { // スマホ版ボタンも連動
             if (isFollowingPlayerMode) {
                 followButton.classList.add('blinking');
                 followButton.textContent = 'FOLLOWING';
@@ -2474,6 +2518,7 @@ function initializeAudio() {
 }
 
 function startGame() {
+    console.log('startGame() called');
     const startSc = document.getElementById('start-screen');
     if (startSc) startSc.style.display = 'none';
     if (renderer && renderer.domElement) {
@@ -2528,37 +2573,40 @@ function startGame() {
         if (teamKillsContainer) teamKillsContainer.style.display = 'none';
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
-    if ('ontouchstart' in window) {
+    const element = document.documentElement;
+
+    if (isMobileDevice) {
+        console.log('startGame(): Mobile device detected. Setting UI to block/flex.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
         const pause = document.getElementById('pause-button');
-        const followBtn = document.getElementById('follow-button'); // 追加
+        const followBtn = document.getElementById('follow-button'); 
 
-        if (joy) joy.style.display = 'block';
-        if (fire) fire.style.display = 'flex';
-        if (crouch) crouch.style.display = 'flex';
-        if (pause) pause.style.display = 'block';
+        if (joy) { joy.style.display = 'block'; console.log('startGame(): joystick-move display set to block'); }
+        if (fire) { fire.style.display = 'flex'; console.log('startGame(): fire-button display set to flex'); }
+        if (crouch) { crouch.style.display = 'flex'; console.log('startGame(): crouch-button display set to flex'); }
+        if (pause) { pause.style.display = 'block'; console.log('startGame(): pause-button display set to block'); }
 
-        if (followBtn) { // Followボタンの表示制御
+        if (followBtn) { 
             if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
-                followBtn.style.display = 'flex';
+                followBtn.style.display = 'flex'; console.log('startGame(): follow-button display set to flex (team mode)');
             } else {
-                followBtn.style.display = 'none';
+                followBtn.style.display = 'none'; console.log('startGame(): follow-button display set to none (non-team mode)');
             }
         }
     } else {
+        console.log('startGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
-        const followBtn = document.getElementById('follow-button'); // 追加
+        const followBtn = document.getElementById('follow-button'); 
 
-        if (joy) joy.style.display = 'none';
-        if (fire) fire.style.display = 'none';
-        if (crouch) crouch.style.display = 'none';
-        if (followBtn) followBtn.style.display = 'none'; // 追加
+        if (joy) { joy.style.display = 'none'; console.log('startGame(): joystick-move display set to none'); }
+        if (fire) { fire.style.display = 'none'; console.log('startGame(): fire-button display set to none'); }
+        if (crouch) { crouch.style.display = 'none'; console.log('startGame(): crouch-button display set to none'); }
+        if (followBtn) { followBtn.style.display = 'none'; console.log('startGame(): follow-button display set to none'); }
     }
-    const element = document.documentElement;
     try {
         if (element.requestFullscreen) {
             element.requestFullscreen().catch(err => console.warn('Fullscreen API error:', err));
@@ -2601,6 +2649,7 @@ function shuffle(array) {
 }
 
 function restartGame() {
+    console.log('restartGame() called');
     playerBreadcrumbs = []; // Reset the breadcrumb trail
     if (gameSettings.fieldState === 'reset') {
         resetObstacles();
@@ -2843,15 +2892,26 @@ function restartGame() {
         if (teamKillsContainer) teamKillsContainer.style.display = 'none';
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
-    if ('ontouchstart' in window) {
+    if (isMobileDevice) {
+        console.log('restartGame(): Mobile device detected. Setting UI to block/flex.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
         const pause = document.getElementById('pause-button');
-        if (joy) joy.style.display = 'block';
-        if (fire) fire.style.display = 'flex';
-        if (crouch) crouch.style.display = 'flex';
-        if (pause) pause.style.display = 'block';
+        if (joy) { joy.style.display = 'block'; console.log('restartGame(): joystick-move display set to block'); }
+        if (fire) { fire.style.display = 'flex'; console.log('restartGame(): fire-button display set to flex'); }
+        if (crouch) { crouch.style.display = 'flex'; console.log('restartGame(): crouch-button display set to flex'); }
+        if (pause) { pause.style.display = 'block'; console.log('restartGame(): pause-button display set to block'); }
+    } else {
+        console.log('restartGame(): PC device detected. Setting UI to none.');
+        const joy = document.getElementById('joystick-move');
+        const fire = document.getElementById('fire-button');
+        const crouch = document.getElementById('crouch-button');
+        const pause = document.getElementById('pause-button');
+        if (joy) { joy.style.display = 'none'; console.log('restartGame(): joystick-move display set to none'); }
+        if (fire) { fire.style.display = 'none'; console.log('restartGame(): fire-button display set to none'); }
+        if (crouch) { crouch.style.display = 'none'; console.log('restartGame(): crouch-button display set to none'); }
+        if (pause) { pause.style.display = 'none'; console.log('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
     }
     for (let i = projectiles.length - 1; i >= 0; i--) scene.remove(projectiles[i].mesh);
     projectiles.length = 0;
@@ -3025,6 +3085,7 @@ function respawnPlayer() {
     }
 }
 
+
 function startPlayerDeathSequence(projectile) {
     if (isPlayerDeathPlaying || playerHP > 0) return;
     isPlayerDeathPlaying = true;
@@ -3036,7 +3097,7 @@ function startPlayerDeathSequence(projectile) {
         followStatusDisplay.style.display = 'none';
         followStatusDisplay.classList.remove('blinking');
     }
-    if (followButton && 'ontouchstart' in window) {
+    if (followButton && isMobileDevice) { // ここを isMobileDevice に変更
         followButton.classList.remove('blinking');
         followButton.textContent = 'FOLLOW';
     }
@@ -3123,7 +3184,7 @@ function startPlayerDeathSequence(projectile) {
                 if (player) player.traverse((object) => { object.visible = true; }); // プレイヤーをシーンに再追加
                 // UIを再表示
                 const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
-                if ('ontouchstart' in window) {
+                if (isMobileDevice) {
                     uiToShow.push('joystick-move', 'fire-button', 'crouch-button');
                 } else {
                     canvas.requestPointerLock();
@@ -3500,6 +3561,7 @@ function showSettingsAndPause() {
 }
 
 function resumeGame() {
+    console.log('resumeGame() called');
     const settingsChanged = JSON.stringify(originalSettings) !== JSON.stringify(gameSettings);
 
     startScreen.style.display = 'none';
@@ -3534,12 +3596,18 @@ function resumeGame() {
             document.getElementById('kill-count-display').style.display = 'block';
         }
 
-        if ('ontouchstart' in window) {
-            document.getElementById('joystick-move').style.display = 'block';
-            document.getElementById('fire-button').style.display = 'flex';
-            document.getElementById('crouch-button').style.display = 'flex';
-            document.getElementById('pause-button').style.display = 'block';
+        if (isMobileDevice) {
+            console.log('resumeGame(): Mobile device detected. Setting UI to block/flex.');
+            const joy = document.getElementById('joystick-move');
+            const fire = document.getElementById('fire-button');
+            const crouch = document.getElementById('crouch-button');
+            const pause = document.getElementById('pause-button');
+            if (joy) { joy.style.display = 'block'; console.log('resumeGame(): joystick-move display set to block'); }
+            if (fire) { fire.style.display = 'flex'; console.log('resumeGame(): fire-button display set to flex'); }
+            if (crouch) { crouch.style.display = 'flex'; console.log('resumeGame(): crouch-button display set to flex'); }
+            if (pause) { pause.style.display = 'block'; console.log('resumeGame(): pause-button display set to block'); }
         } else {
+            console.log('resumeGame(): PC device detected.');
             canvas.requestPointerLock();
         }
 
@@ -4341,9 +4409,8 @@ function animate() {
             for (let j = ais.length - 1; j >= 0; j--) {
                 const ai = ais[j];
                 if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
-                    if (ai.hp <= 0) continue; // すでに死んでいるAIにはヒットしない
+                    if (ai.hp <= 0) continue; 
                     
-                    // チームモードまたはチームアーケードモードの場合、味方AIには当たらない
                     if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player') {
                         continue;
                     }
@@ -4354,11 +4421,18 @@ function animate() {
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
                     else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
+                    
                     if (ai.hp !== Infinity) {
                         ai.hp -= damageAmount;
                         createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
                     }
+
                     if (ai.hp <= 0) {
+                        // 【修正】チームデスマッチ時のスコア加算
+                        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                            playerTeamKills++;
+                        }
+                        // FFA/Arcade用
                         if (gameSettings.gameMode === 'ffa' || gameSettings.gameMode === 'arcade') {
                             playerKills++;
                         }
@@ -4366,9 +4440,6 @@ function animate() {
                     } else {
                         findEvasionSpot(ai);
                     }
-                    // if (ai.hp <= 0 && gameSettings.gameMode !== 'arcade') {
-                    //     ais.splice(j, 1);
-                    // }
                     if (p.weaponType === WEAPON_SG) {
                         scene.remove(p.mesh);
                         projectiles.splice(i, 1);
@@ -4381,13 +4452,11 @@ function animate() {
             const shooterAI = p.shooter;
             const shooterTeam = shooterAI ? shooterAI.team : 'enemy';
             
-            // チームモードまたはチームアーケードモードの場合、AIの弾が他のAIに当たる処理
             if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') && shooterAI) {
                 for (let j = ais.length - 1; j >= 0; j--) {
                     const ai = ais[j];
-                    if (ai === shooterAI || ai.hp <= 0) continue; // 自分自身や死んでいるAIには当たらない
+                    if (ai === shooterAI || ai.hp <= 0) continue; 
                     
-                    // 同じチームには当たらない (FFAモードではこのチェックをスキップ)
                     if (gameSettings.gameMode !== 'ffa' && ai.team === shooterTeam) continue;
                     
                     if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
@@ -4405,6 +4474,12 @@ function animate() {
                             if (p.shooter && p.shooter.kills !== undefined) {
                                 p.shooter.kills++;
                             }
+                            // 【修正】AI同士のキルによるスコア加算
+                            if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                                if (shooterTeam === 'player' && ai.team === 'enemy') playerTeamKills++;
+                                if (shooterTeam === 'enemy' && ai.team === 'player') enemyTeamKills++;
+                            }
+
                             aiFallDownCinematicSequence(p.velocity, ai);
                         } else {
                             findEvasionSpot(ai);
@@ -4419,7 +4494,6 @@ function animate() {
                 if (hitSomething) break;
             }
             
-            // プレイヤーに当たる処理（敵AIのみ、または通常モード）
             if (!hitSomething && (gameSettings.gameMode !== 'team' || shooterTeam === 'enemy')) {
                 const playerPos = player.position;
                 const playerBoundingBox = new THREE.Box3();
@@ -4462,6 +4536,13 @@ function animate() {
                         }
                     }
                     if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                        if (p.shooter && p.shooter.kills !== undefined) {
+                            p.shooter.kills++;
+                        }
+                        // 【修正】プレイヤーが倒された時の敵チームスコア加算
+                        if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && shooterTeam === 'enemy') {
+                            enemyTeamKills++;
+                        }
                         startPlayerDeathSequence(p);
                     }
                     if (p.weaponType === WEAPON_SG) {
@@ -4616,16 +4697,21 @@ function animate() {
             showWinScreen();
         }
     }
-    if (playerHPDisplay) { // nullチェックを追加
+    if (playerHPDisplay) { 
         playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
     }
-    if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'ffa') {
-        if (killCountDisplay) killCountDisplay.style.display = 'block';
-        if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
-    } else if (gameSettings.gameMode === 'teamArcade') { // teamArcadeモードの場合
-        if (killCountDisplay) killCountDisplay.style.display = 'none'; // 個人のキル数は表示しない
-    }
-    else {
+
+    // 【修正】チームデスマッチ時のスコア表示更新
+    if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        if (playerTeamKillsDisplay) playerTeamKillsDisplay.textContent = `PLAYER TEAM KILLS: ${playerTeamKills}`;
+        if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.textContent = `ENEMY TEAM KILLS: ${enemyTeamKills}`;
+        if (killCountDisplay) killCountDisplay.style.display = 'none';
+    } else if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'ffa') {
+        if (killCountDisplay) {
+            killCountDisplay.style.display = 'block';
+            killCountDisplay.textContent = `KILLS: ${playerKills}`;
+        }
+    } else {
         if (killCountDisplay) killCountDisplay.style.display = 'none';
     }
     if (screenShakeDuration > 0) {

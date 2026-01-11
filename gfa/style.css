@@ -9,7 +9,8 @@ body {
 canvas {
     display: none; 
 }
-#joystick-move, #fire-button, #crosshair, #ai-hp-display {
+/* By default, hide mobile-specific controls */
+#joystick-move, #fire-button, #crosshair, #ai-hp-display, #crouch-button, #follow-button {
     display: none; 
 }
 #start-screen {
@@ -59,8 +60,6 @@ canvas {
     color: white;
     font-size: 16px;
     font-weight: bold;
-    justify-content: center;
-    align-items: center;
     cursor: pointer;
     box-shadow: 0 0 10px rgba(255, 100, 100, 0.5);
 }
@@ -121,10 +120,10 @@ canvas {
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 255, 0, 0.2); /* åŠé€æ˜Žã®ç·‘è‰² */
-    mix-blend-mode: screen; /* ç”画é¢ã¨ã®ãƒ–ãƒ¬ãƒ³ãƒ‰ãƒ¢ãƒ¼ãƒ‰ */
-    pointer-events: none; /* ã‚¯ãƒªãƒƒã‚¯ã‚¤ãƒ™ãƒ³ãƒˆã‚’é€éŽ */
-    display: none; /* åˆæœŸçŠæ…‹ã§ã¯éžè¡¨ç¤º */
+    background-color: rgba(0, 255, 0, 0.2); /* 半透明の緑色 */
+    mix-blend-mode: screen; /* 画面とのブレンドモード */
+    pointer-events: none; /* クリックイベントを透過 */
+    display: none; /* 初期状態では非表示 */
 }
 
 .dead-ai-hp {
@@ -171,4 +170,18 @@ canvas {
 /* FOLLOW表示のスタイル */
 #follow-status-display.blinking {
     animation: blink 1s linear infinite;
+}
+
+/* PCの場合（768px以上）はモバイル用のボタンを非表示にする */
+@media (min-width: 768px) {
+    #fire-button, 
+    #preview-fire-button,
+    #joystick-move,
+    #preview-joystick-zone,
+    #crouch-button,
+    #preview-crouch-button,
+    #follow-button,
+    #preview-follow-button {
+        display: none !important;
+    }
 }
