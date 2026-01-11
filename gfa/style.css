@@ -9,11 +9,11 @@ body {
 canvas {
     display: none; 
 }
-/* By default, hide mobile-specific controls */
-#joystick-move, #fire-button, #crosshair, #ai-hp-display, #crouch-button, #follow-button {
-    display: none; 
-}
-#start-screen {
+#joystick-move { display: block; }
+#fire-button { display: flex; }
+#crouch-button { display: flex; }
+#follow-button { display: flex; }
+#crosshair, #ai-hp-display { display: none; }#start-screen {
     position: fixed;
     top: 0;
     left: 0;
