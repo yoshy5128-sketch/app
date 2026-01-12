@@ -310,17 +310,18 @@ let isPaused = false;
             <h1 style="text-align: center; color: lightgreen;">GunFightArenaへようこそ</h1>
             <p>1V3から2V2のチームデスマッチまで、存分にGunFightが楽しめるシンプルかつ超エキサイティングなFPS！それがこのGunFightArenaだ！</p>
             <p>まずはプレイヤーと敵AIのHP（体力）を決めて、ProjectileSpeed（弾の速さ）を決めよう！×2の最速が一番エキサイティングだぞ！</p>
-            <p>WeaponCountは、アリーナ内に配置できる各武器の数だ。武器は取った後も復活するぞ！<br>Medikitは、HPが1回復する。アリーナに配置する数を決めよう！但し、1V3のアーケードモードのみで配置可だ。</p>
+            <p>WeaponCountは、アリーナ内に配置できる各武器の数だ。武器は取った後も復活するぞ！但し、武器は1種類しか持つことができない。弾が尽きたら自動的にハンドガンに切り替わる。<br>Medikitは、HPが1回復する。アリーナに配置する数を決めよう！但し、1V3のアーケードモードのみで配置可だ。</p>
             <p>AICountで敵AIの数を決めよう！チームデスマッチでは、AIが1体味方になるが、その際にも必ず3AIsを選ぶようにしよう！</p>
             <p>FieldStateで、障害物が破壊された状態からのリスタートが選べるぞ！Keepの場合はどんどん隠れる場所がなくなっていくぞ！</p>
-            <p>MapTypeでは、アプリ内蔵のデフォルトマップか、シンプルだが毎回障害物の配置が異なるランダムマップか、自作のカスタムマップかをそれぞれ選べるぞ！</p>
-            <p>強力なMap Editerで自作のカスタムマップをゼロから作成可能！マップを簡単にカスタマイズして、より一層熱いバトルが楽しめる！</p>
-            <p>LoadCustomMapで自作のマップデータを読み込もう！一度読み込んだら、次からはここからマップを呼び出せるぞ！スマホのボタン設定なども各マップごとにセーブ可能！</p>
-            <p>GameModeで、さまざまな形式の熱いバトルを楽しもう！尚、プレイ時間はチームデスマッチのみで有効だ！さらには、Auto-aimのアシスト機能付き！</p>
-            <p>NightModeとは、まさに暗闇での夜戦モード！緊張感たっぷりの熱い戦いが楽しめる。LightIntensityでアリーナの明るさを調整できるぞ！</p>
-            <p>ButtonSettingでスマートフォンのボタン位置調整が可能！ゲーム中は★マークを押してポーズかけて調整できる。自分に合ったボタンポジションでバトルに挑もう！</p>
-            <p>チームデスマッチでは、味方AIからのFollow（フォロー）が受けられる。Followボタンを押すと、味方AIがプレイヤーをフォローし、敵を発見した際には、攻撃もしてくれるぞ！もし敵と遭遇した際には再度ボタンを押してFollowを外すことで、味方AIが積極的に攻撃してくれるぞ！チームワークで敵の背後に回り込み、攻撃するといった戦術も可能だ！但し、フレンドリーファイアにはくれぐれも注意！</p>
-<p>■PCでの操作：W=前進　S＝後進　A=左移動　D＝右移動　F=AIフォロー　C＝しゃがむ　マウス＝視点移動　左クリック＝武器発射　右クリック＝狙撃解除</p>
+            <p>MapTypeでは、アプリ内蔵のデフォルトマップか、シンプルだが毎回障害物の配置が異なるランダムマップか、自作のオリジナルカスタムマップかをそれぞれ選べるぞ！</p>
+            <p>強力なMap Editerで自作のオリジナルマップをゼロから作成可能！マップを簡単にカスタマイズして、より一層熱いバトルが楽しめる！</p>
+            <p>LoadCustomMapで自作のマップデータ（.json)を読み込もう！一度読み込んだら、次回からはここからマップを呼び出せるぞ！</p>
+            <p>GameModeで、さまざまなルールの熱いバトルを楽しもう！尚、プレイ時間はチームデスマッチとフリーフォーオールで有効だ！</p>
+            <p>NightModeとは、まさに暗闇での夜戦モード！緊張感たっぷりのスリリングなバトルが楽しめる。LightIntensityでアリーナの明るさを調整可能！</p>
+            <p>ButtonSettingでスマートフォンのボタン位置調整が可能！スマホでは、ゲーム中に★マークを押してポーズONで調整できる。自分に合ったボタンポジションでバトルに挑もう！</p>
+            <p>チームデスマッチでは、味方AIからのFollow（フォロー）が受けられる。Followボタンを押すと、味方AIがプレイヤーに追従し、敵を発見した際には、攻撃もしてくれるぞ！もし敵と遭遇した際には再度ボタンを押して味方AIをフリーにさせて、積極的に攻撃をさせよう！チームワークで敵の背後に回り込んで仕留めるといった戦術も可能だ！但し、フレンドリーファイアにはくれぐれも注意！</p>
+<p>■スマホでの操作：画面左半分＝前後左右移動　画面右半分＝始点移動　各種ボタン＝攻撃、しゃがみ、フォロー　★ボタン＝ポーズ&設定画面　×＝狙撃解除（スコープ画面内）</p>
+<p>■PCでの操作：W=前進　S＝後進　A=左移動　D＝右移動　P=ポーズ&設定画面　F=AIフォロー　C＝しゃがむ　マウス＝視点移動　左クリック＝武器発射　右クリック＝狙撃解除</p>
             <div style="text-align: center; margin-top: 30px;">
                 <button id="readme-back-button" style="padding: 15px 30px; font-size: 1.2em; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">戻る</button>
             </div>
@@ -1636,6 +1637,11 @@ function createAI(color) {
     aiObject.lastFlankTime = 0;
     aiObject.lastPosition = new THREE.Vector3(); // <= これを追加
 
+    // Add properties for ladder climbing
+    aiObject.isElevating = false;
+    aiObject.elevatingTargetY = 0;
+    aiObject.climbingTarget = null;
+
     return aiObject;
 }
 
@@ -1666,6 +1672,33 @@ function checkLineOfSight(startPosition, endPosition, objectsToAvoid) {
     raycaster.far = distance;
     const intersects = raycaster.intersectObjects(objectsToAvoid, true);
     return intersects.length === 0;
+}
+
+function findNearestLadder(ai, playerPosition) {
+    let nearestLadder = null;
+    let minDistance = Infinity;
+
+    const aiPos = ai.position.clone();
+
+    for (const sensorArea of ladderSwitches) {
+        // 障害物の屋上にプレイヤーがいるか確認
+        const obstacle = sensorArea.userData.obstacle;
+        if (!obstacle) continue;
+
+        const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+        const playerIsOnThisRooftop = playerPosition.y > obstacleBox.max.y - 1.0 && // プレイヤーが高い位置にいる
+                                      playerPosition.x > obstacleBox.min.x && playerPosition.x < obstacleBox.max.x &&
+                                      playerPosition.z > obstacleBox.min.z && playerPosition.z < obstacleBox.max.z;
+
+        if (playerIsOnThisRooftop) {
+             const distanceToLadder = aiPos.distanceTo(sensorArea.position);
+             if (distanceToLadder < minDistance) {
+                 minDistance = distanceToLadder;
+                 nearestLadder = sensorArea;
+             }
+        }
+    }
+    return nearestLadder;
 }
 
 function isBehindObstacle(ai) {
@@ -3646,6 +3679,18 @@ function resumeGame() {
 }
 
 function animate() {
+    // --- Force hide mobile buttons on PC ---
+    if (!('ontouchstart' in window)) {
+        const idsToHide = ['fire-button', 'crouch-button', 'joystick-move', 'follow-button'];
+        idsToHide.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn && btn.style.display !== 'none') {
+                btn.style.display = 'none';
+            }
+        });
+    }
+    // --- End force hide ---
+
     if (window.justRestarted) {
         window.justRestarted = false;
         console.log("--- ANIMATE START DEBUG ---");
@@ -4079,6 +4124,22 @@ function animate() {
         aiCheckPickup(ai);
         const isAISeen = isVisibleToPlayer(ai); // プレイヤーからAIが見えるかどうかの判定
 
+        // --- START: LADDER CLIMBING LOGIC ---
+        const playerPos = player.position.clone();
+        const aiPos = ai.position.clone();
+        const playerIsHigher = playerPos.y > aiPos.y + 3.0; // プレイヤーが3ユニット以上高い
+
+        // 視線が通らず、プレイヤーが高所にいるなら、はしごを探す
+        if (ai.state !== 'CLIMBING' && !isAISeen && playerIsHigher) {
+            const ladder = findNearestLadder(ai, playerPos);
+            if (ladder) {
+                ai.state = 'CLIMBING';
+                ai.climbingTarget = ladder; // はしごセンサーをターゲットとして保存
+                ai.targetPosition.copy(ladder.position); // まずははしごのセンサーエリアに向かう
+            }
+        }
+        // --- END: LADDER CLIMBING LOGIC ---
+
         // 新しいフラグ: AIチームメイトが敵AIを視認しているか
         let isEnemyAISeenByTeammate = false;
         if (isTeammateInTeamModeOrArcade) {
@@ -4097,15 +4158,17 @@ function animate() {
         const distanceToTarget = ai.position.distanceTo(ai.targetPosition);
         const isArrived = distanceToTarget < ARRIVAL_THRESHOLD;
         const isMoving = !isArrived;
-                if (ai.state === 'HIDING') { 
-                    ai.isCrouching = true; 
-                } else if (ai.state === 'FOLLOWING') { // FOLLOWING状態ではしゃがまない
-                    ai.isCrouching = false;
-                } else { 
-                    ai.isCrouching = false; 
-                }
-        ai.scale.y = ai.isCrouching ? 0.7 : 1.0;
-        ai.position.y = -FLOOR_HEIGHT - (ai.isCrouching ? (BODY_HEIGHT + HEAD_RADIUS * 2) * 0.15 : 0);
+        if (ai.state !== 'CLIMBING' && !ai.isElevating) {
+            if (ai.state === 'HIDING') {
+                ai.isCrouching = true;
+            } else if (ai.state === 'FOLLOWING') { // FOLLOWING状態ではしゃがまない
+                ai.isCrouching = false;
+            } else {
+                ai.isCrouching = false;
+            }
+            ai.scale.y = ai.isCrouching ? 0.7 : 1.0;
+            ai.position.y = -FLOOR_HEIGHT - (ai.isCrouching ? (BODY_HEIGHT + HEAD_RADIUS * 2) * 0.15 : 0);
+        }
         if (ai.state === 'ATTACKING' || isMoving) {
             let targetAngle;
             if (isTeamModeOrTeamArcade && ai.team === 'player') { // isTeamModeOrTeamArcadeを使用
@@ -4227,6 +4290,39 @@ function animate() {
                     }
                 }
                 break; // FOLLOWING状態の処理終了
+            case 'CLIMBING':
+                const targetLadder = ai.climbingTarget;
+                if (!targetLadder) {
+                    ai.state = 'HIDING'; // ターゲットがなければHIDINGに戻る
+                    break;
+                }
+
+                const distanceToLadderSensor = ai.position.distanceTo(targetLadder.position);
+
+                if (distanceToLadderSensor < 2.0 && !ai.isElevating) { // センサーに十分に近づいたら上昇開始
+                     ai.isElevating = true;
+                     const obs = targetLadder.userData.obstacle;
+                     ai.elevatingTargetY = (obs.position.y + obs.geometry.parameters.height / 2) + 2.0;
+                     // プレイヤーのはしご移動ロジックを参考に、AIをはしごの根本にワープさせる
+                     const ladderPos = targetLadder.userData.ladderPos;
+                     if (ladderPos) {
+                         ai.position.x = ladderPos.x;
+                         ai.position.z = ladderPos.z;
+                     }
+                }
+                
+                if (ai.isElevating) {
+                    const elevateSpeed = 5.0;
+                    ai.position.y += elevateSpeed * delta;
+                    if (ai.position.y >= ai.elevatingTargetY) {
+                        ai.position.y = ai.elevatingTargetY;
+                        ai.isElevating = false;
+                        ai.climbingTarget = null;
+                        ai.state = 'ATTACKING'; // 屋上に着いたら攻撃モードへ
+                        ai.currentAttackTime = timeElapsed;
+                    }
+                }
+                break;
             case 'MOVING':
                 ai.avoiding = false;
                 if (isTeammateInTeamModeOrArcade) {
@@ -4294,7 +4390,7 @@ function animate() {
                 }
                 break;
         }
-        if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING') {
+        if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING') {
             const oldAIPosition = ai.position.clone();
             let moveDirection = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
             const moveVectorDelta = moveDirection.clone().multiplyScalar(currentAISpeed * delta);
@@ -4836,26 +4932,36 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const joystickZone = document.getElementById('joystick-move');
     const followButton = document.getElementById('follow-button'); // 追加
 
-    fireButton.style.right = fireRight;
-    fireButton.style.bottom = fireBottom;
-    crouchButton.style.right = crouchRight;
-    crouchButton.style.bottom = crouchBottom;
-    joystickZone.style.left = joystickLeft;
-    joystickZone.style.bottom = joystickBottom;
-    if (followButton) { // 追加
-        followButton.style.right = followRight;
-        followButton.style.bottom = followBottom;
-    }
-    
-    fireButton.style.left = '';
-    fireButton.style.top = '';
-    crouchButton.style.left = '';
-    crouchButton.style.top = '';
-    joystickZone.style.right = '';
-    joystickZone.style.top = '';
-    if (followButton) { // 追加
-        followButton.style.left = '';
-        followButton.style.top = '';
+    if ('ontouchstart' in window) {
+        if(fireButton) {
+            fireButton.style.right = fireRight;
+            fireButton.style.bottom = fireBottom;
+            fireButton.style.left = '';
+            fireButton.style.top = '';
+        }
+        if(crouchButton) {
+            crouchButton.style.right = crouchRight;
+            crouchButton.style.bottom = crouchBottom;
+            crouchButton.style.left = '';
+            crouchButton.style.top = '';
+        }
+        if(joystickZone) {
+            joystickZone.style.left = joystickLeft;
+            joystickZone.style.bottom = joystickBottom;
+            joystickZone.style.right = '';
+            joystickZone.style.top = '';
+        }
+        if (followButton) {
+            followButton.style.right = followRight;
+            followButton.style.bottom = followBottom;
+            followButton.style.left = '';
+            followButton.style.top = '';
+        }
+    } else {
+        if(fireButton) fireButton.style.display = 'none';
+        if(crouchButton) crouchButton.style.display = 'none';
+        if(joystickZone) joystickZone.style.display = 'none';
+        if (followButton) followButton.style.display = 'none';
     }
 }); // 閉じ括弧を追加
 
