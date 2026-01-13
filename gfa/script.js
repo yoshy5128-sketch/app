@@ -3141,8 +3141,15 @@ function respawnPlayer() {
 }
 
 
+function forceResetTouchState() {
+    isLooking = false;
+    lookTouchId = -1;
+    isMouseButtonDown = false;
+}
+
 function startPlayerDeathSequence(projectile) {
     if (isPlayerDeathPlaying || playerHP > 0) return;
+    forceResetTouchState(); // Reset input states
     isPlayerDeathPlaying = true;
     isGameRunning = false; // 一時的にゲームを停止
     document.exitPointerLock();
@@ -3379,12 +3386,14 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
 }
 
 function showGameOver() {
+    forceResetTouchState();
     isGameRunning = false;
     gameOverScreen.style.display = 'flex';
     document.exitPointerLock();
 }
 
 function showWinScreen() {
+    forceResetTouchState();
     isGameRunning = false;
     winScreen.style.display = 'flex';
     document.exitPointerLock();
@@ -3596,6 +3605,7 @@ function resolvePlayerCollision(playerObj, obstaclesArray, pushOutDistance = 0.0
 function showSettingsAndPause() {
     if (!isGameRunning && !isPaused) return;
 
+    forceResetTouchState();
     isGameRunning = false;
     if (!isPaused) {
         originalSettings = JSON.parse(JSON.stringify(gameSettings));
