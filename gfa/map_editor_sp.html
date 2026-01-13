@@ -830,21 +830,42 @@
 
         function onMouseMove(event) {
             if (touchMode !== 'none') return;
-            getNormalizedPointer(event);
+            const mouse = getNormalizedPointer(event);
+
             if (isDragging && selectedObject) {
                 raycaster.setFromCamera(mouse, camera);
                 const intersection = new THREE.Vector3();
                 raycaster.ray.intersectPlane(plane, intersection);
+                
                 const snappedX = snapToGrid(intersection.x);
                 const snappedZ = snapToGrid(intersection.z);
-                if (Math.hypot(snappedX, snappedZ) < ARENA_RADIUS) { // Math.sqrtよりMath.hypotが適切
+
+                // アリーナの範囲内に留めるためのチェック
+                let canMove = true;
+                if (selectedObject.userData.type === 'obstacle') {
+                    const halfWidth = selectedObject.geometry.parameters.width / 2;
+                    const halfDepth = selectedObject.geometry.parameters.depth / 2;
+                    const corners = [
+                        new THREE.Vector2(snappedX - halfWidth, snappedZ - halfDepth), new THREE.Vector2(snappedX + halfWidth, snappedZ - halfDepth),
+                        new THREE.Vector2(snappedX - halfWidth, snappedZ + halfDepth), new THREE.Vector2(snappedX + halfWidth, snappedZ + halfDepth)
+                    ];
+                    if (corners.some(corner => corner.length() > ARENA_RADIUS)) {
+                        canMove = false;
+                    }
+                } else {
+                    if (Math.hypot(snappedX, snappedZ) > ARENA_RADIUS) {
+                        canMove = false;
+                    }
+                }
+
+                if (canMove) {
                     selectedObject.position.set(snappedX, selectedObject.position.y, snappedZ);
                     if (selectedObject.userData.type === 'spawn') {
                         const data = SPAWN_POINTS_DATA.find(d => d.id === selectedObject.userData.id);
                         if(data) { data.x = snappedX; data.z = snappedZ; }
                         document.getElementById('spawn-x').textContent = snappedX.toFixed(2);
                         document.getElementById('spawn-z').textContent = snappedZ.toFixed(2);
-                    } else if (selectedObject.userData.type === 'light') { // 追加: 電灯の移動
+                    } else if (selectedObject.userData.type === 'light') {
                         selectedObject.userData.light.position.copy(selectedObject.position);
                     }
                 }
@@ -852,9 +873,13 @@
                 const deltaX = event.clientX - panStart.x;
                 const deltaY = event.clientY - panStart.y;
                 panStart.set(event.clientX, event.clientY);
-                const panFactor = (camera.right - camera.left) / renderer.domElement.clientWidth;
-                cameraTarget.x -= deltaX * panFactor;
-                cameraTarget.z += deltaY * panFactor * (camera.top / camera.right); 
+
+                const panFactorX = (camera.right - camera.left) / renderer.domElement.clientWidth;
+                const panFactorY = (camera.top - camera.bottom) / renderer.domElement.clientHeight;
+
+                cameraTarget.x -= deltaX * panFactorX;
+                cameraTarget.z -= deltaY * panFactorY; // Y軸の動きをZ軸に正しく反映
+
                 const maxPanRadius = ARENA_RADIUS / 2;
                 if (cameraTarget.length() > maxPanRadius) cameraTarget.normalize().multiplyScalar(maxPanRadius);
                 updateCameraPosition();
@@ -894,11 +919,11 @@
         function onMouseDown(event) {
             if (touchMode !== 'none') return;
             
-            getNormalizedPointer(event);
+            const mouse = getNormalizedPointer(event);
+            raycaster.setFromCamera(mouse, camera);
             const allClickable = [...obstacles, ...spawnMeshes, ...lights]; // lightsを追加
 
             if (event.button === 0) { // 左クリック
-                raycaster.setFromCamera(mouse, camera);
                 const intersects = raycaster.intersectObjects(allClickable);
                 if (intersects.length > 0) {
                     isDragging = true;
@@ -911,7 +936,6 @@
                     }
                 }
             } else if (event.button === 2) { // 右クリック (削除とパン)
-                raycaster.setFromCamera(mouse, camera);
                 const intersects = raycaster.intersectObjects([...obstacles, ...lights]); // lightsを追加
                 if (intersects.length > 0) {
                     deleteObject(intersects[0].object); // ロジックを一元化
@@ -947,23 +971,23 @@
             if (touches.length === 1) {
                 touchMode = 'single-tap-drag';
                 touchStartPos.x = touches[0].clientX; touchStartPos.y = touches[0].clientY;
+                
+                const mouse = getNormalizedPointer(event);
+                raycaster.setFromCamera(mouse, camera);
+
                 touchDownTimer = setTimeout(() => {
                     touchMode = 'long-press';
-                    // 長押しで削除
-                    getNormalizedPointer(event.touches[0]);
-                    raycaster.setFromCamera(mouse, camera);
-                    const intersects = raycaster.intersectObjects([...obstacles, ...lights]); // lightsを追加
+                    const intersects = raycaster.intersectObjects([...obstacles, ...lights]);
                     if (intersects.length > 0) {
-                        deleteObject(intersects[0].object); // ロジックを一元化
+                        deleteObject(intersects[0].object);
                     }
                 }, LONG_PRESS_THRESHOLD);
 
-                getNormalizedPointer(event);
-                const allClickable = [...obstacles, ...spawnMeshes, ...lights]; // lightsを追加
+                const allClickable = [...obstacles, ...spawnMeshes, ...lights];
                 const intersects = raycaster.intersectObjects(allClickable);
 
                 if (intersects.length > 0) {
-                    isDragging = true;
+                    isDragging = true; // すぐにドラッグ開始
                     setSelected(intersects[0].object);
                 } else {
                     isDragging = false;
@@ -980,68 +1004,70 @@
         function onTouchMove(event) {
             event.preventDefault();
             const touches = event.touches;
-            const canvasBounds = renderer.domElement.getBoundingClientRect();
-
+            
             if (touchMode === 'long-press') return;
 
-            if (touches.length === 1 && touchMode === 'single-tap-drag') {
+            // ドラッグ判定の閾値を超えたら長押しタイマーをキャンセル
+            if (touchMode === 'single-tap-drag') {
                 const deltaX = touches[0].clientX - touchStartPos.x;
                 const deltaY = touches[0].clientY - touchStartPos.y;
-                if (Math.hypot(deltaX, deltaY) > 10) { // 移動量が大きい場合のみタイマーをクリア
+                if (Math.hypot(deltaX, deltaY) > 10) { 
                     clearTimeout(touchDownTimer); 
                 }
+            }
 
-                if (isDragging && selectedObject) {
-                    getNormalizedPointer(event);
-                    raycaster.setFromCamera(mouse, camera);
-                    const intersection = new THREE.Vector3();
-                    raycaster.ray.intersectPlane(plane, intersection);
-                    
-                    const snappedX = snapToGrid(intersection.x);
-                    const snappedZ = snapToGrid(intersection.z);
+            if (isDragging && selectedObject && touches.length === 1) {
+                const mouse = getNormalizedPointer(event);
+                raycaster.setFromCamera(mouse, camera);
+                const intersection = new THREE.Vector3();
+                raycaster.ray.intersectPlane(plane, intersection);
+                
+                const snappedX = snapToGrid(intersection.x);
+                const snappedZ = snapToGrid(intersection.z);
 
-                    if (Math.hypot(snappedX, snappedZ) < ARENA_RADIUS) { 
-                        selectedObject.position.set(snappedX, selectedObject.position.y, snappedZ);
-                        if (selectedObject.userData.type === 'spawn') {
-                            const data = SPAWN_POINTS_DATA.find(d => d.id === selectedObject.userData.id);
-                            if (data) {
-                                data.x = snappedX;
-                                data.z = snappedZ;
-                                document.getElementById('spawn-x').textContent = snappedX.toFixed(2);
-                                document.getElementById('spawn-z').textContent = snappedZ.toFixed(2);
-                            }
-                        } else if (selectedObject.userData.type === 'light') { // 追加: 電灯の移動
-                            selectedObject.userData.light.position.copy(selectedObject.position);
+                if (Math.hypot(snappedX, snappedZ) < ARENA_RADIUS) { 
+                    selectedObject.position.set(snappedX, selectedObject.position.y, snappedZ);
+                    if (selectedObject.userData.type === 'spawn') {
+                        const data = SPAWN_POINTS_DATA.find(d => d.id === selectedObject.userData.id);
+                        if (data) {
+                            data.x = snappedX;
+                            data.z = snappedZ;
+                            document.getElementById('spawn-x').textContent = snappedX.toFixed(2);
+                            document.getElementById('spawn-z').textContent = snappedZ.toFixed(2);
                         }
+                    } else if (selectedObject.userData.type === 'light') {
+                        selectedObject.userData.light.position.copy(selectedObject.position);
                     }
                 }
-            } else if (touches.length === 2) {
+            } else if (isPanning && touches.length === 2) {
                 clearTimeout(touchDownTimer);
                 touchMode = 'two-finger-pan'; 
+                const canvasBounds = renderer.domElement.getBoundingClientRect();
 
+                // Pinch-to-Zoom
                 const currentDistance = getPinchDistance(touches);
                 const deltaDistance = initialPinchDistance - currentDistance;
-                
-                if (Math.abs(deltaDistance) > 3) { // わずかな距離変化でズーム
-                    const zoomFactor = 1.0 + (deltaDistance / 200); // ズーム感度調整
-                    initialFrustumSize = Math.max(50, Math.min(400, initialFrustumSize * zoomFactor)); // ズーム範囲を制限
+                if (Math.abs(deltaDistance) > 3) {
+                    const zoomFactor = 1.0 + (deltaDistance / 200);
+                    initialFrustumSize = Math.max(50, Math.min(400, initialFrustumSize * zoomFactor));
                     initialPinchDistance = currentDistance; 
                     onWindowResize();
                 } 
                 
+                // Pan
                 const newCenterX = (touches[0].clientX + touches[1].clientX) / 2;
                 const newCenterY = (touches[0].clientY + touches[1].clientY) / 2;
-                
                 const deltaX = newCenterX - panStart.x;
                 const deltaY = newCenterY - panStart.y;
-                
                 panStart.set(newCenterX, newCenterY);
                 
-                const panFactor = (camera.right - camera.left) / canvasBounds.width; // カメラの表示範囲でパン量を計算
-                cameraTarget.x -= deltaX * panFactor;
-                cameraTarget.z += deltaY * panFactor * (camera.top / camera.right); // カメラの向きに合わせてY軸方向のパンをZ軸に変換
+                const panFactorX = (camera.right - camera.left) / canvasBounds.width;
+                const panFactorY = (camera.top - camera.bottom) / canvasBounds.height;
                 
-                const maxPanRadius = ARENA_RADIUS / 2; // パンの最大範囲を制限
+                cameraTarget.x -= deltaX * panFactorX;
+                cameraTarget.z -= deltaY * panFactorY; // Y軸の動きをZ軸に正しく反映
+                
+                const maxPanRadius = ARENA_RADIUS / 2;
                 if (cameraTarget.length() > maxPanRadius) {
                     cameraTarget.normalize().multiplyScalar(maxPanRadius);
                 }
@@ -1050,22 +1076,31 @@
         }
 
         function onTouchEnd(event) {
-            // 短いタップの場合はオブジェクト追加/選択
-            if (touchMode === 'single-tap-drag' && Math.hypot(event.changedTouches[0].clientX - touchStartPos.x, event.changedTouches[0].clientY - touchStartPos.y) < 10) { 
-                getNormalizedPointer(event.changedTouches[0]);
-                const allClickable = [...obstacles, ...spawnMeshes, ...lights]; // lightsを追加
+            clearTimeout(touchDownTimer);
+
+            // 短いタップ(ドラッグなし)の場合はオブジェクト追加/選択
+            if (touchMode === 'single-tap-drag' && Math.hypot(event.changedTouches[0].clientX - touchStartPos.x, event.changedTouches[0].clientY - touchStartPos.y) < 15) { 
+                const mouse = getNormalizedPointer(event.changedTouches[0]);
                 raycaster.setFromCamera(mouse, camera);
+                const allClickable = [...obstacles, ...spawnMeshes, ...lights];
+                
                 const intersects = raycaster.intersectObjects(allClickable);
                 if (intersects.length > 0) {
-                    setSelected(intersects[0].object);
+                    // isDraggingがtrueの場合、これはドラッグ終了なので選択状態は維持
+                    // isDraggingがfalseの場合、これは純粋なタップなので選択
+                    if (!isDragging) {
+                        setSelected(intersects[0].object);
+                    }
                 } else {
                     setSelected(null);
                     const floorIntersects = raycaster.intersectObject(floor);
-                    if (floorIntersects.length > 0) handleObjectAddition(floorIntersects[0].point); // ロジックを一元化
+                    if (floorIntersects.length > 0) handleObjectAddition(floorIntersects[0].point);
                 }
             }
-            clearTimeout(touchDownTimer);
-            isDragging = false; isPanning = false; touchMode = 'none';
+            
+            isDragging = false; 
+            isPanning = false; 
+            touchMode = 'none';
         }
 
         function getPinchDistance(touches) {
