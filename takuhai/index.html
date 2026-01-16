@@ -5,12 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>宅配DEATH - ムサシ運輸物語</title>
     <style>
-        /* 100dvh を使用してツールバーを除いた高さを基準にする */
         body { 
             background: #1a1a1a; color: #fff; font-family: sans-serif; text-align: center; 
             margin: 0; padding: 0; overflow: hidden; 
             height: 100vh; height: 100dvh; width: 100vw;
             display: flex; flex-direction: column; touch-action: manipulation; 
+            /* 全体を上に寄せる */
+            justify-content: flex-start;
         }
 
         .flash-red { background-color: #ff0000 !important; }
@@ -27,41 +28,42 @@
             display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; 
         }
         .main-visual { width: 50%; max-width: 200px; margin-bottom: 10px; border: 2px solid #ff4444; border-radius: 10px; }
-        .menu-btn { width: 220px; padding: 10px; margin: 5px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 14px; font-weight: bold; }
-        .menu-btn:disabled { border-color: #444; color: #444; }
+        .menu-btn { width: 220px; padding: 12px; margin: 6px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 14px; font-weight: bold; }
 
         #game-view { 
-            display: none; flex-direction: column; width: 100%; height: 100%; overflow: hidden; 
+            display: none; flex-direction: column; width: 100%; height: 100%; 
         }
 
-        /* UIパネル（高さ固定：45px） */
+        /* UIパネル（上部固定） */
         #ui-panel { 
-            height: 45px; background: #222; border-bottom: 2px solid #00fbff; 
+            height: 50px; background: #222; border-bottom: 2px solid #00fbff; 
             display: flex; flex-direction: column; justify-content: center; flex-shrink: 0;
         }
         .info-row { display: flex; justify-content: center; gap: 10px; font-size: 11px; }
         .gas-bar-bg { width: 50px; height: 8px; background: #000; border: 1px solid #555; display: inline-block; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; }
 
-        /* キャンバスエリア（可変） */
+        /* ゲーム画面エリア（上に詰める） */
         #game-container { 
-            flex-grow: 1; display: flex; justify-content: center; align-items: center; 
-            background: #111; overflow: hidden; position: relative; padding: 5px;
+            flex-grow: 1; display: flex; justify-content: center; align-items: flex-start; /* 上寄せ */
+            background: #111; overflow: hidden; position: relative; padding-top: 10px;
         }
-        canvas { background: #fff; border: 1px solid #444; display: block; }
+        canvas { background: #fff; border: 1px solid #444; }
 
-        /* コントローラー（高さ固定：140pxに短縮） */
+        /* 操作ボタンエリア（下に余白を作る） */
         .controls { 
-            height: 140px; background: #1a1a1a; flex-shrink: 0;
+            height: 150px; background: #1a1a1a; flex-shrink: 0;
             display: grid; grid-template-areas: ". up ." "left . right" ". down ."; 
-            gap: 2px; justify-content: center; align-content: center; padding-bottom: 10px;
+            gap: 2px; justify-content: center; align-content: center;
+            /* Androidのナビゲーションバーを避けるためのセーフエリア */
+            margin-bottom: 40px; 
+            padding-top: 5px;
         }
         .btn { 
-            width: 58px; height: 58px; background: #333; border: 2px solid #666; border-radius: 12px; 
-            color: white; font-size: 22px; display: flex; align-items: center; justify-content: center; 
+            width: 62px; height: 62px; background: #333; border: 2px solid #666; border-radius: 12px; 
+            color: white; font-size: 24px; display: flex; align-items: center; justify-content: center; 
             user-select: none; -webkit-tap-highlight-color: transparent;
         }
-        /* ボタン同士を少し重ねて高さを稼ぐ */
         .btn-up { grid-area: up; }
         .btn-left { grid-area: left; margin-top: -15px; } 
         .btn-right { grid-area: right; margin-top: -15px; }
@@ -69,8 +71,8 @@
         .btn:active { background: #00fbff; color: #000; }
 
         #next-btn { 
-            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            padding: 12px 24px; background: #ff4444; color: #fff; border-radius: 10px; font-size: 18px; z-index: 10; 
+            display: none; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); 
+            padding: 15px 30px; background: #ff4444; color: #fff; border-radius: 10px; font-size: 20px; z-index: 10; 
         }
     </style>
 </head>
@@ -88,25 +90,26 @@
     </div>
 
     <div id="guide-screen" class="screen" style="display:none;">
-        <div style="background:#222; padding:15px; border-radius:15px; width:80%;">
+        <div style="background:#222; padding:20px; border-radius:15px; width:85%; max-width:300px;">
             <h4 style="margin:0 0 10px 0; color:#ff4444;">遊びかた</h4>
-            <p style="font-size:12px; text-align:left; color:#ccc;">🚚で🏠に届けるゲーム。<br>通常モード：保存あり/最短歩数。<br>じっくり：保存なし/設定可能。</p>
+            <p style="font-size:12px; text-align:left; color:#ccc; line-height:1.6;">🚚で🏠に荷物を届けるゲーム。<br><b>通常</b>：保存あり/最短ガソリン。<br><b>じっくり</b>：保存なし/サイズ・難易度変更可能。</p>
             <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
 
     <div id="config-screen" class="screen" style="display:none;">
-        <div style="background:#222; padding:15px; border-radius:15px; width:80%;">
-            <div style="margin-bottom:10px;"><input type="checkbox" id="severe-check"> シビア(工事あり)</div>
-            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(11, 11)">11x11</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(15, 15)">15x15</button>
+        <div style="background:#222; padding:20px; border-radius:15px; width:85%; max-width:300px;">
+            <h4 style="margin:0 0 15px 0;">じっくり設定</h4>
+            <div style="margin-bottom:15px;"><input type="checkbox" id="severe-check"> シビア(工事あり/余裕5)</div>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(11, 11)">11 x 11</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(15, 15)">15 x 15</button>
             <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
 
     <div id="game-view">
         <div id="ui-panel">
-            <button style="position:absolute; right:5px; top:8px; font-size:10px;" onclick="location.reload()">EXIT</button>
+            <button style="position:absolute; right:5px; top:10px; font-size:10px; padding:3px 8px;" onclick="location.reload()">EXIT</button>
             <div class="info-row">
                 <div id="mode-label">--</div>
                 <div>GAS <div class="gas-bar-bg"><div id="gas-bar-fill"></div></div> <span id="gas-val">--</span></div>
@@ -137,7 +140,7 @@
         const savedData = localStorage.getItem('delivery_death_save');
         if (savedData) {
             const data = JSON.parse(savedData);
-            document.getElementById('stg-info').innerText = `STAGE ${data.stg} 中断中`;
+            document.getElementById('stg-info').innerText = `STAGE ${data.stg} 中断データあり`;
             document.getElementById('continue-btn').disabled = false;
         } else {
             document.getElementById('continue-btn').disabled = true;
@@ -151,9 +154,8 @@
 
     function startCustomMode(w, h) {
         isCustomMode = true; isSevereMode = document.getElementById('severe-check').checked;
-        document.getElementById('mode-label').innerText = isSevereMode ? "STRICT" : "JUST";
-        showScreen('game-view');
-        generateStage(1, w, h);
+        document.getElementById('mode-label').innerText = isSevereMode ? "STRICT" : "FREE";
+        showScreen('game-view'); generateStage(1, w, h);
     }
 
     function startGame(reset) {
@@ -229,10 +231,10 @@
         gameOver = false;
         document.getElementById('next-btn').style.display = 'none';
         
-        // 厳密な高さ計算
         const containerW = document.getElementById('game-container').clientWidth;
         const containerH = document.getElementById('game-container').clientHeight;
-        tileSize = Math.min(Math.floor(containerW * 0.95 / cols), Math.floor(containerH * 0.95 / rows), 40);
+        // マップを少し小さめに表示して、より「上に詰める」ように調整
+        tileSize = Math.min(Math.floor(containerW * 0.9 / cols), Math.floor(containerH * 0.9 / rows), 38);
 
         const dpr = window.devicePixelRatio || 1;
         canvas.style.width = (cols * tileSize) + 'px';
