@@ -51,8 +51,7 @@
             height: 150px; background: #1a1a1a; flex-shrink: 0;
             display: grid; grid-template-areas: ". up ." "left . right" ". down ."; 
             gap: 2px; justify-content: center; align-content: center;
-            margin-bottom: 40px; 
-            padding-top: 5px;
+            margin-bottom: 40px; padding-top: 5px;
         }
         .btn { 
             width: 62px; height: 62px; background: #333; border: 2px solid #666; border-radius: 12px; 
@@ -85,19 +84,33 @@
     </div>
 
     <div id="guide-screen" class="screen" style="display:none;">
-        <div style="background:#222; padding:20px; border-radius:15px; width:85%; max-width:300px;">
-            <h4 style="margin:0 0 10px 0; color:#ff4444;">遊びかた</h4>
-            <p style="font-size:12px; text-align:left; color:#ccc; line-height:1.6;">🚚で🏠に荷物を届けるゲーム。<br><b>PCなら矢印キーでも操作可能！</b><br><b>通常</b>：保存あり/最短ガソリン。<br><b>じっくり</b>：保存なし/設定可能。</p>
-            <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
+        <div style="background:#222; padding:20px; border-radius:15px; width:85%; max-width:320px; max-height: 80vh; overflow-y: auto;">
+            <h3 style="margin:0 0 10px 0; color:#ff4444; border-bottom:1px solid #444; padding-bottom:5px;">配達ルール</h3>
+            <div style="font-size:12px; text-align:left; color:#ccc; line-height:1.5;">
+                <p>🚚を操作して、制限内に全ての🏠へ荷物を届けるパズルアクションです。</p>
+                <b style="color:#00fbff;">■ ガソリン（GAS）</b><br>
+                1歩ごとに1減ります。0になると強制リトライ。通常モードは「最短ルート」の歩数しかないので、道迷いは厳禁です。
+                <p><b style="color:#00fbff;">■ モード解説</b><br>
+                <b>・通常</b>：全50ステージ。進捗は保存されます。<br>
+                <b>・じっくり</b>：保存なし。自由にマップサイズを変更して練習できます。</p>
+                <p><b style="color:#ff4444;">■ 🚧工事現場（シビア設定）</b><br>
+                じっくりモード専用。5歩ごとに道が1箇所封鎖されます。退路を断たれないよう注意！</p>
+                <p><b style="color:#00fbff;">■ 操作</b>：画面の矢印 or キーボード矢印キー</p>
+            </div>
+            <button class="menu-btn" style="width:100%; border-color:#55ff55; color:#55ff55; margin-top:10px;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
 
     <div id="config-screen" class="screen" style="display:none;">
         <div style="background:#222; padding:20px; border-radius:15px; width:85%; max-width:300px;">
-            <h4 style="margin:0 0 15px 0;">じっくり設定</h4>
-            <div style="margin-bottom:15px;"><input type="checkbox" id="severe-check"> シビア(工事あり/余裕5)</div>
-            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(11, 11)">11 x 11</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(15, 15)">15 x 15</button>
+            <h3 style="margin:0 0 15px 0; color:#00fbff;">じっくり設定</h3>
+            <div style="margin-bottom:15px; font-size:14px;">
+                <label style="display:flex; align-items:center; justify-content:center; gap:10px;">
+                    <input type="checkbox" id="severe-check" style="width:20px; height:20px;"> 🚧シビア(工事あり)
+                </label>
+            </div>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(11, 11)">11 x 11 (狭い)</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(15, 15)">15 x 15 (広い)</button>
             <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
@@ -110,7 +123,7 @@
                 <div>GAS <div class="gas-bar-bg"><div id="gas-bar-fill"></div></div> <span id="gas-val">--</span></div>
                 <div>📦:<span id="cargo-count">--</span></div>
             </div>
-            <div id="msg" style="color:#00fbff; font-size:10px; margin-top:2px;">READY...</div>
+            <div id="msg" style="color:#00fbff; font-size:10px; margin-top:2px;"></div>
         </div>
         <div id="game-container">
             <canvas id="gameCanvas"></canvas>
@@ -125,13 +138,14 @@
     </div>
 
 <script>
+    // ... [以下、前回のスクリプト部分と同じ。initLevel内のREADY表示やhandleMove内のREADY消去ロジックは維持] ...
+    // スクリプトの主要な変更点のみ抜粋して記載（全コードとして機能します）
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const chime = document.getElementById('chimeSound');
     let currentSTG = 1, player = {x:1, y:1, facingRight: true}, gas, maxGas, map, rows, cols, tileSize, gameOver, currentStageData = null;
     let isSevereMode = false, isCustomMode = false, moveCount = 0, constructionSites = []; 
 
-    // キーボード操作のリスナー
     window.addEventListener('keydown', (e) => {
         if (document.getElementById('game-view').style.display !== 'flex') return;
         if (gameOver) {
@@ -240,6 +254,8 @@
         player = {x:1, y:1, facingRight: true}; moveCount = 0; constructionSites = [];
         gameOver = false;
         document.getElementById('next-btn').style.display = 'none';
+        document.getElementById('msg').innerText = "READY...";
+        document.getElementById('msg').style.color = "#00fbff";
         
         const containerW = document.getElementById('game-container').clientWidth;
         const containerH = document.getElementById('game-container').clientHeight;
@@ -260,6 +276,9 @@
         let nx = player.x + dx, ny = player.y + dy;
         if(map[ny] && map[ny][nx] !== 1 && map[ny][nx] !== 4) {
             player.x = nx; player.y = ny; gas--; moveCount++;
+            if(moveCount === 1 && document.getElementById('msg').innerText === "READY...") {
+                document.getElementById('msg').innerText = "";
+            }
             if(map[ny][nx] === 3) {
                 map[ny][nx] = 0; chime.pause(); chime.currentTime = 0; chime.play().catch(()=>{});
             }
@@ -373,4 +392,3 @@
 </script>
 </body>
 </html>
-
