@@ -10,7 +10,6 @@
             margin: 0; padding: 0; overflow: hidden; 
             height: 100vh; height: 100dvh; width: 100vw;
             display: flex; flex-direction: column; touch-action: manipulation; 
-            /* 全体を上に寄せる */
             justify-content: flex-start;
         }
 
@@ -28,13 +27,12 @@
             display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; 
         }
         .main-visual { width: 50%; max-width: 200px; margin-bottom: 10px; border: 2px solid #ff4444; border-radius: 10px; }
-        .menu-btn { width: 220px; padding: 12px; margin: 6px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 14px; font-weight: bold; }
+        .menu-btn { width: 220px; padding: 12px; margin: 6px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 14px; font-weight: bold; cursor: pointer; }
 
         #game-view { 
             display: none; flex-direction: column; width: 100%; height: 100%; 
         }
 
-        /* UIパネル（上部固定） */
         #ui-panel { 
             height: 50px; background: #222; border-bottom: 2px solid #00fbff; 
             display: flex; flex-direction: column; justify-content: center; flex-shrink: 0;
@@ -43,19 +41,16 @@
         .gas-bar-bg { width: 50px; height: 8px; background: #000; border: 1px solid #555; display: inline-block; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; }
 
-        /* ゲーム画面エリア（上に詰める） */
         #game-container { 
-            flex-grow: 1; display: flex; justify-content: center; align-items: flex-start; /* 上寄せ */
+            flex-grow: 1; display: flex; justify-content: center; align-items: flex-start; 
             background: #111; overflow: hidden; position: relative; padding-top: 10px;
         }
         canvas { background: #fff; border: 1px solid #444; }
 
-        /* 操作ボタンエリア（下に余白を作る） */
         .controls { 
             height: 150px; background: #1a1a1a; flex-shrink: 0;
             display: grid; grid-template-areas: ". up ." "left . right" ". down ."; 
             gap: 2px; justify-content: center; align-content: center;
-            /* Androidのナビゲーションバーを避けるためのセーフエリア */
             margin-bottom: 40px; 
             padding-top: 5px;
         }
@@ -92,7 +87,7 @@
     <div id="guide-screen" class="screen" style="display:none;">
         <div style="background:#222; padding:20px; border-radius:15px; width:85%; max-width:300px;">
             <h4 style="margin:0 0 10px 0; color:#ff4444;">遊びかた</h4>
-            <p style="font-size:12px; text-align:left; color:#ccc; line-height:1.6;">🚚で🏠に荷物を届けるゲーム。<br><b>通常</b>：保存あり/最短ガソリン。<br><b>じっくり</b>：保存なし/サイズ・難易度変更可能。</p>
+            <p style="font-size:12px; text-align:left; color:#ccc; line-height:1.6;">🚚で🏠に荷物を届けるゲーム。<br><b>PCなら矢印キーでも操作可能！</b><br><b>通常</b>：保存あり/最短ガソリン。<br><b>じっくり</b>：保存なし/設定可能。</p>
             <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
@@ -135,6 +130,21 @@
     const chime = document.getElementById('chimeSound');
     let currentSTG = 1, player = {x:1, y:1, facingRight: true}, gas, maxGas, map, rows, cols, tileSize, gameOver, currentStageData = null;
     let isSevereMode = false, isCustomMode = false, moveCount = 0, constructionSites = []; 
+
+    // キーボード操作のリスナー
+    window.addEventListener('keydown', (e) => {
+        if (document.getElementById('game-view').style.display !== 'flex') return;
+        if (gameOver) {
+            if (e.key === 'Enter' && document.getElementById('next-btn').style.display === 'block') nextStage();
+            return;
+        }
+        switch(e.key) {
+            case 'ArrowUp': handleMove(0, -1); e.preventDefault(); break;
+            case 'ArrowDown': handleMove(0, 1); e.preventDefault(); break;
+            case 'ArrowLeft': handleMove(-1, 0); e.preventDefault(); break;
+            case 'ArrowRight': handleMove(1, 0); e.preventDefault(); break;
+        }
+    });
 
     window.onload = () => {
         const savedData = localStorage.getItem('delivery_death_save');
@@ -233,7 +243,6 @@
         
         const containerW = document.getElementById('game-container').clientWidth;
         const containerH = document.getElementById('game-container').clientHeight;
-        // マップを少し小さめに表示して、より「上に詰める」ように調整
         tileSize = Math.min(Math.floor(containerW * 0.9 / cols), Math.floor(containerH * 0.9 / rows), 38);
 
         const dpr = window.devicePixelRatio || 1;
