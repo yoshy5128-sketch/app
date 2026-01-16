@@ -5,47 +5,78 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>宅配DEATH - ムサシ運輸物語</title>
     <style>
-        body { background: #1a1a1a; color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; touch-action: manipulation; }
+        /* 全体レイアウトの固定 */
+        body { 
+            background: #1a1a1a; color: #fff; font-family: sans-serif; text-align: center; 
+            margin: 0; padding: 0; overflow: hidden; height: 100vh; width: 100vw;
+            display: flex; flex-direction: column; touch-action: manipulation; 
+        }
+
         .flash-red { background-color: #ff0000 !important; }
         @keyframes shake {
             0% { transform: translate(0, 0); }
-            10% { transform: translate(-8px, -8px); }
-            20% { transform: translate(8px, 4px); }
+            10% { transform: translate(-4px, -4px); }
+            20% { transform: translate(4px, 2px); }
             100% { transform: translate(0, 0); }
         }
         .shake-screen { animation: shake 0.1s infinite; }
 
-        .screen { position: absolute; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
-        .main-visual { width: 60%; max-width: 250px; margin-bottom: 10px; border: 2px solid #ff4444; border-radius: 10px; }
-        .menu-btn { width: 240px; padding: 12px; margin: 6px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 15px; font-weight: bold; cursor: pointer; }
-        .menu-btn:disabled { border-color: #444; color: #444; cursor: default; }
+        /* 各種画面 */
+        .screen { 
+            position: absolute; width: 100%; height: 100%; background: #000; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; 
+        }
+        .main-visual { width: 50%; max-width: 200px; margin-bottom: 10px; border: 2px solid #ff4444; border-radius: 10px; }
+        .menu-btn { width: 220px; padding: 10px; margin: 5px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .menu-btn:disabled { border-color: #444; color: #444; }
 
-        .config-box { background: #222; padding: 20px; border-radius: 15px; border: 1px solid #444; width: 85%; max-width: 320px; }
-        .check-row { margin-bottom: 10px; font-size: 18px; color: #00fbff; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        input[type="checkbox"] { transform: scale(1.5); cursor: pointer; }
+        /* 設定・遊びかたパネル */
+        .config-box { background: #222; padding: 15px; border-radius: 15px; border: 1px solid #444; width: 85%; max-width: 320px; }
+        .guide-content { text-align: left; font-size: 12px; line-height: 1.5; color: #ccc; margin-bottom: 10px; }
+        .guide-item { margin-bottom: 5px; border-bottom: 1px solid #333; }
 
-        .guide-content { text-align: left; font-size: 13px; line-height: 1.6; color: #ccc; margin-bottom: 15px; }
-        .guide-item { margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px; }
-        .guide-item b { color: #ff4444; }
+        /* ゲーム表示メイン */
+        #game-view { 
+            display: none; flex-direction: column; width: 100%; height: 100vh; overflow: hidden; 
+        }
 
-        #game-view { display: none; position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
-        #ui-panel { background: #222; padding: 5px; border-bottom: 2px solid #00fbff; flex-shrink: 0; }
-        .info-row { display: flex; justify-content: center; gap: 15px; font-size: 13px; margin-bottom: 2px; }
-        .gas-bar-bg { width: 50px; height: 8px; background: #000; border: 1px solid #555; overflow: hidden; }
+        /* UIパネル（上部） */
+        #ui-panel { 
+            height: 50px; background: #222; border-bottom: 2px solid #00fbff; 
+            display: flex; flex-direction: column; justify-content: center; flex-shrink: 0;
+        }
+        .info-row { display: flex; justify-content: center; gap: 15px; font-size: 12px; }
+        .gas-bar-bg { width: 60px; height: 10px; background: #000; border: 1px solid #555; display: inline-block; vertical-align: middle; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; }
-        
-        #game-container { flex-grow: 1; display: flex; justify-content: center; align-items: center; background: #1a1a1a; overflow: hidden; padding: 5px; }
-        canvas { background: #fff; border: 2px solid #444; }
 
-        .controls { background: #1a1a1a; padding-bottom: 15px; flex-shrink: 0; display: grid; grid-template-areas: ". up ." "left . right" ". down ."; gap: 5px; justify-content: center; }
-        .btn { width: 65px; height: 65px; background: #333; border: 2px solid #666; border-radius: 15px; color: white; font-size: 24px; display: flex; align-items: center; justify-content: center; user-select: none; }
+        /* キャンバスエリア（中央） */
+        #game-container { 
+            flex-grow: 1; display: flex; justify-content: center; align-items: center; 
+            background: #111; overflow: hidden; position: relative;
+        }
+        canvas { background: #fff; border: 2px solid #444; max-width: 95vw; max-height: 95%; }
+
+        /* コントローラー（下部） */
+        .controls { 
+            height: 160px; background: #1a1a1a; flex-shrink: 0;
+            display: grid; grid-template-areas: ". up ." "left . right" ". down ."; 
+            gap: 5px; justify-content: center; align-content: center; padding-bottom: 10px;
+        }
+        .btn { 
+            width: 60px; height: 60px; background: #333; border: 2px solid #666; border-radius: 15px; 
+            color: white; font-size: 24px; display: flex; align-items: center; justify-content: center; 
+            user-select: none; -webkit-tap-highlight-color: transparent;
+        }
         .btn-up { grid-area: up; }
-        .btn-left { grid-area: left; margin-top: -30px; } 
-        .btn-right { grid-area: right; margin-top: -30px; }
-        .btn-down { grid-area: down; margin-top: -30px; }
-        .btn:active { background: #00fbff; color: #000; }
+        .btn-left { grid-area: left; } 
+        .btn-right { grid-area: right; }
+        .btn-down { grid-area: down; }
+        .btn:active { background: #00fbff; color: #000; transform: scale(0.95); }
 
-        #next-btn { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 15px 30px; background: #ff4444; color: #fff; border-radius: 10px; font-size: 20px; z-index: 10; }
+        #next-btn { 
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            padding: 15px 30px; background: #ff4444; color: #fff; border-radius: 10px; font-size: 20px; z-index: 10; 
+        }
     </style>
 </head>
 <body>
@@ -53,48 +84,48 @@
     <audio id="chimeSound" src="chime.mp3" preload="auto"></audio>
 
     <div id="start-screen" class="screen">
-        <img src="logo.png" alt="Visual" class="main-visual">
-        <div id="stg-info" style="margin-bottom: 10px; color: #ff4444; font-weight: bold; font-size: 14px;">通常モード：自動保存対応</div>
+        <img src="logo.png" alt="Logo" class="main-visual">
+        <div id="stg-info" style="margin-bottom: 10px; color: #ff4444; font-size: 13px;">通常モード：自動保存</div>
         <button class="menu-btn" onclick="startGame(true)">はじめから</button>
         <button id="continue-btn" class="menu-btn" onclick="startGame(false)">続きから再開</button>
-        <button class="menu-btn" style="border-color:#00fbff; color:#00fbff;" onclick="showConfig()">じっくりモード設定 (保存なし)</button>
-        <button class="menu-btn" style="border-color:#aaa; color:#aaa;" onclick="showGuide()">遊びかた</button>
+        <button class="menu-btn" style="border-color:#00fbff; color:#00fbff;" onclick="showScreen('config-screen')">じっくりモード (保存なし)</button>
+        <button class="menu-btn" style="border-color:#aaa; color:#aaa;" onclick="showScreen('guide-screen')">遊びかた</button>
     </div>
 
     <div id="guide-screen" class="screen" style="display:none;">
         <div class="config-box">
-            <h3 style="margin-top:0; color:#ff4444;">遊びかた</h3>
+            <h3 style="margin:0 0 10px 0; color:#ff4444;">遊びかた</h3>
             <div class="guide-content">
-                <div class="guide-item">🚚を操作し、全ての🏠に荷物を届けろ！</div>
-                <div class="guide-item"><b>通常モード</b>：最短歩数ぴったり。ミス即終了。<b>中断しても続きから遊べます。</b></div>
-                <div class="guide-item"><b>じっくりモード</b>：保存なし。シビア設定で<b>工事(🚧)</b>が発生。余裕+5歩。</div>
+                <div class="guide-item">🚚ですべての🏠に荷物を届けろ！</div>
+                <div class="guide-item"><b>通常モード</b>：最短歩数ぴったり。ミス不可。自動保存。</div>
+                <div class="guide-item"><b>じっくりモード</b>：保存なし。シビア設定で<b>工事(🚧)</b>発生。</div>
             </div>
-            <button class="menu-btn" style="width:100%; border-color:#555;" onclick="hideGuide()">戻る</button>
+            <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
 
     <div id="config-screen" class="screen" style="display:none;">
         <div class="config-box">
-            <div class="check-row">
-                <input type="checkbox" id="severe-check">
-                <label for="severe-check">シビアモード</label>
+            <h3 style="margin:0 0 10px 0;">サイズ選択</h3>
+            <div style="margin-bottom:15px; color:#00fbff;">
+                <input type="checkbox" id="severe-check"> シビアモード(工事/余白5)
             </div>
-            <button class="menu-btn" style="width:100%; font-size:13px;" onclick="startCustomMode(11, 11)">スモール (11x11)</button>
-            <button class="menu-btn" style="width:100%; font-size:13px;" onclick="startCustomMode(15, 15)">ミドル (15x15)</button>
-            <button class="menu-btn" style="width:100%; font-size:13px;" onclick="startCustomMode(17, 17)">ラージ (17x17)</button>
-            <button class="menu-btn" style="width:100%; border-color:#555; color:#888; font-size:13px;" onclick="hideConfig()">戻る</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(11, 11)">スモール (11x11)</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(15, 15)">ミドル (15x15)</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(17, 17)">ラージ (17x17)</button>
+            <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
 
     <div id="game-view">
         <div id="ui-panel">
-            <button style="position:absolute; right:5px; top:5px; font-size:10px;" onclick="location.reload()">EXIT</button>
+            <button style="position:absolute; right:5px; top:5px; font-size:10px; padding:2px 5px;" onclick="location.reload()">EXIT</button>
             <div class="info-row">
                 <div id="mode-label">--</div>
-                <div style="display:flex; align-items:center;">GAS <div class="gas-bar-bg"><div id="gas-bar-fill"></div></div> <span id="gas-val">--</span></div>
-                <div>📦: <span id="cargo-count">--</span></div>
+                <div>GAS <div class="gas-bar-bg"><div id="gas-bar-fill"></div></div> <span id="gas-val">--</span></div>
+                <div>📦:<span id="cargo-count">--</span></div>
             </div>
-            <div id="msg" style="color:#00fbff; font-size:11px; height:12px;">READY...</div>
+            <div id="msg" style="color:#00fbff; font-size:11px; margin-top:2px;">READY...</div>
         </div>
         <div id="game-container">
             <canvas id="gameCanvas"></canvas>
@@ -126,16 +157,15 @@
         }
     };
 
-    function showGuide() { document.getElementById('guide-screen').style.display = 'flex'; }
-    function hideGuide() { document.getElementById('guide-screen').style.display = 'none'; }
-    function showConfig() { document.getElementById('config-screen').style.display = 'flex'; }
-    function hideConfig() { document.getElementById('config-screen').style.display = 'none'; }
+    function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
+        document.getElementById(id).style.display = 'flex';
+    }
 
     function startCustomMode(w, h) {
         isCustomMode = true; isSevereMode = document.getElementById('severe-check').checked;
         document.getElementById('mode-label').innerText = isSevereMode ? "STRICT+5" : "JUST FIT";
         document.getElementById('config-screen').style.display = 'none';
-        document.getElementById('start-screen').style.display = 'none';
         document.getElementById('game-view').style.display = 'flex';
         generateStage(1, w, h);
     }
@@ -152,8 +182,7 @@
                 const data = JSON.parse(savedData);
                 currentSTG = data.stg;
                 currentStageData = { map: data.map, maxGas: data.maxGas, cols: data.cols, rows: data.rows };
-                initLevel();
-                return;
+                initLevel(); return;
             }
         }
         currentSTG = 1; generateStage(currentSTG);
@@ -198,8 +227,6 @@
         
         let margin = isSevereMode ? 5 : 0; 
         currentStageData = { map: JSON.parse(JSON.stringify(map)), maxGas: totalDist + margin, cols, rows };
-        
-        // 通常モードなら即保存
         if (!isCustomMode) {
             localStorage.setItem('delivery_death_save', JSON.stringify({
                 stg: currentSTG, map: currentStageData.map, maxGas: currentStageData.maxGas, cols, rows
@@ -219,9 +246,10 @@
         document.getElementById('next-btn').style.display = 'none';
         document.getElementById('msg').innerText = `READY...`;
         
-        const containerW = document.getElementById('game-container').clientWidth - 20;
-        const containerH = document.getElementById('game-container').clientHeight - 20;
-        tileSize = Math.min(Math.floor(containerW / cols), Math.floor(containerH / rows), 40);
+        // 画面サイズに合わせてタイルサイズを計算
+        const containerW = document.getElementById('game-container').clientWidth;
+        const containerH = document.getElementById('game-container').clientHeight;
+        tileSize = Math.min(Math.floor(containerW * 0.9 / cols), Math.floor(containerH * 0.9 / rows), 40);
 
         const dpr = window.devicePixelRatio || 1;
         canvas.style.width = (cols * tileSize) + 'px';
@@ -321,7 +349,6 @@
         if(count === 0) {
             gameOver = true; document.getElementById('msg').innerText = "SUCCESS!";
             document.getElementById('next-btn').style.display = 'block';
-            // クリア時にセーブデータを消す（nextStageで新しく作られるため）
             if(!isCustomMode) localStorage.removeItem('delivery_death_save');
         } else if(gas <= 0) {
             gameOver = true; document.getElementById('msg').innerText = "OUT OF FUEL!";
