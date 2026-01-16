@@ -178,13 +178,13 @@
 
     function startCustomMode(w, h) {
         isCustomMode = true; isSevereMode = document.getElementById('severe-check').checked;
-        document.getElementById('mode-label').innerText = isSevereMode ? "STRICT" : "FREE";
+        document.getElementById('mode-label').innerText = isSevereMode ? "STRICT" : "じっくりモード";
         showScreen('game-view'); generateStage(1, w, h);
     }
 
     function startGame(reset) {
         isCustomMode = false; isSevereMode = false;
-        document.getElementById('mode-label').innerText = "NORMAL";
+        document.getElementById('mode-label').innerText = "通常モード";
         showScreen('game-view');
         if (!reset) {
             const savedData = localStorage.getItem('delivery_death_save');
