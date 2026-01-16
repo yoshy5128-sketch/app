@@ -5,10 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>宅配DEATH - ムサシ運輸物語</title>
     <style>
-        /* 全体レイアウトの固定 */
+        /* 100dvh を使用してツールバーを除いた高さを基準にする */
         body { 
             background: #1a1a1a; color: #fff; font-family: sans-serif; text-align: center; 
-            margin: 0; padding: 0; overflow: hidden; height: 100vh; width: 100vw;
+            margin: 0; padding: 0; overflow: hidden; 
+            height: 100vh; height: 100dvh; width: 100vw;
             display: flex; flex-direction: column; touch-action: manipulation; 
         }
 
@@ -21,61 +22,55 @@
         }
         .shake-screen { animation: shake 0.1s infinite; }
 
-        /* 各種画面 */
         .screen { 
             position: absolute; width: 100%; height: 100%; background: #000; 
             display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; 
         }
         .main-visual { width: 50%; max-width: 200px; margin-bottom: 10px; border: 2px solid #ff4444; border-radius: 10px; }
-        .menu-btn { width: 220px; padding: 10px; margin: 5px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .menu-btn { width: 220px; padding: 10px; margin: 5px; background: #222; color: #fff; border: 2px solid #ff4444; border-radius: 30px; font-size: 14px; font-weight: bold; }
         .menu-btn:disabled { border-color: #444; color: #444; }
 
-        /* 設定・遊びかたパネル */
-        .config-box { background: #222; padding: 15px; border-radius: 15px; border: 1px solid #444; width: 85%; max-width: 320px; }
-        .guide-content { text-align: left; font-size: 12px; line-height: 1.5; color: #ccc; margin-bottom: 10px; }
-        .guide-item { margin-bottom: 5px; border-bottom: 1px solid #333; }
-
-        /* ゲーム表示メイン */
         #game-view { 
-            display: none; flex-direction: column; width: 100%; height: 100vh; overflow: hidden; 
+            display: none; flex-direction: column; width: 100%; height: 100%; overflow: hidden; 
         }
 
-        /* UIパネル（上部） */
+        /* UIパネル（高さ固定：45px） */
         #ui-panel { 
-            height: 50px; background: #222; border-bottom: 2px solid #00fbff; 
+            height: 45px; background: #222; border-bottom: 2px solid #00fbff; 
             display: flex; flex-direction: column; justify-content: center; flex-shrink: 0;
         }
-        .info-row { display: flex; justify-content: center; gap: 15px; font-size: 12px; }
-        .gas-bar-bg { width: 60px; height: 10px; background: #000; border: 1px solid #555; display: inline-block; vertical-align: middle; }
+        .info-row { display: flex; justify-content: center; gap: 10px; font-size: 11px; }
+        .gas-bar-bg { width: 50px; height: 8px; background: #000; border: 1px solid #555; display: inline-block; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; }
 
-        /* キャンバスエリア（中央） */
+        /* キャンバスエリア（可変） */
         #game-container { 
             flex-grow: 1; display: flex; justify-content: center; align-items: center; 
-            background: #111; overflow: hidden; position: relative;
+            background: #111; overflow: hidden; position: relative; padding: 5px;
         }
-        canvas { background: #fff; border: 2px solid #444; max-width: 95vw; max-height: 95%; }
+        canvas { background: #fff; border: 1px solid #444; display: block; }
 
-        /* コントローラー（下部） */
+        /* コントローラー（高さ固定：140pxに短縮） */
         .controls { 
-            height: 160px; background: #1a1a1a; flex-shrink: 0;
+            height: 140px; background: #1a1a1a; flex-shrink: 0;
             display: grid; grid-template-areas: ". up ." "left . right" ". down ."; 
-            gap: 5px; justify-content: center; align-content: center; padding-bottom: 10px;
+            gap: 2px; justify-content: center; align-content: center; padding-bottom: 10px;
         }
         .btn { 
-            width: 60px; height: 60px; background: #333; border: 2px solid #666; border-radius: 15px; 
-            color: white; font-size: 24px; display: flex; align-items: center; justify-content: center; 
+            width: 58px; height: 58px; background: #333; border: 2px solid #666; border-radius: 12px; 
+            color: white; font-size: 22px; display: flex; align-items: center; justify-content: center; 
             user-select: none; -webkit-tap-highlight-color: transparent;
         }
+        /* ボタン同士を少し重ねて高さを稼ぐ */
         .btn-up { grid-area: up; }
-        .btn-left { grid-area: left; } 
-        .btn-right { grid-area: right; }
-        .btn-down { grid-area: down; }
-        .btn:active { background: #00fbff; color: #000; transform: scale(0.95); }
+        .btn-left { grid-area: left; margin-top: -15px; } 
+        .btn-right { grid-area: right; margin-top: -15px; }
+        .btn-down { grid-area: down; margin-top: -30px; }
+        .btn:active { background: #00fbff; color: #000; }
 
         #next-btn { 
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            padding: 15px 30px; background: #ff4444; color: #fff; border-radius: 10px; font-size: 20px; z-index: 10; 
+            padding: 12px 24px; background: #ff4444; color: #fff; border-radius: 10px; font-size: 18px; z-index: 10; 
         }
     </style>
 </head>
@@ -85,47 +80,39 @@
 
     <div id="start-screen" class="screen">
         <img src="logo.png" alt="Logo" class="main-visual">
-        <div id="stg-info" style="margin-bottom: 10px; color: #ff4444; font-size: 13px;">通常モード：自動保存</div>
+        <div id="stg-info" style="margin-bottom: 8px; color: #ff4444; font-size: 12px;">通常モード：自動保存</div>
         <button class="menu-btn" onclick="startGame(true)">はじめから</button>
         <button id="continue-btn" class="menu-btn" onclick="startGame(false)">続きから再開</button>
-        <button class="menu-btn" style="border-color:#00fbff; color:#00fbff;" onclick="showScreen('config-screen')">じっくりモード (保存なし)</button>
+        <button class="menu-btn" style="border-color:#00fbff; color:#00fbff;" onclick="showScreen('config-screen')">じっくりモード</button>
         <button class="menu-btn" style="border-color:#aaa; color:#aaa;" onclick="showScreen('guide-screen')">遊びかた</button>
     </div>
 
     <div id="guide-screen" class="screen" style="display:none;">
-        <div class="config-box">
-            <h3 style="margin:0 0 10px 0; color:#ff4444;">遊びかた</h3>
-            <div class="guide-content">
-                <div class="guide-item">🚚ですべての🏠に荷物を届けろ！</div>
-                <div class="guide-item"><b>通常モード</b>：最短歩数ぴったり。ミス不可。自動保存。</div>
-                <div class="guide-item"><b>じっくりモード</b>：保存なし。シビア設定で<b>工事(🚧)</b>発生。</div>
-            </div>
+        <div style="background:#222; padding:15px; border-radius:15px; width:80%;">
+            <h4 style="margin:0 0 10px 0; color:#ff4444;">遊びかた</h4>
+            <p style="font-size:12px; text-align:left; color:#ccc;">🚚で🏠に届けるゲーム。<br>通常モード：保存あり/最短歩数。<br>じっくり：保存なし/設定可能。</p>
             <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
 
     <div id="config-screen" class="screen" style="display:none;">
-        <div class="config-box">
-            <h3 style="margin:0 0 10px 0;">サイズ選択</h3>
-            <div style="margin-bottom:15px; color:#00fbff;">
-                <input type="checkbox" id="severe-check"> シビアモード(工事/余白5)
-            </div>
-            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(11, 11)">スモール (11x11)</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(15, 15)">ミドル (15x15)</button>
-            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(17, 17)">ラージ (17x17)</button>
+        <div style="background:#222; padding:15px; border-radius:15px; width:80%;">
+            <div style="margin-bottom:10px;"><input type="checkbox" id="severe-check"> シビア(工事あり)</div>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(11, 11)">11x11</button>
+            <button class="menu-btn" style="width:100%;" onclick="startCustomMode(15, 15)">15x15</button>
             <button class="menu-btn" style="width:100%; border-color:#555;" onclick="showScreen('start-screen')">戻る</button>
         </div>
     </div>
 
     <div id="game-view">
         <div id="ui-panel">
-            <button style="position:absolute; right:5px; top:5px; font-size:10px; padding:2px 5px;" onclick="location.reload()">EXIT</button>
+            <button style="position:absolute; right:5px; top:8px; font-size:10px;" onclick="location.reload()">EXIT</button>
             <div class="info-row">
                 <div id="mode-label">--</div>
                 <div>GAS <div class="gas-bar-bg"><div id="gas-bar-fill"></div></div> <span id="gas-val">--</span></div>
                 <div>📦:<span id="cargo-count">--</span></div>
             </div>
-            <div id="msg" style="color:#00fbff; font-size:11px; margin-top:2px;">READY...</div>
+            <div id="msg" style="color:#00fbff; font-size:10px; margin-top:2px;">READY...</div>
         </div>
         <div id="game-container">
             <canvas id="gameCanvas"></canvas>
@@ -134,8 +121,8 @@
         <div class="controls">
             <div class="btn btn-up" onclick="handleMove(0,-1)">▲</div>
             <div class="btn btn-left" onclick="handleMove(-1,0)">◀</div>
-            <div class="btn btn-down" onclick="handleMove(0,1)">▼</div>
             <div class="btn btn-right" onclick="handleMove(1,0)">▶</div>
+            <div class="btn btn-down" onclick="handleMove(0,1)">▼</div>
         </div>
     </div>
 
@@ -150,7 +137,7 @@
         const savedData = localStorage.getItem('delivery_death_save');
         if (savedData) {
             const data = JSON.parse(savedData);
-            document.getElementById('stg-info').innerText = `通常モード：STAGE ${data.stg} 中断中`;
+            document.getElementById('stg-info').innerText = `STAGE ${data.stg} 中断中`;
             document.getElementById('continue-btn').disabled = false;
         } else {
             document.getElementById('continue-btn').disabled = true;
@@ -164,18 +151,15 @@
 
     function startCustomMode(w, h) {
         isCustomMode = true; isSevereMode = document.getElementById('severe-check').checked;
-        document.getElementById('mode-label').innerText = isSevereMode ? "STRICT+5" : "JUST FIT";
-        document.getElementById('config-screen').style.display = 'none';
-        document.getElementById('game-view').style.display = 'flex';
+        document.getElementById('mode-label').innerText = isSevereMode ? "STRICT" : "JUST";
+        showScreen('game-view');
         generateStage(1, w, h);
     }
 
     function startGame(reset) {
         isCustomMode = false; isSevereMode = false;
         document.getElementById('mode-label').innerText = "NORMAL";
-        document.getElementById('start-screen').style.display = 'none';
-        document.getElementById('game-view').style.display = 'flex';
-
+        showScreen('game-view');
         if (!reset) {
             const savedData = localStorage.getItem('delivery_death_save');
             if (savedData) {
@@ -244,12 +228,11 @@
         player = {x:1, y:1, facingRight: true}; moveCount = 0; constructionSites = [];
         gameOver = false;
         document.getElementById('next-btn').style.display = 'none';
-        document.getElementById('msg').innerText = `READY...`;
         
-        // 画面サイズに合わせてタイルサイズを計算
+        // 厳密な高さ計算
         const containerW = document.getElementById('game-container').clientWidth;
         const containerH = document.getElementById('game-container').clientHeight;
-        tileSize = Math.min(Math.floor(containerW * 0.9 / cols), Math.floor(containerH * 0.9 / rows), 40);
+        tileSize = Math.min(Math.floor(containerW * 0.95 / cols), Math.floor(containerH * 0.95 / rows), 40);
 
         const dpr = window.devicePixelRatio || 1;
         canvas.style.width = (cols * tileSize) + 'px';
@@ -299,8 +282,7 @@
                     }
                     map[t.r][t.c] = 4; constructionSites.push({r: t.r, c: t.c});
                     document.getElementById('msg').innerText = "🚧 ROAD CLOSED";
-                    document.getElementById('msg').style.color = "#ff4444";
-                    setTimeout(() => { if(!gameOver) document.getElementById('msg').style.color = "#00fbff"; }, 1000);
+                    setTimeout(() => { if(!gameOver) document.getElementById('msg').innerText = ""; }, 1000);
                     break;
                 }
             }
