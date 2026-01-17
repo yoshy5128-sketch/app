@@ -35,9 +35,14 @@
 
         #ui-panel { 
             height: 50px; background: #222; border-bottom: 2px solid #00fbff; 
-            display: flex; flex-direction: column; justify-content: center; flex-shrink: 0;
+            display: flex; align-items: center; padding: 0 10px; flex-shrink: 0;
+            position: relative;
         }
-        .info-row { display: flex; justify-content: center; gap: 10px; font-size: 11px; }
+        .sound-toggle {
+            font-size: 20px; cursor: pointer; width: 30px; text-align: left;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+        }
+        .info-row { flex-grow: 1; display: flex; justify-content: center; gap: 10px; font-size: 11px; }
         .gas-bar-bg { width: 50px; height: 8px; background: #000; border: 1px solid #555; display: inline-block; }
         #gas-bar-fill { width: 100%; height: 100%; background: #00ff00; }
 
@@ -73,6 +78,8 @@
 <body>
 
     <audio id="chimeSound" src="chime.mp3" preload="auto"></audio>
+    <audio id="otsu1" src="otsu1.mp3" preload="auto"></audio>
+    <audio id="otsu2" src="otsu2.mp3" preload="auto"></audio>
 
     <div id="start-screen" class="screen">
         <img src="logo.png" alt="Logo" class="main-visual">
@@ -89,12 +96,12 @@
             <div style="font-size:12px; text-align:left; color:#ccc; line-height:1.5;">
                 <p>🚚を操作して、制限内に全ての🏠へ荷物を届けるパズルアクションです。</p>
                 <b style="color:#00fbff;">■ ガソリン（GAS）</b><br>
-                1歩ごとに1減ります。0になると強制リトライ。通常モードは「最短ルート」の歩数しかないので、道迷いは厳禁です。
+                1歩ごとに1減ります。0になるとリトライ。通常モードは最短歩数設定のため、ミスは許されません。
                 <p><b style="color:#00fbff;">■ モード解説</b><br>
                 <b>・通常</b>：全50ステージ。進捗は保存されます。<br>
-                <b>・じっくり</b>：保存なし。自由にマップサイズを変更して練習できます。</p>
+                <b>・じっくり</b>：保存なし。マップサイズ等を自由に設定できます。</p>
                 <p><b style="color:#ff4444;">■ 🚧工事現場（シビア設定）</b><br>
-                じっくりモード専用。5歩ごとに道が1箇所封鎖されます。退路を断たれないよう注意！</p>
+                5歩ごとに道が1箇所封鎖されます。退路を断たれないよう注意！</p>
                 <p><b style="color:#00fbff;">■ 操作</b>：画面の矢印 or キーボード矢印キー</p>
             </div>
             <button class="menu-btn" style="width:100%; border-color:#55ff55; color:#55ff55; margin-top:10px;" onclick="showScreen('start-screen')">戻る</button>
@@ -117,13 +124,14 @@
 
     <div id="game-view">
         <div id="ui-panel">
-            <button style="position:absolute; right:5px; top:10px; font-size:10px; padding:3px 8px;" onclick="location.reload()">EXIT</button>
+            <div id="sound-btn" class="sound-toggle" onclick="toggleSound()">🔊</div>
             <div class="info-row">
                 <div id="mode-label">--</div>
                 <div>GAS <div class="gas-bar-bg"><div id="gas-bar-fill"></div></div> <span id="gas-val">--</span></div>
                 <div>📦:<span id="cargo-count">--</span></div>
             </div>
-            <div id="msg" style="color:#00fbff; font-size:10px; margin-top:2px;"></div>
+            <button style="font-size:10px; padding:3px 8px; flex-shrink:0;" onclick="location.reload()">EXIT</button>
+            <div id="msg" style="position:absolute; bottom:2px; left:50%; transform:translateX(-50%); color:#00fbff; font-size:10px; pointer-events:none;"></div>
         </div>
         <div id="game-container">
             <canvas id="gameCanvas"></canvas>
@@ -141,8 +149,12 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const chime = document.getElementById('chimeSound');
+    const otsuSounds = [document.getElementById('otsu1'), document.getElementById('otsu2')];
+    
     let currentSTG = 1, player = {x:1, y:1, facingRight: true}, gas, maxGas, map, rows, cols, tileSize, gameOver, currentStageData = null;
     let isSevereMode = false, isCustomMode = false, moveCount = 0, constructionSites = []; 
+    let lastSoundIndex = 1; // クリア音を交互にするためのフラグ
+    let isMuted = false;
 
     window.addEventListener('keydown', (e) => {
         if (document.getElementById('game-view').style.display !== 'flex') return;
@@ -158,7 +170,11 @@
         }
     });
 
-    // 起動時にセーブデータがあるか確認
+    function toggleSound() {
+        isMuted = !isMuted;
+        document.getElementById('sound-btn').innerText = isMuted ? "🔇" : "🔊";
+    }
+
     function checkSaveData() {
         const savedData = localStorage.getItem('delivery_death_save');
         if (savedData) {
@@ -187,7 +203,7 @@
 
     function startGame(reset) {
         isCustomMode = false; isSevereMode = false;
-        document.getElementById('mode-label').innerText = "通常モード";
+        document.getElementById('mode-label').innerText = "通常";
         showScreen('game-view');
         if (reset) {
             localStorage.removeItem('delivery_death_save');
@@ -247,7 +263,6 @@
         let margin = isSevereMode ? 5 : 0; 
         currentStageData = { map: JSON.parse(JSON.stringify(map)), maxGas: totalDist + margin, cols, rows };
         
-        // 通常モードなら即保存
         if (!isCustomMode) {
             localStorage.setItem('delivery_death_save', JSON.stringify({
                 stg: currentSTG, map: currentStageData.map, maxGas: currentStageData.maxGas, cols, rows
@@ -291,7 +306,8 @@
                 document.getElementById('msg').innerText = "";
             }
             if(map[ny][nx] === 3) {
-                map[ny][nx] = 0; chime.pause(); chime.currentTime = 0; chime.play().catch(()=>{});
+                map[ny][nx] = 0;
+                if(!isMuted) { chime.pause(); chime.currentTime = 0; chime.play().catch(()=>{}); }
             }
             if(isSevereMode && moveCount % 5 === 0) closeRandomRoadLogic();
             updateUI(); checkStatus(); draw();
@@ -372,7 +388,14 @@
         if(count === 0) {
             gameOver = true; document.getElementById('msg').innerText = "SUCCESS!";
             document.getElementById('next-btn').style.display = 'block';
-            // セーブデータは削除せず、次のステージに進んだときに上書きするように変更
+            
+            // クリア音を交互に再生
+            if(!isMuted) {
+                lastSoundIndex = (lastSoundIndex === 1) ? 2 : 1;
+                const playSnd = document.getElementById('otsu' + lastSoundIndex);
+                playSnd.currentTime = 0;
+                playSnd.play().catch(()=>{});
+            }
         } else if(gas <= 0) {
             gameOver = true; document.getElementById('msg').innerText = "OUT OF FUEL!";
             document.getElementById('game-view').classList.add('shake-screen');
@@ -401,7 +424,7 @@
             generateStage(1, cols, rows); 
         } else { 
             currentSTG++; 
-            generateStage(currentSTG); // ここで新しいステージが自動的にセーブされる
+            generateStage(currentSTG);
         }
     }
 </script>
