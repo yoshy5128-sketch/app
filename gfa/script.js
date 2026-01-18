@@ -1637,10 +1637,7 @@ function createAI(color) {
     aiObject.lastFlankTime = 0;
     aiObject.lastPosition = new THREE.Vector3(); // <= これを追加
 
-    // Add properties for ladder climbing
-    aiObject.isElevating = false;
-    aiObject.elevatingTargetY = 0;
-    aiObject.climbingTarget = null;
+
 
     return aiObject;
 }
@@ -1677,25 +1674,20 @@ function checkLineOfSight(startPosition, endPosition, objectsToAvoid) {
 function findNearestLadder(ai, playerPosition) {
     let nearestLadder = null;
     let minDistance = Infinity;
-
     const aiPos = ai.position.clone();
 
-    for (const sensorArea of ladderSwitches) {
-        // 障害物の屋上にプレイヤーがいるか確認
-        const obstacle = sensorArea.userData.obstacle;
-        if (!obstacle) continue;
+    // プレイヤーが地上より十分に高い位置にいるかを単純な高さで判定する
+    // これにより、どの屋上にいるかの複雑な判定を避け、ロバスト性を高める
+    const playerIsSignificantlyHigher = playerPosition.y > (DEFAULT_OBSTACLE_HEIGHT * 0.8);
 
-        const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-        const playerIsOnThisRooftop = playerPosition.y > obstacleBox.max.y - 1.0 && // プレイヤーが高い位置にいる
-                                      playerPosition.x > obstacleBox.min.x && playerPosition.x < obstacleBox.max.x &&
-                                      playerPosition.z > obstacleBox.min.z && playerPosition.z < obstacleBox.max.z;
-
-        if (playerIsOnThisRooftop) {
-             const distanceToLadder = aiPos.distanceTo(sensorArea.position);
-             if (distanceToLadder < minDistance) {
-                 minDistance = distanceToLadder;
-                 nearestLadder = sensorArea;
-             }
+    if (playerIsSignificantlyHigher) {
+        for (const sensorArea of ladderSwitches) {
+            // どの建物かは問わず、単純に最も近いラダーセンサーを探す
+            const distanceToLadder = aiPos.distanceTo(sensorArea.position);
+            if (distanceToLadder < minDistance) {
+                minDistance = distanceToLadder;
+                nearestLadder = sensorArea;
+            }
         }
     }
     return nearestLadder;
@@ -2256,7 +2248,15 @@ function aiShoot(ai, timeElapsed) {
     }
     
     if (targetPosition === null) {
-        return;
+        // ターゲットへの直接的な視線が通らない場合でも、
+        // プレイヤーが高所にいる場合は、その位置を目標に設定して威嚇射撃を試みる
+        const playerPos = player.position.clone();
+        const playerIsHigher = playerPos.y > ai.position.y + 3.0; // プレイヤーがAIより高い位置にいるか
+        if (playerIsHigher && !isVisibleToPlayer(ai)) {
+             targetPosition = playerPos;
+        } else {
+             return; // それ以外の場合は射撃しない
+        }
     }
     const direction = new THREE.Vector3().subVectors(targetPosition, startPosition);
     const distanceToPlayer = distanceToTarget;
@@ -3736,8 +3736,12 @@ function animate() {
     
     // Crouching state change adjustment
     const oldPlayerTargetHeight = playerTargetHeight;
-    playerTargetHeight = isCrouchingToggle ? 1.1 : 2.0;
-    if (playerTargetHeight > oldPlayerTargetHeight) { // Standing up
+    // しゃがんだ時に手すり(高さ1.0)より低くなるように、目標の高さを0.9に変更
+    playerTargetHeight = isCrouchingToggle ? 0.9 : 2.0; 
+    // しゃがむ/立つときに高さを即座に反映させる
+    if (playerTargetHeight < oldPlayerTargetHeight) { // Crouching down
+        player.position.y -= oldPlayerTargetHeight - playerTargetHeight;
+    } else if (playerTargetHeight > oldPlayerTargetHeight) { // Standing up
         player.position.y += playerTargetHeight - oldPlayerTargetHeight;
     }
 
@@ -4134,21 +4138,6 @@ function animate() {
         aiCheckPickup(ai);
         const isAISeen = isVisibleToPlayer(ai); // プレイヤーからAIが見えるかどうかの判定
 
-        // --- START: LADDER CLIMBING LOGIC ---
-        const playerPos = player.position.clone();
-        const aiPos = ai.position.clone();
-        const playerIsHigher = playerPos.y > aiPos.y + 3.0; // プレイヤーが3ユニット以上高い
-
-        // 視線が通らず、プレイヤーが高所にいるなら、はしごを探す
-        if (ai.state !== 'CLIMBING' && !isAISeen && playerIsHigher) {
-            const ladder = findNearestLadder(ai, playerPos);
-            if (ladder) {
-                ai.state = 'CLIMBING';
-                ai.climbingTarget = ladder; // はしごセンサーをターゲットとして保存
-                ai.targetPosition.copy(ladder.position); // まずははしごのセンサーエリアに向かう
-            }
-        }
-        // --- END: LADDER CLIMBING LOGIC ---
 
         // 新しいフラグ: AIチームメイトが敵AIを視認しているか
         let isEnemyAISeenByTeammate = false;
@@ -4300,39 +4289,7 @@ function animate() {
                     }
                 }
                 break; // FOLLOWING状態の処理終了
-            case 'CLIMBING':
-                const targetLadder = ai.climbingTarget;
-                if (!targetLadder) {
-                    ai.state = 'HIDING'; // ターゲットがなければHIDINGに戻る
-                    break;
-                }
 
-                const distanceToLadderSensor = ai.position.distanceTo(targetLadder.position);
-
-                if (distanceToLadderSensor < 2.0 && !ai.isElevating) { // センサーに十分に近づいたら上昇開始
-                     ai.isElevating = true;
-                     const obs = targetLadder.userData.obstacle;
-                     ai.elevatingTargetY = (obs.position.y + obs.geometry.parameters.height / 2) + 2.0;
-                     // プレイヤーのはしご移動ロジックを参考に、AIをはしごの根本にワープさせる
-                     const ladderPos = targetLadder.userData.ladderPos;
-                     if (ladderPos) {
-                         ai.position.x = ladderPos.x;
-                         ai.position.z = ladderPos.z;
-                     }
-                }
-                
-                if (ai.isElevating) {
-                    const elevateSpeed = 5.0;
-                    ai.position.y += elevateSpeed * delta;
-                    if (ai.position.y >= ai.elevatingTargetY) {
-                        ai.position.y = ai.elevatingTargetY;
-                        ai.isElevating = false;
-                        ai.climbingTarget = null;
-                        ai.state = 'ATTACKING'; // 屋上に着いたら攻撃モードへ
-                        ai.currentAttackTime = timeElapsed;
-                    }
-                }
-                break;
             case 'MOVING':
                 ai.avoiding = false;
                 if (isTeammateInTeamModeOrArcade) {
@@ -4344,17 +4301,19 @@ function animate() {
                         ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
                     }
                 } else {
-                    if (isAISeen) {
-                        ai.targetWeaponPickup = null;
-                        ai.state = 'ATTACKING';
-                        ai.currentAttackTime = timeElapsed;
-                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
-                    } else if (isArrived && !isAISeen && isBehindObstacle(ai)) {
-                        ai.state = 'HIDING';
-                        ai.lastHiddenTime = timeElapsed;
-                        ai.targetWeaponPickup = null;
-                    }
-                }
+                                                    if (isAISeen) {
+                                                        ai.targetWeaponPickup = null;
+                                                        ai.state = 'ATTACKING';
+                                                        ai.currentAttackTime = timeElapsed;
+                                                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                                                    } else if (isArrived) {
+                                                        // 目的地に到着したがプレイヤーが見えない場合、隠れ場所を探し続けるループに陥り
+                                                        // NaNが発生してフリーズする問題があった。
+                                                        // ここで強制的にATTACKING状態にすることで、ループを断ち切り、フリーズを回避する。
+                                                        ai.state = 'ATTACKING';
+                                                        ai.currentAttackTime = timeElapsed;
+                                                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                                                    }                }
                 break;
             case 'FLANKING':
                 ai.avoiding = false;
