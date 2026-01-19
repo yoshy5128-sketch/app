@@ -3,27 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Descent Maze - Stable Camera Fix</title>
+    <title>Descent Maze - Item Shop Update</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Georgia', serif; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         
         /* UI Elements */
         #ui-overlay { position: absolute; top: 15px; left: 15px; color: gold; font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px black; z-index: 15; pointer-events: none; }
-        #stage-label { position: absolute; top: 15px; right: 15px; color: white; font-size: 16px; text-align: right; pointer-events: none; }
+        .coin-icon { color: #ffd700; margin-left: 15px; }
+        .key-icon { color: #c0c0c0; }
+        
+        #gear-btn { 
+            position: absolute; top: 15px; right: 15px; 
+            width: 40px; height: 40px; font-size: 24px; 
+            background: rgba(0,0,0,0.5); color: white; border: 1px solid white; border-radius: 50%; 
+            display: flex; justify-content: center; align-items: center; 
+            cursor: pointer; z-index: 60; pointer-events: auto; 
+        }
+        #gear-btn:active { background: white; color: black; }
+
+        #jetpack-toggle {
+            position: absolute; top: 15px; right: 65px; /* Positioned next to the gear button */
+            width: 40px; height: 40px; font-size: 16px; font-weight: bold;
+            background: rgba(0,0,0,0.5); color: #aaa; border: 1px solid #aaa; border-radius: 8px;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; z-index: 60; pointer-events: auto;
+            user-select: none;
+        }
+        #jetpack-toggle.active {
+            background: #ffd700;
+            color: black;
+            border-color: white;
+            box-shadow: 0 0 10px #ffd700;
+        }
+
+        #save-spot-btn {
+            position: absolute; top: 15px; right: 115px; /* Positioned next to the jetpack button */
+            width: 40px; height: 40px; font-size: 11px; font-weight: bold;
+            background: rgba(0,0,0,0.5); color: #aaa; border: 1px solid #aaa; border-radius: 8px;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; z-index: 60; pointer-events: auto;
+            user-select: none;
+        }
+        #save-spot-btn.saved {
+             background: #00ff00;
+             color: black;
+             box-shadow: 0 0 10px #00ff00;
+        }
+
+        #stage-label { position: absolute; top: 60px; right: 15px; color: white; font-size: 16px; text-align: right; pointer-events: none; }
         #stage-announcement { position: absolute; width: 100%; top: 30%; text-align: center; color: white; font-size: 2.5em; text-shadow: 0 0 15px rgba(255,255,255,0.5); pointer-events: none; opacity: 0; transition: opacity 1s; z-index: 20; }
         
         /* Menu Screens */
-        #instructions, #clear-screen { 
+        #instructions, #clear-screen, #shop-screen { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             display: flex; flex-direction: column; justify-content: center; align-items: center; 
             background: rgba(0,0,0,0.9); color: white; text-align: center; z-index: 100; 
         }
-        #clear-screen { display: none; }
+        #clear-screen, #shop-screen { display: none; }
         
         .menu-buttons { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; z-index: 101;}
         button { padding: 15px 40px; font-size: 1.1em; cursor: pointer; background: #4a3c2c; color: #ffd700; border: 1px solid #ffd700; border-radius: 4px; transition: 0.2s; min-width: 250px; touch-action: manipulation; }
         button:active { background: #ffd700; color: #000; }
+        button:disabled { border-color: #555; color: #555; background: #222; cursor: default; }
         #btn-continue { display: none; background: #2c3e4a; }
+
+        /* Shop Specific */
+        #shop-items { display: flex; flex-direction: column; gap: 10px; width: 80%; max-width: 400px; }
+        .shop-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 10px; border: 1px solid #555; }
+        .shop-desc { text-align: left; font-size: 0.9em; }
+        .shop-cost { color: #ffd700; font-weight: bold; }
 
         /* Mobile Controls UI */
         .mobile-ui { display: none !important; position: absolute; z-index: 50; touch-action: none; }
@@ -83,8 +131,17 @@
     <audio id="sfx-get" src="get.mp3"></audio>
     <audio id="sfx-fall" src="gan.mp3"></audio>
     <audio id="sfx-clear" src="clear.mp3"></audio>
+    <audio id="sfx-footsteps" src="ashi.mp3" loop></audio>
+    <audio id="sfx-land" src="chaku.mp3"></audio>
 
-    <div id="ui-overlay">KEYS: <span id="item-count">0</span> / 4</div>
+    <div id="ui-overlay">
+        <span class="key-icon">KEYS: <span id="item-count">0</span> / 4</span><br>
+        <span class="coin-icon">COINS: <span id="coin-count">10</span></span><br>
+        <span id="jetpack-status" style="font-size: 14px; color: white;"></span>
+    </div>
+    <div id="jetpack-toggle" style="display: none;">JET</div>
+    <div id="save-spot-btn" style="display: none;">SAVE</div>
+    <div id="gear-btn">⚙</div>
     <div id="stage-label">STAGE 1<br><span id="theme-name">THE DUST RUINS</span></div>
     <div id="stage-announcement">THE DUST RUINS</div>
 
@@ -92,6 +149,7 @@
         <h1 style="letter-spacing: 8px;">DESCENT MAZE</h1>
         <div class="menu-buttons">
             <button onclick="startGame(true)">NEW GAME</button>
+<button onclick="localStorage.clear(); location.reload();" style="background:#600;">DELETE SAVE DATA</button>
             <button id="btn-continue" onclick="startGame(false)">CONTINUE (STAGE <span id="saved-stage-val"></span>)</button>
         </div>
         <p id="how-to-play" style="font-size: 0.8em; margin-top: 40px; color: #888;"></p>
@@ -100,6 +158,44 @@
     <div id="clear-screen">
         <h1 id="status-text">STAGE CLEAR</h1>
         <button id="action-button">NEXT LEVEL</button>
+    </div>
+
+    <div id="shop-screen">
+        <h2>ITEM SHOP</h2>
+        <div style="margin-bottom: 20px;">Current Coins: <span id="shop-coin-display" style="color:#ffd700; font-weight:bold;">0</span></div>
+        <div id="shop-items">
+            <div class="shop-item">
+                <div class="shop-desc">
+                    <strong>Key Locator</strong><br>Highlight keys location
+                </div>
+                <div>
+                    <span class="shop-cost">1 G</span><br>
+                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('locator', 1)" id="btn-buy-locator">BUY</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <div class="shop-desc">
+                    <strong>Save Anywhere</strong><br>Save current spot
+                </div>
+                <div>
+                    <span class="shop-cost">2 G</span><br>
+                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('save', 2)" id="btn-buy-save">BUY</button>
+                </div>
+            </div>
+            <div class="shop-item">
+                <div class="shop-desc">
+                    <strong>Ult. Jetpack</strong><br>Fly for 30s
+                </div>
+                <div>
+                    <span class="shop-cost">10 G</span><br>
+                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('jetpack', 10)" id="btn-buy-jetpack">BUY</button>
+                </div>
+            </div>
+        </div>
+        <div class="menu-buttons" style="margin-top: 30px;">
+            <button onclick="closeShop()">RESUME GAME</button>
+        </div>
+        <p id="shop-msg" style="color: #0f0; height: 20px;"></p>
     </div>
 
     <div id="joystick-zone" class="mobile-ui">
@@ -126,7 +222,17 @@
         let currentStage = 1;
         let isGameOver = false;
         let collectedItemCount = 0;
+        let collectedCoins = 10;
         
+        // Items State
+        let hasJetpack = false;
+        let isJetpackSwitchOn = false;
+        let jetpackState = 'standby'; // 'standby', 'active', 'cooldown'
+        let jetpackFuel = 0; // seconds
+        let jetpackCooldownTimer = 0; // seconds
+        let hasKeyLocator = false;
+        let hasSaveAnywhere = false;
+
         // Detect Mobile
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth < 800 && 'ontouchstart' in window);
         if (isMobile) document.getElementById('game-body').classList.add('is-mobile');
@@ -144,32 +250,145 @@
         // Movement Variables
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
         let canJump = false;
+        let isJumpHeld = false; // For jetpack
         let velocity = new THREE.Vector3();
         let targetY = 51.8, prevTime = performance.now();
         
-        // --- Stable Camera Variables ---
-        // 直接オイラー角を蓄積する変数（Three.jsの自動計算に依存しない）
-        let cameraYaw = 0;   // 横回転
-        let cameraPitch = 0; // 縦回転
+        // Camera Variables
+        let cameraYaw = 0;
+        let cameraPitch = 0;
         
         // Mobile Input
-        let joyVector = { x: 0, y: 0 }; 
+        let joyVector = { x: 0, y: 0 };
+        let isFootstepPlaying = false; 
+        let wasOnGround = true; // For detecting landing
 
         const stairMat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
-        const keyMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.1 });
+        // Key is now Silver
+        const keyMat = new THREE.MeshStandardMaterial({ color: 0xC0C0C0, metalness: 0.9, roughness: 0.2, emissive: 0x222222 });
+        // Coin is Gold
+        const coinMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 0.8, roughness: 0.2 });
 
+        // Save Data Handling
         function checkSaveData() {
-            const saved = localStorage.getItem('descent_maze_stage');
-            if (saved && parseInt(saved) > 1) {
+            const saved = localStorage.getItem('descent_maze_data');
+            if (saved) {
+                const data = JSON.parse(saved);
                 document.getElementById('btn-continue').style.display = 'block';
-                document.getElementById('saved-stage-val').innerText = saved;
-                return parseInt(saved);
+                document.getElementById('saved-stage-val').innerText = data.stage;
+                return data;
             }
-            return 1;
+            return null;
         }
 
-        function saveGame(stageNum) {
-            localStorage.setItem('descent_maze_stage', stageNum);
+        function saveGame(stageNum, pos = null, keys = 0) {
+            const data = {
+                stage: stageNum,
+                coins: collectedCoins,
+                // If pos is provided, it's a "Save Anywhere" save, otherwise just stage progression
+                playerPos: pos ? {x: pos.x, y: pos.y, z: pos.z} : null,
+                keys: keys
+            };
+            localStorage.setItem('descent_maze_data', JSON.stringify(data));
+        }
+
+        // --- Shop Functions ---
+        window.openShop = () => {
+            if (isGameOver) return;
+            document.getElementById('shop-screen').style.display = 'flex';
+            document.getElementById('shop-coin-display').innerText = collectedCoins;
+            document.getElementById('shop-msg').innerText = "";
+            if (!isMobile && controls) controls.unlock();
+            
+            // Update button states
+            document.getElementById('btn-buy-locator').disabled = hasKeyLocator;
+            document.getElementById('btn-buy-jetpack').disabled = hasJetpack;
+            document.getElementById('btn-buy-save').disabled = hasSaveAnywhere;
+        };
+
+        window.closeShop = () => {
+            document.getElementById('shop-screen').style.display = 'none';
+            prevTime = performance.now(); // Prevent time jump
+            if (!isMobile && controls) controls.lock();
+        };
+
+        window.buyItem = (type, cost) => {
+            const msg = document.getElementById('shop-msg');
+            if (collectedCoins >= cost) {
+                if (type === 'locator') {
+                    if (hasKeyLocator) { msg.innerText = "ALREADY ACTIVE"; return; }
+                    collectedCoins -= cost;
+                    hasKeyLocator = true;
+                    highlightKeys();
+                    msg.innerText = "LOCATOR ACTIVATED";
+                    document.getElementById('btn-buy-locator').disabled = true;
+                }
+                else if (type === 'save') {
+                    if (hasSaveAnywhere) { msg.innerText = "ALREADY OWNED"; return; }
+                    collectedCoins -= cost;
+                    hasSaveAnywhere = true;
+                    document.getElementById('save-spot-btn').style.display = 'flex';
+                    msg.innerText = "SAVE ANYWHERE UNLOCKED";
+                    document.getElementById('btn-buy-save').disabled = true;
+                }
+                else if (type === 'jetpack') {
+                    if (hasJetpack) { msg.innerText = "ALREADY OWNED"; return; }
+                    collectedCoins -= cost;
+                    hasJetpack = true;
+                    jetpackState = 'standby';
+                    document.getElementById('jetpack-toggle').style.display = 'flex';
+                    updateHUD(); // To show standby message
+                    msg.innerText = "JETPACK PURCHASED";
+                    document.getElementById('btn-buy-jetpack').disabled = true;
+                }
+                updateHUD();
+                document.getElementById('shop-coin-display').innerText = collectedCoins;
+            } else {
+                msg.innerText = "NOT ENOUGH COINS";
+            }
+        };
+
+        function highlightKeys() {
+            if (!hasKeyLocator) return;
+            collectibleItems.forEach(item => {
+                if (item.userData.type === 'key') {
+                    // Add a bright light to the key
+                    if (!item.userData.hasLight) {
+                        const light = new THREE.PointLight(0x00ff00, 5, 50);
+                        item.add(light);
+                        item.userData.hasLight = true;
+                        // Brighten material
+                        item.traverse((child) => {
+                            if (child.isMesh) {
+                                child.material = child.material.clone();
+                                child.material.emissive.set(0x00ff00);
+                                child.material.emissiveIntensity = 2.0;
+                            }
+                        });
+                    }
+                }
+            });
+        }
+
+        function updateHUD() {
+            document.getElementById('coin-count').innerText = collectedCoins;
+            document.getElementById('item-count').innerText = collectedItemCount;
+            const jetpackStatusEl = document.getElementById('jetpack-status');
+            if (hasJetpack) {
+                switch (jetpackState) {
+                    case 'standby':
+                        jetpackStatusEl.innerHTML = `<span style="color:#00ff00;">JETPACK STANDBY</span>`;
+                        break;
+                    case 'cooldown':
+                        jetpackStatusEl.innerHTML = `JETPACK COOLING: ${Math.ceil(jetpackCooldownTimer)}s`;
+                        break;
+                    case 'active':
+                        // This will be handled in the animate loop for real-time update
+                        break;
+                }
+            } else {
+                jetpackStatusEl.innerHTML = '';
+            }
         }
 
         function init() {
@@ -183,9 +402,20 @@
             if (!isMobile) {
                 controls = new PointerLockControls(camera, document.body);
                 document.getElementById('how-to-play').innerText = "WASD: MOVE / SPACE: JUMP / MOUSE: LOOK";
+                
+                // Fix for gear button click vs pointer lock
+                document.getElementById('gear-btn').addEventListener('click', (e) => {
+                    e.stopPropagation(); // prevent re-lock immediately
+                    window.openShop();
+                });
+                
             } else {
                 document.getElementById('how-to-play').innerText = "LEFT STICK: MOVE / RIGHT SCREEN: LOOK / BUTTON: JUMP";
                 setupMobileControls();
+                document.getElementById('gear-btn').addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                    window.openShop();
+                });
             }
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.9));
@@ -195,11 +425,35 @@
 
             window.addEventListener('resize', onWindowResize);
             checkSaveData();
+
+            // Jetpack Toggle
+            const jetpackToggleBtn = document.getElementById('jetpack-toggle');
+            jetpackToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (hasJetpack) {
+                    isJetpackSwitchOn = !isJetpackSwitchOn;
+                    jetpackToggleBtn.classList.toggle('active', isJetpackSwitchOn);
+                }
+            });
+
+            // Save Spot Button
+            const saveSpotBtn = document.getElementById('save-spot-btn');
+            saveSpotBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (hasSaveAnywhere) {
+                    saveGame(currentStage, camera.position, collectedItemCount);
+                    // Visual feedback
+                    saveSpotBtn.classList.add('saved');
+                    setTimeout(() => saveSpotBtn.classList.remove('saved'), 500);
+                }
+            });
+            
+            // Initial generation (background)
             generateStage(1);
             animate();
         }
 
-        function generateStage(stageNum) {
+        function generateStage(stageNum, savedPos = null, savedKeys = 0) {
             currentStage = stageNum;
             const theme = THEMES[(stageNum - 1) % THEMES.length];
             scene.background = new THREE.Color(theme.sky);
@@ -214,12 +468,16 @@
             ann.innerText = theme.name; ann.style.opacity = 1;
             setTimeout(() => ann.style.opacity = 0, 3000);
 
+            // Cleanup
             objects.forEach(o => scene.remove(o));
             collectibleItems.forEach(k => scene.remove(k));
             if(goal) scene.remove(goal);
             if(floor) scene.remove(floor);
-            objects = []; collectibleItems = []; collectedItemCount = 0;
-            document.getElementById('item-count').innerText = "0";
+            objects = []; collectibleItems = [];
+            
+            // Restore or Reset logic
+            collectedItemCount = savedPos ? savedKeys : 0;
+            updateHUD();
 
             let seed = 555 + stageNum;
             const rnd = () => { const x = Math.sin(seed++) * 10000; return x - Math.floor(x); };
@@ -228,17 +486,24 @@
             startP.position.set(0, 50, 0);
             scene.add(startP); objects.push(startP);
             
-            camera.position.set(0, 51.8, 0); 
-            velocity.set(0, 0, 0);
-            
-            // Reset Camera Rotation
-            cameraYaw = 0; cameraPitch = 0;
-            updateCameraRotation();
+            // Position Player
+            if (savedPos) {
+                camera.position.set(savedPos.x, savedPos.y, savedPos.z);
+            } else {
+                camera.position.set(0, 51.8, 0); 
+                velocity.set(0, 0, 0);
+                cameraYaw = 0; cameraPitch = 0;
+                updateCameraRotation();
+            }
 
             let keyRemaining = 4;
+            // Reduce keys to spawn if loading from save (simple logic: just spawn all, let player find 4 total. 
+            // Strict logic is complex, for this update we assume standard 4 keys spawn).
+            
             const maxDepth = 25 + (stageNum * 10); 
             const branchChance = Math.min(0.25 + (stageNum * 0.05), 0.5); 
             let currentPos = new THREE.Vector3(0, 50, 0);
+            let coinsSpawned = 0;
 
             function createPath(startPos, startRot, depth, isMainPath) {
                 let pos = startPos.clone();
@@ -263,6 +528,7 @@
                     scene.add(land); objects.push(land);
                     pos.copy(land.position);
 
+                    // Key Spawning
                     if ((isMainPath && i > 0 && i % 12 === 0 && keyRemaining > 1) || 
                         (!isMainPath && i === depth - 1 && keyRemaining > 0)) {
                         const k = createKey();
@@ -270,6 +536,18 @@
                         k.userData.baseY = k.position.y;
                         scene.add(k); collectibleItems.push(k);
                         keyRemaining--;
+                    }
+
+                    // Coin Spawning (Hard to reach places / Side branches or Air)
+                    // Limit: 2 per stage
+                    if (coinsSpawned < 2 && rnd() < 0.1 && i > 5) {
+                        const coin = createCoin();
+                        // Place coin high up or slightly off platform
+                        const coinOffset = new THREE.Vector3((rnd()-0.5)*5, 6, (rnd()-0.5)*5); 
+                        coin.position.copy(land.position).add(coinOffset);
+                        coin.userData.baseY = coin.position.y;
+                        scene.add(coin); collectibleItems.push(coin);
+                        coinsSpawned++;
                     }
 
                     if (isMainPath && rnd() < branchChance && depth - i > 6) {
@@ -294,30 +572,40 @@
             floor.rotation.x = -Math.PI/2; floor.position.y = finalPos.y - 200;
             scene.add(floor);
             isGameOver = false;
+
+            // Re-apply item effects if active
+            if (hasKeyLocator) highlightKeys();
         }
 
         function createKey() {
             const g = new THREE.Group();
+            g.userData.type = 'key';
             const r = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.1, 12, 24), keyMat); r.position.y = 0.6; g.add(r);
             const s = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 12), keyMat); s.position.y = 0.2; g.add(s);
             const b = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.06), keyMat); b.position.set(0.15, 0, 0); g.add(b);
             return g;
         }
 
-        // カメラ回転を一括適用する関数
+        function createCoin() {
+            const g = new THREE.Group();
+            g.userData.type = 'coin';
+            const c = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32), coinMat);
+            c.rotation.x = Math.PI / 2;
+            c.position.y = 0.5;
+            g.add(c);
+            return g;
+        }
+
         function updateCameraRotation() {
-            // Pitch制限 (真上・真下を少し避ける)
             const minPitch = -Math.PI / 2 + 0.1;
             const maxPitch = Math.PI / 2 - 0.1;
             cameraPitch = Math.max(minPitch, Math.min(maxPitch, cameraPitch));
 
-            // Quaternion作成 (Y回転 -> X回転の順)
             const qx = new THREE.Quaternion();
             qx.setFromAxisAngle(new THREE.Vector3(1, 0, 0), cameraPitch);
             const qy = new THREE.Quaternion();
             qy.setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
             
-            // カメラに適用 (Yaw * Pitch)
             camera.quaternion.copy(qy).multiply(qx);
         }
 
@@ -326,7 +614,6 @@
             const knob = document.getElementById('joystick-knob');
             const maxDist = 45; 
 
-            // Joystick Logic (same as before)
             const handleJoy = (e) => {
                 e.preventDefault();
                 const touch = e.targetTouches[0]; 
@@ -351,17 +638,16 @@
             joyZone.addEventListener('touchmove', handleJoy, {passive: false});
             joyZone.addEventListener('touchend', resetJoy);
             
-            // --- Stable Camera Logic ---
+            // Stable Camera Logic
             const camArea = document.getElementById('touch-camera-area');
             let lastTouchX = 0; 
             let lastTouchY = 0;
-            let activeTouchId = null; // 現在追跡中の指ID
+            let activeTouchId = null;
 
             camArea.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                // 追跡中の指がなければ、新しく触れた指を追跡対象にする
                 if (activeTouchId === null) {
-                    const t = e.changedTouches[0]; // 新しく触れた指
+                    const t = e.changedTouches[0];
                     activeTouchId = t.identifier;
                     lastTouchX = t.clientX;
                     lastTouchY = t.clientY;
@@ -371,8 +657,6 @@
             camArea.addEventListener('touchmove', (e) => {
                 e.preventDefault();
                 if (activeTouchId === null) return;
-
-                // 追跡中のIDを持つ指を探す
                 let touch = null;
                 for (let i = 0; i < e.changedTouches.length; i++) {
                     if (e.changedTouches[i].identifier === activeTouchId) {
@@ -380,18 +664,13 @@
                         break;
                     }
                 }
-
                 if (touch) {
                     const dx = touch.clientX - lastTouchX;
                     const dy = touch.clientY - lastTouchY;
                     const sens = 0.005;
-
-                    // 単純変数を更新
                     cameraYaw -= dx * sens; 
                     cameraPitch -= dy * sens;
-
                     updateCameraRotation();
-
                     lastTouchX = touch.clientX;
                     lastTouchY = touch.clientY;
                 }
@@ -399,7 +678,6 @@
 
             const endTouch = (e) => {
                 e.preventDefault();
-                // 離れた指の中に追跡中のIDがあれば追跡終了
                 for (let i = 0; i < e.changedTouches.length; i++) {
                     if (e.changedTouches[i].identifier === activeTouchId) {
                         activeTouchId = null;
@@ -414,7 +692,17 @@
             const btnJump = document.getElementById('jump-button');
             btnJump.addEventListener('touchstart', (e) => {
                 e.preventDefault();
+                isJumpHeld = true;
+                const footstepAudio = document.getElementById('sfx-footsteps');
+                if (isFootstepPlaying) {
+                    footstepAudio.pause();
+                    isFootstepPlaying = false;
+                }
                 if(canJump) { velocity.y += 17; canJump = false; }
+            }, {passive: false});
+            btnJump.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                isJumpHeld = false;
             }, {passive: false});
         }
 
@@ -426,9 +714,42 @@
 
         window.startGame = (isNew) => {
             if (isMobile) enterFullscreen();
-            const saved = checkSaveData();
-            const startStage = isNew ? 1 : saved;
-            generateStage(startStage);
+            const savedData = checkSaveData();
+            
+            // If New Game, reset everything
+            if (isNew) {
+                hasKeyLocator = false;
+                hasJetpack = false;
+                isJetpackSwitchOn = false;
+                jetpackState = 'standby';
+                jetpackFuel = 0; // Explicitly reset fuel
+                hasSaveAnywhere = false; // Reset save ability
+
+                document.getElementById('jetpack-toggle').style.display = 'none';
+                document.getElementById('jetpack-toggle').classList.remove('active');
+                document.getElementById('save-spot-btn').style.display = 'none';
+                
+                collectedCoins = 0;
+                generateStage(1);
+            } else if (savedData) {
+                // If continue, load from save data
+                collectedCoins = savedData.coins;
+                
+                // For now, items are not saved, so reset them on continue.
+                hasKeyLocator = false;
+                hasJetpack = false;
+                isJetpackSwitchOn = false;
+                jetpackState = 'standby';
+                jetpackFuel = 0;
+                hasSaveAnywhere = false;
+                document.getElementById('jetpack-toggle').style.display = 'none';
+                document.getElementById('jetpack-toggle').classList.remove('active');
+                document.getElementById('save-spot-btn').style.display = 'none';
+
+                generateStage(savedData.stage, savedData.playerPos, savedData.keys);
+            }
+            
+            updateHUD();
             document.getElementById('instructions').style.display = 'none';
             if(!isMobile && controls) controls.lock();
             document.getElementById('bgm').play().catch(()=>{});
@@ -439,12 +760,65 @@
             const time = performance.now();
             const delta = Math.min((time - prevTime) / 1000, 0.1);
 
+            // Don't update if Shop is Open
+            if (document.getElementById('shop-screen').style.display === 'flex') {
+                prevTime = time;
+                return;
+            }
+
             if (!isGameOver) {
+                // Reset jump state each frame before checking collisions
+                canJump = false;
+
+                // Friction
                 velocity.x -= velocity.x * 10.0 * delta;
                 velocity.z -= velocity.z * 10.0 * delta;
-                velocity.y -= 42.0 * delta; 
 
-                // Camera Direction for Movement (Derived directly from current Quaternion)
+                const jetpackStatusEl = document.getElementById('jetpack-status');
+                let isJetpacking = false;
+
+                // New Jetpack Logic
+                if (hasJetpack) {
+                    // Cooldown state handling
+                    if (jetpackState === 'cooldown') {
+                        jetpackCooldownTimer -= delta;
+                        updateHUD(); // Display countdown
+                        if (jetpackCooldownTimer <= 0) {
+                            jetpackState = 'standby';
+                            jetpackFuel = 5; // Refill fuel
+                            updateHUD(); // Display "STANDBY"
+                        }
+                    }
+                    
+                    // Spray logic: only when switch is on, jump is held, and not in cooldown
+                    if (isJetpackSwitchOn && isJumpHeld && jetpackState === 'standby') {
+                        if (jetpackFuel > 0) {
+                            isJetpacking = true;
+                            jetpackFuel -= delta;
+                            
+                            // Apply lift
+                            velocity.y += 40.0 * delta;
+                            if (velocity.y > 15) velocity.y = 15;
+                            
+                            // Update UI in real-time
+                            jetpackStatusEl.innerHTML = `JETPACK ON: <span style="color:yellow;">${jetpackFuel.toFixed(1)}s</span>`;
+
+                            // Check if fuel just ran out
+                            if (jetpackFuel <= 0) {
+                                jetpackFuel = 0;
+                                jetpackState = 'cooldown';
+                                jetpackCooldownTimer = 60; // Start 60-second cooldown
+                            }
+                        }
+                    }
+                }
+
+                // Apply gravity ONLY if not actively jetpacking
+                if (!isJetpacking) {
+                    velocity.y -= 42.0 * delta;
+                }
+                
+                // Camera Direction for Movement
                 const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
                 camFwd.y = 0; camFwd.normalize();
                 const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
@@ -471,20 +845,49 @@
                 let onObj = false;
                 if(hit.length > 0) {
                     const gY = hit[0].point.y + 1.8;
-                    if(camera.position.y <= gY + 1.0 && velocity.y < 0) { velocity.y = 0; canJump = true; targetY = gY; onObj = true; }
+                    if(camera.position.y <= gY + 1.0 && velocity.y < 0) { 
+                        velocity.y = 0; canJump = true; targetY = gY; onObj = true; 
+                    }
                 }
 
                 if(!onObj) camera.position.y += velocity.y * delta;
                 else camera.position.y += (targetY - camera.position.y) * 0.3;
 
+                // --- Landing Audio Logic ---
+                if (canJump && !wasOnGround) {
+                    document.getElementById('sfx-land').play().catch(e => console.error("Landing audio play failed:", e));
+                }
+
+                // --- Footstep Audio Logic ---
+                const footstepAudio = document.getElementById('sfx-footsteps');
+                const isMoving = moveForward || moveBackward || moveLeft || moveRight || Math.abs(joyVector.x) > 0.1 || Math.abs(joyVector.y) > 0.1;
+                const isMovingOnGround = isMoving && canJump;
+
+                if (isMovingOnGround && !isFootstepPlaying) {
+                    footstepAudio.play().catch(e => console.error("Footstep audio play failed:", e));
+                    isFootstepPlaying = true;
+                } else if (!isMovingOnGround && isFootstepPlaying) {
+                    footstepAudio.pause();
+                    footstepAudio.currentTime = 0;
+                    isFootstepPlaying = false;
+                }
+
+                // Collectibles
                 collectibleItems.forEach((k, i) => {
                     k.rotation.y += delta * 3;
                     k.position.y = k.userData.baseY + Math.sin(time*0.004)*0.25;
+                    
                     if(camera.position.distanceTo(k.position) < 3.2) {
                         document.getElementById('sfx-get').currentTime=0; document.getElementById('sfx-get').play().catch(()=>{});
                         scene.remove(k); collectibleItems.splice(i, 1);
-                        collectedItemCount++; document.getElementById('item-count').innerText = collectedItemCount;
-                        if(collectedItemCount === 4) goal.material.color.set(0x00ff00);
+                        
+                        if (k.userData.type === 'key') {
+                            collectedItemCount++;
+                            if(collectedItemCount >= 4) goal.material.color.set(0x00ff00);
+                        } else if (k.userData.type === 'coin') {
+                            collectedCoins++;
+                        }
+                        updateHUD();
                     }
                 });
 
@@ -502,6 +905,7 @@
                     if(d < 12 && Math.abs(camera.position.y - goal.userData.topY) < 15) {
                         isGameOver = true;
                         const next = currentStage + 1;
+                        // Save progress (next stage, start fresh)
                         saveGame(next);
                         showEndScreen("LEVEL COMPLETED", "DESCEND DEEPER", () => {
                             document.getElementById('clear-screen').style.display='none';
@@ -511,6 +915,9 @@
                     }
                 }
             }
+            // Update grounding state for next frame
+            wasOnGround = canJump;
+
             prevTime = time; renderer.render(scene, camera);
         }
 
@@ -531,11 +938,32 @@
         document.addEventListener('keydown', e => {
             if(e.code==='KeyW') moveForward=true; if(e.code==='KeyS') moveBackward=true;
             if(e.code==='KeyA') moveLeft=true; if(e.code==='KeyD') moveRight=true;
-            if(e.code==='Space' && canJump) { velocity.y+=17; canJump=false; }
+            if(e.code==='Space') {
+                isJumpHeld = true;
+                const footstepAudio = document.getElementById('sfx-footsteps');
+                if (isFootstepPlaying) {
+                    footstepAudio.pause();
+                    isFootstepPlaying = false;
+                }
+                if(canJump) { velocity.y+=17; canJump=false; }
+            }
+            if (e.code === 'KeyJ' && hasJetpack) {
+                const jetpackToggleBtn = document.getElementById('jetpack-toggle');
+                isJetpackSwitchOn = !isJetpackSwitchOn;
+                jetpackToggleBtn.classList.toggle('active', isJetpackSwitchOn);
+            }
+            if (e.code === 'KeyI') {
+                if (document.getElementById('shop-screen').style.display === 'flex') {
+                    window.closeShop();
+                } else {
+                    window.openShop();
+                }
+            }
         });
         document.addEventListener('keyup', e => {
             if(e.code==='KeyW') moveForward=false; if(e.code==='KeyS') moveBackward=false;
             if(e.code==='KeyA') moveLeft=false; if(e.code==='KeyD') moveRight=false;
+            if(e.code==='Space') isJumpHeld = false;
         });
 
         init();
