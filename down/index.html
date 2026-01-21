@@ -281,15 +281,56 @@
             return null;
         }
 
-        function saveGame(stageNum, pos = null, keys = 0) {
-            const data = {
-                stage: stageNum,
-                coins: collectedCoins,
-                // If pos is provided, it's a "Save Anywhere" save, otherwise just stage progression
-                playerPos: pos ? {x: pos.x, y: pos.y, z: pos.z} : null,
-                keys: keys
-            };
+        function saveGame(type, stageNum, pos, keys) {
+            let data = {};
+            // For progress saves, we preserve item ownership but reset position/keys
+            if (type === 'progress') {
+                const existingData = JSON.parse(localStorage.getItem('descent_maze_data')) || {};
+                data = {
+                    ...existingData, // Preserve item states
+                    stage: stageNum,
+                    coins: collectedCoins,
+                    playerPos: null,
+                    keys: 0,
+                };
+            } 
+            // For full saves, we save everything at the current moment
+            else if (type === 'full') {
+                data = {
+                    stage: stageNum,
+                    coins: collectedCoins,
+                    playerPos: pos ? {x: pos.x, y: pos.y, z: pos.z} : null,
+                    keys: keys,
+                    hasKeyLocator: hasKeyLocator,
+                    hasJetpack: hasJetpack,
+                    hasSaveAnywhere: hasSaveAnywhere
+                };
+            }
             localStorage.setItem('descent_maze_data', JSON.stringify(data));
+        }
+
+        function loadGameFromData(savedData) {
+            // Load game state
+            collectedCoins = savedData.coins;
+            hasKeyLocator = savedData.hasKeyLocator || false;
+            hasJetpack = savedData.hasJetpack || false;
+            hasSaveAnywhere = savedData.hasSaveAnywhere || false;
+
+            // Reset dynamic states and UI
+            isJetpackSwitchOn = false;
+            jetpackState = 'standby';
+            jetpackFuel = hasJetpack ? 5 : 0;
+            
+            document.getElementById('jetpack-toggle').style.display = hasJetpack ? 'flex' : 'none';
+            document.getElementById('jetpack-toggle').classList.remove('active');
+            document.getElementById('save-spot-btn').style.display = hasSaveAnywhere ? 'flex' : 'none';
+
+            // Generate stage from loaded data. If no specific position is saved, start from the beginning of the stage.
+            if (savedData.playerPos) {
+                generateStage(savedData.stage, savedData.playerPos, savedData.keys);
+            } else {
+                generateStage(savedData.stage, null, 0);
+            }
         }
 
         // --- Shop Functions ---
@@ -440,11 +481,15 @@
             const saveSpotBtn = document.getElementById('save-spot-btn');
             saveSpotBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (hasSaveAnywhere) {
-                    saveGame(currentStage, camera.position, collectedItemCount);
-                    // Visual feedback
+                if (hasSaveAnywhere && canJump) { // Only allow saving when on ground
+                    saveGame('full', currentStage, camera.position, collectedItemCount);
+                    // Visual feedback: green for success
                     saveSpotBtn.classList.add('saved');
                     setTimeout(() => saveSpotBtn.classList.remove('saved'), 500);
+                } else if (hasSaveAnywhere) {
+                    // Visual feedback: red for failure (e.g., in air)
+                    saveSpotBtn.style.backgroundColor = '#f00';
+                    setTimeout(() => saveSpotBtn.style.backgroundColor = 'rgba(0,0,0,0.5)', 500);
                 }
             });
             
@@ -476,7 +521,7 @@
             objects = []; collectibleItems = [];
             
             // Restore or Reset logic
-            collectedItemCount = savedPos ? savedKeys : 0;
+            collectedItemCount = savedKeys;
             updateHUD();
 
             let seed = 555 + stageNum;
@@ -489,6 +534,7 @@
             // Position Player
             if (savedPos) {
                 camera.position.set(savedPos.x, savedPos.y, savedPos.z);
+                velocity.set(0, 0, 0); // CRITICAL: Reset velocity on load to prevent falling
             } else {
                 camera.position.set(0, 51.8, 0); 
                 velocity.set(0, 0, 0);
@@ -496,7 +542,7 @@
                 updateCameraRotation();
             }
 
-            let keyRemaining = 4;
+            let keyRemaining = 4 - savedKeys;
             // Reduce keys to spawn if loading from save (simple logic: just spawn all, let player find 4 total. 
             // Strict logic is complex, for this update we assume standard 4 keys spawn).
             
@@ -732,21 +778,8 @@
                 collectedCoins = 0;
                 generateStage(1);
             } else if (savedData) {
-                // If continue, load from save data
-                collectedCoins = savedData.coins;
-                
-                // For now, items are not saved, so reset them on continue.
-                hasKeyLocator = false;
-                hasJetpack = false;
-                isJetpackSwitchOn = false;
-                jetpackState = 'standby';
-                jetpackFuel = 0;
-                hasSaveAnywhere = false;
-                document.getElementById('jetpack-toggle').style.display = 'none';
-                document.getElementById('jetpack-toggle').classList.remove('active');
-                document.getElementById('save-spot-btn').style.display = 'none';
-
-                generateStage(savedData.stage, savedData.playerPos, savedData.keys);
+                // If continue, load from save data using the centralized function
+                loadGameFromData(savedData);
             }
             
             updateHUD();
@@ -896,7 +929,15 @@
                     isGameOver = true; document.getElementById('sfx-fall').play().catch(()=>{});
                     showEndScreen("FELL INTO THE ABYSS", "RETRY STAGE", () => {
                         document.getElementById('clear-screen').style.display='none';
-                        generateStage(currentStage); if(!isMobile && controls) controls.lock();
+                        // On retry, load the last saved data
+                        const savedData = checkSaveData();
+                        if (savedData) {
+                            loadGameFromData(savedData);
+                        } else {
+                            // If there's no save data for some reason, start stage over
+                            generateStage(currentStage); 
+                        }
+                        if(!isMobile && controls) controls.lock();
                     });
                 }
                 
@@ -905,8 +946,8 @@
                     if(d < 12 && Math.abs(camera.position.y - goal.userData.topY) < 15) {
                         isGameOver = true;
                         const next = currentStage + 1;
-                        // Save progress (next stage, start fresh)
-                        saveGame(next);
+                        // Save progress for the next stage, but not the specific spot
+                        saveGame('progress', next);
                         showEndScreen("LEVEL COMPLETED", "DESCEND DEEPER", () => {
                             document.getElementById('clear-screen').style.display='none';
                             document.getElementById('bgm').play().catch(()=>{}); generateStage(next);
