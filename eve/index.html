@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Everest Simulator - Definitive Fix</title>
+    <title>Everest Simulator - 8848m Edition</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; touch-action: none; }
         #instrument-panel {
@@ -38,16 +38,12 @@
             text-align: center; display: none; z-index: 100; color: white; background: rgba(0,0,0,0.9); padding: 30px; border: 2px solid #fff; width: 80%;
         }
         .btn-retry { margin-top: 20px; padding: 15px 30px; background: #fff; border: none; cursor: pointer; font-weight: bold; }
-        
-        /* 開始画面オーバーレイ */
         #start-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center;
             z-index: 200; cursor: pointer; flex-direction: column;
         }
-        #start-btn {
-            padding: 20px 40px; background: #00ff00; color: #000; font-weight: bold; font-size: 24px; border: none; cursor: pointer;
-        }
+        #start-btn { padding: 20px 40px; background: #00ff00; color: #000; font-weight: bold; font-size: 24px; border: none; cursor: pointer; }
         #audio-status { color: #888; margin-top: 15px; font-size: 12px; }
     </style>
 </head>
@@ -55,11 +51,11 @@
 
     <div id="start-overlay">
         <button id="start-btn">START CLIMBING</button>
-        <div id="audio-status">Audio: Initializing...</div>
+        <div id="audio-status">Initializing systems...</div>
     </div>
 
     <div id="instrument-panel">
-        <div>ALTITUDE: <span id="alt-val" class="data-value">5364</span>m</div>
+        <div>ALTITUDE: <span id="alt-val" class="data-value">5364.00</span>m</div>
         <div>TO SUMMIT: <span id="dist-val" class="data-value">--</span>m</div>
         <div>WEATHER: <span id="weather-text" class="data-value">NORMAL</span></div>
     </div>
@@ -85,11 +81,19 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 設定 ---
+        // --- 定数設定 ---
+        const startAlt = 5364.00;
+        const targetAlt = 8848.00;
+        const altRange = targetAlt - startAlt; 
+        
         const summitPos = new THREE.Vector3(0, 0, -2800); 
+        const startPosXZ = new THREE.Vector2(0, 2000);
         const terrainSize = 6000;
+
         let isEnded = false;
         let audioEnabled = false;
+        let startGroundY = 0;
+        let summitGroundY = 0;
 
         const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
         if (isTouchDevice) {
@@ -106,7 +110,7 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.body.appendChild(renderer.domElement);
 
-        // --- オーディオ管理 ---
+        // --- オーディオ ---
         const listener = new THREE.AudioListener();
         camera.add(listener);
         const windSound = new THREE.Audio(listener);
@@ -116,26 +120,14 @@
             windSound.setBuffer(buffer);
             windSound.setLoop(true);
             windSound.setVolume(0);
-            document.getElementById('audio-status').innerText = "Audio: Ready";
+            document.getElementById('audio-status').innerText = "Audio Ready";
         }, undefined, (err) => {
-            document.getElementById('audio-status').innerText = "Audio: wind.mp3 not found (Muted)";
-            console.warn("wind.mp3 was not found. Game will continue without sound.");
+            document.getElementById('audio-status').innerText = "Audio Muted (File missing)";
         });
 
-        // ゲーム開始ボタンの処理
-        const startBtn = document.getElementById('start-btn');
-        startBtn.addEventListener('click', () => {
-            // AudioContextの再開
-            if (listener.context.state === 'suspended') {
-                listener.context.resume();
-            }
-
-            // 音源があれば再生
-            if (windSound.buffer) {
-                windSound.play();
-                audioEnabled = true;
-            }
-
+        document.getElementById('start-btn').addEventListener('click', () => {
+            if (listener.context.state === 'suspended') listener.context.resume();
+            if (windSound.buffer) { windSound.play(); audioEnabled = true; }
             document.getElementById('start-overlay').style.display = 'none';
             if (!isTouchDevice) renderer.domElement.requestPointerLock();
         });
@@ -155,38 +147,42 @@
             h += Math.max(0, 1200 - distToSummit * 0.4);
             h += Math.sin(x * 0.02) * 6 + Math.cos(z * 0.02) * 6;
 
-            // クレバス
             let crevasseMask = Math.sin(x * 0.015 + z * 0.01);
             if (crevasseMask > 0.988 && z < 1000 && z > -2500) {
                 if (Math.abs(Math.cos(x * 0.015)) <= 0.96) h -= 600; 
             }
             vertices[i + 1] = h;
 
-            const brightness = 0.8 + (Math.random() * 0.2);
-            if (h < -100) colorObj.setRGB(0.2, 0.2, 0.3);
-            else if (Math.random() > 0.98) colorObj.setRGB(0.4, 0.4, 0.4); 
-            else colorObj.setRGB(brightness, brightness, brightness + 0.05);
+            const noise = Math.random();
+            const brightness = 0.82 + (noise * 0.18);
+            if (h < -100) colorObj.setRGB(0.2, 0.2, 0.28); 
+            else if (noise > 0.975) colorObj.setRGB(0.45, 0.45, 0.48); 
+            else colorObj.setRGB(brightness, brightness, brightness + 0.03);
             colors[i] = colorObj.r; colors[i+1] = colorObj.g; colors[i+2] = colorObj.b;
 
-            if (Math.abs(x) < 5 && Math.abs(z + 2800) < 5) summitPos.y = h;
+            if (Math.abs(x - startPosXZ.x) < 15 && Math.abs(z - startPosXZ.y) < 15) startGroundY = h;
+            if (Math.abs(x) < 15 && Math.abs(z + 2800) < 15) summitGroundY = h;
         }
+        summitPos.y = summitGroundY;
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         geometry.computeVertexNormals();
-        const terrain = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 10 }));
+        const terrain = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 15 }));
         scene.add(terrain);
+
+        // スケール計算
+        const inGameHeightDiff = summitGroundY - startGroundY;
+        const altScale = altRange / inGameHeightDiff;
 
         // --- 頂上の旗 ---
         const flagGroup = new THREE.Group();
         const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 15), new THREE.MeshPhongMaterial({ color: 0x333333 }));
-        pole.position.y = 7.5;
-        flagGroup.add(pole);
+        pole.position.y = 7.5; flagGroup.add(pole);
         const flagShape = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide }));
-        flagShape.position.set(3, 12, 0);
-        flagGroup.add(flagShape);
+        flagShape.position.set(3, 12, 0); flagGroup.add(flagShape);
         flagGroup.position.copy(summitPos);
         scene.add(flagGroup);
 
-        // 吹雪パーティクル
+        // パーティクル
         const snowCount = 5000;
         const snowGeom = new THREE.BufferGeometry();
         const snowCoords = new Float32Array(snowCount * 3);
@@ -197,20 +193,15 @@
         scene.add(snowParticles);
 
         const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(100, 32), new THREE.MeshBasicMaterial({ color: 0xffffcc }));
-        sunDisc.position.set(-2000, 3500, -5000);
-        sunDisc.lookAt(0, 0, 0);
-        scene.add(sunDisc);
-
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.3);
-        dirLight.position.copy(sunDisc.position);
-        scene.add(dirLight);
+        sunDisc.position.set(-2000, 3500, -5000); sunDisc.lookAt(0, 0, 0); scene.add(sunDisc);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.3); dirLight.position.copy(sunDisc.position); scene.add(dirLight);
         scene.add(new THREE.AmbientLight(0xaaaaee, 0.5));
 
-        let player = { pos: new THREE.Vector3(0, 1000, 2000), velY: 0, rotY: 0, rotX: 0, isFalling: false };
+        let player = { pos: new THREE.Vector3(startPosXZ.x, 1000, startPosXZ.y), velY: 0, rotY: 0, rotX: 0, isFalling: false };
         let joyInput = { x: 0, y: 0 };
         const keys = {};
 
-        // マウス視点移動
+        // 操作
         window.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === renderer.domElement) {
                 player.rotY -= e.movementX * 0.002;
@@ -219,7 +210,6 @@
             }
         });
         
-        // スマホ操作系
         const joyContainer = document.getElementById('joystick-container');
         const joyKnob = document.getElementById('joystick-knob');
         let joyTouchId = null;
@@ -256,22 +246,15 @@
             if(isEnded) return;
             requestAnimationFrame(animate);
 
-            // 天候サイクル
             let weatherCycle = (Math.sin(time * 0.0002) + 1) / 2;
             const isWhiteout = weatherCycle > 0.7;
             document.getElementById('weather-text').innerText = isWhiteout ? "WHITEOUT" : "NORMAL";
-            
-            // 音量フェード
-            if (audioEnabled && windSound.isPlaying) {
-                let targetVol = 0.15 + (Math.pow(weatherCycle, 2) * 0.85);
-                windSound.setVolume(targetVol);
-            }
+            if (audioEnabled && windSound.isPlaying) windSound.setVolume(0.15 + (Math.pow(weatherCycle, 2) * 0.85));
 
             const fogDensity = 0.0002 + Math.pow(weatherCycle, 3) * 0.045;
             scene.background = new THREE.Color().lerpColors(new THREE.Color(0x77aaff), new THREE.Color(0xcccccc), Math.min(1, weatherCycle * 1.2));
             scene.fog = new THREE.FogExp2(scene.background, fogDensity);
 
-            // 吹雪パーティクル
             snowParticles.position.copy(player.pos);
             const positions = snowParticles.geometry.attributes.position.array;
             const windSpeed = 0.5 + weatherCycle * 3.5;
@@ -283,7 +266,6 @@
             snowParticles.geometry.attributes.position.needsUpdate = true;
             snowMat.opacity = Math.max(0, (weatherCycle - 0.2) * 0.9);
 
-            // 移動操作
             const speed = 1.8;
             const forward = new THREE.Vector3(Math.sin(player.rotY), 0, Math.cos(player.rotY));
             const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), forward);
@@ -295,7 +277,6 @@
                 player.pos.addScaledVector(right, moveSide * speed);
             }
 
-            // 接地と滑落判定
             raycaster.set(new THREE.Vector3(player.pos.x, 8000, player.pos.z), new THREE.Vector3(0,-1,0));
             const hit = raycaster.intersectObject(terrain);
             if(hit.length > 0) {
@@ -303,20 +284,22 @@
                 if (gY < player.pos.y - 35) player.isFalling = true; 
                 if (player.isFalling) {
                     player.velY -= 0.7;
-                    if (player.pos.y < gY + 3) showEnd("遭難", "クレバスの底へ消えました…");
+                    if (player.pos.y < gY + 3) showEnd("滑落", "クレバスの底へ消えました…");
                 } else {
                     const targetY = gY + 3.0;
                     if(player.pos.y > targetY) player.velY -= 0.18;
                     else {
-                        if(player.velY < -18) showEnd("遭難", "滑落しました。");
+                        if(player.velY < -18) showEnd("滑落", "急斜面から滑落しました。");
                         player.pos.y = targetY; player.velY = 0;
                     }
                 }
             }
             player.pos.y += player.velY;
 
-            // UI更新
-            document.getElementById('alt-val').innerText = Math.floor(5364 + player.pos.y * 3.1);
+            // 標高計算
+            const currentAlt = startAlt + (player.pos.y - startGroundY - 3.0) * altScale;
+            document.getElementById('alt-val').innerText = currentAlt.toFixed(2);
+            
             const distToFlag = player.pos.distanceTo(summitPos);
             document.getElementById('dist-val').innerText = Math.floor(distToFlag);
             
@@ -326,7 +309,8 @@
             pIcon.style.transform = `translate(-50%, -50%) rotate(${-player.rotY * 180 / Math.PI}deg)`;
 
             // 勝利判定
-            if(distToFlag < 10 && player.pos.y > summitPos.y - 5) {
+            if(distToFlag < 10 && currentAlt > targetAlt - 5) {
+                document.getElementById('alt-val').innerText = "8848.00";
                 showEnd("登頂成功", "エベレストの頂（8848m）に到達！");
             }
 
@@ -341,7 +325,7 @@
 
         function showEnd(t, b) {
             if(isEnded) return; isEnded = true;
-            if(audioEnabled && windSound.isPlaying) windSound.stop();
+            if(windSound.isPlaying) windSound.stop();
             document.exitPointerLock();
             document.getElementById('message-screen').style.display = 'block';
             document.getElementById('msg-title').innerText = t; document.getElementById('msg-body').innerText = b;
