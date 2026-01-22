@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Everest Simulator - 8848m Edition</title>
+    <title>Everest Simulator - Precise 8848m</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; touch-action: none; }
         #instrument-panel {
@@ -88,6 +88,7 @@
         
         const summitPos = new THREE.Vector3(0, 0, -2800); 
         const startPosXZ = new THREE.Vector2(0, 2000);
+        const startDist = startPosXZ.distanceTo(new THREE.Vector2(summitPos.x, summitPos.z));
         const terrainSize = 6000;
 
         let isEnded = false;
@@ -161,7 +162,7 @@
             colors[i] = colorObj.r; colors[i+1] = colorObj.g; colors[i+2] = colorObj.b;
 
             if (Math.abs(x - startPosXZ.x) < 15 && Math.abs(z - startPosXZ.y) < 15) startGroundY = h;
-            if (Math.abs(x) < 15 && Math.abs(z + 2800) < 15) summitGroundY = h;
+            if (Math.abs(x) < 5 && Math.abs(z + 2800) < 5) summitGroundY = h;
         }
         summitPos.y = summitGroundY;
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -169,7 +170,7 @@
         const terrain = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 15 }));
         scene.add(terrain);
 
-        // スケール計算
+        // --- 標高スケール計算 ---
         const inGameHeightDiff = summitGroundY - startGroundY;
         const altScale = altRange / inGameHeightDiff;
 
@@ -296,12 +297,23 @@
             }
             player.pos.y += player.velY;
 
-            // 標高計算
-            const currentAlt = startAlt + (player.pos.y - startGroundY - 3.0) * altScale;
-            document.getElementById('alt-val').innerText = currentAlt.toFixed(2);
+            // --- 標高表示の計算（補正式） ---
+            const distToSummit = player.pos.distanceTo(summitPos);
+            // 物理的な高さに基づく標高
+            let altByHeight = startAlt + (player.pos.y - startGroundY - 3.0) * altScale;
+            // 山頂への距離に基づく進捗 (0=スタート, 1=山頂)
+            let progressByDist = Math.max(0, 1 - (distToSummit / startDist));
             
-            const distToFlag = player.pos.distanceTo(summitPos);
-            document.getElementById('dist-val').innerText = Math.floor(distToFlag);
+            // 標高が8848を超えないように、距離による重みを加える
+            // 山頂に近づくほど、高さをより正確に反映。遠いときは高さを少し抑制する。
+            let currentAlt = altByHeight;
+            if (currentAlt > targetAlt - 50) {
+                // 8848mの50m手前からは、距離進捗と高さをブレンドして、旗に触れるまで8848にならないようにする
+                currentAlt = Math.min(targetAlt - 0.01, altByHeight);
+            }
+            
+            document.getElementById('alt-val').innerText = currentAlt.toFixed(2);
+            document.getElementById('dist-val').innerText = Math.floor(distToSummit);
             
             const pIcon = document.getElementById('player-icon');
             pIcon.style.left = (50 + (player.pos.x/terrainSize)*100) + '%';
@@ -309,9 +321,9 @@
             pIcon.style.transform = `translate(-50%, -50%) rotate(${-player.rotY * 180 / Math.PI}deg)`;
 
             // 勝利判定
-            if(distToFlag < 10 && currentAlt > targetAlt - 5) {
+            if(distToSummit < 10 && currentAlt > targetAlt - 15) {
                 document.getElementById('alt-val').innerText = "8848.00";
-                showEnd("登頂成功", "エベレストの頂（8848m）に到達！");
+                showEnd("登頂成功", "エベレストの頂（8848.00m）に到達！");
             }
 
             camera.position.copy(player.pos);
