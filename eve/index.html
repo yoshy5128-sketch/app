@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Everest Simulator - Definitive Fix</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; touch-action: none; }
+        #instrument-panel {
+            position: absolute; top: 10px; left: 10px; color: #00ff00; 
+            background: rgba(0, 20, 0, 0.8); padding: 10px; border: 1px solid #00ff00;
+            z-index: 10; font-size: 12px; pointer-events: none;
+        }
+        .data-value { font-weight: bold; font-size: 16px; color: #fff; }
+        #map-display {
+            position: absolute; top: 10px; right: 10px; width: 120px; height: 120px;
+            background: rgba(0, 40, 0, 0.6); border: 2px solid #00ff00; z-index: 10;
+        }
+        #summit-dot { position: absolute; width: 8px; height: 8px; background: #ff0000; left: 50%; top: 5%; transform: translate(-50%, -50%); clip-path: polygon(50% 0%, 0% 100%, 100% 100%); }
+        #player-icon { 
+            position: absolute; width: 14px; height: 20px; background: #fff; 
+            clip-path: polygon(50% 0%, 0% 100%, 50% 75%, 100% 100%); 
+            transform-origin: center;
+        }
+        #joystick-container {
+            position: absolute; bottom: 50px; left: 40px; width: 120px; height: 120px;
+            background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; z-index: 20;
+            display: none;
+        }
+        #joystick-knob {
+            position: absolute; top: 50%; left: 50%; width: 50px; height: 50px;
+            background: rgba(255, 255, 255, 0.4); border-radius: 50%; transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #touch-look-area { position: absolute; top: 0; right: 0; width: 50%; height: 100%; z-index: 5; display: none; }
+        #message-screen {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; display: none; z-index: 100; color: white; background: rgba(0,0,0,0.9); padding: 30px; border: 2px solid #fff; width: 80%;
+        }
+        .btn-retry { margin-top: 20px; padding: 15px 30px; background: #fff; border: none; cursor: pointer; font-weight: bold; }
+        
+        /* 開始画面オーバーレイ */
+        #start-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center;
+            z-index: 200; cursor: pointer; flex-direction: column;
+        }
+        #start-btn {
+            padding: 20px 40px; background: #00ff00; color: #000; font-weight: bold; font-size: 24px; border: none; cursor: pointer;
+        }
+        #audio-status { color: #888; margin-top: 15px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <div id="start-overlay">
+        <button id="start-btn">START CLIMBING</button>
+        <div id="audio-status">Audio: Initializing...</div>
+    </div>
+
+    <div id="instrument-panel">
+        <div>ALTITUDE: <span id="alt-val" class="data-value">5364</span>m</div>
+        <div>TO SUMMIT: <span id="dist-val" class="data-value">--</span>m</div>
+        <div>WEATHER: <span id="weather-text" class="data-value">NORMAL</span></div>
+    </div>
+
+    <div id="map-display">
+        <div id="summit-dot"></div>
+        <div id="player-icon"></div>
+    </div>
+
+    <div id="joystick-container"><div id="joystick-knob"></div></div>
+    <div id="touch-look-area"></div>
+
+    <div id="message-screen">
+        <h1 id="msg-title"></h1>
+        <p id="msg-body"></p>
+        <button class="btn-retry" onclick="location.reload()">RETRY</button>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- 設定 ---
+        const summitPos = new THREE.Vector3(0, 0, -2800); 
+        const terrainSize = 6000;
+        let isEnded = false;
+        let audioEnabled = false;
+
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        if (isTouchDevice) {
+            document.getElementById('joystick-container').style.display = 'block';
+            document.getElementById('touch-look-area').style.display = 'block';
+        }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.5, 15000);
+        camera.rotation.order = 'YXZ';
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        document.body.appendChild(renderer.domElement);
+
+        // --- オーディオ管理 ---
+        const listener = new THREE.AudioListener();
+        camera.add(listener);
+        const windSound = new THREE.Audio(listener);
+        const audioLoader = new THREE.AudioLoader();
+
+        audioLoader.load('wind.mp3', (buffer) => {
+            windSound.setBuffer(buffer);
+            windSound.setLoop(true);
+            windSound.setVolume(0);
+            document.getElementById('audio-status').innerText = "Audio: Ready";
+        }, undefined, (err) => {
+            document.getElementById('audio-status').innerText = "Audio: wind.mp3 not found (Muted)";
+            console.warn("wind.mp3 was not found. Game will continue without sound.");
+        });
+
+        // ゲーム開始ボタンの処理
+        const startBtn = document.getElementById('start-btn');
+        startBtn.addEventListener('click', () => {
+            // AudioContextの再開
+            if (listener.context.state === 'suspended') {
+                listener.context.resume();
+            }
+
+            // 音源があれば再生
+            if (windSound.buffer) {
+                windSound.play();
+                audioEnabled = true;
+            }
+
+            document.getElementById('start-overlay').style.display = 'none';
+            if (!isTouchDevice) renderer.domElement.requestPointerLock();
+        });
+
+        // --- 地形生成 ---
+        const geometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 200, 200);
+        geometry.rotateX(-Math.PI / 2); 
+        const vertices = geometry.attributes.position.array;
+        const colors = new Float32Array(vertices.length);
+        const colorObj = new THREE.Color();
+
+        for (let i = 0; i < vertices.length; i += 3) {
+            const x = vertices[i], z = vertices[i + 2];
+            let h = (2500 - z) * 0.4; 
+            h += Math.sin(x * 0.002) * 100 + Math.cos(z * 0.002) * 80;
+            let distToSummit = Math.sqrt(x*x + (z + 2800)*(z + 2800));
+            h += Math.max(0, 1200 - distToSummit * 0.4);
+            h += Math.sin(x * 0.02) * 6 + Math.cos(z * 0.02) * 6;
+
+            // クレバス
+            let crevasseMask = Math.sin(x * 0.015 + z * 0.01);
+            if (crevasseMask > 0.988 && z < 1000 && z > -2500) {
+                if (Math.abs(Math.cos(x * 0.015)) <= 0.96) h -= 600; 
+            }
+            vertices[i + 1] = h;
+
+            const brightness = 0.8 + (Math.random() * 0.2);
+            if (h < -100) colorObj.setRGB(0.2, 0.2, 0.3);
+            else if (Math.random() > 0.98) colorObj.setRGB(0.4, 0.4, 0.4); 
+            else colorObj.setRGB(brightness, brightness, brightness + 0.05);
+            colors[i] = colorObj.r; colors[i+1] = colorObj.g; colors[i+2] = colorObj.b;
+
+            if (Math.abs(x) < 5 && Math.abs(z + 2800) < 5) summitPos.y = h;
+        }
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        geometry.computeVertexNormals();
+        const terrain = new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 10 }));
+        scene.add(terrain);
+
+        // --- 頂上の旗 ---
+        const flagGroup = new THREE.Group();
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 15), new THREE.MeshPhongMaterial({ color: 0x333333 }));
+        pole.position.y = 7.5;
+        flagGroup.add(pole);
+        const flagShape = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide }));
+        flagShape.position.set(3, 12, 0);
+        flagGroup.add(flagShape);
+        flagGroup.position.copy(summitPos);
+        scene.add(flagGroup);
+
+        // 吹雪パーティクル
+        const snowCount = 5000;
+        const snowGeom = new THREE.BufferGeometry();
+        const snowCoords = new Float32Array(snowCount * 3);
+        for(let i=0; i<snowCount*3; i++) snowCoords[i] = (Math.random() - 0.5) * 100;
+        snowGeom.setAttribute('position', new THREE.BufferAttribute(snowCoords, 3));
+        const snowMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0 });
+        const snowParticles = new THREE.Points(snowGeom, snowMat);
+        scene.add(snowParticles);
+
+        const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(100, 32), new THREE.MeshBasicMaterial({ color: 0xffffcc }));
+        sunDisc.position.set(-2000, 3500, -5000);
+        sunDisc.lookAt(0, 0, 0);
+        scene.add(sunDisc);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.3);
+        dirLight.position.copy(sunDisc.position);
+        scene.add(dirLight);
+        scene.add(new THREE.AmbientLight(0xaaaaee, 0.5));
+
+        let player = { pos: new THREE.Vector3(0, 1000, 2000), velY: 0, rotY: 0, rotX: 0, isFalling: false };
+        let joyInput = { x: 0, y: 0 };
+        const keys = {};
+
+        // マウス視点移動
+        window.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === renderer.domElement) {
+                player.rotY -= e.movementX * 0.002;
+                player.rotX -= e.movementY * 0.002;
+                player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX));
+            }
+        });
+        
+        // スマホ操作系
+        const joyContainer = document.getElementById('joystick-container');
+        const joyKnob = document.getElementById('joystick-knob');
+        let joyTouchId = null;
+        const handleJoyMove = (t) => {
+            const r = joyContainer.getBoundingClientRect();
+            const cx = r.left + r.width/2, cy = r.top + r.height/2;
+            let dx = t.clientX - cx, dy = t.clientY - cy;
+            const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 60), ang = Math.atan2(dy, dx);
+            joyInput.x = (Math.cos(ang) * dist) / 60; joyInput.y = (Math.sin(ang) * dist) / 60;
+            joyKnob.style.transform = `translate(calc(-50% + ${joyInput.x * 50}px), calc(-50% + ${joyInput.y * 50}px))`;
+        };
+        joyContainer.addEventListener('touchstart', e => { e.preventDefault(); joyTouchId = e.changedTouches[0].identifier; handleJoyMove(e.changedTouches[0]); }, { passive: false });
+        window.addEventListener('touchmove', e => { for (let t of e.changedTouches) if (t.identifier === joyTouchId) handleJoyMove(t); }, { passive: false });
+        window.addEventListener('touchend', e => { joyTouchId = null; joyInput = { x: 0, y: 0 }; joyKnob.style.transform = 'translate(-50%, -50%)'; });
+
+        const lookArea = document.getElementById('touch-look-area');
+        let lookTouchId = null, lastX = 0, lastY = 0;
+        lookArea.addEventListener('touchstart', e => { e.preventDefault(); const t = e.changedTouches[0]; lookTouchId = t.identifier; lastX = t.clientX; lastY = t.clientY; }, { passive: false });
+        window.addEventListener('touchmove', e => { if (lookTouchId !== null) { for (let t of e.changedTouches) if (t.identifier === lookTouchId) { player.rotY -= (t.clientX - lastX) * 0.004; player.rotX -= (t.clientY - lastY) * 0.004; player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX)); lastX = t.clientX; lastY = t.clientY; } } }, { passive: false });
+        window.addEventListener('touchend', e => { lookTouchId = null; });
+
+        window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+        const raycaster = new THREE.Raycaster();
+        function alignToGround() {
+            raycaster.set(new THREE.Vector3(player.pos.x, 8000, player.pos.z), new THREE.Vector3(0,-1,0));
+            const hit = raycaster.intersectObject(terrain);
+            if(hit.length > 0) player.pos.y = hit[0].point.y + 3.0;
+        }
+        alignToGround();
+
+        function animate(time) {
+            if(isEnded) return;
+            requestAnimationFrame(animate);
+
+            // 天候サイクル
+            let weatherCycle = (Math.sin(time * 0.0002) + 1) / 2;
+            const isWhiteout = weatherCycle > 0.7;
+            document.getElementById('weather-text').innerText = isWhiteout ? "WHITEOUT" : "NORMAL";
+            
+            // 音量フェード
+            if (audioEnabled && windSound.isPlaying) {
+                let targetVol = 0.15 + (Math.pow(weatherCycle, 2) * 0.85);
+                windSound.setVolume(targetVol);
+            }
+
+            const fogDensity = 0.0002 + Math.pow(weatherCycle, 3) * 0.045;
+            scene.background = new THREE.Color().lerpColors(new THREE.Color(0x77aaff), new THREE.Color(0xcccccc), Math.min(1, weatherCycle * 1.2));
+            scene.fog = new THREE.FogExp2(scene.background, fogDensity);
+
+            // 吹雪パーティクル
+            snowParticles.position.copy(player.pos);
+            const positions = snowParticles.geometry.attributes.position.array;
+            const windSpeed = 0.5 + weatherCycle * 3.5;
+            for(let i=0; i<snowCount; i++) {
+                positions[i*3] += windSpeed; positions[i*3+1] -= 0.15;
+                if(positions[i*3] > 50) positions[i*3] = -50;
+                if(positions[i*3+1] < -25) positions[i*3+1] = 25;
+            }
+            snowParticles.geometry.attributes.position.needsUpdate = true;
+            snowMat.opacity = Math.max(0, (weatherCycle - 0.2) * 0.9);
+
+            // 移動操作
+            const speed = 1.8;
+            const forward = new THREE.Vector3(Math.sin(player.rotY), 0, Math.cos(player.rotY));
+            const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), forward);
+            if (!player.isFalling) {
+                let moveFwd = joyInput.y, moveSide = joyInput.x;
+                if (keys.w) moveFwd -= 1.0; if (keys.s) moveFwd += 1.0;
+                if (keys.a) moveSide -= 1.0; if (keys.d) moveSide += 1.0;
+                player.pos.addScaledVector(forward, moveFwd * speed);
+                player.pos.addScaledVector(right, moveSide * speed);
+            }
+
+            // 接地と滑落判定
+            raycaster.set(new THREE.Vector3(player.pos.x, 8000, player.pos.z), new THREE.Vector3(0,-1,0));
+            const hit = raycaster.intersectObject(terrain);
+            if(hit.length > 0) {
+                const gY = hit[0].point.y;
+                if (gY < player.pos.y - 35) player.isFalling = true; 
+                if (player.isFalling) {
+                    player.velY -= 0.7;
+                    if (player.pos.y < gY + 3) showEnd("遭難", "クレバスの底へ消えました…");
+                } else {
+                    const targetY = gY + 3.0;
+                    if(player.pos.y > targetY) player.velY -= 0.18;
+                    else {
+                        if(player.velY < -18) showEnd("遭難", "滑落しました。");
+                        player.pos.y = targetY; player.velY = 0;
+                    }
+                }
+            }
+            player.pos.y += player.velY;
+
+            // UI更新
+            document.getElementById('alt-val').innerText = Math.floor(5364 + player.pos.y * 3.1);
+            const distToFlag = player.pos.distanceTo(summitPos);
+            document.getElementById('dist-val').innerText = Math.floor(distToFlag);
+            
+            const pIcon = document.getElementById('player-icon');
+            pIcon.style.left = (50 + (player.pos.x/terrainSize)*100) + '%';
+            pIcon.style.top = (50 + (player.pos.z/terrainSize)*100) + '%';
+            pIcon.style.transform = `translate(-50%, -50%) rotate(${-player.rotY * 180 / Math.PI}deg)`;
+
+            // 勝利判定
+            if(distToFlag < 10 && player.pos.y > summitPos.y - 5) {
+                showEnd("登頂成功", "エベレストの頂（8848m）に到達！");
+            }
+
+            camera.position.copy(player.pos);
+            if(isWhiteout) {
+                camera.position.x += (Math.random()-0.5) * 0.08;
+                camera.position.y += (Math.random()-0.5) * 0.08;
+            }
+            camera.rotation.set(player.rotX, player.rotY, 0);
+            renderer.render(scene, camera);
+        }
+
+        function showEnd(t, b) {
+            if(isEnded) return; isEnded = true;
+            if(audioEnabled && windSound.isPlaying) windSound.stop();
+            document.exitPointerLock();
+            document.getElementById('message-screen').style.display = 'block';
+            document.getElementById('msg-title').innerText = t; document.getElementById('msg-body').innerText = b;
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        animate(0);
+    </script>
+</body>
+</html>
