@@ -67,6 +67,18 @@
         #message-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; z-index: 200; color: white; background: rgba(0,0,0,0.9); padding: 30px; border: 2px solid #fff; width: 80%; }
         .btn-retry { margin-top: 20px; padding: 10px 20px; background: #fff; border: none; cursor: pointer; font-weight: bold; }
     </style>
+    <!-- PWA設定 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="icon.png">
+
+<script>
+  // サービスワーカーの登録
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('Service Worker Registered'));
+  }
+</script>
 </head>
 <body>
 
@@ -387,3 +399,4 @@
     </script>
 </body>
 </html>
+
