@@ -15,25 +15,26 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             z-index: 500; color: white; text-shadow: 2px 2px 10px rgba(0,0,0,0.8);
         }
-        #title-logo { font-size: 36px; font-weight: bold; margin-bottom: 25px; letter-spacing: 5px; }
+        #title-logo { font-size: 32px; font-weight: bold; margin-bottom: 20px; letter-spacing: 5px; }
         .menu-btn { padding: 12px 25px; font-size: 16px; font-weight: bold; cursor: pointer; border: 2px solid white; background: rgba(0,0,0,0.5); color: white; margin: 8px; width: 220px; }
-        #instrument-panel { position: absolute; top: 10px; left: 10px; color: #00ff00; background: rgba(0, 20, 0, 0.8); padding: 8px; border: 1px solid #00ff00; z-index: 10; font-size: 10px; min-width: 120px; pointer-events: none; }
-        .data-value { font-weight: bold; font-size: 13px; color: #fff; }
-        #o2-container { width: 100%; height: 8px; background: #003300; border: 1px solid #00ff00; margin-top: 4px; }
+        
+        /* コンパクトな計器類 */
+        #instrument-panel { position: absolute; top: 8px; left: 8px; color: #00ff00; background: rgba(0, 20, 0, 0.8); padding: 6px; border: 1px solid #00ff00; z-index: 10; font-size: 9px; min-width: 100px; pointer-events: none; }
+        .data-value { font-weight: bold; font-size: 11px; color: #fff; }
+        #o2-container { width: 100%; height: 6px; background: #003300; border: 1px solid #00ff00; margin-top: 3px; }
         #o2-bar { width: 100%; height: 100%; background: #00ff00; }
-        #step-btn-container { position: absolute; bottom: 30px; left: 30px; width: 100px; height: 100px; background: rgba(255, 255, 255, 0.2); border: 3px solid rgba(255,255,255,0.5); border-radius: 50%; z-index: 100; display: none; align-items: center; justify-content: center; user-select: none; }
-        #touch-look-area { position: absolute; top: 0; right: 0; width: 70%; height: 100%; z-index: 5; display: none; }
-        #map-display { position: absolute; top: 10px; right: 10px; width: 90px; height: 90px; background: rgba(0, 40, 0, 0.6); border: 1px solid #00ff00; z-index: 10; }
+
+        /* 操作系 */
+        #step-btn-container { position: absolute; bottom: 25px; left: 25px; width: 90px; height: 90px; background: rgba(255, 255, 255, 0.2); border: 3px solid rgba(255,255,255,0.5); border-radius: 50%; z-index: 100; display: none; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; }
+        #touch-look-area { position: absolute; top: 0; right: 0; width: 75%; height: 100%; z-index: 5; display: none; }
+
+        /* マップ */
+        #map-display { position: absolute; top: 8px; right: 8px; width: 80px; height: 80px; background: rgba(0, 40, 0, 0.6); border: 1px solid #00ff00; z-index: 10; }
         #player-icon { position: absolute; width: 8px; height: 12px; background: #fff; clip-path: polygon(50% 0%, 0% 100%, 50% 75%, 100% 100%); }
+        
         #vision-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; opacity: 0; pointer-events: none; z-index: 100; }
-        /* ゲームオーバー画面の設定を強化 */
-        #message-screen { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            text-align: center; display: none; z-index: 2000; color: white; 
-            background: rgba(0,0,0,0.95); padding: 40px; border: 2px solid #fff; width: 80%; 
-        }
-        .retry-btn { margin-top: 25px; padding: 15px 30px; font-size: 18px; font-weight: bold; cursor: pointer; background: #fff; color: #000; border: none; }
-        #phase-notice { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); color: #ffff00; padding: 15px; border: 2px solid #ffff00; z-index: 150; display: none; text-align: center; }
+        #message-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; z-index: 2000; color: white; background: rgba(0,0,0,0.95); padding: 30px; border: 2px solid #fff; width: 80%; }
+        #phase-notice { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.8); color: #ffff00; padding: 12px; border: 2px solid #ffff00; z-index: 150; display: none; text-align: center; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -46,22 +47,22 @@
 
 <div id="instructions-panel" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:80%; max-width:500px; background:rgba(0,0,0,0.95); border:2px solid #00ff00; padding:20px; color:#fff; z-index:600; display:none; font-size:12px;">
     <h3>遊び方</h3>
-    <p>あなたは今から、エベレスト制覇を目指します！<br>ベースキャンプを出発し頂上を目指してください。<br>移動中は酸素消費が早く、0になると倒れます。<br>下山時は黄色のレスキュー（★）で補給可能です。</p>
-    <button onclick="this.parentElement.style.display='none'" style="padding:8px 16px; background:#00ff00; border:none; cursor:pointer; font-weight:bold;">閉じる</button>
+    <p>あなたは今から、エベレスト制覇を目指します！<br>ベースキャンプを出発し頂上を目指してください。<br>STEPボタンで進みます。右画面をなぞって向きを変えられます。</p>
+    <button onclick="this.parentElement.style.display='none'" style="padding:8px 16px; background:#00ff00; border:none; cursor:pointer;">閉じる</button>
 </div>
 
 <div id="instrument-panel">
     <div id="stage-text" style="color:#ffff00; margin-bottom:3px;">PHASE: ASCENT</div>
-    <div>ALTITUDE: <span id="alt-val" class="data-value">5364.00</span>m</div>
-    <div>TO GOAL: <span id="dist-val" class="data-value">--</span>m</div>
-    <div>WEATHER: <span id="weather-text" class="data-value">NORMAL</span></div>
+    <div>ALT: <span id="alt-val" class="data-value">5364.00</span>m</div>
+    <div>DST: <span id="dist-val" class="data-value">--</span>m</div>
+    <div>WTR: <span id="weather-text" class="data-value">NORMAL</span></div>
     <div id="o2-container"><div id="o2-bar"></div></div>
 </div>
 
 <div id="map-display">
-    <div id="bc-dot" style="position:absolute; width:6px; height:6px; background:#00aaff; border:1px solid #fff;"></div>
-    <div id="summit-dot" style="position:absolute; width:6px; height:6px; background:#ff0000; clip-path:polygon(50% 0%, 0% 100%, 100% 100%);"></div>
-    <div id="rescue-dot" style="position:absolute; width:10px; height:10px; background:#ffff00; display:none; clip-path:polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);"></div>
+    <div id="bc-dot" style="position:absolute; width:5px; height:5px; background:#00aaff; border:1px solid #fff;"></div>
+    <div id="summit-dot" style="position:absolute; width:5px; height:5px; background:#ff0000; clip-path:polygon(50% 0%, 0% 100%, 100% 100%);"></div>
+    <div id="rescue-dot" style="position:absolute; width:8px; height:8px; background:#ffff00; display:none; clip-path:polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);"></div>
     <div id="player-icon"></div>
 </div>
 
@@ -69,13 +70,7 @@
 <div id="touch-look-area"></div>
 <div id="vision-overlay"></div>
 <div id="phase-notice"></div>
-
-<!-- リトライ画面 -->
-<div id="message-screen">
-    <h1 id="msg-title"></h1>
-    <p id="msg-body"></p>
-    <button class="retry-btn" onclick="location.reload()">RETRY</button>
-</div>
+<div id="message-screen"><h1 id="msg-title"></h1><p id="msg-body"></p><button onclick="location.reload()" style="padding:10px 20px; cursor:pointer;">RETRY</button></div>
 
 <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }</script>
 
@@ -84,28 +79,30 @@
 
     const START_ALT = 5364.0, TARGET_ALT = 8848.0, TERRAIN_SIZE = 6000;
     const START_POS_XZ = { x: 0, z: 2000 }, SUMMIT_POS_XZ = { x: 0, z: -2800 };
+    
+    // 感度の調整
+    const TOUCH_SENSITIVITY = 0.018; 
+
     let gameState = 'ASCENT', oxygen = 100, isEnded = false, gameStartTime = 0, isStep = false;
     let rescuePos = null, rescueObj = null;
 
-    // --- Scene Setup ---
+    // --- 3D Scene ---
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.5, 18000);
+    camera.rotation.order = 'YXZ'; // 回転順序を固定
+    
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     document.body.appendChild(renderer.domElement);
 
-    // Audio Setup
     const listener = new THREE.AudioListener();
     camera.add(listener);
     const windSound = new THREE.Audio(listener);
     new THREE.AudioLoader().load('wind.mp3', (buffer) => {
-        windSound.setBuffer(buffer);
-        windSound.setLoop(true);
-        windSound.setVolume(0);
+        windSound.setBuffer(buffer); windSound.setLoop(true); windSound.setVolume(0);
     });
 
-    // Height Function
     function getH(x, z) {
         let h = (2500 - z) * 0.4 + Math.sin(x*0.002)*100 + Math.cos(z*0.002)*80;
         let d = Math.sqrt(x*x + (z+2800)**2);
@@ -116,8 +113,7 @@
     const peakH = getH(SUMMIT_POS_XZ.x, SUMMIT_POS_XZ.z);
     const hScale = (TARGET_ALT - START_ALT) / (peakH - baseH);
 
-    // Terrain Mesh
-    const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 120, 120);
+    const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, 100, 100);
     geo.rotateX(-Math.PI/2);
     const v = geo.attributes.position.array;
     const colors = new Float32Array(v.length);
@@ -141,14 +137,6 @@
         scene.add(tent);
     }
 
-    // Snow
-    const snowCount = 2000;
-    const snowGeo = new THREE.BufferGeometry();
-    const snowPos = new Float32Array(snowCount*3);
-    for(let i=0; i<snowCount*3; i++) snowPos[i]=(Math.random()-0.5)*120;
-    snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
-    const snowPoints = new THREE.Points(snowGeo, new THREE.PointsMaterial({color:0xffffff, size:0.2, transparent:true, opacity:0.5}));
-    scene.add(snowPoints);
     scene.add(new THREE.AmbientLight(0xaaaaee, 0.6));
     const dl = new THREE.DirectionalLight(0xffffff, 1.2);
     dl.position.set(-1000, 2000, -1000); scene.add(dl);
@@ -157,15 +145,11 @@
     let player = { pos: new THREE.Vector3(START_POS_XZ.x, baseH+10, START_POS_XZ.z), velY:0, rotY:0, rotX:0, isFalling:false };
     const keys = {};
 
-    // --- Interaction ---
     document.getElementById('start-climb-btn').onclick = () => {
-        // Audio resume
         if (THREE.AudioContext.getContext().state === 'suspended') THREE.AudioContext.getContext().resume();
-        
         document.getElementById('top-screen').style.display = 'none';
         gameStartTime = performance.now();
         if(windSound.buffer) windSound.play();
-        
         try { document.documentElement.requestFullscreen(); screen.orientation.lock('landscape').catch(()=>{}); } catch(e){}
         if(!isTouch) renderer.domElement.requestPointerLock();
     };
@@ -181,22 +165,50 @@
     sBtn.addEventListener('touchend', ()=>{isStep=false;});
     window.onkeydown=e=>keys[e.key.toLowerCase()]=true; window.onkeyup=e=>keys[e.key.toLowerCase()]=false;
 
-    let lx, ly, tid=null;
-    document.getElementById('touch-look-area').ontouchstart=e=>{ const t=e.changedTouches[0]; tid=t.identifier; lx=t.clientX; ly=t.clientY; };
-    window.ontouchmove=e=>{
-        if(tid===null) return;
-        for(let t of e.changedTouches) if(t.identifier===tid){
-            player.rotY-=(t.clientX-lx)*0.012; player.rotX-=(t.clientY-ly)*0.012;
-            player.rotX=Math.max(-1.4, Math.min(1.4, player.rotX)); lx=t.clientX; ly=t.clientY;
+    // --- 視点操作の修正 ---
+    let lx = 0, ly = 0, tid = null;
+    const lookArea = document.getElementById('touch-look-area');
+
+    lookArea.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const t = e.changedTouches[0];
+        tid = t.identifier;
+        lx = t.clientX;
+        ly = t.clientY;
+    }, { passive: false });
+
+    window.addEventListener('touchmove', e => {
+        if(tid === null) return;
+        for(let t of e.changedTouches) {
+            if(t.identifier === tid) {
+                const dx = t.clientX - lx;
+                const dy = t.clientY - ly;
+                
+                player.rotY -= dx * TOUCH_SENSITIVITY;
+                player.rotX -= dy * TOUCH_SENSITIVITY;
+                
+                // 上下の角度制限
+                player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX));
+                
+                // 数値の肥大化を防ぐ
+                player.rotY %= Math.PI * 2;
+
+                lx = t.clientX;
+                ly = t.clientY;
+            }
         }
-    };
-    window.ontouchend=()=>tid=null;
+    }, { passive: false });
+
+    window.addEventListener('touchend', e => {
+        for(let t of e.changedTouches) if(t.identifier === tid) tid = null;
+    });
+
     window.onmousemove=e=>{ 
-        // ゲーム終了後はポインターロックしない
         if(isEnded) return;
         if(document.pointerLockElement){ 
-            player.rotY-=e.movementX*0.002; player.rotX-=e.movementY*0.002; 
-            player.rotX=Math.max(-1.4, Math.min(1.4, player.rotX)); 
+            player.rotY -= e.movementX * 0.002;
+            player.rotX -= e.movementY * 0.002;
+            player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX)); 
         } 
     };
 
@@ -220,45 +232,32 @@
                 fwd.y=0; fwd.normalize(); player.pos.addScaledVector(fwd, 0.95); moving = true;
             }
             oxygen -= (moving ? 0.012 : 0.005);
-            if(oxygen <= 0) { 
-                oxygen=0; 
-                document.getElementById('vision-overlay').style.opacity=1; 
-                showEnd("登山不能","酸素欠乏により意識を失いました。"); 
-            }
+            if(oxygen <= 0) { oxygen=0; document.getElementById('vision-overlay').style.opacity=1; showEnd("登山不能","酸素が尽きました。"); }
             document.getElementById('o2-bar').style.width = oxygen + "%";
             if(oxygen < 30) document.getElementById('vision-overlay').style.opacity = ((Math.sin(time*0.002)+1)/2) * ((30-oxygen)/30) * 0.8;
             if(windSound.isPlaying) windSound.setVolume(0.1 + Math.pow(wCycle, 2)*0.9);
         }
 
-        // --- 地形判定 ---
+        // 接地判定
         ray.set(new THREE.Vector3(player.pos.x, 8000, player.pos.z), new THREE.Vector3(0,-1,0));
         const hits = ray.intersectObject(terrainMesh);
         if(hits.length > 0) {
             const gy = hits[0].point.y;
             const elapsed = performance.now() - gameStartTime;
-
             if (gameStartTime > 0 && elapsed < 3000) {
-                player.pos.y = gy + 3;
-                player.velY = 0;
+                player.pos.y = gy + 3; player.velY = 0;
             } else if (gameStartTime > 0) {
                 if(gy < player.pos.y - 45) player.isFalling = true;
-                
                 if(player.isFalling) {
-                    player.velY -= 0.8; 
-                    if(player.pos.y < gy + 3) showEnd("滑落","クレバスに転落しました。");
+                    player.velY -= 0.8; if(player.pos.y < gy + 3) showEnd("滑落","クレバスに転落しました。");
                 } else {
-                    const ty = gy + 3;
-                    if(player.pos.y > ty) player.velY -= 0.2;
-                    else { 
-                        if(player.velY < -22) showEnd("滑落","滑落死しました。"); 
-                        player.pos.y = ty; player.velY = 0; 
-                    }
+                    const ty = gy + 3; if(player.pos.y > ty) player.velY -= 0.2;
+                    else { if(player.velY < -22) showEnd("滑落","滑落死しました。"); player.pos.y = ty; player.velY = 0; }
                 }
             }
         }
         player.pos.y += player.velY;
 
-        // UI & Map
         const dS = player.pos.distanceTo(new THREE.Vector3(SUMMIT_POS_XZ.x, peakH, SUMMIT_POS_XZ.z));
         const dB = player.pos.distanceTo(new THREE.Vector3(START_POS_XZ.x, baseH+3, START_POS_XZ.z));
         document.getElementById('alt-val').innerText = (START_ALT + (player.pos.y-(baseH+3))*hScale).toFixed(2);
@@ -271,19 +270,14 @@
                 rescuePos = new THREE.Vector3(rx, getH(rx, rz), rz);
                 rescueObj = new THREE.Mesh(new THREE.ConeGeometry(8,20,4), new THREE.MeshPhongMaterial({color:0xffff00}));
                 rescueObj.position.set(rx, rescuePos.y+10, rz); scene.add(rescueObj);
-                const rd = document.getElementById('rescue-dot'); rd.style.display='block'; rd.style.left=(50+(rx/TERRAIN_SIZE)*100)+'%'; rd.style.top=(50+(rz/TERRAIN_SIZE)*100)+'%';
+                document.getElementById('rescue-dot').style.display='block'; document.getElementById('rescue-dot').style.left=(50+(rx/TERRAIN_SIZE)*100)+'%'; document.getElementById('rescue-dot').style.top=(50+(rz/TERRAIN_SIZE)*100)+'%';
                 const n = document.getElementById('phase-notice'); n.innerHTML="登頂成功！<br>レスキュー(★)で酸素補給せよ"; n.style.display='block'; setTimeout(()=>n.style.display='none',5000);
             }
         } else {
             document.getElementById('dist-val').innerText = Math.floor(dB);
             if(rescuePos && player.pos.distanceTo(rescuePos) < 20) { oxygen=100; scene.remove(rescueObj); rescuePos=null; document.getElementById('rescue-dot').style.display='none'; }
-            if(dB < 30) showEnd("完全制覇","エベレストを制覇し無事帰還しました！");
+            if(dB < 30) showEnd("完全制覇","おめでとう！無事帰還しました。");
         }
-
-        snowPoints.position.copy(player.pos);
-        const pa = snowPoints.geometry.attributes.position.array;
-        for(let i=0; i<snowCount; i++){ pa[i*3]+=0.4+wCycle; pa[i*3+1]-=0.15; if(pa[i*3]>60)pa[i*3]=-60; if(pa[i*3+1]<-30)pa[i*3+1]=30; }
-        snowPoints.geometry.attributes.position.needsUpdate = true;
 
         const pIcon = document.getElementById('player-icon');
         pIcon.style.left=(50+(player.pos.x/TERRAIN_SIZE)*100)+'%'; pIcon.style.top=(50+(player.pos.z/TERRAIN_SIZE)*100)+'%';
@@ -297,23 +291,11 @@
         renderer.render(scene, camera);
     }
 
-    // --- ゲーム終了・カーソル解放 ---
     function showEnd(t, b) {
-        if(isEnded) return; 
-        isEnded=true; 
-        
-        // 1. 音声を止める
-        if(windSound.isPlaying) windSound.stop();
-        
-        // 2. カーソルを解放する（PC用）
-        if (document.exitPointerLock) {
-            document.exitPointerLock();
-        }
-        
-        // 3. メッセージ画面を表示
+        if(isEnded) return; isEnded=true; if(windSound.isPlaying) windSound.stop();
+        if (document.exitPointerLock) document.exitPointerLock();
         document.getElementById('message-screen').style.display='block';
-        document.getElementById('msg-title').innerText=t; 
-        document.getElementById('msg-body').innerText=b;
+        document.getElementById('msg-title').innerText=t; document.getElementById('msg-body').innerText=b;
     }
 
     window.onresize=()=>{ camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); };
