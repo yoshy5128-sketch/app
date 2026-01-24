@@ -392,18 +392,27 @@
 
         window.addEventListener('touchmove', e => { 
             if (lookTouchId !== null) { 
-                for (let t of e.changedTouches) if (t.identifier === lookTouchId) { 
-                                                                                                    const deltaX = t.clientX - lastX;
-                                                                                                    const deltaY = t.clientY - lastY;
-                                                                                
-                                                                                                    player.rotY -= deltaX * TOUCH_SENSITIVITY;
-                                                                                                    player.rotY = (player.rotY + Math.PI) % (2 * Math.PI) - Math.PI; // Y軸回転の正規化
-                                                                                
-                                                                                                    player.rotX -= deltaY * TOUCH_SENSITIVITY; // 元の符号に戻す
-                                                                                                    player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX));
-                                                                                                    
-                                                                                                    lastX = t.clientX; // 計算後に更新
-                                                                                                    lastY = t.clientY; // 計算後に更新                } 
+                for (let t of e.changedTouches) {
+                    if (t.identifier === lookTouchId) { 
+                        const deltaX = t.clientX - lastX;
+                        const deltaY = t.clientY - lastY;
+                                    
+                        player.rotY -= deltaX * TOUCH_SENSITIVITY;
+                        player.rotY = (player.rotY + Math.PI) % (2 * Math.PI) - Math.PI; // Y軸回転の正規化
+                                    
+                        // player.rotY の向きに応じて deltaY の符号を調整
+                        let effectiveDeltaY = deltaY;
+                        // Math.cos(player.rotY) が負の値（概ね後ろを向いている）の場合に、上下の方向を反転させる
+                        if (Math.cos(player.rotY) < 0) {
+                             effectiveDeltaY *= -1;
+                        }
+                        player.rotX -= effectiveDeltaY * TOUCH_SENSITIVITY;
+                        player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX));
+                        
+                        lastX = t.clientX; // 計算後に更新
+                        lastY = t.clientY; // 計算後に更新
+                    }
+                } 
             } 
         }, { passive: false });
         window.addEventListener('touchend', () => lookTouchId = null);
