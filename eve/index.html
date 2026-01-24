@@ -44,7 +44,7 @@
 
         /* STEPボタン (丸ボタン) */
         #step-btn-container {
-            position: absolute; bottom: 30px; left: 30px; width: 100px; height: 100px;
+            position: absolute; bottom: 60px; left: 60px; width: 100px; height: 100px; /* 位置を右斜め上に調整 */
             background: rgba(255, 255, 255, 0.2); border: 3px solid rgba(255,255,255,0.5); 
             border-radius: 50%; z-index: 100; display: none; align-items: center; justify-content: center;
             user-select: none; -webkit-user-select: none; touch-action: none;
@@ -67,6 +67,12 @@
         #message-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; z-index: 200; color: white; background: rgba(0,0,0,0.9); padding: 30px; border: 2px solid #fff; width: 80%; }
         .btn-retry { margin-top: 20px; padding: 10px 20px; background: #fff; border: none; cursor: pointer; font-weight: bold; }
     </style>
+
+<!-- PWA設定 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="icon.png">
+
 </head>
 <body>
 
@@ -400,13 +406,7 @@
                         player.rotY -= deltaX * TOUCH_SENSITIVITY;
                         player.rotY = (player.rotY + Math.PI) % (2 * Math.PI) - Math.PI; // Y軸回転の正規化
                                     
-                        // player.rotY の向きに応じて deltaY の符号を調整
-                        let effectiveDeltaY = deltaY;
-                        // Math.cos(player.rotY) が負の値（概ね後ろを向いている）の場合に、上下の方向を反転させる
-                        if (Math.cos(player.rotY) < 0) {
-                             effectiveDeltaY *= -1;
-                        }
-                        player.rotX -= effectiveDeltaY * TOUCH_SENSITIVITY;
+                        player.rotX -= deltaY * TOUCH_SENSITIVITY; // 元の符号に戻す
                         player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX));
                         
                         lastX = t.clientX; // 計算後に更新
@@ -570,7 +570,7 @@
             document.getElementById('bc-dot').style.left = (50 + (START_POS_XZ.x/TERRAIN_SIZE)*100) + '%';
             document.getElementById('bc-dot').style.top = (50 + (START_POS_XZ.z/TERRAIN_SIZE)*100) + '%';
 
-            camera.position.copy(player.pos); camera.rotation.set(player.rotX, player.rotY, 0);
+            camera.position.copy(player.pos); camera.rotation.set(player.rotX, player.rotY, 0, 'YXZ'); // rotation orderを明示的に指定
             renderer.render(scene, camera);
         }
 
@@ -584,6 +584,10 @@
 
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         animate(0);
+
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js', {updateViaCache: 'none'});
+}
     </script>
 </body>
 </html>
