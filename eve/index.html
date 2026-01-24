@@ -393,10 +393,10 @@
         window.addEventListener('touchmove', e => { 
             if (lookTouchId !== null) { 
                 for (let t of e.changedTouches) if (t.identifier === lookTouchId) { 
-                                                            player.rotY -= (t.clientX - lastX) * TOUCH_SENSITIVITY;
-                                                            player.rotY = (player.rotY + Math.PI) % (2 * Math.PI) - Math.PI; // Y軸回転の正規化
-                                                            player.rotX += (t.clientY - lastY) * TOUCH_SENSITIVITY; // 符号を反転
-                                                            player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX)); lastX = t.clientX; lastY = t.clientY;                } 
+                                                                                player.rotY -= (t.clientX - lastX) * TOUCH_SENSITIVITY;
+                                                                                player.rotY = (player.rotY + Math.PI) % (2 * Math.PI) - Math.PI; // Y軸回転の正規化
+                                                                                player.rotX -= (t.clientY - lastY) * TOUCH_SENSITIVITY; // 元の符号に戻す
+                                                                                player.rotX = Math.max(-1.4, Math.min(1.4, player.rotX)); lastX = t.clientX; lastY = t.clientY;                } 
             } 
         }, { passive: false });
         window.addEventListener('touchend', () => lookTouchId = null);
