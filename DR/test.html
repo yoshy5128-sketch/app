@@ -15,11 +15,16 @@
     #zoomSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
     #zoomSlider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
     @media (pointer: coarse) { #zoomSlider { display: block; } }
+    .hp-display { position: absolute; bottom: 10px; font-family: sans-serif; font-size: 24px; font-weight: bold; color: #fff; text-shadow: 2px 2px 0 #000; }
+    #player-hp { left: 10px; }
+    #enemy-hp { right: 10px; }
 </style>
 </head>
 <body>
 
 <div id="msg">ENEMY DESTROYED!</div>
+<div id="player-hp" class="hp-display">PLAYER HP: 100</div>
+<div id="enemy-hp" class="hp-display">ENEMY HP: 100</div>
 <div class="touch-area touch-left"></div>
 <div class="touch-area touch-right"></div>
 <div id="fullscreenButton">★</div>
@@ -119,14 +124,14 @@ function createCar(color) {
     return { group, wheels, color };
 }
 
-const player = { ...createCar(0xff3333), speed: 0, lastSpeed: 0, vY: 0, yaw: 0, pitch: 0, roll: 0, impactV: new THREE.Vector3() };
+const player = { ...createCar(0xff3333), speed: 0, lastSpeed: 0, vY: 0, yaw: 0, pitch: 0, roll: 0, impactV: new THREE.Vector3(), hp: 100 };
 scene.add(player.group);
 
 let enemy = initEnemy(0x3366ff);
 let enemyRespawnTimer = 0;
 
 function initEnemy(color) {
-    const ent = { ...createCar(color), speed: 0, lastSpeed: 0, yaw: 0, pitch: 0, roll: 0, attackTimer: 0, mode: 'follow', active: true, impactV: new THREE.Vector3() };
+    const ent = { ...createCar(color), speed: 0, lastSpeed: 0, yaw: 0, pitch: 0, roll: 0, attackTimer: 0, mode: 'follow', active: true, impactV: new THREE.Vector3(), hp: 100 };
     ent.group.position.set(20, 5, 50); 
     scene.add(ent.group);
     return ent;
@@ -135,6 +140,7 @@ function initEnemy(color) {
 function destroyEnemy() {
     if(!enemy.active) return;
     enemy.active = false;
+    enemy.hp = 0; // HPを0に
     spawnDebris(enemy.group.position, enemy.color, 0.8, 30);
     spawnDebris(enemy.group.position, 0xffaa00, 1.5, 15);
     scene.remove(enemy.group);
@@ -143,7 +149,48 @@ function destroyEnemy() {
     msg.innerText = "ENEMY DESTROYED!";
     msg.style.color = "#ff3333";
     setTimeout(() => msg.style.display = 'none', 2000);
-    enemyRespawnTimer = 150;
+    enemyRespawnTimer = 150; // 150フレーム後にリスポーン
+}
+
+function destroyPlayer() {
+    if(player.hp > 0) return; // まだ死んでない
+    player.hp = 0; // HPを0に
+    spawnDebris(player.group.position, player.color, 1.0, 50);
+    spawnDebris(player.group.position, 0xffaa00, 1.8, 20);
+    scene.remove(player.group);
+    const msg = document.getElementById('msg');
+    msg.style.display = 'block';
+    msg.innerText = "GAME OVER";
+    msg.style.color = "#ff0000";
+    // ここでリスタート処理などを入れても良い
+}
+
+function showDamageMessage(text, pos, isPlayer = false) {
+    const div = document.createElement('div');
+    div.style.position = 'absolute';
+    div.style.color = isPlayer ? 'red' : 'orange';
+    div.style.fontSize = '20px';
+    div.style.fontWeight = 'bold';
+    div.style.textShadow = '1px 1px #000';
+    div.innerText = text;
+    document.body.appendChild(div);
+
+    const screenPos = pos.clone().project(camera);
+    div.style.left = `${(screenPos.x + 1) / 2 * window.innerWidth}px`;
+    div.style.top = `${(-screenPos.y + 1) / 2 * window.innerHeight}px`;
+
+    let life = 1.0;
+    const fade = () => {
+        if (life <= 0) {
+            div.remove();
+            return;
+        }
+        life -= 0.03;
+        div.style.top = `${parseInt(div.style.top) - 1}px`;
+        div.style.opacity = life;
+        requestAnimationFrame(fade);
+    };
+    fade();
 }
 
 let audioCtx, pOsc, pGain, crsAudioBuffer;
@@ -309,26 +356,53 @@ function animate() {
         }
     });
 
-    if (enemy.active) {
+    if (enemy.active && player.hp > 0) {
         const dist = player.group.position.distanceTo(enemy.group.position);
-        if (dist < 3.2) {
+
+        // 衝突判定 + 無敵時間（一度衝突したら少しの間再判定しない）
+        const now = performance.now();
+        if (dist < 4.5 && (!player.lastHit || now - player.lastHit > 500) && (!enemy.lastHit || now - enemy.lastHit > 500) ) {
             playCrashSound();
 
-            const pushVec = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
+            // --- ダメージ判定ロジック ---
+            const pToE = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
+            const pVel = new THREE.Vector3(0, 0, -1).applyQuaternion(player.group.quaternion).multiplyScalar(player.speed * -1); // speedは後退が+なので反転
+            const eVel = new THREE.Vector3(0, 0, -1).applyQuaternion(enemy.group.quaternion).multiplyScalar(enemy.speed * -1);
             
-            // プレイヤーと敵が互いに弾け合うように、impactVを強く加える
-            player.impactV.add(pushVec.clone().multiplyScalar(-2.0));
-            enemy.impactV.add(pushVec.clone().multiplyScalar(2.0));
+            const pAttackScore = pVel.dot(pToE);
+            const eAttackScore = eVel.dot(pToE.clone().negate());
             
-            // 衝突時の速度を減衰
-            player.speed *= 0.85;
-            enemy.speed *= 0.85;
+            const damage = 5 + Math.abs(pAttackScore - eAttackScore) * 30; // ダメージ計算
 
+            if (pAttackScore > eAttackScore + 0.1) { // プレイヤーが仕掛けた
+                enemy.hp -= damage;
+                showDamageMessage(`ENEMY -${Math.round(damage)} HP`, enemy.group.position);
+            } else if (eAttackScore > pAttackScore + 0.1) { // 敵が仕掛けた
+                player.hp -= damage;
+                showDamageMessage(`PLAYER -${Math.round(damage)} HP`, player.group.position, true);
+                 // ダメージエフェクト
+                document.body.style.backgroundColor = 'red';
+                setTimeout(() => { document.body.style.backgroundColor = 'black'; }, 100);
+            }
+
+            player.lastHit = now;
+            enemy.lastHit = now;
+
+            // --- 物理的な反発 ---
+            const pushVec = pToE.clone();
+            const totalImpact = Math.abs(player.speed) + Math.abs(enemy.speed);
+            player.impactV.add(pushVec.clone().multiplyScalar(-totalImpact * 0.5));
+            enemy.impactV.add(pushVec.clone().multiplyScalar(totalImpact * 0.5));
+            player.speed *= 0.8;
+            enemy.speed *= 0.8;
             spawnDust(player.group.position.clone().lerp(enemy.group.position, 0.5), true);
 
-            // 破壊の条件も衝撃の強さに応じて調整
-            if (enemy.impactV.length() > 2.5) {
+            // --- HP判定 ---
+            if (enemy.hp <= 0) {
                 destroyEnemy();
+            }
+            if (player.hp <= 0) {
+                destroyPlayer();
             }
         }
     }
@@ -364,6 +438,16 @@ function animate() {
     } else { mirrorMesh.visible = false; }
 
     if(audioCtx) { pGain.gain.setTargetAtTime(0.3, now, 0.05); pOsc.frequency.setTargetAtTime(70 + Math.abs(player.speed) * 60, now, 0.05); }
+
+    // HP表示を更新
+    document.getElementById('player-hp').innerText = `PLAYER HP: ${Math.max(0, Math.round(player.hp))}`;
+    if (enemy.active) {
+        document.getElementById('enemy-hp').style.display = 'block';
+        document.getElementById('enemy-hp').innerText = `ENEMY HP: ${Math.max(0, Math.round(enemy.hp))}`;
+    } else {
+        document.getElementById('enemy-hp').style.display = 'none';
+    }
+
     renderer.render(scene, camera);
 }
 animate();
