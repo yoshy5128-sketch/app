@@ -317,21 +317,24 @@ function animate() {
             ent.attackTimer += 0.01;
             if (dist > 50) ent.mode = 'follow'; else if (ent.attackTimer % 12 < 5) ent.mode = 'follow'; else if (ent.attackTimer % 12 < 9) ent.mode = 'side_press'; else ent.mode = 'block';
             let tYaw = Math.atan2(toPlayer.x, toPlayer.z);
-            let tSpeed = Math.abs(player.speed);
+            let tSpeed;
             if (ent.mode === 'side_press') {
-                tSpeed = Math.abs(player.speed) + 0.3;
+                tSpeed = -(Math.abs(player.speed) + 0.3);
                 const side = Math.sin(ent.attackTimer * 0.2) > 0 ? 1 : -1;
                 const offset = new THREE.Vector3(Math.cos(player.yaw)*side*3, 0, Math.sin(player.yaw)*side*3);
                 const attackPos = player.group.position.clone().add(offset);
                 const toAttack = new THREE.Vector3().subVectors(attackPos, ent.group.position);
                 tYaw = Math.atan2(toAttack.x, toAttack.z);
             } else if (ent.mode === 'block') {
-                tSpeed = Math.abs(player.speed) + 0.5;
+                tSpeed = -(Math.abs(player.speed) + 0.5);
                 const frontPos = player.group.position.clone().add(new THREE.Vector3(Math.sin(player.yaw)*12, 0, Math.cos(player.yaw)*12));
                 const toFront = new THREE.Vector3().subVectors(frontPos, ent.group.position);
                 tYaw = Math.atan2(toFront.x, toFront.z);
-                if (dist < 9) tSpeed = Math.abs(player.speed) * 0.9;
-            } else { tSpeed = dist > 15 ? Math.abs(player.speed) + 0.4 : Math.abs(player.speed) - 0.3; }
+                if (dist < 9) tSpeed = -(Math.abs(player.speed) * 0.9);
+            } else { 
+                const speedOffset = dist > 15 ? 0.4 : -0.3;
+                tSpeed = -(Math.abs(player.speed) + speedOffset);
+            }
             ent.speed = THREE.MathUtils.lerp(ent.speed, tSpeed, 0.015);
             let dy = tYaw - ent.yaw;
             while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
@@ -366,8 +369,12 @@ function animate() {
 
             // --- ダメージ判定ロジック ---
             const pToE = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
-            const pVel = new THREE.Vector3(0, 0, -1).applyQuaternion(player.group.quaternion).multiplyScalar(player.speed * -1); // speedは後退が+なので反転
-            const eVel = new THREE.Vector3(0, 0, -1).applyQuaternion(enemy.group.quaternion).multiplyScalar(enemy.speed * -1);
+            
+            const pForward = player.group.getWorldDirection(new THREE.Vector3());
+            const pVel = pForward.multiplyScalar(-player.speed);
+
+            const eForward = enemy.group.getWorldDirection(new THREE.Vector3());
+            const eVel = eForward.multiplyScalar(-enemy.speed);
             
             const pAttackScore = pVel.dot(pToE);
             const eAttackScore = eVel.dot(pToE.clone().negate());
