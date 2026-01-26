@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Three.js Drive - Pure Chase Battle</title>
 <style>
-    body { margin: 0; overflow: hidden; background: #000; }
+    body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
     #msg { position: absolute; top: 40%; width: 100%; text-align: center; color: #ff3333; font-family: sans-serif; font-size: 40px; font-weight: bold; text-shadow: 2px 2px 0 #000; display: none; pointer-events: none; }
     .touch-area { position: absolute; top: 0; width: 50%; height: 100%; z-index: 1000; display: none; }
     .touch-left { left: 0; }
@@ -31,7 +31,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-// --- 設定 ---
+// --- 基本設定 ---
 const MAX_SPEED = 4.0, ACCEL = 0.15, FRICTION = 0.96, GRAVITY = 0.1;
 const MAX_ZOOM_LEVEL = 2.0;
 
@@ -180,7 +180,8 @@ window.addEventListener("keydown", e => { keys[e.code] = true; initAudio(); if(a
 window.addEventListener("keyup", e => { keys[e.code] = false; });
 
 let lookYaw = 0, lookPitch = 0, zoomLevel = isMobile() ? 0.8 : 0.5, smoothedCamPos = new THREE.Vector3();
-let touchState = { left: { active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 }, right: { active: false, startX: 0, startY: 0, currentX: 0, currentY: 0 } };
+let touchLeftId = -1, touchRightId = -1;
+let touchState = { left: { startX: 0, startY: 0, currentX: 0, currentY: 0 }, right: { startX: 0, startY: 0, currentX: 0, currentY: 0 } };
 
 addEventListener("wheel", e => { zoomLevel = Math.max(0, Math.min(MAX_ZOOM_LEVEL, zoomLevel + e.deltaY*0.001)); }, {passive:true});
 renderer.domElement.addEventListener("mousedown", () => {
@@ -200,14 +201,47 @@ const zoomSlider = document.getElementById('zoomSlider');
 zoomSlider.value = zoomLevel.toString();
 zoomSlider.addEventListener('input', e => { zoomLevel = parseFloat(e.target.value); });
 
-const touchLeft = document.querySelector('.touch-left');
-const touchRight = document.querySelector('.touch-right');
-touchLeft.addEventListener('touchstart', e => { e.preventDefault(); const t = e.touches[0]; touchState.left = { active: true, startX: t.clientX, startY: t.clientY, currentX: t.clientX, currentY: t.clientY }; initAudio(); if(audioCtx) audioCtx.resume(); }, {passive:false});
-touchLeft.addEventListener('touchmove', e => { e.preventDefault(); const t = e.touches[0]; touchState.left.currentX = t.clientX; touchState.left.currentY = t.clientY; }, {passive:false});
-touchLeft.addEventListener('touchend', e => { e.preventDefault(); touchState.left.active = false; keys.KeyW = keys.KeyS = keys.KeyA = keys.KeyD = false; }, {passive:false});
-touchRight.addEventListener('touchstart', e => { e.preventDefault(); const t = e.touches[0]; touchState.right = { active: true, startX: t.clientX, startY: t.clientY, currentX: t.clientX, currentY: t.clientY }; }, {passive:false});
-touchRight.addEventListener('touchmove', e => { e.preventDefault(); const t = e.touches[0]; touchState.right.currentX = t.clientX; touchState.right.currentY = t.clientY; }, {passive:false});
-touchRight.addEventListener('touchend', e => { e.preventDefault(); touchState.right.active = false; }, {passive:false});
+// --- 修正箇所：マルチタッチ対応のイベント処理 ---
+window.addEventListener('touchstart', e => {
+    initAudio(); if(audioCtx) audioCtx.resume();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.clientX < window.innerWidth / 2) {
+            touchLeftId = t.identifier;
+            touchState.left = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, currentY: t.clientY };
+        } else {
+            touchRightId = t.identifier;
+            touchState.right = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, currentY: t.clientY };
+        }
+    }
+}, {passive: false});
+
+window.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === touchLeftId) {
+            touchState.left.currentX = t.clientX;
+            touchState.left.currentY = t.clientY;
+        } else if (t.identifier === touchRightId) {
+            // ここで即座に視点を更新する
+            const dx = t.clientX - touchState.right.currentX;
+            const dy = t.clientY - touchState.right.currentY;
+            lookYaw -= dx * 0.005;
+            lookPitch = THREE.MathUtils.clamp(lookPitch - dy * 0.005, -0.6, 0.6);
+            touchState.right.currentX = t.clientX;
+            touchState.right.currentY = t.clientY;
+        }
+    }
+}, {passive: false});
+
+window.addEventListener('touchend', e => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === touchLeftId) { touchLeftId = -1; keys.KeyW = keys.KeyS = keys.KeyA = keys.KeyD = false; }
+        else if (t.identifier === touchRightId) { touchRightId = -1; }
+    }
+}, {passive: false});
 
 function animate() {
     requestAnimationFrame(animate);
@@ -245,14 +279,6 @@ function animate() {
     const entities = [player];
     if(enemy.active) entities.push(enemy);
 
-    // --- 修正箇所：右画面視点移動の独立化（走行中でも可能に） ---
-    if (touchState.right.active) {
-        lookYaw -= (touchState.right.currentX - touchState.right.startX) * 0.003;
-        lookPitch = Math.max(-0.6, Math.min(0.6, lookPitch - (touchState.right.currentY - touchState.right.startY) * 0.003));
-        touchState.right.startY = touchState.right.currentY; 
-        touchState.right.startX = touchState.right.currentX;
-    }
-
     entities.forEach(ent => {
         const isP = (ent === player);
         const isE = (ent === enemy);
@@ -266,7 +292,7 @@ function animate() {
         if(isP && !ent.dead) {
             if(keys.KeyW) ent.speed -= ACCEL; if(keys.KeyS) ent.speed += ACCEL;
             if(keys.KeyA) ent.yaw += 0.05; if(keys.KeyD) ent.yaw -= 0.05;
-            if (touchState.left.active) {
+            if (touchLeftId !== -1) {
                 const dy = touchState.left.currentY - touchState.left.startY;
                 const dx = touchState.left.currentX - touchState.left.startX;
                 if (dy < -20) ent.speed -= ACCEL; else if (dy > 20) ent.speed += ACCEL;
