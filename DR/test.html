@@ -128,6 +128,7 @@ const player = { ...createCar(0xff3333), speed: 0, lastSpeed: 0, vY: 0, yaw: 0, 
 scene.add(player.group);
 
 let enemy = initEnemy(0x3366ff);
+enemy.speed = -2; // 初期速度
 let enemyRespawnTimer = 0;
 
 function initEnemy(color) {
@@ -279,7 +280,7 @@ function animate() {
         if (enemyRespawnTimer <= 0) {
             enemy = initEnemy([0xff00ff, 0xffff00, 0x00ff00, 0xffffff][Math.floor(Math.random()*4)]);
             enemy.group.position.copy(player.group.position).add(new THREE.Vector3(Math.sin(player.yaw)*-30, 0, Math.cos(player.yaw)*-30));
-            enemy.yaw = player.yaw; enemy.speed = Math.abs(player.speed) * 1.5;
+            enemy.yaw = player.yaw; enemy.speed = -(Math.abs(player.speed) * 1.5 + 1.0); // プレイヤーが止まっていても最低速度1で向かうように
             const msg = document.getElementById('msg'); msg.style.display = 'block'; msg.innerText = "NEW CHALLENGER!"; msg.style.color = "#ffff00";
             setTimeout(() => msg.style.display = 'none', 1500);
         }
