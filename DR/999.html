@@ -5,27 +5,26 @@
 <title>Three.js Drive - Pure Chase Battle</title>
 <style>
     body { margin: 0; overflow: hidden; background: #000; }
-    #msg { position: absolute; top: 40%; width: 100%; text-align: center; color: #ff3333; font-family: sans-serif; font-size: 40px; font-weight: bold; text-shadow: 2px 2px 0 #000; display: none; pointer-events: none; z-index: 20; }
+    #msg { position: absolute; top: 40%; width: 100%; text-align: center; color: #ff3333; font-family: sans-serif; font-size: 40px; font-weight: bold; text-shadow: 2px 2px 0 #000; display: none; pointer-events: none; }
     .touch-area { position: absolute; top: 0; width: 50%; height: 100%; z-index: 1000; display: none; }
     .touch-left { left: 0; }
     .touch-right { right: 0; }
     @media (pointer: coarse) { .touch-area { display: block; } }
-    #fullscreenButton { position: absolute; top: 15px; left: 15px; font-family: sans-serif; font-size: 24px; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 8px 12px; border-radius: 8px; cursor: pointer; user-select: none; z-index: 1010; line-height: 1; }
+    #fullscreenButton { position: absolute; top: 15px; left: 15px; font-family: sans-serif; font-size: 24px; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 8px 12px; border-radius: 8px; cursor: pointer; user-select: none; z-index: 10; line-height: 1; }
     #zoomSlider { position: absolute; right: 15px; top: 50%; transform: translateY(-50%) rotate(-90deg); width: 200px; height: 10px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.3); outline: none; border-radius: 5px; opacity: 0.7; transition: opacity .2s; z-index: 10; }
     #zoomSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
     #zoomSlider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
     @media (pointer: coarse) { #zoomSlider { display: block; } }
-
-    /* HP UI 追加 */
-    #hud { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 40px; color: white; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 10; font-size: 18px; }
-    .hp-val { color: #ff3333; font-size: 24px; }
+    
+    /* HP UI */
+    #hud { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 40px; color: white; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; }
 </style>
 </head>
 <body>
 
 <div id="hud">
-    <div>PLAYER HP: <span id="p-hp" class="hp-val">100</span></div>
-    <div>ENEMY HP: <span id="e-hp" class="hp-val">100</span></div>
+    <div>PLAYER HP: <span id="p-hp">100</span></div>
+    <div>ENEMY HP: <span id="e-hp">100</span></div>
 </div>
 <div id="msg">ENEMY DESTROYED!</div>
 <div class="touch-area touch-left"></div>
@@ -95,13 +94,12 @@ function updateChunks(px, pz) {
 const particles = [];
 function spawnDust(pos, isSpark = false, isSmoke = false) {
     let color = isSpark ? 0xffffff : 0xd2c08a; 
-    if (isSmoke) color = 0x333333; // 黒煙用
+    if (isSmoke) color = 0x333333;
     const size = isSpark ? 0.2 : (isSmoke ? 0.6 : (0.4 + Math.random() * 0.4));
-    const p = new THREE.Mesh(new THREE.SphereGeometry(size, 4, 4), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: isSmoke ? 0.8 : 0.6 }));
+    const p = new THREE.Mesh(new THREE.SphereGeometry(size, 4, 4), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6 }));
     p.position.copy(pos);
     const spread = isSpark ? 0.5 : 0.3;
-    const vel = isSmoke ? new THREE.Vector3((Math.random()-0.5)*0.2, 0.2 + Math.random()*0.2, (Math.random()-0.5)*0.2) 
-                       : new THREE.Vector3((Math.random()-0.5)*spread, Math.random()*0.5 + 0.2, (Math.random()-0.5)*spread);
+    const vel = isSmoke ? new THREE.Vector3((Math.random()-0.5)*0.2, 0.2+Math.random()*0.2, (Math.random()-0.5)*0.2) : new THREE.Vector3((Math.random()-0.5)*spread, Math.random()*0.5 + 0.2, (Math.random()-0.5)*spread);
     p.userData = { life: 1.0, vel: vel, type: isSmoke ? 'smoke' : 'dust' };
     scene.add(p); particles.push(p);
 }
@@ -140,7 +138,6 @@ let enemyRespawnTimer = 0;
 function initEnemy(color) {
     const ent = { ...createCar(color), speed: 0, lastSpeed: 0, yaw: 0, pitch: 0, roll: 0, attackTimer: 0, mode: 'follow', active: true, impactV: new THREE.Vector3() };
     ent.group.position.set(20, 5, 50); 
-    document.getElementById('e-hp').innerText = "100";
     scene.add(ent.group);
     return ent;
 }
@@ -149,8 +146,8 @@ function destroyEnemy() {
     if(!enemy.active || enemy.dead) return;
     enemy.dead = true;
     enemy.hp = 0;
-    enemy.bodyMat.color.set(0x111111); // 黒焦げ
-    spawnDebris(enemy.group.position, 0x111111, 0.8, 30);
+    enemy.bodyMat.color.set(0x000000); // 真っ黒
+    spawnDebris(enemy.group.position, 0x000000, 0.8, 30);
     spawnDebris(enemy.group.position, 0xffaa00, 1.5, 15);
     const msg = document.getElementById('msg');
     msg.style.display = 'block';
@@ -175,7 +172,7 @@ function initAudio() {
     fetch('crs.mp3').then(r => r.arrayBuffer()).then(ab => audioCtx.decodeAudioData(ab)).then(buffer => { crsAudioBuffer = buffer; });
 }
 
-function playCrsSound() {
+function playCollisionSound() {
     if (!audioCtx || !crsAudioBuffer) return;
     const source = audioCtx.createBufferSource();
     source.buffer = crsAudioBuffer;
@@ -201,18 +198,28 @@ renderer.domElement.addEventListener("mousedown", () => {
 });
 document.addEventListener("mousemove", e => { if (document.pointerLockElement === renderer.domElement) { lookYaw -= e.movementX * 0.003; lookPitch = Math.max(-0.6, Math.min(0.6, lookPitch - e.movementY * 0.003)); } });
 
-// フルスクリーンボタン修正
+// --- 【修正箇所】モバイル・各ブラウザ対応のフルスクリーン切り替えロジック ---
 document.getElementById('fullscreenButton').addEventListener('click', () => {
     const doc = window.document;
     const docEl = doc.documentElement;
+
+    // 各ブラウザごとのフルスクリーン呼び出し/終了関数の定義
     const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
     const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
 
-    if(!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
-        requestFullScreen.call(docEl);
-        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+    // 現在フルスクリーンかどうかの判定（各種プレフィックス対応）
+    if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+        if (requestFullScreen) {
+            requestFullScreen.call(docEl);
+            // 画面方向のロック（ランドスケープ/横向き）
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {});
+            }
+        }
     } else {
-        cancelFullScreen.call(doc);
+        if (cancelFullScreen) {
+            cancelFullScreen.call(doc);
+        }
     }
 });
 
@@ -271,12 +278,12 @@ function animate() {
         const isP = (ent === player);
         const isE = (ent === enemy);
 
-        // HP低下・死亡演出
+        // 死亡・煙演出
         if (ent.dead) {
             ent.speed = 0;
-            if (Math.random() > 0.8) spawnDust(ent.group.position.clone().add(new THREE.Vector3(0, 1, 0)), false, true);
+            if (Math.random() > 0.8) spawnDust(ent.group.position.clone().add(new THREE.Vector3(0,1,0)), false, true);
         } else if (ent.hp <= 30) {
-            if (Math.random() > 0.9) spawnDust(ent.group.position.clone().add(new THREE.Vector3(0, 1, 0)), false, true);
+            if (Math.random() > 0.9) spawnDust(ent.group.position.clone().add(new THREE.Vector3(0,1,0)), false, true);
         }
 
         ent.lastSpeed = ent.speed;
@@ -328,6 +335,7 @@ function animate() {
         if (!ent.dead) {
             ent.group.position.addScaledVector(new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw), ent.speed);
         }
+        
         const fD = 2.2;
         const hF = getHeight(ent.group.position.x + Math.sin(ent.yaw)*fD, ent.group.position.z + Math.cos(ent.yaw)*fD);
         const hB = getHeight(ent.group.position.x - Math.sin(ent.yaw)*fD, ent.group.position.z - Math.cos(ent.yaw)*fD);
@@ -349,11 +357,14 @@ function animate() {
     if (enemy.active && !player.dead && !enemy.dead) {
         const dist = player.group.position.distanceTo(enemy.group.position);
         if (dist < 3.5) {
-            playCrsSound();
+            playCollisionSound();
+            // 相手への方向
             const dirP2E = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
+            // お互いの移動ベクトル
             const pMove = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)).multiplyScalar(-player.speed);
             const eMove = new THREE.Vector3(Math.sin(enemy.yaw), 0, Math.cos(enemy.yaw)).multiplyScalar(enemy.speed);
             
+            // 相手に向かう強さ(内積)
             const pAtkForce = pMove.dot(dirP2E);
             const eAtkForce = eMove.dot(dirP2E.clone().negate());
 
@@ -362,10 +373,13 @@ function animate() {
             player.impactV.add(dirP2E.clone().multiplyScalar(-bounce));
             enemy.impactV.add(dirP2E.clone().multiplyScalar(bounce));
 
+            // ダメージ判定
             if (pAtkForce > eAtkForce + 0.3) {
-                enemy.hp -= 20; spawnDust(enemy.group.position, true);
+                enemy.hp -= 20;
+                spawnDust(enemy.group.position, true);
             } else if (eAtkForce > pAtkForce + 0.3) {
-                player.hp -= 20; spawnDust(player.group.position, true);
+                player.hp -= 20;
+                spawnDust(player.group.position, true);
             }
 
             document.getElementById('p-hp').innerText = Math.max(0, player.hp);
@@ -374,8 +388,8 @@ function animate() {
             if (enemy.hp <= 0) destroyEnemy();
             if (player.hp <= 0) {
                 player.dead = true;
-                player.bodyMat.color.set(0x111111);
-                spawnDebris(player.group.position, 0x111111, 0.8, 20);
+                player.bodyMat.color.set(0x000000);
+                spawnDebris(player.group.position, 0x000000, 0.8, 20);
                 document.getElementById('msg').innerText = "GAME OVER";
                 document.getElementById('msg').style.display = 'block';
                 setTimeout(() => location.reload(), 5000);
