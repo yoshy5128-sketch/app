@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Everest Simulator</title>
+    <title>Everest Simulator - Maze Edition (Easy Oxygen)</title>
+    <link rel="manifest" href="manifest.json">
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; touch-action: none; }
         
@@ -83,14 +84,11 @@
         <p>あなたは今から、エベレスト制覇を目指します！<br>
         ベースキャンプを出発し、エベレストの頂上を目指してください。<br>
         途中、視界不良をはじめ、落ちたら確実に死亡するクレバス、そして限りある酸素との戦いがあなたを待ち受けています。<br>
-        酸素が無くなると視界がブラックアウトし、気を失ってしまいます。<br>
+        登山のスピードを上げればそれだけ酸素も早く減ります。酸素が無くなると視界がブラックアウトし、気を失ってしまいます。<br>
         たとえ無事に登頂が成功しても、今度は下山の恐怖があなたを待ち受けています。<br>
         登頂に成功したら、まずは近くのレスキュー（黄色のテント★）を目指して酸素を補給してください。<br>
         そして無事にベースキャンプまで辿り着けたら、それが本当の意味でのエベレスト制覇です！<br>
-        がんばってください。<br>
-        ■ヘリ・モードでの操作方法：<br>
-        ・PC　マウス＝方向＆視点　W＝上昇　S＝下降　スペース＝前に進む<br>
-　　　　・スマホ　右画面＝方向＆視点　左画面スワイプ＝上昇、下降　ボタン＝前に進む</p>
+        がんばってください。</p>
         <button id="close-btn">閉じる</button>
     </div>
 
@@ -597,7 +595,16 @@
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
         animate(0);
     </script>
+<script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('SW registered: ', registration);
+                }).catch(registrationError => {
+                    console.log('SW registration failed: ', registrationError);
+                });
+            });
+        }
+    </script>
 </body>
 </html>
-
-
