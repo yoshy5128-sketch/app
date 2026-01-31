@@ -424,7 +424,6 @@
         const raycaster = new THREE.Raycaster();
 
         function animate(time) {
-            if (isEnded && !isHeliMode) return;
             requestAnimationFrame(animate);
 
             if (isHeliMode) {
@@ -440,118 +439,120 @@
                 if (keys.w) player.pos.y += speed;
                 if (keys.s) player.pos.y -= speed;
             } else {
-                let weatherCycle = (Math.sin(time * 0.0002) + 1) / 2;
-                const isWhiteout = weatherCycle > 0.7;
-                document.getElementById('weather-text').innerText = isWhiteout ? "WHITEOUT" : "NORMAL";
-                if (gameStartTime > 0 && windSound.isPlaying) windSound.setVolume(0.1 + Math.pow(weatherCycle, 2) * 0.9);
-                const fogDensity = 0.0002 + Math.pow(weatherCycle, 3) * 0.045;
-                scene.background = new THREE.Color().lerpColors(new THREE.Color(0x77aaff), new THREE.Color(0xcccccc), Math.min(1, weatherCycle * 1.2));
-                scene.fog = new THREE.FogExp2(scene.background, fogDensity);
+                if (!isEnded) {
+                    let weatherCycle = (Math.sin(time * 0.0002) + 1) / 2;
+                    const isWhiteout = weatherCycle > 0.7;
+                    document.getElementById('weather-text').innerText = isWhiteout ? "WHITEOUT" : "NORMAL";
+                    if (gameStartTime > 0 && windSound.isPlaying) windSound.setVolume(0.1 + Math.pow(weatherCycle, 2) * 0.9);
+                    const fogDensity = 0.0002 + Math.pow(weatherCycle, 3) * 0.045;
+                    scene.background = new THREE.Color().lerpColors(new THREE.Color(0x77aaff), new THREE.Color(0xcccccc), Math.min(1, weatherCycle * 1.2));
+                    scene.fog = new THREE.FogExp2(scene.background, fogDensity);
 
-                let isMoving = false;
-                const speed = 0.95;
-                if (!player.isFalling && gameStartTime > 0) {
-                    if (isStepButtonPressed || keys.w) {
-                        const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                        fwd.y = 0; fwd.normalize();
-                        player.pos.addScaledVector(fwd, speed);
-                        isMoving = true;
+                    let isMoving = false;
+                    const speed = 0.95;
+                    if (!player.isFalling && gameStartTime > 0) {
+                        if (isStepButtonPressed || keys.w) {
+                            const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                            fwd.y = 0; fwd.normalize();
+                            player.pos.addScaledVector(fwd, speed);
+                            isMoving = true;
+                        }
                     }
-                }
-                if (gameStartTime > 0) {
-                    oxygen -= (isMoving ? O2_LOSS_MOVING : O2_LOSS_NORMAL);
-                    if (oxygen <= 0) { oxygen = 0; document.getElementById('vision-overlay').style.opacity = 1; showEnd("登山不能", "酸素が尽きました。"); }
-                    document.getElementById('o2-bar').style.width = oxygen + "%";
-                    if (oxygen < 30) document.getElementById('vision-overlay').style.opacity = ((Math.sin(time * 0.002) + 1) / 2) * ((30 - oxygen) / 30) * 0.8;
-                    else if (!isEnded) document.getElementById('vision-overlay').style.opacity = 0;
-                }
+                    if (gameStartTime > 0) {
+                        oxygen -= (isMoving ? O2_LOSS_MOVING : O2_LOSS_NORMAL);
+                        if (oxygen <= 0) { oxygen = 0; document.getElementById('vision-overlay').style.opacity = 1; showEnd("登山不能", "酸素が尽きました。"); }
+                        document.getElementById('o2-bar').style.width = oxygen + "%";
+                        if (oxygen < 30) document.getElementById('vision-overlay').style.opacity = ((Math.sin(time * 0.002) + 1) / 2) * ((30 - oxygen) / 30) * 0.8;
+                        else if (!isEnded) document.getElementById('vision-overlay').style.opacity = 0;
+                    }
 
-                raycaster.set(new THREE.Vector3(player.pos.x, 8000, player.pos.z), new THREE.Vector3(0, -1, 0));
-                const hit = raycaster.intersectObject(terrainMesh);
-                if (hit.length > 0) {
-                    const gY = hit[0].point.y;
-                    const isInitialPhase = gameStartTime > 0 && performance.now() - gameStartTime < 500;
-                    if (isInitialPhase) {
-                        player.pos.y = gY + 3.0;
-                        player.velY = 0;
-                        player.isFalling = false;
-                    } else {
-                        if (gameStartTime > 0 && performance.now() - gameStartTime > 2000 && gY < player.pos.y - 45) player.isFalling = true;
-                        if (player.isFalling) {
-                            player.velY -= 0.8;
-                            if (player.pos.y < gY + 3) showEnd("滑落", "クレバスに転落しました。");
+                    raycaster.set(new THREE.Vector3(player.pos.x, 8000, player.pos.z), new THREE.Vector3(0, -1, 0));
+                    const hit = raycaster.intersectObject(terrainMesh);
+                    if (hit.length > 0) {
+                        const gY = hit[0].point.y;
+                        const isInitialPhase = gameStartTime > 0 && performance.now() - gameStartTime < 500;
+                        if (isInitialPhase) {
+                            player.pos.y = gY + 3.0;
+                            player.velY = 0;
+                            player.isFalling = false;
                         } else {
-                            const targetY = gY + 3.0;
-                            if (player.pos.y > targetY) player.velY -= 0.2;
-                            else {
-                                if (gameStartTime > 0 && performance.now() - gameStartTime > 2000 && player.velY < -22) showEnd("滑落", "急斜面から滑落しました。");
-                                player.pos.y = targetY; player.velY = 0;
+                            if (gameStartTime > 0 && performance.now() - gameStartTime > 2000 && gY < player.pos.y - 45) player.isFalling = true;
+                            if (player.isFalling) {
+                                player.velY -= 0.8;
+                                if (player.pos.y < gY + 3) showEnd("滑落", "クレバスに転落しました。");
+                            } else {
+                                const targetY = gY + 3.0;
+                                if (player.pos.y > targetY) player.velY -= 0.2;
+                                else {
+                                    if (gameStartTime > 0 && performance.now() - gameStartTime > 2000 && player.velY < -22) showEnd("滑落", "急斜面から滑落しました。");
+                                    player.pos.y = targetY; player.velY = 0;
+                                }
                             }
                         }
                     }
-                }
-                player.pos.y += player.velY;
+                    player.pos.y += player.velY;
 
-                if (gameState === 'DESCENT' && rescueObject) {
-                    const distToRescue = player.pos.distanceTo(rescueObject.position);
-                    if (distToRescue < 20) {
-                        oxygen = 100;
-                        const el = document.getElementById('phase-notice');
-                        el.innerHTML = "酸素回復！ベースキャンプを目指せ！";
-                        el.style.display = 'block';
-                        setTimeout(() => el.style.display = 'none', 3000);
-                        scene.remove(rescueObject);
-                        rescueObject = null;
-                        document.getElementById('rescue-dot').style.display = 'none';
-                    }
-                }
-                document.getElementById('alt-val').innerText = (START_ALT + (player.pos.y - (baseH + 3.0)) * heightScale).toFixed(2);
-                const dToS = player.pos.distanceTo(new THREE.Vector3(SUMMIT_POS_XZ.x, peakH, SUMMIT_POS_XZ.z));
-                const dToB = player.pos.distanceTo(new THREE.Vector3(START_POS_XZ.x, baseH + 3.0, START_POS_XZ.z));
-                if (gameState === 'ASCENT') {
-                    document.getElementById('dist-val').innerText = Math.floor(dToS);
-                    if (gameStartTime > 0 && dToS < 15) {
-                        gameState = 'DESCENT'; document.getElementById('stage-text').innerText = "PHASE: DESCENT";
-                        document.getElementById('stage-text').style.color = "#00aaff";
-                        const el = document.getElementById('phase-notice'); el.innerHTML = "登頂成功！<br>レスキュー(★)で酸素補給せよ"; el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 5000);
-                        const randomX = SUMMIT_POS_XZ.x + (Math.random() - 0.5) * 400;
-                        const randomZ = SUMMIT_POS_XZ.z + (Math.random() - 0.5) * 400;
-                        raycaster.set(new THREE.Vector3(randomX, 8000, randomZ), new THREE.Vector3(0, -1, 0));
-                        const hitRescue = raycaster.intersectObject(terrainMesh);
-                        if (hitRescue.length > 0) {
-                            const groundY = hitRescue[0].point.y;
-                            rescuePos = new THREE.Vector3(randomX, groundY, randomZ);
-                            const tentGeometry = new THREE.ConeGeometry(6, 9, 4);
-                            const yellowMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, shininess: 5 });
-                            rescueObject = new THREE.Mesh(tentGeometry, yellowMaterial);
-                            rescueObject.position.set(rescuePos.x, rescuePos.y + 4.5, rescuePos.z);
-                            rescueObject.rotation.y = Math.random() * Math.PI * 2;
-                            scene.add(rescueObject);
-                            const rescueDot = document.getElementById('rescue-dot');
-                            rescueDot.style.display = 'block';
-                            rescueDot.style.left = (50 + (rescuePos.x / TERRAIN_SIZE) * 100) + '%';
-                            rescueDot.style.top = (50 + (rescuePos.z / TERRAIN_SIZE) * 100) + '%';
+                    if (gameState === 'DESCENT' && rescueObject) {
+                        const distToRescue = player.pos.distanceTo(rescueObject.position);
+                        if (distToRescue < 20) {
+                            oxygen = 100;
+                            const el = document.getElementById('phase-notice');
+                            el.innerHTML = "酸素回復！ベースキャンプを目指せ！";
+                            el.style.display = 'block';
+                            setTimeout(() => el.style.display = 'none', 3000);
+                            scene.remove(rescueObject);
+                            rescueObject = null;
+                            document.getElementById('rescue-dot').style.display = 'none';
                         }
-                        const saveData = { playerPos: { x: player.pos.x, y: player.pos.y, z: player.pos.z }, playerRotY: player.rotY, playerRotX: player.rotX, oxygen: 100, gameState: gameState };
-                        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(saveData));
                     }
-                } else {
-                    document.getElementById('dist-val').innerText = Math.floor(dToB);
-                    if (dToB < 30) showEnd("完全登頂成功", "エベレスト制覇おめでとう！");
+                    document.getElementById('alt-val').innerText = (START_ALT + (player.pos.y - (baseH + 3.0)) * heightScale).toFixed(2);
+                    const dToS = player.pos.distanceTo(new THREE.Vector3(SUMMIT_POS_XZ.x, peakH, SUMMIT_POS_XZ.z));
+                    const dToB = player.pos.distanceTo(new THREE.Vector3(START_POS_XZ.x, baseH + 3.0, START_POS_XZ.z));
+                    if (gameState === 'ASCENT') {
+                        document.getElementById('dist-val').innerText = Math.floor(dToS);
+                        if (gameStartTime > 0 && dToS < 15) {
+                            gameState = 'DESCENT'; document.getElementById('stage-text').innerText = "PHASE: DESCENT";
+                            document.getElementById('stage-text').style.color = "#00aaff";
+                            const el = document.getElementById('phase-notice'); el.innerHTML = "登頂成功！<br>レスキュー(★)で酸素補給せよ"; el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 5000);
+                            const randomX = SUMMIT_POS_XZ.x + (Math.random() - 0.5) * 400;
+                            const randomZ = SUMMIT_POS_XZ.z + (Math.random() - 0.5) * 400;
+                            raycaster.set(new THREE.Vector3(randomX, 8000, randomZ), new THREE.Vector3(0, -1, 0));
+                            const hitRescue = raycaster.intersectObject(terrainMesh);
+                            if (hitRescue.length > 0) {
+                                const groundY = hitRescue[0].point.y;
+                                rescuePos = new THREE.Vector3(randomX, groundY, randomZ);
+                                const tentGeometry = new THREE.ConeGeometry(6, 9, 4);
+                                const yellowMaterial = new THREE.MeshPhongMaterial({ color: 0xffff00, shininess: 5 });
+                                rescueObject = new THREE.Mesh(tentGeometry, yellowMaterial);
+                                rescueObject.position.set(rescuePos.x, rescuePos.y + 4.5, rescuePos.z);
+                                rescueObject.rotation.y = Math.random() * Math.PI * 2;
+                                scene.add(rescueObject);
+                                const rescueDot = document.getElementById('rescue-dot');
+                                rescueDot.style.display = 'block';
+                                rescueDot.style.left = (50 + (rescuePos.x / TERRAIN_SIZE) * 100) + '%';
+                                rescueDot.style.top = (50 + (rescuePos.z / TERRAIN_SIZE) * 100) + '%';
+                            }
+                            const saveData = { playerPos: { x: player.pos.x, y: player.pos.y, z: player.pos.z }, playerRotY: player.rotY, playerRotX: player.rotX, oxygen: 100, gameState: gameState };
+                            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(saveData));
+                        }
+                    } else {
+                        document.getElementById('dist-val').innerText = Math.floor(dToB);
+                        if (dToB < 30) showEnd("完全登頂成功", "エベレスト制覇おめでとう！");
+                    }
+                    snowParticles.position.copy(player.pos);
+                    const pAttr = snowParticles.geometry.attributes.position.array;
+                    for (let i = 0; i < snowCount; i++) {
+                        pAttr[i * 3] += 0.5 + weatherCycle * 4.0; pAttr[i * 3 + 1] -= 0.15;
+                        if (pAttr[i * 3] > 60) pAttr[i * 3] = -60; if (pAttr[i * 3 + 1] < -30) pAttr[i * 3 + 1] = 30;
+                    }
+                    snowParticles.geometry.attributes.position.needsUpdate = true;
+                    snowMat.opacity = Math.max(0, (weatherCycle - 0.2) * 0.9);
+                    const pIcon = document.getElementById('player-icon');
+                    pIcon.style.left = (50 + (player.pos.x / TERRAIN_SIZE) * 100) + '%'; pIcon.style.top = (50 + (player.pos.z / TERRAIN_SIZE) * 100) + '%';
+                    pIcon.style.transform = `translate(-50%, -50%) rotate(${-player.rotY * 180 / Math.PI}deg)`;
+                    document.getElementById('bc-dot').style.left = (50 + (START_POS_XZ.x / TERRAIN_SIZE) * 100) + '%';
+                    document.getElementById('bc-dot').style.top = (50 + (START_POS_XZ.z / TERRAIN_SIZE) * 100) + '%';
                 }
-                snowParticles.position.copy(player.pos);
-                const pAttr = snowParticles.geometry.attributes.position.array;
-                for (let i = 0; i < snowCount; i++) {
-                    pAttr[i * 3] += 0.5 + weatherCycle * 4.0; pAttr[i * 3 + 1] -= 0.15;
-                    if (pAttr[i * 3] > 60) pAttr[i * 3] = -60; if (pAttr[i * 3 + 1] < -30) pAttr[i * 3 + 1] = 30;
-                }
-                snowParticles.geometry.attributes.position.needsUpdate = true;
-                snowMat.opacity = Math.max(0, (weatherCycle - 0.2) * 0.9);
-                const pIcon = document.getElementById('player-icon');
-                pIcon.style.left = (50 + (player.pos.x / TERRAIN_SIZE) * 100) + '%'; pIcon.style.top = (50 + (player.pos.z / TERRAIN_SIZE) * 100) + '%';
-                pIcon.style.transform = `translate(-50%, -50%) rotate(${-player.rotY * 180 / Math.PI}deg)`;
-                document.getElementById('bc-dot').style.left = (50 + (START_POS_XZ.x / TERRAIN_SIZE) * 100) + '%';
-                document.getElementById('bc-dot').style.top = (50 + (START_POS_XZ.z / TERRAIN_SIZE) * 100) + '%';
             }
             camera.position.copy(player.pos); camera.rotation.set(player.rotX, player.rotY, 0, 'YXZ');
             renderer.render(scene, camera);
