@@ -480,7 +480,13 @@
                             if (gameStartTime > 0 && performance.now() - gameStartTime > 2000 && gY < player.pos.y - 45) player.isFalling = true;
                             if (player.isFalling) {
                                 player.velY -= 0.8;
-                                if (player.pos.y < gY + 3) showEnd("滑落", "クレバスに転落しました。");
+                                if (player.pos.y < gY + 3) {
+                                     if (gameState === 'DESCENT') {
+                                        showEnd("下山中に滑落！", "頂上から再開します。");
+                                    } else {
+                                        showEnd("滑落", "クレバスに転落しました。");
+                                    }
+                                }
                             } else {
                                 const targetY = gY + 3.0;
                                 if (player.pos.y > targetY) player.velY -= 0.2;
@@ -576,6 +582,23 @@
             isEnded = false;
         }
 
+        function resetToSummit() {
+            if (!isEnded) return;
+            player.pos.set(SUMMIT_POS_XZ.x, peakH + 3.0, SUMMIT_POS_XZ.z);
+            player.velY = 0;
+            player.isFalling = false;
+            oxygen = 100; // 酸素も回復
+            document.getElementById('message-screen').style.display = 'none';
+            document.getElementById('vision-overlay').style.opacity = 0;
+            if (windSound.buffer && !windSound.isPlaying) {
+                windSound.play();
+            }
+            if (!isTouchDevice) {
+                renderer.domElement.requestPointerLock();
+            }
+            isEnded = false;
+        }
+
         function showEnd(t, b) {
             if (isEnded) return; isEnded = true;
             if (windSound.isPlaying) windSound.stop();
@@ -583,7 +606,11 @@
             document.getElementById('message-screen').style.display = 'block';
             document.getElementById('msg-title').innerText = t; document.getElementById('msg-body').innerText = b;
             const retryBtn = document.querySelector('.btn-retry');
-            if (t !== "完全登頂成功") {
+            
+            if (t === "下山中に滑落！") {
+                retryBtn.innerText = "RETRY";
+                retryBtn.onclick = resetToSummit;
+            } else if (t !== "完全登頂成功") {
                 retryBtn.innerText = "RETRY";
                 retryBtn.onclick = resetToPenitentiary;
             } else {
