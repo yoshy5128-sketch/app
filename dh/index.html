@@ -426,23 +426,40 @@ function animate() {
         let turnInput = 0;
         
         if(isP && !ent.dead) {
-            // 前進・後進
-            if(keys.KeyW) ent.speed += ACCEL; 
-            if(keys.KeyS) ent.speed -= ACCEL;
+            // --- 入力状態の集約 ---
+            let moveUp = keys.KeyW;
+            let moveDown = keys.KeyS;
+            let moveLeft = keys.KeyA;
+            let moveRight = keys.KeyD;
+
+            // タッチ操作がある場合、入力を上書きまたは追加
+            if (touchLeftId !== -1) {
+                const dy = touchState.left.currentY - touchState.left.startY;
+                const dx = touchState.left.currentX - touchState.left.startX;
+                if (dy < -5) moveUp = true;    // 前進感度を改善
+                if (dy > 5)  moveDown = true;
+                if (dx < -5) moveLeft = true;  // ハンドリング遊びを調整
+                if (dx > 5)  moveRight = true;
+            }
+
+            // --- 前進・後進の処理 ---
+            if(moveUp) ent.speed += ACCEL; 
+            if(moveDown) ent.speed -= ACCEL;
+            ent.speed *= FRICTION;
+
+            // --- ハンドリング（旋回）の処理：重厚感Ver ---
+            // 目標の旋回速度（0.055くらいが「クイックすぎず軽すぎず」のラインです）
+            const targetTurnSpeed = (moveLeft ? 0.055 : 0) + (moveRight ? -0.055 : 0);
             
-            // ★ハンドリングの調整（重厚感の追加）
-            // 目標とする旋回速度をスピードに応じて変化させる
-            const targetTurnSpeed = (keys.KeyA ? 0.06 : 0) + (keys.KeyD ? -0.06 : 0);
-            
-            // 現在の旋回に補間（Lerp）をかけて、じわっと曲がり始めるようにする（0.15が重さの決め手）
-            ent.currentTurnSpeed = THREE.MathUtils.lerp(ent.currentTurnSpeed || 0, targetTurnSpeed, 0.05);
+            // 線形補間（lerp）でじわっと旋回を開始・停止させる（0.12が重さの決め手）
+            ent.currentTurnSpeed = THREE.MathUtils.lerp(ent.currentTurnSpeed || 0, targetTurnSpeed, 0.12);
             ent.yaw += ent.currentTurnSpeed;
             
-            // ロール用の入力値（視覚的な傾き）
-            turnInput = ent.currentTurnSpeed * 15; 
+            // 車体の傾き（ロール）に反映
+            turnInput = ent.currentTurnSpeed * 18; 
 
-            ent.speed *= FRICTION;
-        }
+        } else if (!isP && !ent.dead) {
+            // ... ここから下（敵AI）はそのまま ...
 
             // AI separation logic (Request ①)
             const separationForce = new THREE.Vector3();
