@@ -16,8 +16,8 @@
     #zoomSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
     @media (pointer: coarse) { #zoomSlider { display: block; } }
     
-    #hud { position: absolute; top: 20px; width: 100%; display: flex; justify-content: center; gap: 40px; color: white; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; }
-    #mission-info { position: absolute; top: 60px; width: 100%; text-align: center; color: #ffff00; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; font-size: 18px; }
+    #hud { position: absolute; top: 5px; width: 100%; display: flex; justify-content: flex-start; gap: 40px; color: white; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; padding-left: 15px; }
+    #mission-info { position: absolute; top: 5px; width: 100%; text-align: right; color: #ffff00; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; font-size: 18px; padding-right: 15px; }
 </style>
 </head>
 <body>
@@ -157,7 +157,14 @@ const enemyColors = [0x00cc00, 0xcccc00, 0xcc22cc, 0xeeeeee, 0x2244cc, 0xcc5500]
 
 function spawnEnemyAt(x, z) {
     const col = enemyColors[Math.floor(Math.random() * enemyColors.length)];
-    const ent = { ...createCar(col), speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, attackTimer: 0, mode: 'follow', impactV: new THREE.Vector3() };
+    const aiTypes = ['chaser', 'evasive', 'flanker']; // Define AI types
+    const assignedType = aiTypes[Math.floor(Math.random() * aiTypes.length)]; // Randomly assign one
+    const ent = { 
+        ...createCar(col), 
+        speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, 
+        attackTimer: 0, mode: 'follow', impactV: new THREE.Vector3(),
+        aiType: assignedType // Assign AI type
+    };
     ent.group.position.set(x, 10, z);
     scene.add(ent.group);
     enemies.push(ent);
@@ -215,18 +222,6 @@ function setNextObjective(type) {
         beaconMesh.material = beaconGreenMat;
         document.getElementById('mission-type').innerText = "DELIVER (GREEN BEAM)";
         document.getElementById('mission-type').style.color = "#33ff33";
-        
-        // ★AI復活処理
-        const enemiesToRespawn = stageEnemyCount - enemies.length;
-        if (enemiesToRespawn > 0) {
-            for (let i = 0; i < enemiesToRespawn; i++) {
-                const spawnAngle = player.yaw + Math.PI + (Math.random() - 0.5) * 1.5;
-                const spawnDist = 40 + Math.random() * 20;
-                const ex = player.group.position.x + Math.sin(spawnAngle) * spawnDist;
-                const ez = player.group.position.z + Math.cos(spawnAngle) * spawnDist;
-                spawnEnemyAt(ex, ez);
-            }
-        }
     }
     
     document.getElementById('cargo-count').innerText = currentCargo;
@@ -329,6 +324,12 @@ window.addEventListener('touchmove', e => {
     }
 }, {passive: false});
 
+// ③フルスクリーンボタンの有効化
+document.getElementById('fullscreenButton').addEventListener('click', () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => console.warn(err));
+    else document.exitFullscreen();
+});
+
 window.addEventListener('touchend', e => {
     for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
@@ -350,6 +351,8 @@ function animate() {
     if (distToTarget < 30) {
         if (missionState === 'pickup') {
             showMsg("CARGO PICKED UP!");
+            player.hp = 100; // Player HP restored at pickup point
+            document.getElementById('p-hp').innerText = 100;
             setNextObjective('deliver');
         } else {
             currentCargo++;
@@ -392,6 +395,15 @@ function animate() {
 
     const entities = [player, ...enemies]; 
 
+    // ★AIが規定数に満たない場合に即座にリスポーンさせる
+    if (enemies.length < stageEnemyCount) {
+        const spawnAngle = player.yaw + Math.PI + (Math.random() - 0.5) * 1.5;
+        const spawnDist = 100 + Math.random() * 50;
+        const ex = player.group.position.x + Math.sin(spawnAngle) * spawnDist;
+        const ez = player.group.position.z + Math.cos(spawnAngle) * spawnDist;
+        spawnEnemyAt(ex, ez);
+    }
+
     entities.forEach(ent => {
         const isP = (ent === player);
         if (!isP && ent.dead) return; 
@@ -412,13 +424,63 @@ function animate() {
             }
             ent.speed *= FRICTION;
         } else if (!isP && !ent.dead) {
+            // AI separation logic (Request ①)
+            const separationForce = new THREE.Vector3();
+            for (let i = 0; i < enemies.length; i++) {
+                const otherEnt = enemies[i];
+                if (ent === otherEnt || otherEnt.dead) continue; // Don't compare with self or dead enemies
+
+                const distance = ent.group.position.distanceTo(otherEnt.group.position);
+                const separationRadius = 8; // Adjust based on car size
+                const maxRepelForce = 0.1; // Max force to prevent jitter
+
+                if (distance < separationRadius && distance > 0.001) { // Prevent division by zero / very small distance
+                    const repelVector = new THREE.Vector3().subVectors(ent.group.position, otherEnt.group.position).normalize();
+                    const repelStrength = Math.min(maxRepelForce, (separationRadius - distance) / separationRadius);
+                    separationForce.add(repelVector.multiplyScalar(repelStrength));
+                }
+            }
+            ent.group.position.add(separationForce.multiplyScalar(0.2)); // Apply separation force (scaled down)
+
+            // Original AI movement logic
             const toPlayer = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
             const dist = toPlayer.length();
             ent.attackTimer += 0.01;
-            let tYaw = Math.atan2(toPlayer.x, toPlayer.z) + Math.PI;
             
-            let tSpeed = Math.max(0, Math.abs(player.speed) + 0.6); 
-            if (dist < 10) tSpeed *= 0.8; 
+            // Initialize tYaw and tSpeed with default values (e.g., chaser behavior)
+            let tYaw = Math.atan2(toPlayer.x, toPlayer.z) + Math.PI; 
+            let tSpeed = Math.max(1.0, Math.abs(player.speed) + 0.6); 
+            if (dist < 10) tSpeed *= 0.8;
+
+            switch (ent.aiType) {
+                case 'chaser':
+                    tSpeed = Math.max(1.2, Math.abs(player.speed) + 0.8); // Slightly more aggressive speed
+                    if (dist < 10) tSpeed *= 0.8; // Slow down if too close
+                    break;
+                case 'evasive':
+                    const desiredDistEvasive = 40;
+                    let targetAngle = Math.atan2(toPlayer.x, toPlayer.z) + Math.PI; // Always have player as a general target
+                    if (dist < desiredDistEvasive - 10) { // Too close, move away
+                        // Evade by moving slightly away and to the side
+                        tYaw = targetAngle + (Math.random() > 0.5 ? Math.PI / 3 : -Math.PI / 3); // Point away and to side
+                        tSpeed = Math.max(1.0, Math.abs(player.speed) + 0.6); // Slightly faster to create distance
+                    } else if (dist > desiredDistEvasive + 10) { // Too far, move towards
+                        tYaw = targetAngle; // Point directly at player
+                        tSpeed = Math.max(1.1, Math.abs(player.speed) + 0.7); // Faster to close gap
+                    } else { // Ideal distance, circle
+                        const perpendicularAngle = Math.atan2(toPlayer.z, toPlayer.x) + (Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2);
+                        tYaw = targetAngle + (Math.random() > 0.5 ? Math.PI / 6 : -Math.PI / 6); // Small deviation to orbit
+                        tSpeed = Math.max(0.8, Math.abs(player.speed) + 0.4); // Maintain moderate speed
+                    }
+                    break;
+                case 'flanker':
+                    const flankAngleOffset = (Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2) * 0.5; // +/- 45 degrees
+                    tYaw = Math.atan2(toPlayer.x, toPlayer.z) + Math.PI + flankAngleOffset;
+                    tSpeed = Math.max(1.0, Math.abs(player.speed) + 0.6); // Standard speed
+                    if (dist < 15) tSpeed *= 0.7; // Slow down if too close
+                    break;
+                // No default needed now as tYaw and tSpeed are initialized
+            }
             
             ent.speed = THREE.MathUtils.lerp(ent.speed, tSpeed, 0.02);
             let dy = tYaw - ent.yaw;
