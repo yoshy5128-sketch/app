@@ -401,7 +401,7 @@ function animate() {
 
         // --- 【変更点2】車高の変更（Ride Height） ---
         // 接地判定のオフセットを 0.22 から 0.60 に増やし、車体を高く浮かせました
-        const avgY = (hF + hB + hR + hL) / 4 + 0.60; 
+        const avgY = (hF + hB + hR + hL) / 4 + 0.12; 
         
         if(isP) { ent.vY -= GRAVITY; ent.group.position.y += ent.vY; if(ent.group.position.y <= avgY) { ent.group.position.y = avgY; ent.vY = 0; } }
         else { ent.group.position.y = avgY; }
