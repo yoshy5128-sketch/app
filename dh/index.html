@@ -435,7 +435,7 @@ function animate() {
             const targetTurnSpeed = (keys.KeyA ? 0.06 : 0) + (keys.KeyD ? -0.06 : 0);
             
             // 現在の旋回に補間（Lerp）をかけて、じわっと曲がり始めるようにする（0.15が重さの決め手）
-            ent.currentTurnSpeed = THREE.MathUtils.lerp(ent.currentTurnSpeed || 0, targetTurnSpeed, 0.5);
+            ent.currentTurnSpeed = THREE.MathUtils.lerp(ent.currentTurnSpeed || 0, targetTurnSpeed, 0.05);
             ent.yaw += ent.currentTurnSpeed;
             
             // ロール用の入力値（視覚的な傾き）
