@@ -286,7 +286,15 @@ window.addEventListener('touchend', e => {
         else if (t.identifier === touchRightId) touchRightId = -1;
     }
 }, {passive: false});
+// ③フルスクリーンボタンの有効化
 
+document.getElementById('fullscreenButton').addEventListener('click', () => {
+
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => console.warn(err));
+
+    else document.exitFullscreen();
+
+});
 function animate() {
     requestAnimationFrame(animate);
     const now = audioCtx ? audioCtx.currentTime : 0;
