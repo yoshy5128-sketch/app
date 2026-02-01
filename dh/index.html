@@ -39,12 +39,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-// --- 物理設定（速度ダウン・調整済み） ---
+// --- 物理設定 ---
 const MAX_SPEED = 2.5, ACCEL = 0.08, FRICTION = 0.96, GRAVITY = 0.1, MAX_ZOOM_LEVEL = 2.0;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 8000); // 描画距離延長
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 8000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -147,23 +147,21 @@ function createCar(color) {
     return { group, wheels, bodyMat, color, hp: 100, dead: false };
 }
 
-// --- プレイヤー作成 ---
 const player = { ...createCar(0xcc2222), speed: 0, lastSpeed: 0, vY: 0, yaw: 0, pitch: 0, roll: 0, impactV: new THREE.Vector3() };
 scene.add(player.group);
 
-// --- 敵AI管理システム ---
 let enemies = [];
 const enemyColors = [0x00cc00, 0xcccc00, 0xcc22cc, 0xeeeeee, 0x2244cc, 0xcc5500];
 
 function spawnEnemyAt(x, z) {
     const col = enemyColors[Math.floor(Math.random() * enemyColors.length)];
-    const aiTypes = ['chaser', 'evasive', 'flanker']; // Define AI types
-    const assignedType = aiTypes[Math.floor(Math.random() * aiTypes.length)]; // Randomly assign one
+    const aiTypes = ['chaser', 'evasive', 'flanker'];
+    const assignedType = aiTypes[Math.floor(Math.random() * aiTypes.length)];
     const ent = { 
         ...createCar(col), 
         speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, 
         attackTimer: 0, mode: 'follow', impactV: new THREE.Vector3(),
-        aiType: assignedType // Assign AI type
+        aiType: assignedType
     };
     ent.group.position.set(x, 10, z);
     scene.add(ent.group);
@@ -182,20 +180,16 @@ function updateEnemiesCount(count) {
     }
 }
 
-// --- ゲーム進行・ミッションロジック ---
 let currentStage = 1;
 let currentCargo = 0;
 let maxCargo = 1;
 let missionState = 'pickup';
 let stageEnemyCount = 0;
 
-// ビーコン（光の柱）：巨大化
-const beaconGeo = new THREE.CylinderGeometry(40, 40, 5000, 32); // 半径を15から40に太くする
+const beaconGeo = new THREE.CylinderGeometry(40, 40, 5000, 32);
 const beaconRedMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
 const beaconGreenMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
-
 const beaconMesh = new THREE.Mesh(beaconGeo, beaconRedMat);
-// 初期位置は仮
 beaconMesh.position.y = 2500;
 scene.add(beaconMesh);
 
@@ -203,16 +197,9 @@ let targetPos = new THREE.Vector3();
 
 function setNextObjective(type) {
     missionState = type;
-    
-    // 距離を10倍に修正 (3000〜6000の距離)
     const angle = Math.random() * Math.PI * 2;
     const dist = 3000 + Math.random() * 3000;
-    
-    targetPos.set(
-        player.group.position.x + Math.sin(angle) * dist,
-        0,
-        player.group.position.z + Math.cos(angle) * dist
-    );
+    targetPos.set(player.group.position.x + Math.sin(angle) * dist, 0, player.group.position.z + Math.cos(angle) * dist);
 
     if (type === 'pickup') {
         beaconMesh.material = beaconRedMat;
@@ -223,7 +210,6 @@ function setNextObjective(type) {
         document.getElementById('mission-type').innerText = "DELIVER (GREEN BEAM)";
         document.getElementById('mission-type').style.color = "#33ff33";
     }
-    
     document.getElementById('cargo-count').innerText = currentCargo;
     document.getElementById('cargo-max').innerText = maxCargo;
     document.getElementById('stage-num').innerText = currentStage;
@@ -232,25 +218,11 @@ function setNextObjective(type) {
 function initStage(stage) {
     currentStage = stage;
     currentCargo = 0;
-    
-    if (stage === 1) {
-        maxCargo = 1;
-        stageEnemyCount = 1;
-        updateEnemiesCount(stageEnemyCount);
-    } else if (stage === 2) {
-        maxCargo = 2;
-        stageEnemyCount = 1;
-        updateEnemiesCount(stageEnemyCount);
-    } else if (stage === 3) {
-        maxCargo = 3;
-        stageEnemyCount = 2;
-        updateEnemiesCount(stageEnemyCount);
-    } else {
-        maxCargo = 3;
-        stageEnemyCount = 3;
-        updateEnemiesCount(stageEnemyCount);
-    }
-    
+    if (stage === 1) { maxCargo = 1; stageEnemyCount = 1; }
+    else if (stage === 2) { maxCargo = 2; stageEnemyCount = 1; }
+    else if (stage === 3) { maxCargo = 3; stageEnemyCount = 2; }
+    else { maxCargo = 3; stageEnemyCount = 3; }
+    updateEnemiesCount(stageEnemyCount);
     setNextObjective('pickup');
     showMsg("STAGE " + stage + " START");
 }
@@ -261,38 +233,21 @@ function showMsg(text, duration = 3000) {
     setTimeout(() => { m.style.display = 'none'; }, duration);
 }
 
-// ゲーム開始時の初期化
 initStage(1);
 
-function playSFX(filename) {
-    if (!audioCtx) initAudio(); // Ensure audio context is initialized
-    if (!audioCtx) return; // If initialization failed, don't proceed
+let audioCtx, pOsc, pGain;
+function initAudio() { if (audioCtx) return; try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } pOsc = audioCtx.createOscillator(); pOsc.type = 'sawtooth'; pGain = audioCtx.createGain(); pGain.gain.value = 0; pOsc.connect(pGain).connect(audioCtx.destination); pOsc.start(); }
 
+function playSFX(filename) {
+    if (!audioCtx) initAudio(); if (!audioCtx) return;
     const source = audioCtx.createBufferSource();
-    fetch(filename)
-        .then(response => response.arrayBuffer())
-        .then(buffer => audioCtx.decodeAudioData(buffer))
-        .then(decodedBuffer => {
-            source.buffer = decodedBuffer;
-            source.connect(audioCtx.destination);
-            source.start(0);
-        })
-        .catch(e => console.error("Error playing sound:", e));
+    fetch(filename).then(r => r.arrayBuffer()).then(b => audioCtx.decodeAudioData(b)).then(d => { source.buffer = d; source.connect(audioCtx.destination); source.start(0); }).catch(e => {});
 }
 
 function flashRedScreen() {
-    const flashDiv = document.getElementById('redFlash');
-    if (flashDiv) {
-        flashDiv.style.opacity = '0.6'; // Make it visible
-        setTimeout(() => {
-            flashDiv.style.opacity = '0'; // Fade out
-        }, 100); // Flash for 100ms
-    }
+    const f = document.getElementById('redFlash');
+    if (f) { f.style.opacity = '0.6'; setTimeout(() => { f.style.opacity = '0'; }, 100); }
 }
-
-// --- 入力・システム系 ---
-let audioCtx, pOsc, pGain;
-function initAudio() { if (audioCtx) return; try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } pOsc = audioCtx.createOscillator(); pOsc.type = 'sawtooth'; pGain = audioCtx.createGain(); pGain.gain.value = 0; pOsc.connect(pGain).connect(audioCtx.destination); pOsc.start(); }
 
 const keys = {};
 window.addEventListener("keydown", e => { keys[e.code] = true; initAudio(); if(audioCtx) audioCtx.resume(); });
@@ -315,71 +270,51 @@ window.addEventListener('touchstart', e => {
     }
 }, {passive: false});
 
-// --- タッチ入力部分の改善 ---
 window.addEventListener('touchmove', e => {
     e.preventDefault();
     for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        if (t.identifier === touchLeftId) {
-            touchState.left.currentX = t.clientX;
-            touchState.left.currentY = t.clientY;
-            
-            const dy = touchState.left.currentY - touchState.left.startY;
-            const dx = touchState.left.currentX - touchState.left.startX;
-            
-            // 閾値を5pxに。少しの傾きで即座に入力を反映
-            keys.KeyW = (dy < -5);
-            keys.KeyS = (dy > 5);
-            keys.KeyA = (dx < -5); // 左旋回
-            keys.KeyD = (dx > 5);  // 右旋回
-
-        } else if (t.identifier === touchRightId) {
-            // 右画面（視点移動）
-            lookYaw -= (t.clientX - touchState.right.currentX) * 0.005;
-            lookPitch = THREE.MathUtils.clamp(lookPitch - (t.clientY - touchState.right.currentY) * 0.005, -0.6, 0.6);
-            touchState.right.currentX = t.clientX;
-            touchState.right.currentY = t.clientY;
-        }
+        if (t.identifier === touchLeftId) { touchState.left.currentX = t.clientX; touchState.left.currentY = t.clientY; }
+        else if (t.identifier === touchRightId) { lookYaw -= (t.clientX - touchState.right.currentX) * 0.005; lookPitch = THREE.MathUtils.clamp(lookPitch - (t.clientY - touchState.right.currentY) * 0.005, -0.6, 0.6); touchState.right.currentX = t.clientX; touchState.right.currentY = t.clientY; }
     }
 }, {passive: false});
 
-// ③フルスクリーンボタンの有効化
-document.getElementById('fullscreenButton').addEventListener('click', () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => console.warn(err));
-    else document.exitFullscreen();
-});
+window.addEventListener('touchend', e => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === touchLeftId) { touchLeftId = -1; keys.KeyW = keys.KeyS = keys.KeyA = keys.KeyD = false; }
+        else if (t.identifier === touchRightId) touchRightId = -1;
+    }
+}, {passive: false});
 
 function animate() {
     requestAnimationFrame(animate);
     const now = audioCtx ? audioCtx.currentTime : 0;
     
-    // --- ビーコン更新：巨大化対応でY座標調整 ---
-    const hT = getHeight(targetPos.x, targetPos.z);
-    beaconMesh.position.set(targetPos.x, hT + 2495, targetPos.z); // 少し地面に埋める
+    // --- 【変更点1】空の色の変化（Dynamic Sky） ---
+    // 時間経過（Date.now()を使用）で色相と明度を緩やかに変化させる
+    const timeFactor = Date.now() * 0.0001; 
+    const skyH = 0.6; // ベースは青（0.6）
+    const skyS = 0.4;
+    const skyL = 0.4 + Math.sin(timeFactor) * 0.3; // 0.1(夜) 〜 0.7(昼) まで変化
+    scene.background.setHSL(skyH, skyS, skyL);
     
-    // 距離判定（ビーコンの半径+αで緩めに）
+    const hT = getHeight(targetPos.x, targetPos.z);
+    beaconMesh.position.set(targetPos.x, hT + 2495, targetPos.z);
+    
     const distToTarget = Math.sqrt((player.group.position.x - targetPos.x)**2 + (player.group.position.z - targetPos.z)**2);
     if (distToTarget < 30) {
         if (missionState === 'pickup') {
             showMsg("CARGO PICKED UP!");
-            player.hp = 100; // Player HP restored at pickup point
-            document.getElementById('p-hp').innerText = 100;
+            player.hp = 100; document.getElementById('p-hp').innerText = 100;
             setNextObjective('deliver');
         } else {
             currentCargo++;
-            player.hp = 100;
-            document.getElementById('p-hp').innerText = 100;
-            
+            player.hp = 100; document.getElementById('p-hp').innerText = 100;
             if (currentCargo >= maxCargo) {
                 showMsg("STAGE CLEARED!");
-                // ステージ番号バグ修正：より安全な整数変換で確実に加算
-                setTimeout(() => {
-                    let nextStage = parseInt(currentStage, 10);
-                    nextStage = nextStage + 1;
-                    initStage(nextStage);
-                }, 2000);
-                // 連鎖的なステージ進行を防ぐため、ターゲットビーコンを即座に遠くへ移動させる
-                targetPos.set(999999, 999999, 999999); // ターゲットを遠くへ移動
+                setTimeout(() => { let nextStage = parseInt(currentStage, 10) + 1; initStage(nextStage); }, 2000);
+                targetPos.set(999999, 999999, 999999);
             } else {
                 showMsg("DELIVERED! NEXT CARGO...");
                 setTimeout(() => { setNextObjective('pickup'); }, 1500);
@@ -405,20 +340,14 @@ function animate() {
     }
 
     const entities = [player, ...enemies]; 
-
-    // ★AIが規定数に満たない場合に即座にリスポーンさせる
     if (enemies.length < stageEnemyCount) {
-        const spawnAngle = player.yaw + Math.PI + (Math.random() - 0.5) * 1.5;
-        const spawnDist = 100 + Math.random() * 50;
-        const ex = player.group.position.x + Math.sin(spawnAngle) * spawnDist;
-        const ez = player.group.position.z + Math.cos(spawnAngle) * spawnDist;
-        spawnEnemyAt(ex, ez);
+        const sa = player.yaw + Math.PI + (Math.random() - 0.5) * 1.5, sd = 100 + Math.random() * 50;
+        spawnEnemyAt(player.group.position.x + Math.sin(sa)*sd, player.group.position.z + Math.cos(sa)*sd);
     }
 
     entities.forEach(ent => {
         const isP = (ent === player);
         if (!isP && ent.dead) return; 
-
         if (ent.dead) { ent.speed *= 0.95; if (Math.random() > 0.8) spawnDust(ent.group.position.clone().add(new THREE.Vector3(0,1,0)), false, true); }
         else if (ent.hp <= 30 && Math.random() > 0.9) spawnDust(ent.group.position.clone().add(new THREE.Vector3(0,1,0)), false, true);
 
@@ -426,109 +355,52 @@ function animate() {
         let turnInput = 0;
         
         if(isP && !ent.dead) {
-            // --- 入力状態の集約 ---
-            let moveUp = keys.KeyW, moveDown = keys.KeyS, moveLeft = keys.KeyA, moveRight = keys.KeyD;
-
+            if(keys.KeyW) ent.speed += ACCEL; if(keys.KeyS) ent.speed -= ACCEL;
+            if(keys.KeyA) { ent.yaw += 0.05; turnInput = 1; } if(keys.KeyD) { ent.yaw -= 0.05; turnInput = -1; }
             if (touchLeftId !== -1) {
                 const dy = touchState.left.currentY - touchState.left.startY, dx = touchState.left.currentX - touchState.left.startX;
-                if (dy < -5) moveUp = true; if (dy > 5) moveDown = true;
-                if (dx < -5) moveLeft = true; if (dx > 5) moveRight = true;
+                if (dy < -20) ent.speed += ACCEL; else if (dy > 20) ent.speed -= ACCEL;
+                if (dx < -20) { ent.yaw += 0.05; turnInput = 1; } else if (dx > 20) { ent.yaw -= 0.05; turnInput = -1; }
             }
-
-            // --- 前進・後進 ---
-            if(moveUp) ent.speed += ACCEL; if(moveDown) ent.speed -= ACCEL;
             ent.speed *= FRICTION;
-
-            // --- ハンドリング（さらに重く調整） ---
-            // 最大旋回速度を 0.055 -> 0.045 へ（旋回半径を大きく）
-            const targetTurnSpeed = (moveLeft ? 0.045 : 0) + (moveRight ? -0.045 : 0);
-            
-            // 補間係数を 0.12 -> 0.07 へ（ハンドルを切ってから曲がり出すまでを遅く、重く）
-            ent.currentTurnSpeed = THREE.MathUtils.lerp(ent.currentTurnSpeed || 0, targetTurnSpeed, 0.07);
-            ent.yaw += ent.currentTurnSpeed;
-            
-            turnInput = ent.currentTurnSpeed * 25; 
-
         } else if (!isP && !ent.dead) {
-            // --- 敵AIの修正（追跡するように角度調整） ---
-            const separationForce = new THREE.Vector3();
+            const sf = new THREE.Vector3();
             for (let i = 0; i < enemies.length; i++) {
-                const otherEnt = enemies[i];
-                if (ent === otherEnt || otherEnt.dead) continue;
-                const distance = ent.group.position.distanceTo(otherEnt.group.position);
-                if (distance < 8 && distance > 0.001) {
-         aw           const repelVector = new THREE.Vector3().subVectors(ent.group.position, otherEnt.group.position).normalize();
-                    separationForce.add(repelVector.multiplyScalar(0.1));
-                }
+                const oe = enemies[i]; if (ent === oe || oe.dead) continue;
+                const dist = ent.group.position.distanceTo(oe.group.position);
+                if (dist < 8 && dist > 0.001) sf.add(new THREE.Vector3().subVectors(ent.group.position, oe.group.position).normalize().multiplyScalar(Math.min(0.1, (8 - dist) / 8)));
             }
-            ent.group.position.add(separationForce.multiplyScalar(0.2));
-
-            const toPlayer = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
-            const dist = toPlayer.length();
-            ent.attackTimer += 0.01;
-            
-            // ★修正：Math.PI を削除。これでプレイヤーの方向（0度）を向きます
-            let tYaw = Math.atan2(toPlayer.x, toPlayer.z); 
-            let tSpeed = Math.max(1.0, Math.abs(player.speed) + 0.6); 
-
-            switch (ent.aiType) {
-                case 'chaser':
-                    tSpeed = Math.max(1.2, Math.abs(player.speed) + 0.8);
-                    if (dist < 10) tSpeed *= 0.8;
-                    break;
-                case 'evasive':
-                    const desiredDistEvasive = 40;
-                    if (dist < desiredDistEvasive - 10) {
-                        tYaw += (Math.random() > 0.5 ? 1 : -1); // プレイヤーを避けつつ横に
-                        tSpeed = Math.max(1.1, Math.abs(player.speed) + 0.8);
-                    }
-                    break;
-                case 'flanker':
-                    tYaw += (Math.random() > 0.5 ? 0.5 : -0.5); // 左右に散る
-                    tSpeed = Math.max(1.1, Math.abs(player.speed) + 0.7);
-                    break;
-            }
-            
-            ent.speed = THREE.MathUtils.lerp(ent.speed, tSpeed, 0.02);
-            let dy = tYaw - ent.yaw;
-            while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
-            const step = dy * 0.03; // AIの旋回も少し鋭く
-            ent.yaw += step;
-            turnInput = THREE.MathUtils.clamp(step * 20, -1, 1);
+            ent.group.position.add(sf.multiplyScalar(0.2));
+            const tp = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
+            const d = tp.length(); ent.attackTimer += 0.01;
+            let ty = Math.atan2(tp.x, tp.z) + Math.PI, ts = Math.max(0, Math.abs(player.speed) + 0.6);
+            if (d < 10) ts *= 0.8; 
+            ent.speed = THREE.MathUtils.lerp(ent.speed, ts, 0.02);
+            let dy = ty - ent.yaw; while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
+            const step = dy * 0.025; ent.yaw += step; turnInput = THREE.MathUtils.clamp(step * 20, -1, 1);
         }
 
-        const forwardVec = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
-        ent.group.position.addScaledVector(forwardVec, ent.speed);
+        const fw = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
+        ent.group.position.addScaledVector(fw, ent.speed);
         ent.group.position.add(ent.impactV); ent.impactV.multiplyScalar(0.9);
 
         const fD = 2.3, sD = 1.25; 
-        const rightVec = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
+        const rw = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
+        const hF = getHeight(ent.group.position.x + fw.x * fD, ent.group.position.z + fw.z * fD);
+        const hB = getHeight(ent.group.position.x - fw.x * fD, ent.group.position.z - fw.z * fD);
+        const hR = getHeight(ent.group.position.x + rw.x * sD, ent.group.position.z + rw.z * sD);
+        const hL = getHeight(ent.group.position.x - rw.x * sD, ent.group.position.z - rw.z * sD);
+
+        // --- 【変更点2】車高の変更（Ride Height） ---
+        // 接地判定のオフセットを 0.22 から 0.60 に増やし、車体を高く浮かせました
+        const avgY = (hF + hB + hR + hL) / 4 + 0.60; 
         
-        const hF = getHeight(ent.group.position.x + forwardVec.x * fD, ent.group.position.z + forwardVec.z * fD);
-        const hB = getHeight(ent.group.position.x - forwardVec.x * fD, ent.group.position.z - forwardVec.z * fD);
-        const hR = getHeight(ent.group.position.x + rightVec.x * sD, ent.group.position.z + rightVec.z * sD);
-        const hL = getHeight(ent.group.position.x - rightVec.x * sD, ent.group.position.z - rightVec.z * sD);
+        if(isP) { ent.vY -= GRAVITY; ent.group.position.y += ent.vY; if(ent.group.position.y <= avgY) { ent.group.position.y = avgY; ent.vY = 0; } }
+        else { ent.group.position.y = avgY; }
 
-        const avgY = (hF + hB + hR + hL) / 4 + 0.22;
-        if(isP) { 
-            ent.vY -= GRAVITY; 
-            ent.group.position.y += ent.vY; 
-            if(ent.group.position.y <= avgY) { 
-                ent.group.position.y = avgY; 
-                ent.vY = 0; 
-            } 
-        } else { 
-            ent.group.position.y = avgY; 
-        }
-
-        const terrainPitch = Math.atan2(hF - hB, fD * 2);
-        const terrainRoll = Math.atan2(hR - hL, sD * 2);
-        const accelPitch = (ent.speed - ent.lastSpeed) * 1.8;
-        const centrifugalRoll = -turnInput * Math.abs(ent.speed) * 0.06;
-
-        ent.pitch = THREE.MathUtils.lerp(ent.pitch, terrainPitch + accelPitch, 0.12);
-        ent.roll = THREE.MathUtils.lerp(ent.roll, terrainRoll + centrifugalRoll, 0.08);
-
+        const terrainPitch = Math.atan2(hF - hB, fD * 2), terrainRoll = Math.atan2(hR - hL, sD * 2);
+        ent.pitch = THREE.MathUtils.lerp(ent.pitch, terrainPitch + (ent.speed - ent.lastSpeed)*1.8, 0.12);
+        ent.roll = THREE.MathUtils.lerp(ent.roll, terrainRoll - turnInput*Math.abs(ent.speed)*0.06, 0.08);
         ent.group.quaternion.setFromEuler(new THREE.Euler(ent.pitch, ent.yaw, ent.roll, 'YXZ'));
 
         if(!ent.dead && Math.abs(ent.speed) > 0.5 && ent.group.position.y <= avgY + 0.5) {
@@ -544,69 +416,37 @@ function animate() {
             if(enemy.dead) return;
             const dist = player.group.position.distanceTo(enemy.group.position);
             if (dist < 3.8) {
-                const dirP2E = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
-                const pForward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-                
-                if (pForward.dot(dirP2E) > 0.3) {
-                    enemy.hp -= 20; 
-                    enemy.impactV.add(dirP2E.clone().multiplyScalar(1.5)); 
-                    playSFX('crs.mp3'); // Player deals damage
-                    // Intense sparks
-                    for (let i = 0; i < 5; i++) {
-                        spawnDust(enemy.group.position, true); 
-                    }
-
+                const dir = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
+                if (new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)).dot(dir) > 0.3) {
+                    enemy.hp -= 20; enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3');
+                    for (let i=0; i<5; i++) spawnDust(enemy.group.position, true);
                     if(enemy.hp <= 0) {
-                        enemy.dead = true;
-                        enemy.bodyMat.color.set(0x000000);
-                        spawnDebris(enemy.group.position, 0x000000, 0.8, 30);
-                        spawnDebris(enemy.group.position, 0xffaa00, 1.5, 15);
-                        playSFX('crash.mp3'); // AI car destroyed
-                        setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000);
+                        enemy.dead = true; enemy.bodyMat.color.set(0x000000);
+                        spawnDebris(enemy.group.position, 0x000000, 0.8, 30); spawnDebris(enemy.group.position, 0xffaa00, 1.5, 15);
+                        playSFX('crash.mp3'); setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000);
                     }
                 } else {
-                    player.hp -= 5; 
-                    player.impactV.add(dirP2E.clone().multiplyScalar(-0.8)); 
-                    spawnDust(player.group.position, false);
-                    playSFX('crs.mp3'); // Player takes damage
-                    flashRedScreen(); // Flash screen red
+                    player.hp -= 5; player.impactV.add(dir.multiplyScalar(-0.8)); spawnDust(player.group.position, false);
+                    playSFX('crs.mp3'); flashRedScreen();
                 }
                 document.getElementById('p-hp').innerText = Math.max(0, player.hp);
-                
-                if (player.hp <= 0) { 
-                    player.dead = true; 
-                    document.getElementById('msg').innerText = "GAME OVER"; 
-                    document.getElementById('msg').style.display = 'block'; 
-                    playSFX('crash.mp3'); // Player destroyed
-                    setTimeout(() => location.reload(), 5000); 
-                }
+                if (player.hp <= 0) { player.dead = true; document.getElementById('msg').innerText = "GAME OVER"; document.getElementById('msg').style.display = 'block'; playSFX('crash.mp3'); setTimeout(() => location.reload(), 5000); }
             }
         });
     }
 
-    const cockpitPos = new THREE.Vector3(0, 2.4, 0.5), tpsPos = new THREE.Vector3(0, 4.5, 12), dronePos = new THREE.Vector3(0, 70, 150);
-    let currentOffset;
-    if (zoomLevel <= 1.0) currentOffset = new THREE.Vector3().lerpVectors(cockpitPos, tpsPos, zoomLevel);
-    else currentOffset = new THREE.Vector3().lerpVectors(tpsPos, dronePos, Math.min(1.0, (zoomLevel - 1.0) / (MAX_ZOOM_LEVEL - 1.0)));
-
-    const baseQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, player.yaw, 0));
-    const mouseQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ'));
-    let finalQuat;
-    if (zoomLevel <= 1.0) finalQuat = new THREE.Quaternion().slerpQuaternions(player.group.quaternion.clone(), baseQuat, zoomLevel).multiply(mouseQuat);
-    else {
-        const cameraPosForLookAt = player.group.position.clone().add(currentOffset.clone().applyQuaternion(baseQuat));
-        const tempCam = new THREE.Camera(); tempCam.position.copy(cameraPosForLookAt); tempCam.lookAt(player.group.position);
-        finalQuat = tempCam.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, lookYaw, 0)));
-    }
-    const targetCamPos = player.group.position.clone().add(currentOffset.clone().applyQuaternion(finalQuat));
-    smoothedCamPos.lerp(targetCamPos, zoomLevel < 0.15 ? 1.0 : (zoomLevel < 1.0 ? 0.2 : 0.3));
-    camera.position.copy(smoothedCamPos); camera.quaternion.copy(finalQuat);
+    const cp = new THREE.Vector3(0, 2.4, 0.5), tp = new THREE.Vector3(0, 4.5, 12), dp = new THREE.Vector3(0, 70, 150);
+    let co = (zoomLevel <= 1.0) ? new THREE.Vector3().lerpVectors(cp, tp, zoomLevel) : new THREE.Vector3().lerpVectors(tp, dp, Math.min(1.0, (zoomLevel - 1.0)/(MAX_ZOOM_LEVEL - 1.0)));
+    const bq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, player.yaw, 0)), mq = new THREE.Quaternion().setFromEuler(new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ'));
+    let fq;
+    if (zoomLevel <= 1.0) fq = new THREE.Quaternion().slerpQuaternions(player.group.quaternion.clone(), bq, zoomLevel).multiply(mq);
+    else { const cpl = player.group.position.clone().add(co.clone().applyQuaternion(bq)), tc = new THREE.Camera(); tc.position.copy(cpl); tc.lookAt(player.group.position); fq = tc.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, lookYaw, 0))); }
+    smoothedCamPos.lerp(player.group.position.clone().add(co.clone().applyQuaternion(fq)), zoomLevel < 0.15 ? 1.0 : (zoomLevel < 1.0 ? 0.2 : 0.3));
+    camera.position.copy(smoothedCamPos); camera.quaternion.copy(fq);
 
     if (zoomLevel < 0.15) {
-        mirrorMesh.visible = true; mirrorMesh.position.copy(camera.position).add(new THREE.Vector3(0, 0.2, -0.4).applyQuaternion(camera.quaternion));
-        mirrorMesh.quaternion.copy(camera.quaternion);
-        mirrorCamera.position.copy(player.group.position).add(new THREE.Vector3(0, 2.6, 0).applyQuaternion(player.group.quaternion));
-        mirrorCamera.quaternion.setFromEuler(new THREE.Euler(0, player.yaw + Math.PI, 0));
+        mirrorMesh.visible = true; mirrorMesh.position.copy(camera.position).add(new THREE.Vector3(0, 0.2, -0.4).applyQuaternion(camera.quaternion)); mirrorMesh.quaternion.copy(camera.quaternion);
+        mirrorCamera.position.copy(player.group.position).add(new THREE.Vector3(0, 2.6, 0).applyQuaternion(player.group.quaternion)); mirrorCamera.quaternion.setFromEuler(new THREE.Euler(0, player.yaw + Math.PI, 0));
         renderer.setRenderTarget(mirrorRenderTarget); renderer.render(scene, mirrorCamera); renderer.setRenderTarget(null);
     } else mirrorMesh.visible = false;
 
