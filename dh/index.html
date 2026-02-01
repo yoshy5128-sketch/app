@@ -324,35 +324,22 @@ window.addEventListener('touchmove', e => {
             touchState.left.currentX = t.clientX;
             touchState.left.currentY = t.clientY;
             
-            // 感度調整：閾値を20から5に下げ、より敏感に反応するように修正
             const dy = touchState.left.currentY - touchState.left.startY;
             const dx = touchState.left.currentX - touchState.left.startX;
             
-            // 前進・後進の判定
-            if (dy < -5) keys.KeyW = true; else keys.KeyW = false;
-            if (dy > 5) keys.KeyS = true; else keys.KeyS = false;
-            
-            // 左右の判定
-            if (dx < -5) keys.KeyA = true; else keys.KeyA = false;
-            if (dx > 5) keys.KeyD = true; else keys.KeyD = false;
+            // 閾値を5pxに。少しの傾きで即座に入力を反映
+            keys.KeyW = (dy < -5);
+            keys.KeyS = (dy > 5);
+            keys.KeyA = (dx < -5); // 左旋回
+            keys.KeyD = (dx > 5);  // 右旋回
 
         } else if (t.identifier === touchRightId) {
+            // 右画面（視点移動）
             lookYaw -= (t.clientX - touchState.right.currentX) * 0.005;
             lookPitch = THREE.MathUtils.clamp(lookPitch - (t.clientY - touchState.right.currentY) * 0.005, -0.6, 0.6);
             touchState.right.currentX = t.clientX;
             touchState.right.currentY = t.clientY;
         }
-    }
-}, {passive: false});
-
-// 指を離した時にキーをリセット
-window.addEventListener('touchend', e => {
-    for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i];
-        if (t.identifier === touchLeftId) {
-            touchLeftId = -1;
-            keys.KeyW = keys.KeyS = keys.KeyA = keys.KeyD = false;
-        } else if (t.identifier === touchRightId) touchRightId = -1;
     }
 }, {passive: false});
 
