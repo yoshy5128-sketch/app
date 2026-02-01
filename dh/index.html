@@ -427,102 +427,72 @@ function animate() {
         
         if(isP && !ent.dead) {
             // --- 入力状態の集約 ---
-            let moveUp = keys.KeyW;
-            let moveDown = keys.KeyS;
-            let moveLeft = keys.KeyA;
-            let moveRight = keys.KeyD;
+            let moveUp = keys.KeyW, moveDown = keys.KeyS, moveLeft = keys.KeyA, moveRight = keys.KeyD;
 
-            // タッチ操作がある場合、入力を上書きまたは追加
             if (touchLeftId !== -1) {
-                const dy = touchState.left.currentY - touchState.left.startY;
-                const dx = touchState.left.currentX - touchState.left.startX;
-                if (dy < -5) moveUp = true;    // 前進感度を改善
-                if (dy > 5)  moveDown = true;
-                if (dx < -5) moveLeft = true;  // ハンドリング遊びを調整
-                if (dx > 5)  moveRight = true;
+                const dy = touchState.left.currentY - touchState.left.startY, dx = touchState.left.currentX - touchState.left.startX;
+                if (dy < -5) moveUp = true; if (dy > 5) moveDown = true;
+                if (dx < -5) moveLeft = true; if (dx > 5) moveRight = true;
             }
 
-            // --- 前進・後進の処理 ---
-            if(moveUp) ent.speed += ACCEL; 
-            if(moveDown) ent.speed -= ACCEL;
+            // --- 前進・後進 ---
+            if(moveUp) ent.speed += ACCEL; if(moveDown) ent.speed -= ACCEL;
             ent.speed *= FRICTION;
 
-            // --- ハンドリング（旋回）の処理：重厚感Ver ---
-            // 目標の旋回速度（0.055くらいが「クイックすぎず軽すぎず」のラインです）
-            const targetTurnSpeed = (moveLeft ? 0.055 : 0) + (moveRight ? -0.055 : 0);
+            // --- ハンドリング（さらに重く調整） ---
+            // 最大旋回速度を 0.055 -> 0.045 へ（旋回半径を大きく）
+            const targetTurnSpeed = (moveLeft ? 0.045 : 0) + (moveRight ? -0.045 : 0);
             
-            // 線形補間（lerp）でじわっと旋回を開始・停止させる（0.12が重さの決め手）
-            ent.currentTurnSpeed = THREE.MathUtils.lerp(ent.currentTurnSpeed || 0, targetTurnSpeed, 0.12);
+            // 補間係数を 0.12 -> 0.07 へ（ハンドルを切ってから曲がり出すまでを遅く、重く）
+            ent.currentTurnSpeed = THREE.MathUtils.lerp(ent.currentTurnSpeed || 0, targetTurnSpeed, 0.07);
             ent.yaw += ent.currentTurnSpeed;
             
-            // 車体の傾き（ロール）に反映
-            turnInput = ent.currentTurnSpeed * 18; 
+            turnInput = ent.currentTurnSpeed * 25; 
 
         } else if (!isP && !ent.dead) {
-            // ... ここから下（敵AI）はそのまま ...
-
-            // AI separation logic (Request ①)
+            // --- 敵AIの修正（追跡するように角度調整） ---
             const separationForce = new THREE.Vector3();
             for (let i = 0; i < enemies.length; i++) {
                 const otherEnt = enemies[i];
-                if (ent === otherEnt || otherEnt.dead) continue; // Don't compare with self or dead enemies
-
+                if (ent === otherEnt || otherEnt.dead) continue;
                 const distance = ent.group.position.distanceTo(otherEnt.group.position);
-                const separationRadius = 8; // Adjust based on car size
-                const maxRepelForce = 0.1; // Max force to prevent jitter
-
-                if (distance < separationRadius && distance > 0.001) { // Prevent division by zero / very small distance
-                    const repelVector = new THREE.Vector3().subVectors(ent.group.position, otherEnt.group.position).normalize();
-                    const repelStrength = Math.min(maxRepelForce, (separationRadius - distance) / separationRadius);
-                    separationForce.add(repelVector.multiplyScalar(repelStrength));
+                if (distance < 8 && distance > 0.001) {
+         aw           const repelVector = new THREE.Vector3().subVectors(ent.group.position, otherEnt.group.position).normalize();
+                    separationForce.add(repelVector.multiplyScalar(0.1));
                 }
             }
-            ent.group.position.add(separationForce.multiplyScalar(0.2)); // Apply separation force (scaled down)
+            ent.group.position.add(separationForce.multiplyScalar(0.2));
 
-            // Original AI movement logic
             const toPlayer = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
             const dist = toPlayer.length();
             ent.attackTimer += 0.01;
             
-            // Initialize tYaw and tSpeed with default values (e.g., chaser behavior)
-            let tYaw = Math.atan2(toPlayer.x, toPlayer.z) + Math.PI; 
+            // ★修正：Math.PI を削除。これでプレイヤーの方向（0度）を向きます
+            let tYaw = Math.atan2(toPlayer.x, toPlayer.z); 
             let tSpeed = Math.max(1.0, Math.abs(player.speed) + 0.6); 
-            if (dist < 10) tSpeed *= 0.8;
 
             switch (ent.aiType) {
                 case 'chaser':
-                    tSpeed = Math.max(1.2, Math.abs(player.speed) + 0.8); // Slightly more aggressive speed
-                    if (dist < 10) tSpeed *= 0.8; // Slow down if too close
+                    tSpeed = Math.max(1.2, Math.abs(player.speed) + 0.8);
+                    if (dist < 10) tSpeed *= 0.8;
                     break;
                 case 'evasive':
                     const desiredDistEvasive = 40;
-                    let targetAngle = Math.atan2(toPlayer.x, toPlayer.z) + Math.PI; // Always have player as a general target
-                    if (dist < desiredDistEvasive - 10) { // Too close, move away
-                        // Evade by moving slightly away and to the side
-                        tYaw = targetAngle + (Math.random() > 0.5 ? Math.PI / 3 : -Math.PI / 3); // Point away and to side
-                        tSpeed = Math.max(1.0, Math.abs(player.speed) + 0.6); // Slightly faster to create distance
-                    } else if (dist > desiredDistEvasive + 10) { // Too far, move towards
-                        tYaw = targetAngle; // Point directly at player
-                        tSpeed = Math.max(1.1, Math.abs(player.speed) + 0.7); // Faster to close gap
-                    } else { // Ideal distance, circle
-                        const perpendicularAngle = Math.atan2(toPlayer.z, toPlayer.x) + (Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2);
-                        tYaw = targetAngle + (Math.random() > 0.5 ? Math.PI / 6 : -Math.PI / 6); // Small deviation to orbit
-                        tSpeed = Math.max(0.8, Math.abs(player.speed) + 0.4); // Maintain moderate speed
+                    if (dist < desiredDistEvasive - 10) {
+                        tYaw += (Math.random() > 0.5 ? 1 : -1); // プレイヤーを避けつつ横に
+                        tSpeed = Math.max(1.1, Math.abs(player.speed) + 0.8);
                     }
                     break;
                 case 'flanker':
-                    const flankAngleOffset = (Math.random() > 0.5 ? Math.PI / 2 : -Math.PI / 2) * 0.5; // +/- 45 degrees
-                    tYaw = Math.atan2(toPlayer.x, toPlayer.z) + Math.PI + flankAngleOffset;
-                    tSpeed = Math.max(1.0, Math.abs(player.speed) + 0.6); // Standard speed
-                    if (dist < 15) tSpeed *= 0.7; // Slow down if too close
+                    tYaw += (Math.random() > 0.5 ? 0.5 : -0.5); // 左右に散る
+                    tSpeed = Math.max(1.1, Math.abs(player.speed) + 0.7);
                     break;
-                // No default needed now as tYaw and tSpeed are initialized
             }
             
             ent.speed = THREE.MathUtils.lerp(ent.speed, tSpeed, 0.02);
             let dy = tYaw - ent.yaw;
             while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
-            const step = dy * 0.025; 
+            const step = dy * 0.03; // AIの旋回も少し鋭く
             ent.yaw += step;
             turnInput = THREE.MathUtils.clamp(step * 20, -1, 1);
         }
