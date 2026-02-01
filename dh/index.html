@@ -426,15 +426,24 @@ function animate() {
         let turnInput = 0;
         
         if(isP && !ent.dead) {
-            if(keys.KeyW) ent.speed += ACCEL; if(keys.KeyS) ent.speed -= ACCEL;
-            if(keys.KeyA) { ent.yaw += 0.05; turnInput = 1; } if(keys.KeyD) { ent.yaw -= 0.05; turnInput = -1; }
-            if (touchLeftId !== -1) {
-                const dy = touchState.left.currentY - touchState.left.startY, dx = touchState.left.currentX - touchState.left.startX;
-                if (dy < -20) ent.speed += ACCEL; else if (dy > 20) ent.speed -= ACCEL;
-                if (dx < -20) { ent.yaw += 0.05; turnInput = 1; } else if (dx > 20) { ent.yaw -= 0.05; turnInput = -1; }
-            }
+            // 前進・後進
+            if(keys.KeyW) ent.speed += ACCEL; 
+            if(keys.KeyS) ent.speed -= ACCEL;
+            
+            // ★ハンドリングの調整（重厚感の追加）
+            // 目標とする旋回速度をスピードに応じて変化させる
+            const targetTurnSpeed = (keys.KeyA ? 0.06 : 0) + (keys.KeyD ? -0.06 : 0);
+            
+            // 現在の旋回に補間（Lerp）をかけて、じわっと曲がり始めるようにする（0.15が重さの決め手）
+            ent.currentTurnSpeed = THREE.MathUtils.lerp(ent.currentTurnSpeed || 0, targetTurnSpeed, 0.15);
+            ent.yaw += ent.currentTurnSpeed;
+            
+            // ロール用の入力値（視覚的な傾き）
+            turnInput = ent.currentTurnSpeed * 15; 
+
             ent.speed *= FRICTION;
-        } else if (!isP && !ent.dead) {
+        }
+
             // AI separation logic (Request ①)
             const separationForce = new THREE.Vector3();
             for (let i = 0; i < enemies.length; i++) {
