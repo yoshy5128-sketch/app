@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Descent Maze</title>
+    <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4a3c2c">
+<link rel="apple-touch-icon" href="icon-512.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js');
+    });
+  }
+</script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Georgia', serif; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         
