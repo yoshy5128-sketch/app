@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <style>
+        body { margin: 0; padding: 0; overflow: hidden; background: #222; touch-action: none; width: 100vw; height: 100dvh; font-family: sans-serif; }
+        canvas { background: #fff; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: none; object-fit: contain; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; overflow: hidden; }
+        
+        #menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: white; padding: 40px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); z-index: 10; width: 80%; max-width: 400px; }
+        .btn { display: block; width: 100%; padding: 15px; margin: 15px auto; border: none; border-radius: 50px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.2s; color: white; }
+        #btn-sandbag { background: #666; }
+        #btn-sparring { background: #ff4444; }
+        #back-btn { position: absolute; top: 20px; left: 20px; padding: 10px 20px; background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 10px; pointer-events: auto; cursor: pointer; z-index: 20; }
+        
+        #gong-area { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); pointer-events: auto; text-align: center; z-index: 30; cursor: pointer; }
+        #gong-btn { background: none; border: none; cursor: pointer; padding: 0; outline: none; }
+        #gong-img { width: 60px; height: auto; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); transition: transform 0.1s; display: block; margin: 0 auto; }
+        #gong-btn:active #gong-img { transform: scale(1.1); }
+        #gong-text { color: white; font-weight: bold; font-size: 14px; background: rgba(0,0,0,0.4); padding: 2px 10px; border-radius: 10px; margin-top: 5px; }
+
+        #touch-area { position: absolute; pointer-events: auto; box-sizing: border-box; }
+        #slider-knob { width: 50px; height: 50px; background: rgba(120,120,120,0.9); border-radius: 50%; position: absolute; box-shadow: 0 4px 10px rgba(0,0,0,0.3); pointer-events: none; }
+        
+        .portrait-zone { display: none; position: absolute; right: 0; width: 50%; pointer-events: none; border-left: 1px solid rgba(255,255,255,0.1); box-sizing: border-box; justify-content: center; align-items: center; color: rgba(255,255,255,0.4); font-weight: bold; font-size: 18px; z-index: 5; text-align: center; }
+        #zone-straight { background: rgba(255, 50, 50, 0.05); }
+        #zone-hook { background: rgba(50, 50, 255, 0.05); border-top: 1px solid rgba(255,255,255,0.1); }
+
+        @media (orientation: landscape) {
+            body { display: flex; justify-content: center; align-items: center; }
+            canvas { width: 100%; height: 100%; position: relative; }
+            #touch-area { bottom: 20px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 60px; border: 2px solid rgba(255,255,255,0.2); }
+            .portrait-zone { display: none; }
+        }
+
+        @media (orientation: portrait) {
+            body { display: block; }
+            canvas { width: 100%; height: 35vh; position: absolute; top: 0; left: 0; object-fit: fill; border-bottom: 2px solid #444; }
+            #touch-area { bottom: 10vh; left: 8vw; width: 38vw; height: 38vw; background: rgba(255,255,255,0.08); border-radius: 50%; border: 2px solid rgba(255,255,255,0.1); }
+            .portrait-zone { display: flex; width: 50%; pointer-events: auto; }
+            #zone-straight { top: 35vh; height: 32.5vh; }
+            #zone-hook { top: 67.5vh; height: 32.5vh; }
+        }
+    </style>
+</head>
+<body>
+    <div id="menu">
+        <h1>BOXING TRAINER</h1>
+        <button id="btn-sandbag" class="btn">サンドバッグモード</button>
+        <button id="btn-sparring" class="btn">スパーリングモード</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui-layer">
+        <div id="gong-area">
+            <button id="gong-btn"><img src="gong.png" id="gong-img" alt="GONG"></button>
+            <div id="gong-text">MATCH START</div>
+        </div>
+        <button id="back-btn">BACK</button>
+        <div id="touch-area"><div id="slider-knob"></div></div>
+        <div id="zone-straight" class="portrait-zone">奥の手<br>STRAIGHT / UPPER</div>
+        <div id="zone-hook" class="portrait-zone">手前の手<br>HOOK / JAB</div>
+    </div>
+
+    <script>
+        // サウンド設定
+        const sndStartGong = new Audio('s-gong.mp3');
+        const sndEndGong = new Audio('e-gong.mp3');
+        const sndHB = new Audio('hb.mp4'); // Straight/Upper
+        const sndSP = new Audio('sp.mp4'); // Jab/Hook
+        const sndMP = new Audio('mp.mp3'); // Body blow hit
+
+        function playSnd(audio) {
+            const clone = audio.cloneNode();
+            clone.play().catch(e => console.log("Sound play error:", e));
+        }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const menu = document.getElementById('menu');
+        const uiLayer = document.getElementById('ui-layer');
+        const knob = document.getElementById('slider-knob');
+        const touchArea = document.getElementById('touch-area');
+        const gongBtn = document.getElementById('gong-btn');
+        const gongText = document.getElementById('gong-text');
+        
+        let mode = ''; 
+        let time = 0, sliderX = 0, punchAngleOffset = 0;
+        let matchActive = false;
+        const MIN_DIST = 45;
+        const SKIN_COLOR = '#ffdbac';
+        let straightTriggered = false, hookTriggered = false;
+        let currentLeftLimit = 40;
+        let currentRightMargin = 40;
+
+        function createChar(x, teamColor, side) {
+            return {
+                x: x, y: 330, teamColor: teamColor, side: side,
+                angle: 0, velA: 0, velX: 0,
+                isPunching: false, punchProg: 0, isStraight: false, isUppercut: false,
+                hitEffect: 0, hitX: 0, hitY: 0, isBlocked: false,
+                shake: 0, impactRecoil: 0, impactJump: 0,
+                offsetY: 0, fistX: 0, fistY: 0, aiTimer: 0, guardHeight: 0,
+                hp: 100, maxHp: 100, stamina: 100, maxStamina: 100,
+                isDown: false, fallAngle: 0, fallDirection: 1
+            };
+        }
+
+        let player, enemy, sandbag = { x: 450, y: 150, w: 30, h: 90, angle: 0, velA: 0, hitEffect: 0 };
+
+        document.getElementById('btn-sandbag').onclick = () => start('sandbag');
+        document.getElementById('btn-sparring').onclick = () => start('sparring');
+        document.getElementById('back-btn').onclick = () => {
+            canvas.style.display = 'none'; uiLayer.style.display = 'none'; menu.style.display = 'block'; mode = '';
+        };
+
+        gongBtn.onclick = () => {
+            playSnd(sndStartGong);
+            if (player.isDown || enemy.isDown) {
+                player.hp = 100; player.stamina = 100; player.isDown = false; player.angle = 0; player.offsetY = 0;
+                enemy.hp = 100; enemy.stamina = 100; enemy.isDown = false; enemy.angle = 0; enemy.offsetY = 0;
+                const centerX = canvas.width / 2;
+                player.x = centerX - 80; enemy.x = centerX + 80;
+            }
+            matchActive = true;
+            gongText.textContent = "FIGHT!";
+            setTimeout(() => { if (matchActive) gongText.textContent = ""; }, 1500);
+        };
+
+        function start(m) {
+            mode = m; menu.style.display = 'none'; canvas.style.display = 'block'; uiLayer.style.display = 'block';
+            matchActive = false;
+            gongText.textContent = "MATCH START";
+            resizeCanvas();
+            const centerX = canvas.width / 2;
+            const spawnOffset = Math.min(canvas.width * 0.25, 80); 
+            player = createChar(centerX - spawnOffset, '#ff4444', 1);
+            enemy = createChar(centerX + spawnOffset, '#4444ff', -1);
+            sandbag.x = centerX + 40;
+            resetKnob();
+            requestAnimationFrame(draw);
+        }
+
+        function resetKnob() {
+            const rect = touchArea.getBoundingClientRect();
+            knob.style.left = (rect.width / 2 - 25) + 'px';
+            knob.style.top = (rect.height / 2 - 25) + 'px';
+        }
+
+        function resizeCanvas() {
+            canvas.height = 400; 
+            const isPortrait = window.innerHeight > window.innerWidth;
+            if (isPortrait) {
+                canvas.width = canvas.height * (window.innerWidth / (window.innerHeight * 0.35));
+                currentLeftLimit = 20; currentRightMargin = 20;
+            } else {
+                canvas.width = Math.max(600, canvas.height * (window.innerWidth / window.innerHeight));
+                currentLeftLimit = 150; currentRightMargin = 150;
+            }
+            setTimeout(resetKnob, 10);
+        }
+        window.addEventListener('resize', () => { if(mode) resizeCanvas(); });
+
+        let moveTouchId = null, punchTouchId = null, swipeStartPos = null, activeSwipeType = null;
+        touchArea.onpointerdown = (e) => { e.preventDefault(); moveTouchId = e.pointerId; };
+
+        window.addEventListener('pointerdown', (e) => {
+            if (!mode || player.isDown || !matchActive) return;
+            const isPortrait = window.innerHeight > window.innerWidth;
+            if (punchTouchId !== null || e.pointerId === moveTouchId) return;
+            if (e.target.tagName === 'BUTTON' || e.target.id === 'gong-btn' || e.target.id === 'gong-img') return;
+            const isRightSide = e.clientX > window.innerWidth / 2;
+            if (isPortrait) {
+                const controlYStart = window.innerHeight * 0.35;
+                if (e.clientY > controlYStart && isRightSide) {
+                    punchTouchId = e.pointerId; swipeStartPos = { x: e.clientX, y: e.clientY };
+                    activeSwipeType = (e.clientY - controlYStart) < (window.innerHeight - controlYStart) / 2 ? 'straight' : 'hook';
+                    triggerPunch(activeSwipeType, 0, 0);
+                }
+            } else if (isRightSide) {
+                punchTouchId = e.pointerId; swipeStartPos = { x: e.clientX, y: e.clientY };
+                activeSwipeType = e.clientY < window.innerHeight / 2 ? 'straight' : 'hook';
+            }
+        });
+
+        function triggerPunch(type, dx, dy) {
+            if (type === 'straight' && !straightTriggered) {
+                playSnd(sndHB);
+                player.isPunching = true; player.isStraight = true; player.punchProg = 0; straightTriggered = true;
+                player.isUppercut = (player.guardHeight === 1);
+                player.stamina = Math.max(0, player.stamina - 5);
+            } else if (type === 'hook' && !hookTriggered) {
+                playSnd(sndSP);
+                player.isPunching = true; player.isStraight = false; player.punchProg = 0;
+                punchAngleOffset = (dx === 0 && dy === 0) ? 0 : Math.atan2(dy, Math.abs(dx)) * 0.6; 
+                hookTriggered = true; player.stamina = Math.max(0, player.stamina - 2);
+            }
+        }
+
+        window.addEventListener('pointermove', (e) => {
+            if (e.pointerId === moveTouchId && !player.isDown && matchActive) {
+                const rect = touchArea.getBoundingClientRect();
+                const radius = rect.width / 2;
+                let cx = e.clientX - (rect.left + radius); let cy = e.clientY - (rect.top + radius);
+                const dist = Math.sqrt(cx*cx + cy*cy); const maxDist = radius - 25;
+                if (dist > maxDist) { cx *= maxDist / dist; cy *= maxDist / dist; }
+                knob.style.left = (radius + cx - 25) + 'px'; knob.style.top = (radius + cy - 25) + 'px';
+                sliderX = cx / maxDist;
+                player.guardHeight = cy / maxDist < -0.4 ? -1 : (cy / maxDist > 0.4 ? 1 : 0);
+            }
+            if (e.pointerId === punchTouchId && swipeStartPos && !player.isDown && matchActive) {
+                const dx = e.clientX - swipeStartPos.x, dy = e.clientY - swipeStartPos.y;
+                if (activeSwipeType === 'hook') punchAngleOffset = Math.atan2(dy, Math.abs(dx)) * 0.6;
+                if (!(window.innerHeight > window.innerWidth) && !player.isPunching && dx > 30) triggerPunch(activeSwipeType, dx, dy);
+            }
+        });
+
+        window.addEventListener('pointerup', (e) => {
+            if (e.pointerId === moveTouchId) { moveTouchId = null; sliderX = 0; player.guardHeight = 0; resetKnob(); }
+            if (e.pointerId === punchTouchId) { punchTouchId = null; swipeStartPos = null; straightTriggered = false; hookTriggered = false; }
+        });
+
+        function updateChar(c, isPlayer) {
+            if (c.hp <= 0 && !c.isDown) { 
+                playSnd(sndEndGong);
+                c.isDown = true; c.isPunching = false; c.fallAngle = 0; c.fallDirection = c.impactRecoil >= 0 ? 1 : -1; 
+                matchActive = false;
+                gongText.textContent = "RING THE GONG!";
+            }
+            if (c.isDown) {
+                c.fallAngle += ((Math.PI / 2) * c.fallDirection * c.side - c.fallAngle) * 0.1; c.angle = c.fallAngle;
+                c.offsetY = Math.min(30, c.offsetY + 2.5); return;
+            }
+            if (!matchActive) return;
+
+            if (c.stamina < c.maxStamina) c.stamina = Math.min(c.maxStamina, c.stamina + 0.04);
+            if (isPlayer) { c.velX = sliderX * 5; } else if (mode === 'sparring') {
+                c.aiTimer += 0.02; const d = Math.abs(c.x - player.x);
+                if (!c.aiState) { c.aiState = 'spacing'; c.stateTimer = 0; }
+                c.stateTimer -= 0.02;
+                if (c.stateTimer <= 0) {
+                    const r = Math.random();
+                    if (c.stamina < 20) { c.aiState = 'spacing'; c.stateTimer = 3; }
+                    else if (r < 0.4) { c.aiState = 'spacing'; c.stateTimer = 2; }
+                    else if (r < 0.7) { c.aiState = 'pressure'; c.stateTimer = 1.5; }
+                    else { c.aiState = 'sway'; c.stateTimer = 1; }
+                }
+                if (c.aiState === 'spacing') {
+                    const idl = 90 + Math.sin(c.aiTimer * 2) * 20;
+                    c.velX = d > idl ? -2 : (d < idl - 10 ? 2.5 : 0);
+                    c.guardHeight = (player.isPunching && Math.random() < 0.3) ? (player.isStraight ? -1 : 1) : 0;
+                } else if (c.aiState === 'pressure') { c.velX = d > 55 ? -3.5 : 1.5; c.guardHeight = -1; }
+                else if (c.aiState === 'sway') { c.velX = Math.sin(c.aiTimer * 12) * 6; c.guardHeight = 1; }
+                if (!c.isPunching && c.stamina > 10 && !player.isDown && d < 100 && Math.random() < 0.04) {
+                    c.isPunching = true; c.punchProg = 0; c.isStraight = Math.random() > 0.4;
+                    if(c.isStraight) playSnd(sndHB); else playSnd(sndSP);
+                    c.isUppercut = (c.isStraight && c.guardHeight === 1);
+                    c.stamina -= (c.isStraight ? 5 : 2);
+                }
+            }
+            c.x += c.velX;
+            if (mode === 'sparring') {
+                const dist = Math.abs(player.x - enemy.x);
+                if (dist < MIN_DIST) {
+                    const overlap = (MIN_DIST - dist) / 2;
+                    if (player.x < enemy.x) { player.x -= overlap; enemy.x += overlap; } else { player.x += overlap; enemy.x -= overlap; }
+                }
+            } else if (mode === 'sandbag' && Math.abs(player.x - sandbag.x) < 40) player.x = sandbag.x - 40;
+
+            if (c.x < currentLeftLimit) c.x = currentLeftLimit;
+            if (c.x > canvas.width - currentRightMargin) c.x = canvas.width - currentRightMargin;
+
+            const speed = isPlayer ? Math.abs(sliderX) * 8 + 6 : 6;
+            c.offsetY = Math.abs(Math.cos(time * speed)) * 2 + c.impactJump;
+            c.velA += ((Math.sin(time * speed) * 0.08 + c.impactRecoil + ((c.isPunching && c.isStraight) ? Math.sin(c.punchProg * Math.PI) * 0.38 * c.side : 0)) - c.angle) * 0.2; 
+            c.velA *= 0.75; c.angle += c.velA;
+            if (c.isPunching) {
+                c.punchProg += c.stamina <= 20 ? 0.14 : 0.28;
+                if (c.punchProg >= 1) { c.isPunching = false; c.isStraight = false; c.isUppercut = false; }
+            }
+            c.impactRecoil *= 0.85; c.impactJump *= 0.8;
+            if (c.hitEffect > 0) { c.hitEffect -= 0.08; c.shake = Math.sin(time * 60) * 2.5 * c.hitEffect; } else { c.hitEffect = 0; c.shake = 0; }
+        }
+
+        function drawLegs() {
+            ctx.strokeStyle = '#222'; ctx.lineWidth = 3.5;
+            ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-9, 15); ctx.lineTo(-20, 37.5);
+            ctx.moveTo(6, 0); ctx.lineTo(9, 15); ctx.lineTo(20, 37.5); ctx.stroke();
+        }
+
+        function drawBodyParts(c) {
+            ctx.fillStyle = SKIN_COLOR; ctx.lineWidth = 2.5;
+            ctx.fillRect(-14, -37.5, 28, 40); ctx.strokeRect(-14, -37.5, 28, 40);
+            ctx.fillStyle = c.teamColor; ctx.fillRect(-14.5, -17.5, 29, 20); ctx.strokeRect(-14.5, -17.5, 29, 20);
+            ctx.fillStyle = SKIN_COLOR; ctx.beginPath(); ctx.arc(0, -50, 16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        }
+
+        function drawArm(c, isFront, isPlayer) {
+            const side = c.side; let sY = -25, upperA, elbowA = 0, sX;
+            let ext = c.isPunching ? Math.sin(c.punchProg * Math.PI) : 0;
+            const tar = (c === player) ? (mode === 'sparring' ? enemy : {x:sandbag.x, y:250}) : player;
+            if (!isFront) {
+                sX = 2 * side;
+                if (c.isStraight && c.isPunching) {
+                    sY = c.isUppercut ? -15 : -50; 
+                    const push = ext * 46 * side; ctx.save(); ctx.translate(push, 0);
+                    upperA = c.isUppercut ? -0.8 * side : Math.atan2((tar.y - 50) - (c.y + sY), Math.abs(c.x - tar.x)) * side - c.angle * side;
+                    if (!c.isDown) { c.fistX = c.x + sX + push + (Math.cos(upperA + c.angle) * 37.5) * side; c.fistY = c.y + sY + (Math.sin(upperA + c.angle) * 37.5); }
+                } else {
+                    if (c.guardHeight === -1) { upperA = -0.4 * side; elbowA = -1.3 * side; } 
+                    else if (c.guardHeight === 1) { upperA = 1.1 * side; elbowA = -1.1 * side; } 
+                    else { upperA = 0.4 * side; elbowA = -1.6 * side; }
+                }
+            } else {
+                sX = 8 * side; 
+                if (c.isPunching && !c.isStraight) {
+                    const push = ext * 22.5 * side; upperA = ((isPlayer ? punchAngleOffset : -0.2) - ext * 0.15) * side; elbowA = (-1.5 + ext * 1.5) * side;
+                    ctx.save(); ctx.translate(push, 0);
+                    if (!c.isDown) {
+                        c.fistX = c.x + sX + push + (Math.cos(upperA + c.angle) * 17.5 + Math.cos(upperA + elbowA + c.angle) * 19) * side;
+                        c.fistY = c.y + sY + (Math.sin(upperA + c.angle) * 17.5 + Math.sin(upperA + elbowA + c.angle) * 19);
+                    }
+                } else { upperA = 0.9 * side; elbowA = -2.5 * side; }
+            }
+            ctx.save(); ctx.translate(sX, sY); ctx.rotate(upperA); ctx.fillStyle = SKIN_COLOR; ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
+            ctx.strokeRect(0, -4.5, 18 * side, 9); ctx.fillRect(0, -4.5, 18 * side, 9);
+            ctx.translate(18 * side, 0); ctx.rotate(elbowA);
+            ctx.strokeRect(0, -4.5, 19.5 * side, 9); ctx.fillRect(0, -4.5, 19.5 * side, 9);
+            ctx.fillStyle = c.teamColor; ctx.beginPath(); ctx.arc(19 * side, 0, 11, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            ctx.restore(); if ((c.isStraight && c.isPunching && !isFront) || (c.isPunching && !c.isStraight && isFront)) ctx.restore();
+        }
+
+        function drawChar(c, isPlayer) {
+            ctx.save(); ctx.translate(c.x + c.shake, c.y + c.offsetY);
+            if (c.isDown) ctx.rotate(c.angle);
+            drawArm(c, false, isPlayer); drawLegs(); ctx.rotate(c.isDown ? 0 : c.angle); drawBodyParts(c); drawArm(c, true, isPlayer);
+            ctx.restore();
+            if (c.hitEffect > 0) {
+                ctx.save(); ctx.strokeStyle = c.isBlocked ? `rgba(0, 225, 255, ${c.hitEffect})` : `rgba(255, 120, 0, ${c.hitEffect})`; ctx.lineWidth = 2;
+                for(let i=0; i<8; i++) {
+                    const ang = i * Math.PI / 4 + time * 5; ctx.beginPath(); ctx.moveTo(c.hitX, c.hitY);
+                    ctx.lineTo(c.hitX + Math.cos(ang) * 22 * c.hitEffect, c.hitY + Math.sin(ang) * 22 * c.hitEffect); ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        function updateSandbag() {
+            if (!matchActive) return;
+            sandbag.velA += (0 - sandbag.angle) * 0.05; sandbag.velA *= 0.96; sandbag.angle += sandbag.velA;
+            if (sandbag.hitEffect > 0) sandbag.hitEffect -= 0.08;
+        }
+
+        function drawSandbag() {
+            ctx.save(); ctx.translate(sandbag.x, sandbag.y);
+            ctx.beginPath(); ctx.moveTo(0, -50); ctx.lineTo(0, 0); ctx.strokeStyle = '#555'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.rotate(sandbag.angle); ctx.fillStyle = '#8b4513'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
+            ctx.fillRect(-sandbag.w/2, 0, sandbag.w, sandbag.h); ctx.strokeRect(-sandbag.w/2, 0, sandbag.w, sandbag.h);
+            ctx.restore();
+        }
+
+        function checkCollision() {
+            if (!matchActive) return;
+            if (mode === 'sparring') {
+                [player, enemy].forEach(atk => {
+                    if (atk.isDown) return; const tar = atk === player ? enemy : player; if (tar.isDown) return;
+                    if (atk.isPunching && atk.punchProg > 0.35 && atk.punchProg < 0.65) {
+                        const dx = Math.abs(atk.fistX - tar.x), dy = atk.fistY - (tar.y - 50); 
+                        if (dx < 30 && dy > -45 && dy < 65) {
+                            let blk = (dy < 10 && tar.guardHeight === -1) || (dy >= 10 && tar.guardHeight === 1);
+                            // ボディ命中時の音
+                            if (dy >= 10) playSnd(sndMP);
+                            
+                            tar.hp -= blk ? 1 : 5; tar.hitX = atk.fistX; tar.hitY = atk.fistY; tar.hitEffect = 1.0; tar.isBlocked = blk;
+                            tar.velX = (blk ? 0.9 : (atk.isStraight ? 13 : 7)) * atk.side; 
+                            if (!blk) { if (dy < 10) { tar.impactRecoil = 1.2 * atk.side; tar.impactJump = -6; } else { tar.impactRecoil = -0.7 * atk.side; tar.impactJump = 2; } }
+                            atk.punchProg = 0.66;
+                        }
+                    }
+                });
+            } else if (mode === 'sandbag' && player.isPunching && player.punchProg > 0.4 && player.punchProg < 0.6) {
+                if (Math.abs(player.fistX - sandbag.x) < 25 && Math.abs(player.fistY - (sandbag.y + 50)) < 50) { 
+                    playSnd(sndMP);
+                    sandbag.velA = 0.3; sandbag.hitEffect = 1.0; player.punchProg = 0.66; 
+                }
+            }
+        }
+
+        function drawStats(c, x, align) {
+            const w = 75, h = 5, y = 15;
+            ctx.fillStyle = '#000'; ctx.font = 'bold 8px sans-serif'; ctx.textAlign = align;
+            ctx.fillText(c === player ? "YOU" : "CPU", x + (align === 'left' ? 0 : w), y - 5);
+            ctx.fillStyle = '#555'; ctx.fillRect(x, y, w, h);
+            ctx.fillStyle = c.hp > 30 ? '#0f0' : '#f00'; ctx.fillRect(x, y, w * (c.hp / c.maxHp), h);
+            ctx.fillStyle = '#555'; ctx.fillRect(x, y + 8, w, h);
+            ctx.fillStyle = '#ff0'; ctx.fillRect(x, y + 8, w * (c.stamina / c.maxStamina), h);
+        }
+
+        function draw() {
+            if (!mode) return; time += 0.02; ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#eee'; ctx.fillRect(0, 377, canvas.width, 13);
+            updateChar(player, true);
+            if (mode === 'sparring') { 
+                updateChar(enemy, false); checkCollision(); drawChar(enemy, false); 
+                drawStats(player, 10, 'left'); drawStats(enemy, canvas.width - 85, 'right');
+            } else { updateSandbag(); checkCollision(); drawSandbag(); drawStats(player, 10, 'left'); }
+            drawChar(player, true); requestAnimationFrame(draw);
+        }
+    </script>
+</body>
+</html>
