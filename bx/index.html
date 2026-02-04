@@ -63,17 +63,30 @@
     </div>
 
     <script>
-        // サウンド設定
-        const sndStartGong = new Audio('s-gong.mp3');
-        const sndEndGong = new Audio('e-gong.mp3');
-        const sndHB = new Audio('hb.mp4'); // Straight/Upper
-        const sndSP = new Audio('sp.mp4'); // Jab/Hook
-        const sndMP = new Audio('mp.mp3'); // Body blow hit
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const soundBuffers = {};
 
-        function playSnd(audio) {
-            const clone = audio.cloneNode();
-            clone.play().catch(e => console.log("Sound play error:", e));
+        async function loadSound(name, url) {
+            try {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+                soundBuffers[name] = await audioCtx.decodeAudioData(arrayBuffer);
+            } catch (e) { console.error("Failed to load sound:", url, e); }
         }
+
+        function playSnd(name) {
+            if (!soundBuffers[name] || audioCtx.state === 'suspended') return;
+            const source = audioCtx.createBufferSource();
+            source.buffer = soundBuffers[name];
+            source.connect(audioCtx.destination);
+            source.start(0);
+        }
+
+        loadSound('start', 's-gong.mp3');
+        loadSound('end', 'e-gong.mp3');
+        loadSound('hb', 'hb.mp4');
+        loadSound('sp', 'sp.mp4');
+        loadSound('mp', 'mp.mp3');
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -90,8 +103,7 @@
         const MIN_DIST = 45;
         const SKIN_COLOR = '#ffdbac';
         let straightTriggered = false, hookTriggered = false;
-        let currentLeftLimit = 40;
-        let currentRightMargin = 40;
+        let currentLeftLimit = 40, currentRightMargin = 40;
 
         function createChar(x, teamColor, side) {
             return {
@@ -106,7 +118,7 @@
             };
         }
 
-        let player, enemy, sandbag = { x: 450, y: 150, w: 30, h: 90, angle: 0, velA: 0, hitEffect: 0 };
+        let player, enemy, sandbag = { x: 450, y: 250, w: 30, h: 90, angle: 0, velA: 0, hitEffect: 0 };
 
         document.getElementById('btn-sandbag').onclick = () => start('sandbag');
         document.getElementById('btn-sparring').onclick = () => start('sparring');
@@ -115,7 +127,8 @@
         };
 
         gongBtn.onclick = () => {
-            playSnd(sndStartGong);
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            playSnd('start');
             if (player.isDown || enemy.isDown) {
                 player.hp = 100; player.stamina = 100; player.isDown = false; player.angle = 0; player.offsetY = 0;
                 enemy.hp = 100; enemy.stamina = 100; enemy.isDown = false; enemy.angle = 0; enemy.offsetY = 0;
@@ -129,8 +142,7 @@
 
         function start(m) {
             mode = m; menu.style.display = 'none'; canvas.style.display = 'block'; uiLayer.style.display = 'block';
-            matchActive = false;
-            gongText.textContent = "MATCH START";
+            matchActive = false; gongText.textContent = "MATCH START";
             resizeCanvas();
             const centerX = canvas.width / 2;
             const spawnOffset = Math.min(canvas.width * 0.25, 80); 
@@ -185,12 +197,12 @@
 
         function triggerPunch(type, dx, dy) {
             if (type === 'straight' && !straightTriggered) {
-                playSnd(sndHB);
+                playSnd('hb');
                 player.isPunching = true; player.isStraight = true; player.punchProg = 0; straightTriggered = true;
                 player.isUppercut = (player.guardHeight === 1);
                 player.stamina = Math.max(0, player.stamina - 5);
             } else if (type === 'hook' && !hookTriggered) {
-                playSnd(sndSP);
+                playSnd('sp');
                 player.isPunching = true; player.isStraight = false; player.punchProg = 0;
                 punchAngleOffset = (dx === 0 && dy === 0) ? 0 : Math.atan2(dy, Math.abs(dx)) * 0.6; 
                 hookTriggered = true; player.stamina = Math.max(0, player.stamina - 2);
@@ -222,10 +234,9 @@
 
         function updateChar(c, isPlayer) {
             if (c.hp <= 0 && !c.isDown) { 
-                playSnd(sndEndGong);
+                playSnd('end');
                 c.isDown = true; c.isPunching = false; c.fallAngle = 0; c.fallDirection = c.impactRecoil >= 0 ? 1 : -1; 
-                matchActive = false;
-                gongText.textContent = "RING THE GONG!";
+                matchActive = false; gongText.textContent = "RING THE GONG!";
             }
             if (c.isDown) {
                 c.fallAngle += ((Math.PI / 2) * c.fallDirection * c.side - c.fallAngle) * 0.1; c.angle = c.fallAngle;
@@ -253,7 +264,7 @@
                 else if (c.aiState === 'sway') { c.velX = Math.sin(c.aiTimer * 12) * 6; c.guardHeight = 1; }
                 if (!c.isPunching && c.stamina > 10 && !player.isDown && d < 100 && Math.random() < 0.04) {
                     c.isPunching = true; c.punchProg = 0; c.isStraight = Math.random() > 0.4;
-                    if(c.isStraight) playSnd(sndHB); else playSnd(sndSP);
+                    if(c.isStraight) playSnd('hb'); else playSnd('sp');
                     c.isUppercut = (c.isStraight && c.guardHeight === 1);
                     c.stamina -= (c.isStraight ? 5 : 2);
                 }
@@ -298,7 +309,7 @@
         function drawArm(c, isFront, isPlayer) {
             const side = c.side; let sY = -25, upperA, elbowA = 0, sX;
             let ext = c.isPunching ? Math.sin(c.punchProg * Math.PI) : 0;
-            const tar = (c === player) ? (mode === 'sparring' ? enemy : {x:sandbag.x, y:250}) : player;
+            const tar = (c === player) ? (mode === 'sparring' ? enemy : {x:sandbag.x, y:c.y}) : player;
             if (!isFront) {
                 sX = 2 * side;
                 if (c.isStraight && c.isPunching) {
@@ -347,7 +358,10 @@
 
         function updateSandbag() {
             if (!matchActive) return;
-            sandbag.velA += (0 - sandbag.angle) * 0.05; sandbag.velA *= 0.96; sandbag.angle += sandbag.velA;
+            // 重厚感を出すため復元力を弱め(0.015)、抵抗(0.85)を強く設定
+            sandbag.velA += (0 - sandbag.angle) * 0.015;
+            sandbag.velA *= 0.85;
+            sandbag.angle += sandbag.velA;
             if (sandbag.hitEffect > 0) sandbag.hitEffect -= 0.08;
         }
 
@@ -368,9 +382,7 @@
                         const dx = Math.abs(atk.fistX - tar.x), dy = atk.fistY - (tar.y - 50); 
                         if (dx < 30 && dy > -45 && dy < 65) {
                             let blk = (dy < 10 && tar.guardHeight === -1) || (dy >= 10 && tar.guardHeight === 1);
-                            // ボディ命中時の音
-                            if (dy >= 10) playSnd(sndMP);
-                            
+                            if (dy >= 10) playSnd('mp');
                             tar.hp -= blk ? 1 : 5; tar.hitX = atk.fistX; tar.hitY = atk.fistY; tar.hitEffect = 1.0; tar.isBlocked = blk;
                             tar.velX = (blk ? 0.9 : (atk.isStraight ? 13 : 7)) * atk.side; 
                             if (!blk) { if (dy < 10) { tar.impactRecoil = 1.2 * atk.side; tar.impactJump = -6; } else { tar.impactRecoil = -0.7 * atk.side; tar.impactJump = 2; } }
@@ -379,9 +391,12 @@
                     }
                 });
             } else if (mode === 'sandbag' && player.isPunching && player.punchProg > 0.4 && player.punchProg < 0.6) {
-                if (Math.abs(player.fistX - sandbag.x) < 25 && Math.abs(player.fistY - (sandbag.y + 50)) < 50) { 
-                    playSnd(sndMP);
-                    sandbag.velA = 0.3; sandbag.hitEffect = 1.0; player.punchProg = 0.66; 
+                if (Math.abs(player.fistX - sandbag.x) < 25 && Math.abs(player.fistY - (sandbag.y + 45)) < 60) { 
+                    playSnd('mp');
+                    // 揺れ方向の修正：左側から打つ(player.x < sandbag.x)場合は右へ揺れるように負の値を設定
+                    const forceDir = player.x < sandbag.x ? -1 : 1;
+                    sandbag.velA = forceDir * 0.08; 
+                    sandbag.hitEffect = 1.0; player.punchProg = 0.66; 
                 }
             }
         }
