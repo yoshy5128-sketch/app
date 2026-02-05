@@ -82,12 +82,13 @@
             source.start(0);
         }
 
+        // --- 音声ファイル修正セクション ---
         loadSound('start', 's-gong.mp3');
         loadSound('end', 'e-gong.mp3');
-        loadSound('hb', 'hb.mp4');
-        loadSound('sp', 'sp.mp4');
-        loadSound('mp', 'mp.mp3'); // 敵ヒット音用
-        loadSound('ph', 'ph.mp3'); // プレイヤーヒット音用（新規）
+        loadSound('swing_s', 'hb.mp4'); // ストレート空振り
+        loadSound('swing_h', 'sp.mp4'); // フック空振り
+        loadSound('p_hit', 'mp.mp3');   // プレイヤーパンチヒット音
+        loadSound('e_hit', 'sp.mp3');   // 敵パンチヒット音
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -198,12 +199,12 @@
 
         function triggerPunch(type, dx, dy) {
             if (type === 'straight' && !straightTriggered) {
-                playSnd('hb');
+                playSnd('swing_s');
                 player.isPunching = true; player.isStraight = true; player.punchProg = 0; straightTriggered = true;
                 player.isUppercut = (player.guardHeight === 1);
                 player.stamina = Math.max(0, player.stamina - 5);
             } else if (type === 'hook' && !hookTriggered) {
-                playSnd('sp');
+                playSnd('swing_h');
                 player.isPunching = true; player.isStraight = false; player.punchProg = 0;
                 punchAngleOffset = (dx === 0 && dy === 0) ? 0 : Math.atan2(dy, Math.abs(dx)) * 0.6; 
                 hookTriggered = true; player.stamina = Math.max(0, player.stamina - 2);
@@ -265,7 +266,7 @@
                 else if (c.aiState === 'sway') { c.velX = Math.sin(c.aiTimer * 12) * 6; c.guardHeight = 1; }
                 if (!c.isPunching && c.stamina > 10 && !player.isDown && d < 100 && Math.random() < 0.04) {
                     c.isPunching = true; c.punchProg = 0; c.isStraight = Math.random() > 0.4;
-                    if(c.isStraight) playSnd('hb'); else playSnd('sp');
+                    if(c.isStraight) playSnd('swing_s'); else playSnd('swing_h');
                     c.isUppercut = (c.isStraight && c.guardHeight === 1);
                     c.stamina -= (c.isStraight ? 5 : 2);
                 }
@@ -373,6 +374,7 @@
             ctx.restore();
         }
 
+        // --- 衝突判定＆音声ロジック修正 ---
         function checkCollision() {
             if (!matchActive) return;
             if (mode === 'sparring') {
@@ -381,10 +383,13 @@
                     if (atk.isPunching && atk.punchProg > 0.35 && atk.punchProg < 0.65) {
                         const dx = Math.abs(atk.fistX - tar.x), dy = atk.fistY - (tar.y - 50); 
                         if (dx < 30 && dy > -45 && dy < 65) {
-                            // 修正：攻撃者に応じて打撃音を切り替え
-                            playSnd(atk === player ? 'ph' : 'mp');
-                            
                             let blk = (dy < 10 && tar.guardHeight === -1) || (dy >= 10 && tar.guardHeight === 1);
+                            
+                            // 修正：クリーンヒット時（blkがfalse、オレンジの火花）のみ再生
+                            if (!blk) {
+                                playSnd(atk === player ? 'p_hit' : 'e_hit');
+                            }
+
                             tar.hp -= blk ? 1 : 5; tar.hitX = atk.fistX; tar.hitY = atk.fistY; tar.hitEffect = 1.0; tar.isBlocked = blk;
                             tar.velX = (blk ? 0.9 : (atk.isStraight ? 13 : 7)) * atk.side; 
                             if (!blk) { if (dy < 10) { tar.impactRecoil = 1.2 * atk.side; tar.impactJump = -6; } else { tar.impactRecoil = -0.7 * atk.side; tar.impactJump = 2; } }
@@ -394,7 +399,8 @@
                 });
             } else if (mode === 'sandbag' && player.isPunching && player.punchProg > 0.4 && player.punchProg < 0.6) {
                 if (Math.abs(player.fistX - sandbag.x) < 25 && Math.abs(player.fistY - (sandbag.y + 45)) < 60) { 
-                    playSnd('ph'); // プレイヤーのサンドバッグ打撃音
+                    // サンドバッグはガードがないため、常にクリーンヒット音
+                    playSnd('p_hit'); 
                     const forceDir = player.x < sandbag.x ? -1 : 1;
                     sandbag.velA = forceDir * 0.08; 
                     sandbag.hitEffect = 1.0; player.punchProg = 0.66; 
