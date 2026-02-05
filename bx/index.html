@@ -86,7 +86,8 @@
         loadSound('end', 'e-gong.mp3');
         loadSound('hb', 'hb.mp4');
         loadSound('sp', 'sp.mp4');
-        loadSound('mp', 'mp.mp3');
+        loadSound('mp', 'mp.mp3'); // 敵ヒット音用
+        loadSound('ph', 'ph.mp3'); // プレイヤーヒット音用（新規）
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -358,7 +359,6 @@
 
         function updateSandbag() {
             if (!matchActive) return;
-            // 重厚感を出すため復元力を弱め(0.015)、抵抗(0.85)を強く設定
             sandbag.velA += (0 - sandbag.angle) * 0.015;
             sandbag.velA *= 0.85;
             sandbag.angle += sandbag.velA;
@@ -381,8 +381,10 @@
                     if (atk.isPunching && atk.punchProg > 0.35 && atk.punchProg < 0.65) {
                         const dx = Math.abs(atk.fistX - tar.x), dy = atk.fistY - (tar.y - 50); 
                         if (dx < 30 && dy > -45 && dy < 65) {
+                            // 修正：攻撃者に応じて打撃音を切り替え
+                            playSnd(atk === player ? 'ph' : 'mp');
+                            
                             let blk = (dy < 10 && tar.guardHeight === -1) || (dy >= 10 && tar.guardHeight === 1);
-                            if (dy >= 10) playSnd('mp');
                             tar.hp -= blk ? 1 : 5; tar.hitX = atk.fistX; tar.hitY = atk.fistY; tar.hitEffect = 1.0; tar.isBlocked = blk;
                             tar.velX = (blk ? 0.9 : (atk.isStraight ? 13 : 7)) * atk.side; 
                             if (!blk) { if (dy < 10) { tar.impactRecoil = 1.2 * atk.side; tar.impactJump = -6; } else { tar.impactRecoil = -0.7 * atk.side; tar.impactJump = 2; } }
@@ -392,8 +394,7 @@
                 });
             } else if (mode === 'sandbag' && player.isPunching && player.punchProg > 0.4 && player.punchProg < 0.6) {
                 if (Math.abs(player.fistX - sandbag.x) < 25 && Math.abs(player.fistY - (sandbag.y + 45)) < 60) { 
-                    playSnd('mp');
-                    // 揺れ方向の修正：左側から打つ(player.x < sandbag.x)場合は右へ揺れるように負の値を設定
+                    playSnd('ph'); // プレイヤーのサンドバッグ打撃音
                     const forceDir = player.x < sandbag.x ? -1 : 1;
                     sandbag.velA = forceDir * 0.08; 
                     sandbag.hitEffect = 1.0; player.punchProg = 0.66; 
