@@ -28,6 +28,8 @@
         color: white; font-family: sans-serif; z-index: 2000;
     }
     #result-title { font-size: 50px; color: #ffff00; margin-bottom: 20px; text-shadow: 0 0 10px orange; }
+    /* 新規追加: ミッションボーナス表示 */
+    #mission-bonus { font-size: 36px; color: #00ffff; margin-bottom: 10px; text-shadow: 0 0 5px cyan; }
     #result-bonus { font-size: 30px; margin-bottom: 40px; color: #00ff00; }
     #next-btn {
         padding: 15px 40px; font-size: 24px; background: #00cc00; color: white;
@@ -55,6 +57,7 @@
 
 <div id="result-screen">
     <div id="result-title">STAGE CLEAR</div>
+    <div id="mission-bonus">Mission Complete $1000</div>
     <div id="result-bonus">Enemy Kill x <span id="kill-disp">0</span> x 100 = $<span id="money-bonus">0</span></div>
     <div id="next-btn">Next Stage</div>
 </div>
@@ -219,6 +222,11 @@ let maxCargo = 1;
 let missionState = 'pickup';
 let stageEnemyCount = 0;
 
+// === BGM設定 ===
+const bgmAudio = new Audio();
+bgmAudio.loop = true;
+bgmAudio.volume = 0.5; // 音量半分
+
 const beaconGeo = new THREE.CylinderGeometry(40, 40, 5000, 32);
 const beaconRedMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
 const beaconGreenMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
@@ -262,6 +270,18 @@ function initStage(stage) {
     updateEnemiesCount(stageEnemyCount);
     setNextObjective('pickup');
     showMsg("STAGE " + stage + " START");
+
+    // --- BGM切り替えロジック ---
+    // 奇数ステージ: mh.mp3, 偶数ステージ: as.mp3
+    const nextBgm = (stage % 2 !== 0) ? 'mh.mp3' : 'as.mp3';
+    // ファイルが変わる場合、またはBGMがセットされていない場合に設定
+    if (bgmAudio.src.indexOf(nextBgm) === -1) {
+        bgmAudio.src = nextBgm;
+        bgmAudio.play().catch(e => { /* 自動再生ブロック対策: ユーザー操作まで待機 */ });
+    } else {
+        // 同じ曲でも停止していれば再生
+        if (bgmAudio.paused) bgmAudio.play().catch(e => {});
+    }
 }
 
 function showMsg(text, duration = 3000) {
@@ -277,12 +297,19 @@ function showResultScreen() {
     const killDisp = document.getElementById('kill-disp');
     const moneyBonusDisp = document.getElementById('money-bonus');
     
-    const bonus = killCount * 100;
-    playerMoney += bonus; 
+    // --- 音声制御 ---
+    bgmAudio.pause(); // BGM停止
+    if(pGain) pGain.gain.value = 0; // エンジン音停止
+    playSFX('jin.mp3'); // クリアジングル再生
+
+    // --- ボーナス計算 ---
+    const missionReward = 1000;
+    const killBonus = killCount * 100;
+    playerMoney += missionReward + killBonus; // ミッション + キルボーナスを加算
     
     document.getElementById('p-money').innerText = playerMoney;
     killDisp.innerText = killCount;
-    moneyBonusDisp.innerText = bonus;
+    moneyBonusDisp.innerText = killBonus;
     
     screen.style.display = 'flex';
 }
@@ -297,7 +324,24 @@ document.getElementById('next-btn').addEventListener('click', () => {
 initStage(1);
 
 let audioCtx, pOsc, pGain;
-function initAudio() { if (audioCtx) return; try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } pOsc = audioCtx.createOscillator(); pOsc.type = 'sawtooth'; pGain = audioCtx.createGain(); pGain.gain.value = 0; pOsc.connect(pGain).connect(audioCtx.destination); pOsc.start(); }
+function initAudio() { 
+    if (audioCtx) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        // BGMが止まっていたら再生試行（初回タップ用）
+        if (bgmAudio.paused && gameState === 'PLAY') bgmAudio.play().catch(e=>{});
+        return; 
+    }
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } 
+    pOsc = audioCtx.createOscillator(); 
+    pOsc.type = 'sawtooth'; 
+    pGain = audioCtx.createGain(); 
+    pGain.gain.value = 0; 
+    pOsc.connect(pGain).connect(audioCtx.destination); 
+    pOsc.start();
+    
+    // BGM再生試行
+    if (bgmAudio.paused && gameState === 'PLAY') bgmAudio.play().catch(e=>{});
+}
 
 function playSFX(filename) {
     if (!audioCtx) initAudio(); if (!audioCtx) return;
@@ -311,19 +355,19 @@ function flashRedScreen() {
 }
 
 const keys = {};
-window.addEventListener("keydown", e => { keys[e.code] = true; initAudio(); if(audioCtx) audioCtx.resume(); });
+window.addEventListener("keydown", e => { keys[e.code] = true; initAudio(); });
 window.addEventListener("keyup", e => { keys[e.code] = false; });
 
 let lookYaw = 0, lookPitch = 0, zoomLevel = 0.8, smoothedCamPos = new THREE.Vector3();
 let touchLeftId = -1, touchRightId = -1, touchState = { left: { startX: 0, startY: 0, currentX: 0, currentY: 0 }, right: { startX: 0, startY: 0, currentX: 0, currentY: 0 } };
 
 addEventListener("wheel", e => { zoomLevel = Math.max(0, Math.min(MAX_ZOOM_LEVEL, zoomLevel + e.deltaY*0.001)); }, {passive:true});
-renderer.domElement.addEventListener("mousedown", () => { renderer.domElement.requestPointerLock(); initAudio(); if(audioCtx) audioCtx.resume(); });
+renderer.domElement.addEventListener("mousedown", () => { renderer.domElement.requestPointerLock(); initAudio(); });
 document.addEventListener("mousemove", e => { if (document.pointerLockElement === renderer.domElement) { lookYaw -= e.movementX * 0.003; lookPitch = Math.max(-0.6, Math.min(0.6, lookPitch - e.movementY * 0.003)); } });
 document.getElementById('zoomSlider').addEventListener('input', e => { zoomLevel = parseFloat(e.target.value); });
 
 window.addEventListener('touchstart', e => {
-    initAudio(); if(audioCtx) audioCtx.resume();
+    initAudio(); 
     for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
         if (t.clientX < window.innerWidth / 2) { touchLeftId = t.identifier; touchState.left = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, currentY: t.clientY }; }
@@ -494,7 +538,7 @@ function animate() {
                     enemy.hp -= 20;
                     player.hp += 5; 
                     
-                    enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3'); // 攻撃HIT音
+                    enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3'); 
                     for (let i=0; i<5; i++) spawnDust(enemy.group.position, true);
                     
                     if(enemy.hp <= 0) {
@@ -504,20 +548,18 @@ function animate() {
                         player.hp += 10;
                         
                         enemy.bodyMat.color.set(0x000000);
-                        // 黒い破片
                         spawnDebris(enemy.group.position, 0x000000, 0.8, 30);
-                        // ②修正: 敵の元のボディカラーの破片
                         spawnDebris(enemy.group.position, enemy.color, 1.5, 15);
                         
-                        playSFX('crash.mp3'); // 破壊音
+                        playSFX('crash.mp3'); 
                         setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000);
                     }
                 } else {
-                    // --- 敵の追突（被ダメージ） ---
+                    // --- 敵の追突 ---
                     player.hp -= 5; 
                     player.impactV.add(dir.multiplyScalar(-0.8)); 
                     spawnDust(player.group.position, false);
-                    playSFX('ecrs.mp3'); // ①修正: 被ダメージ音
+                    playSFX('ecrs.mp3'); 
                     flashRedScreen();
                 }
                 document.getElementById('p-hp').innerText = Math.floor(Math.max(0, player.hp));
