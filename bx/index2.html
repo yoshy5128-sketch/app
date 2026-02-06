@@ -106,7 +106,7 @@
         const CLINCH_DIST = 55; 
         const COST_STRAIGHT = 15; 
         const COST_HOOK = 10;     
-        const RECOVER_THRESHOLD = 20; // 30から20へ。疲労からの復帰を早く修正
+        const RECOVER_THRESHOLD = 20; 
         
         const SKIN_COLOR = '#ffdbac';
         let straightTriggered = false, hookTriggered = false;
@@ -126,7 +126,8 @@
             };
         }
 
-        let player, enemy, sandbag = { x: 450, y: 250, w: 30, h: 90, angle: 0, velA: 0, hitEffect: 0 };
+        // hitX, hitYを追加
+        let player, enemy, sandbag = { x: 450, y: 210, w: 50, h: 130, angle: 0, velA: 0, hitEffect: 0, hitX: 0, hitY: 0 };
 
         document.getElementById('btn-sandbag').onclick = () => start('sandbag');
         document.getElementById('btn-sparring').onclick = () => start('sparring');
@@ -143,7 +144,6 @@
                 const centerX = canvas.width / 2;
                 player.x = centerX - 80; enemy.x = centerX + 80;
             }
-            // 開始時にフラグをクリア
             player.isFatigued = false;
             enemy.isFatigued = false;
             matchActive = true;
@@ -159,7 +159,7 @@
             const spawnOffset = Math.min(canvas.width * 0.25, 80); 
             player = createChar(centerX - spawnOffset, '#ff4444', 1);
             enemy = createChar(centerX + spawnOffset, '#4444ff', -1);
-            sandbag.x = centerX + 40;
+            sandbag.x = centerX + 100; 
             resetKnob();
             requestAnimationFrame(draw);
         }
@@ -208,9 +208,10 @@
 
         function triggerPunch(type, dx, dy) {
             if (!matchActive || player.isPunching) return;
-            const cost = type === 'straight' ? COST_STRAIGHT : COST_HOOK;
             
-            // 修正：疲労フラグが立っているか、スタミナがコスト未満なら打てない
+            if (mode === 'sparring' && Math.abs(player.x - enemy.x) < CLINCH_DIST) return;
+
+            const cost = type === 'straight' ? COST_STRAIGHT : COST_HOOK;
             if (player.isFatigued || player.stamina < cost) return;
 
             if (type === 'straight' && !straightTriggered) {
@@ -261,21 +262,16 @@
                 c.offsetY = Math.min(30, c.offsetY + 2.5); return;
             }
             
-            // スタミナ回復
-            if (c.stamina < c.maxStamina) {
-                c.stamina = Math.min(c.maxStamina, c.stamina + 0.2); 
-            }
-            
-            // 疲労判定ロジック修正
+            if (c.stamina < c.maxStamina) c.stamina = Math.min(c.maxStamina, c.stamina + 0.2); 
             if (c.stamina <= 0) c.isFatigued = true;
             if (c.isFatigued && c.stamina > RECOVER_THRESHOLD) c.isFatigued = false;
-            // 念押し：スタミナがほぼ全快なら絶対に疲労状態ではない
             if (c.stamina > 80) c.isFatigued = false;
 
             if (!matchActive) return;
 
             if (isPlayer) { 
-                c.velX = sliderX * 5; 
+                const moveSpeed = (mode === 'sandbag') ? 4 : 5;
+                c.velX = sliderX * moveSpeed; 
             } else if (mode === 'sparring') {
                 c.aiTimer += 0.02; const d = Math.abs(c.x - player.x);
                 if (!c.aiState) { c.aiState = 'spacing'; c.stateTimer = 0; }
@@ -283,9 +279,7 @@
                 
                 if (c.stateTimer <= 0) {
                     const r = Math.random();
-                    if (c.isFatigued || c.stamina < COST_HOOK) { 
-                        c.aiState = 'survival'; c.stateTimer = 1.5; 
-                    }
+                    if (c.isFatigued || c.stamina < COST_HOOK) { c.aiState = 'survival'; c.stateTimer = 1.5; }
                     else if (r < 0.4) { c.aiState = 'spacing'; c.stateTimer = 2; }
                     else if (r < 0.7) { c.aiState = 'pressure'; c.stateTimer = 1.5; }
                     else { c.aiState = 'sway'; c.stateTimer = 1; }
@@ -293,11 +287,8 @@
 
                 if (c.aiState === 'survival') {
                     const isCornered = (c.x > canvas.width - 100) || (c.x < 100);
-                    if (isCornered || d < CLINCH_DIST + 15) {
-                        c.velX = 3.5 * -c.side; 
-                    } else {
-                        c.velX = 4.0 * c.side; 
-                    }
+                    if (isCornered || d < CLINCH_DIST + 15) c.velX = 3.5 * -c.side; 
+                    else c.velX = 4.0 * c.side; 
                     c.guardHeight = 1; 
                 } 
                 else if (c.aiState === 'spacing') {
@@ -323,7 +314,9 @@
                     const overlap = (MIN_DIST - dist) / 2;
                     if (player.x < enemy.x) { player.x -= overlap; enemy.x += overlap; } else { player.x += overlap; enemy.x -= overlap; }
                 }
-            } else if (mode === 'sandbag' && Math.abs(player.x - sandbag.x) < 40) player.x = sandbag.x - 40;
+            } else if (mode === 'sandbag' && Math.abs(player.x - sandbag.x) < 55) {
+                player.x = sandbag.x - 55;
+            }
 
             if (c.x < currentLeftLimit) c.x = currentLeftLimit;
             if (c.x > canvas.width - currentRightMargin) c.x = canvas.width - currentRightMargin;
@@ -332,8 +325,10 @@
             c.offsetY = Math.abs(Math.cos(time * speed)) * 2 + c.impactJump;
             c.velA += ((Math.sin(time * speed) * 0.08 + c.impactRecoil + ((c.isPunching && c.isStraight) ? Math.sin(c.punchProg * Math.PI) * 0.38 * c.side : 0)) - c.angle) * 0.2; 
             c.velA *= 0.75; c.angle += c.velA;
+            
             if (c.isPunching) {
-                c.punchProg += 0.28;
+                const pSpeed = (mode === 'sandbag') ? 0.22 : 0.28;
+                c.punchProg += pSpeed;
                 if (c.punchProg >= 1) { c.isPunching = false; c.isStraight = false; c.isUppercut = false; }
             }
             c.impactRecoil *= 0.85; c.impactJump *= 0.8;
@@ -416,25 +411,37 @@
             ctx.rotate(sandbag.angle); ctx.fillStyle = '#8b4513'; ctx.strokeStyle = '#222'; ctx.lineWidth = 2.5;
             ctx.fillRect(-sandbag.w/2, 0, sandbag.w, sandbag.h); ctx.strokeRect(-sandbag.w/2, 0, sandbag.w, sandbag.h);
             ctx.restore();
+
+            // 火花エフェクトの描画を追加
+            if (sandbag.hitEffect > 0) {
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 120, 0, ${sandbag.hitEffect})`;
+                ctx.lineWidth = 2;
+                for(let i=0; i<8; i++) {
+                    const ang = i * Math.PI / 4 + time * 5;
+                    ctx.beginPath();
+                    ctx.moveTo(sandbag.hitX, sandbag.hitY);
+                    ctx.lineTo(sandbag.hitX + Math.cos(ang) * 22 * sandbag.hitEffect, sandbag.hitY + Math.sin(ang) * 22 * sandbag.hitEffect);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
         }
 
         function checkCollision() {
             if (!matchActive) return;
 
-            if (mode === 'sparring' && Math.abs(player.x - enemy.x) < CLINCH_DIST) {
-                return; 
-            }
+            const currentDist = Math.abs(player.x - enemy.x);
 
             if (mode === 'sparring') {
                 [player, enemy].forEach(atk => {
                     if (atk.isDown) return; const tar = atk === player ? enemy : player; if (tar.isDown) return;
+                    if (currentDist < CLINCH_DIST) return;
                     if (atk.isPunching && atk.punchProg > 0.35 && atk.punchProg < 0.65) {
                         const dx = Math.abs(atk.fistX - tar.x), dy = atk.fistY - (tar.y - 50); 
                         if (dx < 30 && dy > -45 && dy < 65) {
                             let blk = (dy < 10 && tar.guardHeight === -1) || (dy >= 10 && tar.guardHeight === 1);
-                            
                             if (!blk) playSnd(atk === player ? 'p_hit' : 'e_hit');
-
                             tar.hp -= blk ? 1 : 5; tar.hitX = atk.fistX; tar.hitY = atk.fistY; tar.hitEffect = 1.0; tar.isBlocked = blk;
                             tar.velX = (blk ? 0.9 : (atk.isStraight ? 13 : 7)) * atk.side; 
                             if (!blk) { if (dy < 10) { tar.impactRecoil = 1.2 * atk.side; tar.impactJump = -6; } else { tar.impactRecoil = -0.7 * atk.side; tar.impactJump = 2; } }
@@ -443,10 +450,13 @@
                     }
                 });
             } else if (mode === 'sandbag' && player.isPunching && player.punchProg > 0.4 && player.punchProg < 0.6) {
-                if (Math.abs(player.fistX - sandbag.x) < 25 && Math.abs(player.fistY - (sandbag.y + 45)) < 60) { 
+                if (Math.abs(player.fistX - sandbag.x) < 40 && Math.abs(player.fistY - (sandbag.y + 65)) < 90) { 
                     playSnd('p_hit'); 
                     const forceDir = player.x < sandbag.x ? -1 : 1;
-                    sandbag.velA = forceDir * 0.08; 
+                    sandbag.velA = forceDir * 0.12; 
+                    // ヒット位置を記録
+                    sandbag.hitX = player.fistX;
+                    sandbag.hitY = player.fistY;
                     sandbag.hitEffect = 1.0; player.punchProg = 0.66; 
                 }
             }
@@ -458,7 +468,6 @@
             ctx.fillText(c === player ? "YOU" : "CPU", x + (align === 'left' ? 0 : w), y - 5);
             ctx.fillStyle = '#555'; ctx.fillRect(x, y, w, h);
             ctx.fillStyle = c.hp > 30 ? '#0f0' : '#f00'; ctx.fillRect(x, y, w * (c.hp / c.maxHp), h);
-            
             ctx.fillStyle = '#555'; ctx.fillRect(x, y + 8, w, h);
             ctx.fillStyle = c.isFatigued ? '#888' : '#ff0'; 
             ctx.fillRect(x, y + 8, w * (c.stamina / c.maxStamina), h);
