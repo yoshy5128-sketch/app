@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Three.js Drive - Long Haul Mission</title>
+<title>Three.js Drive - Mission & Battle</title>
 <style>
     body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
     /* UI系スタイル */
@@ -16,14 +16,35 @@
     #zoomSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
     @media (pointer: coarse) { #zoomSlider { display: block; } }
     
-    #hud { position: absolute; top: 5px; width: 100%; display: flex; justify-content: flex-start; gap: 40px; color: white; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; padding-left: 15px; }
+    #hud { position: absolute; top: 5px; width: 100%; display: flex; justify-content: flex-start; gap: 30px; color: white; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; padding-left: 15px; }
     #mission-info { position: absolute; top: 5px; width: 100%; text-align: right; color: #ffff00; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; font-size: 18px; padding-right: 15px; }
+
+    /* ステージクリア画面用のスタイル */
+    #result-screen {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        display: none;
+        flex-direction: column; justify-content: center; align-items: center;
+        color: white; font-family: sans-serif; z-index: 2000;
+    }
+    #result-title { font-size: 50px; color: #ffff00; margin-bottom: 20px; text-shadow: 0 0 10px orange; }
+    #result-bonus { font-size: 30px; margin-bottom: 40px; color: #00ff00; }
+    #next-btn {
+        padding: 15px 40px; font-size: 24px; background: #00cc00; color: white;
+        border: 2px solid #fff; border-radius: 10px; cursor: pointer;
+        font-weight: bold; text-shadow: 1px 1px 0 #000;
+    }
+    #next-btn:hover { background: #00ff00; }
+    
+    /* マネー表示用カラー */
+    .money-text { color: #88ff88; }
 </style>
 </head>
 <body>
 
 <div id="hud">
-    <div>PLAYER HP: <span id="p-hp">100</span></div>
+    <div>HP: <span id="p-hp">100</span></div>
+    <div class="money-text">$<span id="p-money">0</span></div>
     <div>STAGE: <span id="stage-num">1</span></div>
 </div>
 <div id="mission-info">
@@ -31,6 +52,13 @@
 </div>
 
 <div id="msg">MESSAGE</div>
+
+<div id="result-screen">
+    <div id="result-title">STAGE CLEAR</div>
+    <div id="result-bonus">Enemy Kill x <span id="kill-disp">0</span> x 100 = $<span id="money-bonus">0</span></div>
+    <div id="next-btn">Next Stage</div>
+</div>
+
 <div class="touch-area touch-left"></div>
 <div class="touch-area touch-right"></div>
 <div id="fullscreenButton">★</div>
@@ -180,6 +208,11 @@ function updateEnemiesCount(count) {
     }
 }
 
+// === ゲーム状態変数 ===
+let gameState = 'PLAY'; 
+let killCount = 0;      
+let playerMoney = 0;
+
 let currentStage = 1;
 let currentCargo = 0;
 let maxCargo = 1;
@@ -218,10 +251,14 @@ function setNextObjective(type) {
 function initStage(stage) {
     currentStage = stage;
     currentCargo = 0;
+    killCount = 0; 
+    gameState = 'PLAY'; 
+
     if (stage === 1) { maxCargo = 1; stageEnemyCount = 1; }
     else if (stage === 2) { maxCargo = 2; stageEnemyCount = 1; }
     else if (stage === 3) { maxCargo = 3; stageEnemyCount = 2; }
     else { maxCargo = 3; stageEnemyCount = 3; }
+    
     updateEnemiesCount(stageEnemyCount);
     setNextObjective('pickup');
     showMsg("STAGE " + stage + " START");
@@ -232,6 +269,30 @@ function showMsg(text, duration = 3000) {
     m.innerText = text; m.style.display = 'block';
     setTimeout(() => { m.style.display = 'none'; }, duration);
 }
+
+// === リザルト画面表示関数 ===
+function showResultScreen() {
+    gameState = 'CLEAR'; 
+    const screen = document.getElementById('result-screen');
+    const killDisp = document.getElementById('kill-disp');
+    const moneyBonusDisp = document.getElementById('money-bonus');
+    
+    const bonus = killCount * 100;
+    playerMoney += bonus; 
+    
+    document.getElementById('p-money').innerText = playerMoney;
+    killDisp.innerText = killCount;
+    moneyBonusDisp.innerText = bonus;
+    
+    screen.style.display = 'flex';
+}
+
+// Next Stageボタンのイベント
+document.getElementById('next-btn').addEventListener('click', () => {
+    document.getElementById('result-screen').style.display = 'none';
+    let nextStage = parseInt(currentStage, 10) + 1;
+    initStage(nextStage);
+});
 
 initStage(1);
 
@@ -286,25 +347,27 @@ window.addEventListener('touchend', e => {
         else if (t.identifier === touchRightId) touchRightId = -1;
     }
 }, {passive: false});
-// ③フルスクリーンボタンの有効化
 
 document.getElementById('fullscreenButton').addEventListener('click', () => {
-
     if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => console.warn(err));
-
     else document.exitFullscreen();
-
 });
+
 function animate() {
     requestAnimationFrame(animate);
+
+    if (gameState === 'CLEAR') {
+        renderer.render(scene, camera);
+        return;
+    }
+
     const now = audioCtx ? audioCtx.currentTime : 0;
     
-    // --- 【変更点1】空の色の変化（Dynamic Sky） ---
-    // 時間経過（Date.now()を使用）で色相と明度を緩やかに変化させる
+    // Sky
     const timeFactor = Date.now() * 0.0001; 
-    const skyH = 0.6; // ベースは青（0.6）
+    const skyH = 0.6;
     const skyS = 0.4;
-    const skyL = 0.4 + Math.sin(timeFactor) * 0.3; // 0.1(夜) 〜 0.7(昼) まで変化
+    const skyL = 0.4 + Math.sin(timeFactor) * 0.3;
     scene.background.setHSL(skyH, skyS, skyL);
     
     const hT = getHeight(targetPos.x, targetPos.z);
@@ -314,14 +377,15 @@ function animate() {
     if (distToTarget < 30) {
         if (missionState === 'pickup') {
             showMsg("CARGO PICKED UP!");
-            player.hp = 100; document.getElementById('p-hp').innerText = 100;
+            if (player.hp < 100) player.hp = 100;
+            document.getElementById('p-hp').innerText = Math.floor(player.hp);
             setNextObjective('deliver');
         } else {
             currentCargo++;
-            player.hp = 100; document.getElementById('p-hp').innerText = 100;
+            if (player.hp < 100) player.hp = 100;
+            document.getElementById('p-hp').innerText = Math.floor(player.hp);
             if (currentCargo >= maxCargo) {
-                showMsg("STAGE CLEARED!");
-                setTimeout(() => { let nextStage = parseInt(currentStage, 10) + 1; initStage(nextStage); }, 2000);
+                showResultScreen();
                 targetPos.set(999999, 999999, 999999);
             } else {
                 showMsg("DELIVERED! NEXT CARGO...");
@@ -365,9 +429,12 @@ function animate() {
         if(isP && !ent.dead) {
             if(keys.KeyW) ent.speed += ACCEL; if(keys.KeyS) ent.speed -= ACCEL;
             if(keys.KeyA) { ent.yaw += 0.05; turnInput = 1; } if(keys.KeyD) { ent.yaw -= 0.05; turnInput = -1; }
+            
             if (touchLeftId !== -1) {
                 const dy = touchState.left.currentY - touchState.left.startY, dx = touchState.left.currentX - touchState.left.startX;
-                if (dy < -20) ent.speed += ACCEL; else if (dy > 20) ent.speed -= ACCEL;
+                if (dy < -15) ent.speed += ACCEL * 1.5; 
+                else if (dy > 20) ent.speed -= ACCEL;
+                
                 if (dx < -20) { ent.yaw += 0.05; turnInput = 1; } else if (dx > 20) { ent.yaw -= 0.05; turnInput = -1; }
             }
             ent.speed *= FRICTION;
@@ -398,9 +465,6 @@ function animate() {
         const hB = getHeight(ent.group.position.x - fw.x * fD, ent.group.position.z - fw.z * fD);
         const hR = getHeight(ent.group.position.x + rw.x * sD, ent.group.position.z + rw.z * sD);
         const hL = getHeight(ent.group.position.x - rw.x * sD, ent.group.position.z - rw.z * sD);
-
-        // --- 【変更点2】車高の変更（Ride Height） ---
-        // 接地判定のオフセットを 0.22 から 0.60 に増やし、車体を高く浮かせました
         const avgY = (hF + hB + hR + hL) / 4 + 0.12; 
         
         if(isP) { ent.vY -= GRAVITY; ent.group.position.y += ent.vY; if(ent.group.position.y <= avgY) { ent.group.position.y = avgY; ent.vY = 0; } }
@@ -426,18 +490,37 @@ function animate() {
             if (dist < 3.8) {
                 const dir = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
                 if (new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)).dot(dir) > 0.3) {
-                    enemy.hp -= 20; enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3');
+                    // --- プレイヤーの攻撃成功 ---
+                    enemy.hp -= 20;
+                    player.hp += 5; 
+                    
+                    enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3'); // 攻撃HIT音
                     for (let i=0; i<5; i++) spawnDust(enemy.group.position, true);
+                    
                     if(enemy.hp <= 0) {
-                        enemy.dead = true; enemy.bodyMat.color.set(0x000000);
-                        spawnDebris(enemy.group.position, 0x000000, 0.8, 30); spawnDebris(enemy.group.position, 0xffaa00, 1.5, 15);
-                        playSFX('crash.mp3'); setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000);
+                        // --- 敵破壊 ---
+                        enemy.dead = true; 
+                        killCount++;      
+                        player.hp += 10;
+                        
+                        enemy.bodyMat.color.set(0x000000);
+                        // 黒い破片
+                        spawnDebris(enemy.group.position, 0x000000, 0.8, 30);
+                        // ②修正: 敵の元のボディカラーの破片
+                        spawnDebris(enemy.group.position, enemy.color, 1.5, 15);
+                        
+                        playSFX('crash.mp3'); // 破壊音
+                        setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000);
                     }
                 } else {
-                    player.hp -= 5; player.impactV.add(dir.multiplyScalar(-0.8)); spawnDust(player.group.position, false);
-                    playSFX('crs.mp3'); flashRedScreen();
+                    // --- 敵の追突（被ダメージ） ---
+                    player.hp -= 5; 
+                    player.impactV.add(dir.multiplyScalar(-0.8)); 
+                    spawnDust(player.group.position, false);
+                    playSFX('ecrs.mp3'); // ①修正: 被ダメージ音
+                    flashRedScreen();
                 }
-                document.getElementById('p-hp').innerText = Math.max(0, player.hp);
+                document.getElementById('p-hp').innerText = Math.floor(Math.max(0, player.hp));
                 if (player.hp <= 0) { player.dead = true; document.getElementById('msg').innerText = "GAME OVER"; document.getElementById('msg').style.display = 'block'; playSFX('crash.mp3'); setTimeout(() => location.reload(), 5000); }
             }
         });
