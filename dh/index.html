@@ -2,9 +2,10 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Three.js Drive - Mission & Battle Full</title>
+<title>Three.js Drive - Mission & Battle</title>
 <style>
     body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
+    /* UI系スタイル */
     #msg { position: absolute; top: 40%; width: 100%; text-align: center; color: #ff3333; font-family: sans-serif; font-size: 40px; font-weight: bold; text-shadow: 2px 2px 0 #000; display: none; pointer-events: none; z-index: 1020; }
     .touch-area { position: absolute; top: 0; width: 50%; height: 100%; z-index: 1000; display: none; }
     .touch-left { left: 0; }
@@ -13,10 +14,12 @@
     #fullscreenButton { position: absolute; top: 15px; left: 15px; font-family: sans-serif; font-size: 24px; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 8px 12px; border-radius: 8px; cursor: pointer; user-select: none; z-index: 1010; line-height: 1; }
     #zoomSlider { position: absolute; right: -75px; top: 50%; transform: translateY(-50%) rotate(-90deg); width: 200px; height: 10px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.3); outline: none; border-radius: 5px; opacity: 0.7; transition: opacity .2s; z-index: 1010; }
     #zoomSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
+    @media (pointer: coarse) { #zoomSlider { display: block; } }
     
     #hud { position: absolute; top: 5px; width: 100%; display: flex; justify-content: flex-start; gap: 30px; color: white; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; padding-left: 15px; }
     #mission-info { position: absolute; top: 5px; width: 100%; text-align: right; color: #ffff00; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; font-size: 18px; padding-right: 15px; }
 
+    /* ステージクリア画面用のスタイル */
     #result-screen {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0, 0, 0, 0.85);
@@ -25,7 +28,8 @@
         color: white; font-family: sans-serif; z-index: 2000;
     }
     #result-title { font-size: 50px; color: #ffff00; margin-bottom: 20px; text-shadow: 0 0 10px orange; }
-    #mission-bonus-text { font-size: 36px; color: #00ffff; margin-bottom: 10px; text-shadow: 0 0 5px cyan; }
+    /* 新規追加: ミッションボーナス表示 */
+    #mission-bonus { font-size: 36px; color: #00ffff; margin-bottom: 10px; text-shadow: 0 0 5px cyan; }
     #result-bonus { font-size: 30px; margin-bottom: 40px; color: #00ff00; }
     #next-btn {
         padding: 15px 40px; font-size: 24px; background: #00cc00; color: white;
@@ -33,6 +37,8 @@
         font-weight: bold; text-shadow: 1px 1px 0 #000;
     }
     #next-btn:hover { background: #00ff00; }
+    
+    /* マネー表示用カラー */
     .money-text { color: #88ff88; }
 </style>
 </head>
@@ -51,7 +57,7 @@
 
 <div id="result-screen">
     <div id="result-title">STAGE CLEAR</div>
-    <div id="mission-bonus-text">Mission Complete $1000</div>
+    <div id="mission-bonus">Mission Complete $1000</div>
     <div id="result-bonus">Enemy Kill x <span id="kill-disp">0</span> x 100 = $<span id="money-bonus">0</span></div>
     <div id="next-btn">Next Stage</div>
 </div>
@@ -64,7 +70,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-// --- 基本設定 ---
+// --- 物理設定 ---
 const MAX_SPEED = 2.5, ACCEL = 0.08, FRICTION = 0.96, GRAVITY = 0.1, MAX_ZOOM_LEVEL = 2.0;
 
 const scene = new THREE.Scene();
@@ -96,7 +102,6 @@ sun.shadow.camera.left = -100; sun.shadow.camera.right = 100;
 sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100;
 sun.shadow.mapSize.set(2048, 2048); scene.add(sun);
 
-// バックミラー用
 const mirrorCamera = new THREE.PerspectiveCamera(40, 3.0, 0.1, 500);
 const mirrorRenderTarget = new THREE.WebGLRenderTarget(256, 85);
 const mirrorMaterial = new THREE.MeshBasicMaterial({ map: mirrorRenderTarget.texture });
@@ -126,7 +131,6 @@ function updateChunks(px, pz) {
     }
 }
 
-// --- パーティクルシステム ---
 const particles = [];
 function spawnDust(pos, isSpark = false, isSmoke = false) {
     let color = isSpark ? 0xffffff : 0xd2c08a; if (isSmoke) color = 0x333333;
@@ -148,7 +152,6 @@ function spawnDebris(pos, color, scale, count = 5) {
     }
 }
 
-// --- エンティティ作成 ---
 function createCar(color) {
     const group = new THREE.Group();
     const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.3 });
@@ -191,33 +194,54 @@ function spawnEnemyAt(x, z) {
         attackTimer: 0, mode: 'follow', impactV: new THREE.Vector3(),
         aiType: assignedType
     };
-    ent.group.position.set(x, 10, z); scene.add(ent.group); enemies.push(ent);
+    ent.group.position.set(x, 10, z);
+    scene.add(ent.group);
+    enemies.push(ent);
 }
 
 function updateEnemiesCount(count) {
     enemies.forEach(e => scene.remove(e.group));
     enemies = [];
     for(let i=0; i<count; i++) {
-        const angle = player.yaw + Math.PI + (Math.random()-0.5), dist = 40 + Math.random() * 20;
-        spawnEnemyAt(player.group.position.x + Math.sin(angle)*dist, player.group.position.z + Math.cos(angle)*dist);
+        const angle = player.yaw + Math.PI + (Math.random()-0.5);
+        const dist = 40 + Math.random() * 20;
+        const ex = player.group.position.x + Math.sin(angle) * dist;
+        const ez = player.group.position.z + Math.cos(angle) * dist;
+        spawnEnemyAt(ex, ez);
     }
 }
 
-// --- ゲーム進行・ミッション ---
-let gameState = 'PLAY', killCount = 0, playerMoney = 0, currentStage = 1, currentCargo = 0, maxCargo = 1, missionState = 'pickup', stageEnemyCount = 0;
-const bgmAudio = new Audio(); bgmAudio.loop = true; bgmAudio.volume = 0.5;
+// === ゲーム状態変数 ===
+let gameState = 'PLAY'; 
+let killCount = 0;      
+let playerMoney = 0;
+
+let currentStage = 1;
+let currentCargo = 0;
+let maxCargo = 1;
+let missionState = 'pickup';
+let stageEnemyCount = 0;
+
+// === BGM設定 ===
+const bgmAudio = new Audio();
+bgmAudio.loop = true;
+bgmAudio.volume = 0.5; // 音量半分
 
 const beaconGeo = new THREE.CylinderGeometry(40, 40, 5000, 32);
 const beaconRedMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
 const beaconGreenMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
 const beaconMesh = new THREE.Mesh(beaconGeo, beaconRedMat);
-beaconMesh.position.y = 2500; scene.add(beaconMesh);
+beaconMesh.position.y = 2500;
+scene.add(beaconMesh);
+
 let targetPos = new THREE.Vector3();
 
 function setNextObjective(type) {
     missionState = type;
-    const angle = Math.random() * Math.PI * 2, dist = 3000 + Math.random() * 3000;
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 3000 + Math.random() * 3000;
     targetPos.set(player.group.position.x + Math.sin(angle) * dist, 0, player.group.position.z + Math.cos(angle) * dist);
+
     if (type === 'pickup') {
         beaconMesh.material = beaconRedMat;
         document.getElementById('mission-type').innerText = "PICKUP (RED BEAM)";
@@ -233,56 +257,90 @@ function setNextObjective(type) {
 }
 
 function initStage(stage) {
-    currentStage = stage; currentCargo = 0; killCount = 0; gameState = 'PLAY'; 
+    currentStage = stage;
+    currentCargo = 0;
+    killCount = 0; 
+    gameState = 'PLAY'; 
+
     if (stage === 1) { maxCargo = 1; stageEnemyCount = 1; }
     else if (stage === 2) { maxCargo = 2; stageEnemyCount = 1; }
-    else { maxCargo = 3; stageEnemyCount = Math.min(stage, 4); }
+    else if (stage === 3) { maxCargo = 3; stageEnemyCount = 2; }
+    else { maxCargo = 3; stageEnemyCount = 3; }
+    
     updateEnemiesCount(stageEnemyCount);
     setNextObjective('pickup');
     showMsg("STAGE " + stage + " START");
+
+    // --- BGM切り替えロジック ---
+    // 奇数ステージ: mh.mp3, 偶数ステージ: as.mp3
     const nextBgm = (stage % 2 !== 0) ? 'mh.mp3' : 'as.mp3';
-    if (bgmAudio.src.indexOf(nextBgm) === -1) { bgmAudio.src = nextBgm; bgmAudio.play().catch(e => {}); }
-    else if (bgmAudio.paused) { bgmAudio.play().catch(e => {}); }
+    // ファイルが変わる場合、またはBGMがセットされていない場合に設定
+    if (bgmAudio.src.indexOf(nextBgm) === -1) {
+        bgmAudio.src = nextBgm;
+        bgmAudio.play().catch(e => { /* 自動再生ブロック対策: ユーザー操作まで待機 */ });
+    } else {
+        // 同じ曲でも停止していれば再生
+        if (bgmAudio.paused) bgmAudio.play().catch(e => {});
+    }
 }
 
 function showMsg(text, duration = 3000) {
-    const m = document.getElementById('msg'); m.innerText = text; m.style.display = 'block';
+    const m = document.getElementById('msg');
+    m.innerText = text; m.style.display = 'block';
     setTimeout(() => { m.style.display = 'none'; }, duration);
 }
 
+// === リザルト画面表示関数 ===
 function showResultScreen() {
     gameState = 'CLEAR'; 
-    bgmAudio.pause();
-    if (pGain && audioCtx) {
-        pGain.gain.cancelScheduledValues(audioCtx.currentTime);
-        pGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.01);
-    }
-    playSFX('jin.mp3'); 
+    const screen = document.getElementById('result-screen');
+    const killDisp = document.getElementById('kill-disp');
+    const moneyBonusDisp = document.getElementById('money-bonus');
+    
+    // --- 音声制御 ---
+    bgmAudio.pause(); // BGM停止
+    if(pGain) pGain.gain.value = 0; // エンジン音停止
+    playSFX('jin.mp3'); // クリアジングル再生
 
+    // --- ボーナス計算 ---
     const missionReward = 1000;
     const killBonus = killCount * 100;
-    playerMoney += missionReward + killBonus; 
+    playerMoney += missionReward + killBonus; // ミッション + キルボーナスを加算
     
     document.getElementById('p-money').innerText = playerMoney;
-    document.getElementById('kill-disp').innerText = killCount;
-    document.getElementById('money-bonus').innerText = killBonus;
-    document.getElementById('result-screen').style.display = 'flex';
+    killDisp.innerText = killCount;
+    moneyBonusDisp.innerText = killBonus;
+    
+    screen.style.display = 'flex';
 }
 
+// Next Stageボタンのイベント
 document.getElementById('next-btn').addEventListener('click', () => {
     document.getElementById('result-screen').style.display = 'none';
-    initStage(parseInt(currentStage, 10) + 1);
+    let nextStage = parseInt(currentStage, 10) + 1;
+    initStage(nextStage);
 });
 
 initStage(1);
 
-// --- オーディオ ---
 let audioCtx, pOsc, pGain;
 function initAudio() { 
-    if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); if (bgmAudio.paused && gameState === 'PLAY') bgmAudio.play().catch(e=>{}); return; }
+    if (audioCtx) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        // BGMが止まっていたら再生試行（初回タップ用）
+        if (bgmAudio.paused && gameState === 'PLAY') bgmAudio.play().catch(e=>{});
+        return; 
+    }
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } 
-    pOsc = audioCtx.createOscillator(); pOsc.type = 'sawtooth'; pGain = audioCtx.createGain(); pGain.gain.value = 0; 
-    pOsc.connect(pGain).connect(audioCtx.destination); pOsc.start();
+    pOsc = audioCtx.createOscillator(); 
+    pOsc.type = 'sawtooth'; 
+    pGain = audioCtx.createGain(); 
+    pGain.gain.value = 0; 
+    pOsc.connect(pGain).connect(audioCtx.destination); 
+    pOsc.start();
+    
+    // BGM再生試行
+    if (bgmAudio.paused && gameState === 'PLAY') bgmAudio.play().catch(e=>{});
 }
 
 function playSFX(filename) {
@@ -292,10 +350,10 @@ function playSFX(filename) {
 }
 
 function flashRedScreen() {
-    const f = document.getElementById('redFlash'); if (f) { f.style.opacity = '0.6'; setTimeout(() => { f.style.opacity = '0'; }, 100); }
+    const f = document.getElementById('redFlash');
+    if (f) { f.style.opacity = '0.6'; setTimeout(() => { f.style.opacity = '0'; }, 100); }
 }
 
-// --- 入力・コントロール ---
 const keys = {};
 window.addEventListener("keydown", e => { keys[e.code] = true; initAudio(); });
 window.addEventListener("keyup", e => { keys[e.code] = false; });
@@ -335,39 +393,54 @@ window.addEventListener('touchend', e => {
 }, {passive: false});
 
 document.getElementById('fullscreenButton').addEventListener('click', () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => {}); else document.exitFullscreen();
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => console.warn(err));
+    else document.exitFullscreen();
 });
 
-// --- メインループ ---
 function animate() {
     requestAnimationFrame(animate);
-    if (gameState === 'CLEAR') { renderer.render(scene, camera); return; }
+
+    if (gameState === 'CLEAR') {
+        renderer.render(scene, camera);
+        return;
+    }
+
     const now = audioCtx ? audioCtx.currentTime : 0;
-    scene.background.setHSL(0.6, 0.4, 0.4 + Math.sin(Date.now()*0.0001) * 0.3);
     
-    // ビーコン更新
+    // Sky
+    const timeFactor = Date.now() * 0.0001; 
+    const skyH = 0.6;
+    const skyS = 0.4;
+    const skyL = 0.4 + Math.sin(timeFactor) * 0.3;
+    scene.background.setHSL(skyH, skyS, skyL);
+    
     const hT = getHeight(targetPos.x, targetPos.z);
     beaconMesh.position.set(targetPos.x, hT + 2495, targetPos.z);
     
-    // 目的地判定
     const distToTarget = Math.sqrt((player.group.position.x - targetPos.x)**2 + (player.group.position.z - targetPos.z)**2);
     if (distToTarget < 30) {
         if (missionState === 'pickup') {
-            showMsg("CARGO PICKED UP!"); player.hp = Math.min(100, player.hp + 50);
+            showMsg("CARGO PICKED UP!");
+            if (player.hp < 100) player.hp = 100;
             document.getElementById('p-hp').innerText = Math.floor(player.hp);
             setNextObjective('deliver');
         } else {
-            currentCargo++; player.hp = Math.min(100, player.hp + 50);
+            currentCargo++;
+            if (player.hp < 100) player.hp = 100;
             document.getElementById('p-hp').innerText = Math.floor(player.hp);
-            if (currentCargo >= maxCargo) { showResultScreen(); targetPos.set(999999, 999999, 999999); }
-            else { showMsg("DELIVERED! NEXT CARGO..."); setTimeout(() => { setNextObjective('pickup'); }, 1500); }
+            if (currentCargo >= maxCargo) {
+                showResultScreen();
+                targetPos.set(999999, 999999, 999999);
+            } else {
+                showMsg("DELIVERED! NEXT CARGO...");
+                setTimeout(() => { setNextObjective('pickup'); }, 1500);
+            }
         }
     }
 
     updateChunks(player.group.position.x, player.group.position.z);
     sun.position.set(player.group.position.x + 50, 150, player.group.position.z + 50); sun.target = player.group;
 
-    // パーティクル更新
     for(let i = particles.length - 1; i >= 0; i--){
         const p = particles[i]; p.userData.life -= 0.015; p.position.add(p.userData.vel);
         if (p.userData.type === 'debris') {
@@ -382,7 +455,6 @@ function animate() {
         if(p.userData.life <= 0){ scene.remove(p); particles.splice(i, 1); }
     }
 
-    // エンティティ更新
     const entities = [player, ...enemies]; 
     if (enemies.length < stageEnemyCount) {
         const sa = player.yaw + Math.PI + (Math.random() - 0.5) * 1.5, sd = 100 + Math.random() * 50;
@@ -397,59 +469,64 @@ function animate() {
 
         ent.lastSpeed = ent.speed;
         let turnInput = 0;
-
+        
         if(isP && !ent.dead) {
             if(keys.KeyW) ent.speed += ACCEL; if(keys.KeyS) ent.speed -= ACCEL;
             if(keys.KeyA) { ent.yaw += 0.05; turnInput = 1; } if(keys.KeyD) { ent.yaw -= 0.05; turnInput = -1; }
+            
             if (touchLeftId !== -1) {
                 const dy = touchState.left.currentY - touchState.left.startY, dx = touchState.left.currentX - touchState.left.startX;
-                if (dy < -15) ent.speed += ACCEL * 1.5; else if (dy > 20) ent.speed -= ACCEL;
+                if (dy < -15) ent.speed += ACCEL * 1.5; 
+                else if (dy > 20) ent.speed -= ACCEL;
+                
                 if (dx < -20) { ent.yaw += 0.05; turnInput = 1; } else if (dx > 20) { ent.yaw -= 0.05; turnInput = -1; }
             }
             ent.speed *= FRICTION;
         } else if (!isP && !ent.dead) {
-            // 敵AIロジック（復元）
+            const sf = new THREE.Vector3();
+            for (let i = 0; i < enemies.length; i++) {
+                const oe = enemies[i]; if (ent === oe || oe.dead) continue;
+                const dist = ent.group.position.distanceTo(oe.group.position);
+                if (dist < 8 && dist > 0.001) sf.add(new THREE.Vector3().subVectors(ent.group.position, oe.group.position).normalize().multiplyScalar(Math.min(0.1, (8 - dist) / 8)));
+            }
+            ent.group.position.add(sf.multiplyScalar(0.2));
             const tp = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
-            const dist = tp.length();
-            let targetYaw = Math.atan2(tp.x, tp.z) + Math.PI;
-            
-            if(ent.aiType === 'evasive' && dist < 15) targetYaw += Math.PI * 0.5;
-            if(ent.aiType === 'flanker' && dist > 20) targetYaw += Math.sin(Date.now()*0.001) * 0.5;
-
-            ent.speed = THREE.MathUtils.lerp(ent.speed, Math.max(0, Math.abs(player.speed) + 0.7), 0.02);
-            let dy = targetYaw - ent.yaw; while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
-            ent.yaw += dy * 0.025; turnInput = THREE.MathUtils.clamp(dy * 0.5, -1, 1);
+            const d = tp.length(); ent.attackTimer += 0.01;
+            let ty = Math.atan2(tp.x, tp.z) + Math.PI, ts = Math.max(0, Math.abs(player.speed) + 0.6);
+            if (d < 10) ts *= 0.8; 
+            ent.speed = THREE.MathUtils.lerp(ent.speed, ts, 0.02);
+            let dy = ty - ent.yaw; while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
+            const step = dy * 0.025; ent.yaw += step; turnInput = THREE.MathUtils.clamp(step * 20, -1, 1);
         }
 
         const fw = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
         ent.group.position.addScaledVector(fw, ent.speed);
         ent.group.position.add(ent.impactV); ent.impactV.multiplyScalar(0.9);
 
-        // 地形接地ロジック
-        const fD = 2.3, sD = 1.25, rw = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
+        const fD = 2.3, sD = 1.25; 
+        const rw = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
         const hF = getHeight(ent.group.position.x + fw.x * fD, ent.group.position.z + fw.z * fD);
         const hB = getHeight(ent.group.position.x - fw.x * fD, ent.group.position.z - fw.z * fD);
         const hR = getHeight(ent.group.position.x + rw.x * sD, ent.group.position.z + rw.z * sD);
         const hL = getHeight(ent.group.position.x - rw.x * sD, ent.group.position.z - rw.z * sD);
         const avgY = (hF + hB + hR + hL) / 4 + 0.12; 
-
+        
         if(isP) { ent.vY -= GRAVITY; ent.group.position.y += ent.vY; if(ent.group.position.y <= avgY) { ent.group.position.y = avgY; ent.vY = 0; } }
         else { ent.group.position.y = avgY; }
 
-        ent.pitch = THREE.MathUtils.lerp(ent.pitch, Math.atan2(hF - hB, fD * 2) + (ent.speed - ent.lastSpeed)*1.8, 0.12);
-        ent.roll = THREE.MathUtils.lerp(ent.roll, Math.atan2(hR - hL, sD * 2) - turnInput*Math.abs(ent.speed)*0.06, 0.08);
+        const terrainPitch = Math.atan2(hF - hB, fD * 2), terrainRoll = Math.atan2(hR - hL, sD * 2);
+        ent.pitch = THREE.MathUtils.lerp(ent.pitch, terrainPitch + (ent.speed - ent.lastSpeed)*1.8, 0.12);
+        ent.roll = THREE.MathUtils.lerp(ent.roll, terrainRoll - turnInput*Math.abs(ent.speed)*0.06, 0.08);
         ent.group.quaternion.setFromEuler(new THREE.Euler(ent.pitch, ent.yaw, ent.roll, 'YXZ'));
 
-        // --- タイヤパーティクル完全復元 ---
-        if(!ent.dead && Math.abs(ent.speed) > 0.4 && ent.group.position.y <= avgY + 0.5) {
-            [[-1.2,0,1.8], [1.2,0,1.8], [-1.2,0,-1.8], [1.2,0,-1.8]].forEach(off => {
+        if(!ent.dead && Math.abs(ent.speed) > 0.5 && ent.group.position.y <= avgY + 0.5) {
+            [[-1.2,0,-1.5], [1.2,0,-1.5]].forEach(off => {
                 const wPos = new THREE.Vector3(...off).applyQuaternion(ent.group.quaternion).add(ent.group.position);
                 if(Math.random() > 0.6) spawnDust(wPos);
             });
         }
     });
 
-    // 衝突判定
     if (!player.dead) {
         enemies.forEach((enemy, idx) => {
             if(enemy.dead) return;
@@ -457,43 +534,57 @@ function animate() {
             if (dist < 3.8) {
                 const dir = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
                 if (new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)).dot(dir) > 0.3) {
-                    enemy.hp -= 20; player.hp += 5; enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3'); 
+                    // --- プレイヤーの攻撃成功 ---
+                    enemy.hp -= 20;
+                    player.hp += 5; 
+                    
+                    enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3'); 
                     for (let i=0; i<5; i++) spawnDust(enemy.group.position, true);
+                    
                     if(enemy.hp <= 0) {
-                        enemy.dead = true; killCount++; player.hp += 10; enemy.bodyMat.color.set(0x000000);
-                        spawnDebris(enemy.group.position, 0x000000, 0.8, 30); spawnDebris(enemy.group.position, enemy.color, 1.5, 15);
-                        playSFX('crash.mp3'); setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000);
+                        // --- 敵破壊 ---
+                        enemy.dead = true; 
+                        killCount++;      
+                        player.hp += 10;
+                        
+                        enemy.bodyMat.color.set(0x000000);
+                        spawnDebris(enemy.group.position, 0x000000, 0.8, 30);
+                        spawnDebris(enemy.group.position, enemy.color, 1.5, 15);
+                        
+                        playSFX('crash.mp3'); 
+                        setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000);
                     }
                 } else {
-                    player.hp -= 5; player.impactV.add(dir.multiplyScalar(-0.8)); flashRedScreen(); playSFX('ecrs.mp3');
+                    // --- 敵の追突 ---
+                    player.hp -= 5; 
+                    player.impactV.add(dir.multiplyScalar(-0.8)); 
+                    spawnDust(player.group.position, false);
+                    playSFX('ecrs.mp3'); 
+                    flashRedScreen();
                 }
                 document.getElementById('p-hp').innerText = Math.floor(Math.max(0, player.hp));
-                if (player.hp <= 0) { player.dead = true; showMsg("GAME OVER"); playSFX('crash.mp3'); setTimeout(() => location.reload(), 5000); }
+                if (player.hp <= 0) { player.dead = true; document.getElementById('msg').innerText = "GAME OVER"; document.getElementById('msg').style.display = 'block'; playSFX('crash.mp3'); setTimeout(() => location.reload(), 5000); }
             }
         });
     }
 
-    // カメラロジック
     const cp = new THREE.Vector3(0, 2.4, 0.5), tp = new THREE.Vector3(0, 4.5, 12), dp = new THREE.Vector3(0, 70, 150);
-    let co = (zoomLevel <= 1.0) ? new THREE.Vector3().lerpVectors(cp, tp, zoomLevel) : new THREE.Vector3().lerpVectors(tp, dp, Math.min(1.0, (zoomLevel - 1.0)));
+    let co = (zoomLevel <= 1.0) ? new THREE.Vector3().lerpVectors(cp, tp, zoomLevel) : new THREE.Vector3().lerpVectors(tp, dp, Math.min(1.0, (zoomLevel - 1.0)/(MAX_ZOOM_LEVEL - 1.0)));
     const bq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, player.yaw, 0)), mq = new THREE.Quaternion().setFromEuler(new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ'));
-    let fq = (zoomLevel <= 1.0) ? new THREE.Quaternion().slerpQuaternions(player.group.quaternion.clone(), bq, zoomLevel).multiply(mq) : bq.clone().multiply(mq);
-    
-    smoothedCamPos.lerp(player.group.position.clone().add(co.clone().applyQuaternion(fq)), zoomLevel < 1.0 ? 0.2 : 0.3);
+    let fq;
+    if (zoomLevel <= 1.0) fq = new THREE.Quaternion().slerpQuaternions(player.group.quaternion.clone(), bq, zoomLevel).multiply(mq);
+    else { const cpl = player.group.position.clone().add(co.clone().applyQuaternion(bq)), tc = new THREE.Camera(); tc.position.copy(cpl); tc.lookAt(player.group.position); fq = tc.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, lookYaw, 0))); }
+    smoothedCamPos.lerp(player.group.position.clone().add(co.clone().applyQuaternion(fq)), zoomLevel < 0.15 ? 1.0 : (zoomLevel < 1.0 ? 0.2 : 0.3));
     camera.position.copy(smoothedCamPos); camera.quaternion.copy(fq);
 
-    // バックミラー表示
     if (zoomLevel < 0.15) {
         mirrorMesh.visible = true; mirrorMesh.position.copy(camera.position).add(new THREE.Vector3(0, 0.2, -0.4).applyQuaternion(camera.quaternion)); mirrorMesh.quaternion.copy(camera.quaternion);
         mirrorCamera.position.copy(player.group.position).add(new THREE.Vector3(0, 2.6, 0).applyQuaternion(player.group.quaternion)); mirrorCamera.quaternion.setFromEuler(new THREE.Euler(0, player.yaw + Math.PI, 0));
         renderer.setRenderTarget(mirrorRenderTarget); renderer.render(scene, mirrorCamera); renderer.setRenderTarget(null);
     } else mirrorMesh.visible = false;
 
-    // --- エンジン音制御 ---
-    if(audioCtx && !player.dead && gameState === 'PLAY') { 
-        pGain.gain.setTargetAtTime(0.3, now, 0.05); pOsc.frequency.setTargetAtTime(70 + Math.abs(player.speed) * 60, now, 0.05); 
-    } else if(pGain) { pGain.gain.setTargetAtTime(0, now, 0.05); }
-
+    if(audioCtx && !player.dead) { pGain.gain.setTargetAtTime(0.3, now, 0.05); pOsc.frequency.setTargetAtTime(70 + Math.abs(player.speed) * 60, now, 0.05); }
+    else if(pGain) pGain.gain.setTargetAtTime(0, now, 0.05);
     renderer.render(scene, camera);
 }
 animate();
