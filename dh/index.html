@@ -587,7 +587,8 @@ function animate() {
         renderer.setRenderTarget(mirrorRenderTarget); renderer.render(scene, mirrorCamera); renderer.setRenderTarget(null);
     } else mirrorMesh.visible = false;
 
-    if(audioCtx && !player.dead) { pGain.gain.setTargetAtTime(0.3, now, 0.05); pOsc.frequency.setTargetAtTime(70 + Math.abs(player.speed) * 60, now, 0.05); }
+    // --- 修正箇所: クリア時は音量を更新しない（0に向かうようにelseに流す） ---
+    if(audioCtx && !player.dead && gameState !== 'CLEAR') { pGain.gain.setTargetAtTime(0.3, now, 0.05); pOsc.frequency.setTargetAtTime(70 + Math.abs(player.speed) * 60, now, 0.05); }
     else if(pGain) pGain.gain.setTargetAtTime(0, now, 0.05);
     renderer.render(scene, camera);
 }
