@@ -299,7 +299,11 @@ function showResultScreen() {
     
     // --- 音声制御 ---
     bgmAudio.pause(); // BGM停止
-    if(pGain) pGain.gain.value = 0; // エンジン音停止
+    if(pGain) {
+        // エンジン音のスケジュールをキャンセルして即座に0にする
+        pGain.gain.cancelScheduledValues(audioCtx.currentTime);
+        pGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    }
     playSFX('jin.mp3'); // クリアジングル再生
 
     // --- ボーナス計算 ---
