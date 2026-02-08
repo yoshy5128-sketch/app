@@ -92,7 +92,6 @@
         background: #555; color: #fff; border: 1px solid #aaa; border-radius: 5px; cursor: pointer;
     }
 
-    /* 【修正】リプレイ再生中UI（右上に移動・小型化） */
     #replay-ui {
         position: absolute; top: 15px; right: 15px; width: auto; text-align: right;
         z-index: 4000; display: none; font-family: sans-serif; pointer-events: none;
@@ -103,7 +102,6 @@
         border: 1px solid #fff; border-radius: 5px; cursor: pointer;
     }
 
-    /* 【新規】リプレイ終了後のメニュー画面 */
     #post-replay-screen {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0, 0, 0, 0.8); display: none;
@@ -136,19 +134,19 @@
 <div id="msg">MESSAGE</div>
 <div id="noise-overlay"></div>
 
-<!-- リプレイUI（右上配置） -->
+<!-- リプレイUI -->
 <div id="replay-ui">
     <div id="replay-info">REPLAY MODE</div>
     <div id="exit-replay-btn">EXIT</div>
 </div>
 
-<!-- 【新規】リプレイ終了後画面 -->
+<!-- リプレイ終了後画面 -->
 <div id="post-replay-screen">
     <div id="post-replay-title">REPLAY FINISHED</div>
     <div class="result-btns">
         <div class="post-btn replay-btn" id="post-replay-restart">RESTART</div>
         <div class="post-btn replay-btn" style="background:#ff8800;" id="post-replay-save">SAVE</div>
-        <div class="post-btn" style="background:#444;" id="post-replay-exit">BACK TO TOP</div>
+        <div class="post-btn" style="background:#444;" id="post-replay-exit">BACK</div>
     </div>
 </div>
 
@@ -318,7 +316,7 @@ const enemyColors = [0x00cc00, 0xcccc00, 0xcc22cc, 0xeeeeee, 0x2244cc, 0xcc5500]
 
 function spawnEnemyAt(x, z) {
     const col = enemyColors[Math.floor(Math.random() * enemyColors.length)];
-    const ent = { ...createCar(col), speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, attackTimer: 0, impactV: new THREE.Vector3() };
+    const ent = { ...createCar(col), speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, attackTimer: 0, impactV: new THREE.Vector3(), color: col };
     ent.group.position.set(x, 10, z); scene.add(ent.group); enemies.push(ent);
 }
 
@@ -364,10 +362,10 @@ let isReplaying = false;
 
 function recordFrame() {
     const frame = {
-        p: { pos: player.group.position.clone(), quat: player.group.quaternion.clone(), speed: player.speed, hp: player.hp, dead: player.dead },
-        e: enemies.map(en => ({ pos: en.group.position.clone(), quat: en.group.quaternion.clone(), speed: en.speed, hp: en.hp, dead: en.dead, color: en.color })),
+        p: { pos: {x: player.group.position.x, y: player.group.position.y, z: player.group.position.z}, quat: {_x: player.group.quaternion.x, _y: player.group.quaternion.y, _z: player.group.quaternion.z, _w: player.group.quaternion.w}, speed: player.speed, hp: player.hp, dead: player.dead },
+        e: enemies.map(en => ({ pos: {x: en.group.position.x, y: en.group.position.y, z: en.group.position.z}, quat: {_x: en.group.quaternion.x, _y: en.group.quaternion.y, _z: en.group.quaternion.z, _w: en.group.quaternion.w}, speed: en.speed, hp: en.hp, dead: en.dead, color: en.color })),
         sand: { intensity: sandstormIntensity, cycle: sandstormCycleTimer, peak: sandstormPeak },
-        target: targetPos.clone(),
+        target: {x: targetPos.x, y: targetPos.y, z: targetPos.z},
         mission: { type: missionState, cargo: currentCargo, max: maxCargo, stage: currentStage }
     };
     replayBuffer.push(frame);
@@ -376,63 +374,58 @@ function recordFrame() {
 function startReplay(data) {
     if (!data || data.length === 0) return;
     replayBuffer = data; replayIndex = 0; isReplaying = true; gameState = 'PLAY'; 
+    const firstFrame = data[0]; currentStage = firstFrame.mission.stage;
+    
+    // 【改善】車両の完全復旧
+    player.bodyMat.color.set(0xcc2222); player.group.visible = true;
+    player.group.position.set(firstFrame.p.pos.x, firstFrame.p.pos.y, firstFrame.p.pos.z);
+    if (!player.group.parent) scene.add(player.group);
+    smoothedCamPos.copy(player.group.position);
+
+    enemies.forEach(e => scene.remove(e.group));
+    enemies = firstFrame.e.map(edata => {
+        const ent = { ...createCar(edata.color), dead: false, speed: 0, color: edata.color };
+        ent.group.position.set(edata.pos.x, edata.pos.y, edata.pos.z);
+        scene.add(ent.group); return ent;
+    });
+
     document.getElementById('top-screen').style.display = 'none';
     document.getElementById('result-screen').style.display = 'none';
     document.getElementById('post-replay-screen').style.display = 'none';
     document.getElementById('replay-ui').style.display = 'block';
     document.getElementById('hud').style.display = 'flex';
     document.getElementById('mission-info').style.display = 'block';
+    document.getElementById('zoomSlider').style.display = 'block'; 
     initAudio();
+    const playlist = ['mh.mp3', 'as.mp3', 'fu.mp3', 'vp.mp3', 'pr.mp3'];
+    bgmAudio.src = playlist[(currentStage - 1) % playlist.length];
+    bgmAudio.play().catch(e => {});
 }
 
-function exitReplay() {
-    isReplaying = false;
-    document.getElementById('replay-ui').style.display = 'none';
-    document.getElementById('post-replay-screen').style.display = 'flex'; // 終了画面を表示
-}
-
-// 保存
-function saveCurrentReplay() {
-    const blob = new Blob([JSON.stringify(replayBuffer)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `replay_stage${currentStage}.json`; a.click();
-}
+function exitReplay() { isReplaying = false; document.getElementById('replay-ui').style.display = 'none'; document.getElementById('post-replay-screen').style.display = 'flex'; }
+function saveCurrentReplay() { const blob = new Blob([JSON.stringify(replayBuffer)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `replay_stage${currentStage}.json`; a.click(); }
 
 document.getElementById('save-replay-btn').addEventListener('click', saveCurrentReplay);
 document.getElementById('post-replay-save').addEventListener('click', saveCurrentReplay);
-
-document.getElementById('gallery-btn').addEventListener('click', () => {
-    document.getElementById('replay-loader').click();
-});
-
+document.getElementById('gallery-btn').addEventListener('click', () => { document.getElementById('replay-loader').click(); });
 document.getElementById('replay-loader').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (f) => { startReplay(JSON.parse(f.target.result)); };
-    reader.readAsText(file);
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader(); reader.onload = (f) => { startReplay(JSON.parse(f.target.result)); }; reader.readAsText(file);
 });
-
 document.getElementById('local-replay-btn').addEventListener('click', () => { startReplay([...replayBuffer]); });
 document.getElementById('post-replay-restart').addEventListener('click', () => { startReplay([...replayBuffer]); });
-
 document.getElementById('exit-replay-btn').addEventListener('click', exitReplay);
 document.getElementById('post-replay-exit').addEventListener('click', () => {
     document.getElementById('post-replay-screen').style.display = 'none';
-    document.getElementById('top-screen').style.display = 'flex';
-    document.getElementById('hud').style.display = 'none';
-    document.getElementById('mission-info').style.display = 'none';
+    if (replayBuffer.length > 0 && (gameState === 'CLEAR' || gameState === 'PLAY')) { document.getElementById('result-screen').style.display = 'flex'; gameState = 'CLEAR'; }
+    else document.getElementById('top-screen').style.display = 'flex';
+    document.getElementById('hud').style.display = 'none'; document.getElementById('mission-info').style.display = 'none';
 });
 
 // =======================
 
 let bgmEnabled = true; let bgmVolume = 0.5; const bgmAudio = new Audio(); bgmAudio.loop = true; bgmAudio.volume = bgmVolume; 
-
-function updateBgmVolume() {
-    if (!bgmEnabled) { bgmAudio.volume = 0; if (!bgmAudio.paused) bgmAudio.pause(); } 
-    else { bgmAudio.volume = bgmVolume; if (bgmAudio.paused && gameState === 'PLAY') bgmAudio.play().catch(e => {}); }
-}
+function updateBgmVolume() { if (!bgmEnabled) { bgmAudio.volume = 0; if (!bgmAudio.paused) bgmAudio.pause(); } else { bgmAudio.volume = bgmVolume; if (bgmAudio.paused && gameState === 'PLAY') bgmAudio.play().catch(e => {}); } }
 
 const beaconGeo = new THREE.CylinderGeometry(40, 40, 5000, 32);
 const beaconRedMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, fog: false });
@@ -440,12 +433,9 @@ const beaconGreenMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparen
 const beaconMesh = new THREE.Mesh(beaconGeo, beaconRedMat); beaconMesh.position.y = 2500; scene.add(beaconMesh);
 
 let targetPos = new THREE.Vector3();
-
 function setNextObjective(type) {
-    missionState = type;
-    const angle = Math.random() * Math.PI * 2; 
+    missionState = type; const angle = Math.random() * Math.PI * 2; 
     targetPos.set(player.group.position.x + Math.sin(angle) * 5250, 0, player.group.position.z + Math.cos(angle) * 5250);
-    
     if (type === 'pickup') { beaconMesh.material = beaconRedMat; document.getElementById('mission-type').innerText = "PICKUP (RED BEAM)"; document.getElementById('mission-type').style.color = "#ff3333"; }
     else { beaconMesh.material = beaconGreenMat; document.getElementById('mission-type').innerText = "DELIVER (GREEN BEAM)"; document.getElementById('mission-type').style.color = "#33ff33"; }
     document.getElementById('cargo-count').innerText = currentCargo; document.getElementById('cargo-max').innerText = maxCargo; document.getElementById('stage-num').innerText = currentStage;
@@ -456,15 +446,13 @@ function initStage(stage) {
     replayBuffer = []; isReplaying = false;
     document.getElementById('hud').style.display = 'flex'; document.getElementById('mission-info').style.display = 'block'; document.getElementById('fullscreenButton').style.display = 'block';
     if(window.matchMedia("(pointer: coarse)").matches) document.getElementById('zoomSlider').style.display = 'block';
-    
     if (stage >= 10) maxCargo = 3; else if (stage >= 4) maxCargo = 2; else maxCargo = 1;
     stageEnemyCount = stage === 1 ? 1 : (stage === 2 ? 1 : (stage === 3 ? 2 : 3));
     updateEnemiesCount(stageEnemyCount); setNextObjective('pickup'); showMsg("STAGE " + stage + " START");
-    if (bgmEnabled) { bgmAudio.src = (stage % 2 !== 0) ? 'mh.mp3' : 'as.mp3'; bgmAudio.play().catch(e => {}); }
+    if (bgmEnabled) { const playlist = ['mh.mp3', 'as.mp3', 'fu.mp3', 'vp.mp3', 'pr.mp3']; bgmAudio.src = playlist[(stage - 1) % playlist.length]; bgmAudio.play().catch(e => {}); }
 }
 
 function showMsg(text, duration = 3000) { const m = document.getElementById('msg'); m.innerText = text; m.style.display = 'block'; setTimeout(() => { m.style.display = 'none'; }, duration); }
-
 function showResultScreen() {
     gameState = 'CLEAR'; const screen = document.getElementById('result-screen'); bgmAudio.pause();
     if(pGain) { pGain.gain.cancelScheduledValues(audioCtx.currentTime); pGain.gain.setValueAtTime(0, audioCtx.currentTime); }
@@ -502,7 +490,7 @@ document.getElementById('fullscreenButton').addEventListener('click', () => { if
 function animate() {
     requestAnimationFrame(animate);
     if (gameState === 'TOP' || gameState === 'SETTINGS') { renderer.render(scene, camera); if(pGain && audioCtx) pGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); return; }
-    if (gameState === 'CLEAR') { renderer.render(scene, camera); return; }
+    if (gameState === 'CLEAR' && !isReplaying) { renderer.render(scene, camera); return; }
 
     const now = audioCtx ? audioCtx.currentTime : 0;
     const timeFactor = Date.now() * 0.0001; 
@@ -510,12 +498,29 @@ function animate() {
 
     if (isReplaying) {
         const f = replayBuffer[replayIndex]; if (!f) { exitReplay(); return; }
-        player.group.position.copy(f.p.pos); player.group.quaternion.copy(f.p.quat); player.hp = f.p.hp; player.dead = f.p.dead; player.speed = f.p.speed;
+        const prevF = replayIndex > 0 ? replayBuffer[replayIndex - 1] : null;
+        if (prevF && f.p.hp < prevF.p.hp) { playSFX(f.p.hp <= 0 ? 'crash.mp3' : 'ecrs.mp3'); if (f.p.hp <= 0) spawnDebris(player.group.position, player.color, 1.5, 15); }
+        // 【修正】JSONデータの座標と回転を個別にセット
+        player.group.position.set(f.p.pos.x, f.p.pos.y, f.p.pos.z);
+        player.group.quaternion.set(f.p.quat._x, f.p.quat._y, f.p.quat._z, f.p.quat._w);
+        player.hp = f.p.hp; player.dead = f.p.dead; player.speed = f.p.speed;
+        if (!player.dead) player.bodyMat.color.set(0xcc2222); else player.bodyMat.color.set(0);
         sandstormIntensity = f.sand.intensity; sandstormCycleTimer = f.sand.cycle; sandstormPeak = f.sand.peak;
-        targetPos.copy(f.target); missionState = f.mission.type; currentCargo = f.mission.cargo; maxCargo = f.mission.max; currentStage = f.mission.stage;
+        targetPos.set(f.target.x, f.target.y, f.target.z);
+        missionState = f.mission.type; currentCargo = f.mission.cargo; maxCargo = f.mission.max; currentStage = f.mission.stage;
         document.getElementById('p-hp').innerText = Math.floor(player.hp); document.getElementById('cargo-count').innerText = currentCargo; document.getElementById('cargo-max').innerText = maxCargo; document.getElementById('stage-num').innerText = currentStage;
         document.getElementById('replay-info').innerText = `REPLAY - STAGE ${currentStage} (${Math.floor(replayIndex/60)}s / ${Math.floor(replayBuffer.length/60)}s)`;
-        f.e.forEach((edata, idx) => { if (enemies[idx]) { enemies[idx].group.position.copy(edata.pos); enemies[idx].group.quaternion.copy(edata.quat); enemies[idx].speed = edata.speed; enemies[idx].dead = edata.dead; } });
+        f.e.forEach((edata, idx) => { 
+            if (enemies[idx]) {
+                const prevE = prevF ? prevF.e[idx] : null;
+                if (prevE && edata.dead && !prevE.dead) { enemies[idx].bodyMat.color.set(0); spawnDebris(new THREE.Vector3(edata.pos.x, edata.pos.y, edata.pos.z), edata.color, 1.5, 15); playSFX('crash.mp3'); }
+                else if (prevE && edata.hp < prevE.hp) { playSFX('crs.mp3'); for (let i=0; i<5; i++) spawnDust(enemies[idx].group.position, true); }
+                if (!edata.dead) enemies[idx].bodyMat.color.set(edata.color); else enemies[idx].bodyMat.color.set(0);
+                enemies[idx].group.position.set(edata.pos.x, edata.pos.y, edata.pos.z);
+                enemies[idx].group.quaternion.set(edata.quat._x, edata.quat._y, edata.quat._z, edata.quat._w);
+                enemies[idx].speed = edata.speed; enemies[idx].dead = edata.dead; 
+            } 
+        });
         replayIndex++; if (replayIndex >= replayBuffer.length) exitReplay();
     } else {
         if (currentStage >= 5) {
@@ -580,6 +585,7 @@ function animate() {
                 if (touchLeftId !== -1) { const dy = touchState.left.currentY - touchState.left.startY, dx = touchState.left.currentX - touchState.left.startX; if (dy < -15) ent.speed += ACCEL * 1.5; else if (dy > 20) ent.speed -= ACCEL; if (dx < -20) { ent.yaw += 0.05; turnInput = 1; } else if (dx > 20) { ent.yaw -= 0.05; turnInput = -1; } }
                 ent.speed *= FRICTION;
             } else if (!isP && !ent.dead) {
+                enemies.forEach(other => { if (ent === other || other.dead) return; const d = ent.group.position.distanceTo(other.group.position); if (d < 5.5) ent.group.position.add(new THREE.Vector3().subVectors(ent.group.position, other.group.position).normalize().multiplyScalar(0.12)); });
                 const tpVec = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
                 ent.speed = THREE.MathUtils.lerp(ent.speed, Math.abs(player.speed) + 0.5, 0.02);
                 let dy = (Math.atan2(tpVec.x, tpVec.z) + Math.PI) - ent.yaw; while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
