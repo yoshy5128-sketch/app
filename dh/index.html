@@ -110,7 +110,19 @@
     }
     #post-replay-title { font-size: 40px; color: #00ccff; margin-bottom: 30px; font-weight: bold; }
 
-    /* ノイズ用オーバーレイ */
+    #garage-screen {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.95); display: none;
+        flex-direction: column; justify-content: center; align-items: center;
+        z-index: 3500; font-family: sans-serif; color: #fff;
+    }
+    .garage-slot {
+        margin-bottom: 15px; width: 420px; padding: 15px; background: #222;
+        border: 1px solid #444; border-radius: 10px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .garage-slot span { font-weight: bold; font-size: 18px; }
+    .load-json-btn { background: #ff9900; border: none; color: #000; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+
     #noise-overlay {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         pointer-events: none; z-index: 1035; opacity: 0;
@@ -134,13 +146,11 @@
 <div id="msg">MESSAGE</div>
 <div id="noise-overlay"></div>
 
-<!-- リプレイUI -->
 <div id="replay-ui">
     <div id="replay-info">REPLAY MODE</div>
     <div id="exit-replay-btn">EXIT</div>
 </div>
 
-<!-- リプレイ終了後画面 -->
 <div id="post-replay-screen">
     <div id="post-replay-title">REPLAY FINISHED</div>
     <div class="result-btns">
@@ -150,14 +160,22 @@
     </div>
 </div>
 
+<div id="garage-screen">
+    <div class="settings-title">CAR GARAGE</div>
+    <div class="garage-slot"><span>PLAYER CAR</span><button class="load-json-btn" onclick="openCarLoader('player')">LOAD JSON</button></div>
+    <div class="garage-slot"><span>ENEMY 1</span><button class="load-json-btn" onclick="openCarLoader('enemy1')">LOAD JSON</button></div>
+    <div class="garage-slot"><span>ENEMY 2</span><button class="load-json-btn" onclick="openCarLoader('enemy2')">LOAD JSON</button></div>
+    <div class="garage-slot"><span>ENEMY 3</span><button class="load-json-btn" onclick="openCarLoader('enemy3')">LOAD JSON</button></div>
+    <div class="garage-slot"><span>ENEMY 4</span><button class="load-json-btn" onclick="openCarLoader('enemy4')">LOAD JSON</button></div>
+    <button id="settings-close" onclick="document.getElementById('garage-screen').style.display='none'; document.getElementById('top-screen').style.display='flex';">BACK</button>
+</div>
+
 <div id="top-screen">
     <div class="top-title">THREE.JS DRIVE</div>
-    <div id="debug-stage-select">
-        DEBUG STAGE SELECT: 
-        <select id="stage-choice"></select>
-    </div>
+    <div id="debug-stage-select">DEBUG STAGE SELECT: <select id="stage-choice"></select></div>
     <div class="top-btns">
         <div class="btn-large" id="start-btn">GAME START</div>
+        <div class="btn-sub" onclick="document.getElementById('top-screen').style.display='none'; document.getElementById('garage-screen').style.display='flex';">GARAGE</div>
         <div class="btn-sub" id="gallery-btn">REPLAY GALLERY</div>
     </div>
     <div id="gear-btn">&#9881;</div>
@@ -165,14 +183,8 @@
 
 <div id="settings-screen">
     <div class="settings-title">SETTINGS</div>
-    <div class="setting-item">
-        <span class="setting-label">BGM</span>
-        <input type="checkbox" id="bgm-toggle" checked>
-    </div>
-    <div class="setting-item">
-        <span class="setting-label">VOLUME</span>
-        <input type="range" id="bgm-volume" min="0" max="1" step="0.1" value="0.5">
-    </div>
+    <div class="setting-item"><span class="setting-label">BGM</span><input type="checkbox" id="bgm-toggle" checked></div>
+    <div class="setting-item"><span class="setting-label">VOLUME</span><input type="range" id="bgm-volume" min="0" max="1" step="0.1" value="0.5"></div>
     <div id="settings-close">BACK</div>
 </div>
 
@@ -195,54 +207,173 @@
 <div id="redFlash" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: red; opacity: 0; pointer-events: none; z-index: 1030; transition: opacity 0.1s ease-out;"></div>
 
 <input type="file" id="replay-loader" style="display:none" accept=".json">
+<input type="file" id="car-loader" style="display:none" accept=".json">
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
 const stageChoice = document.getElementById('stage-choice');
-for(let i=1; i<=30; i++){
-    const opt = document.createElement('option'); opt.value = i; opt.innerText = "STAGE " + i; stageChoice.appendChild(opt);
+for(let i=1; i<=30; i++){ const opt = document.createElement('option'); opt.value = i; opt.innerText = "STAGE " + i; stageChoice.appendChild(opt); }
+
+// --- ガレージ設定 ---
+const carConfigs = { player: null, enemy1: null, enemy2: null, enemy3: null, enemy4: null };
+function openCarLoader(slot) {
+    const l = document.getElementById('car-loader');
+    l.onchange = (e) => {
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (f) => { try { carConfigs[slot] = JSON.parse(f.target.result); alert(slot.toUpperCase() + " LOADED!"); } catch(e){ alert("Invalid JSON"); } };
+        reader.readAsText(file);
+    };
+    l.click();
 }
+
+function createCarFromConfig(design, defCol) {
+    const p = design || {
+        color: '#' + defCol.toString(16).padStart(6, '0'),
+        width: 2.2, totalLength: 5.0, lift: 0.4, noseH: 0.6, noseSlant: 0.2, spoilerAngle: 0.5,
+        hoodL: 1.6, hoodH: 0.8, fSlant: 0.8, roofH: 1.5, roofL: 1.5, rSlant: 1.0, trunkH: 0.9, tailH: 0.7,
+        wheelSizeFront: 0.45, wheelSizeRear: 0.45, wheelTread: 0.1, wheelColor: '#ffffff',
+        headlights: 'Round_2', tailLights: 'Dual', mufflerType: 'Single',
+        bumperF: true, bumperR: true, bumperColor: '#dddddd', frontGrill: true, grillColor: '#111111',
+        rearGarnish: true, garnishColor: '#111111'
+    };
+
+    const container = new THREE.Group();
+    const visual = new THREE.Group(); 
+    container.add(visual);
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.4, metalness: 0.5 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 1, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+    const wheelMat = new THREE.MeshStandardMaterial({ color: p.wheelColor, metalness: 0.9, roughness: 0.1 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+    const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+    const tailMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const bumperMat = new THREE.MeshStandardMaterial({ color: p.bumperColor });
+    const grillMat = new THREE.MeshStandardMaterial({ color: p.grillColor });
+    const garnishMat = new THREE.MeshStandardMaterial({ color: p.garnishColor });
+    const mufflerMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 1.0 });
+
+    const halfL = p.totalLength / 2; const halfW = p.width / 2;
+    const faceAngle = Math.atan2(p.noseSlant, p.noseH);
+
+    const bShape = new THREE.Shape();
+    bShape.moveTo(halfL, 0); 
+    bShape.lineTo(halfL - p.noseSlant, p.noseH);
+    bShape.lineTo(halfL - p.hoodL, p.hoodH);
+    bShape.lineTo(halfL - p.hoodL - p.fSlant - p.roofL - p.rSlant, p.trunkH);
+    bShape.lineTo(-halfL, p.tailH);
+    bShape.lineTo(-halfL, 0);
+    bShape.closePath();
+    const bodyBase = new THREE.Mesh(new THREE.ExtrudeGeometry(bShape, { depth: p.width, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05 }), bodyMat);
+    bodyBase.position.set(0, p.lift, -halfW); bodyBase.castShadow = bodyBase.receiveShadow = true;
+    visual.add(bodyBase);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(p.roofL, 0.05, p.width), bodyMat);
+    roof.position.set(halfL - p.hoodL - p.fSlant - (p.roofL / 2), p.lift + p.roofH, 0); visual.add(roof);
+
+    const addG = (s, e) => {
+        const dx = e[0]-s[0], dy = e[1]-s[1], len = Math.sqrt(dx*dx+dy*dy);
+        const g = new THREE.Mesh(new THREE.BoxGeometry(len, 0.02, p.width*0.96), glassMat);
+        g.position.set(s[0]+dx/2, p.lift+s[1]+dy/2, 0); g.rotation.z = Math.atan2(dy, dx); visual.add(g);
+    };
+    addG([halfL-p.hoodL, p.hoodH], [halfL-p.hoodL-p.fSlant, p.roofH]);
+    addG([halfL-p.hoodL-p.fSlant-p.roofL, p.roofH], [halfL-p.hoodL-p.fSlant-p.roofL-p.rSlant, p.trunkH]);
+    
+    const sideShape = new THREE.Shape();
+    sideShape.moveTo(halfL - p.hoodL, p.hoodH);
+    sideShape.lineTo(halfL - p.hoodL - p.fSlant, p.roofH);
+    sideShape.lineTo(halfL - p.hoodL - p.fSlant - p.roofL, p.roofH);
+    sideShape.lineTo(halfL - p.hoodL - p.fSlant - p.roofL - p.rSlant, p.trunkH);
+    const sL = new THREE.Mesh(new THREE.ShapeGeometry(sideShape), glassMat); sL.position.set(0, p.lift, halfW + 0.01); visual.add(sL);
+    const sR = sL.clone(); sR.position.z = -halfW - 0.01; visual.add(sR);
+
+    const wheels = []; const wheelZ = halfW + 0.15 + p.wheelTread;
+    const wPosArr = [
+        {x:halfL-0.9, z:wheelZ, s:p.wheelSizeFront, side:1}, {x:halfL-0.9, z:-wheelZ, s:p.wheelSizeFront, side:-1}, 
+        {x:-halfL+0.9, z:wheelZ, s:p.wheelSizeRear, side:1}, {x:-halfL+0.9, z:-wheelZ, s:p.wheelSizeRear, side:-1}
+    ];
+    wPosArr.forEach(pos => {
+        const wg = new THREE.Group();
+        wg.add(new THREE.Mesh(new THREE.CylinderGeometry(pos.s, pos.s, 0.3, 32).rotateX(Math.PI/2), tireMat));
+        wg.add(new THREE.Mesh(new THREE.CylinderGeometry(pos.s*0.75, pos.s*0.75, 0.31, 32).rotateX(Math.PI/2), wheelMat));
+        for(let i=0; i<5; i++) {
+            const spoke = new THREE.Mesh(new THREE.BoxGeometry(pos.s*1.45, 0.08, 0.08), wheelMat);
+            spoke.position.z = 0.16 * pos.side; spoke.rotation.z = (i/5)*Math.PI; wg.add(spoke);
+        }
+        wg.position.set(pos.x, pos.s, pos.z); visual.add(wg); wheels.push(wg);
+    });
+
+    const hlRelY = p.noseH - 0.22; const hlX = halfL - (hlRelY / p.noseH) * p.noseSlant;
+    const createHL = (zSide) => {
+        const g = new THREE.Group();
+        if(p.headlights === 'Round_2') g.add(new THREE.Mesh(new THREE.CircleGeometry(0.18, 24).rotateY(Math.PI/2), lightMat));
+        else if(p.headlights === 'Square_2') g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.22).rotateY(Math.PI/2), lightMat));
+        else if(p.headlights === 'Square_4') { [0.12,-0.12].forEach(o=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(0.2,0.14).rotateY(Math.PI/2), lightMat); m.position.z=o; g.add(m); }); }
+        g.position.set(hlX+0.061, p.lift+hlRelY, zSide); g.rotation.z = faceAngle; visual.add(g);
+    };
+    createHL(halfW - 0.25); createHL(-halfW + 0.25);
+
+    if(p.frontGrill) {
+        const grill = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.25, p.width*0.45), grillMat);
+        grill.position.set(hlX+0.051, p.lift+hlRelY, 0); grill.rotation.z = faceAngle; visual.add(grill);
+    }
+
+    const tlY = p.lift + p.tailH - 0.25;
+    const createTL = (zSide) => {
+        const g = new THREE.Group();
+        if(p.tailLights === 'Round') g.add(new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), tailMat));
+        else if(p.tailLights === 'Dual') { [0.12,-0.12].forEach(o=>{ const m=new THREE.Mesh(new THREE.CircleGeometry(0.1, 24), tailMat); m.position.x=o; g.add(m); }); }
+        else g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.2), tailMat));
+        g.rotation.y = -Math.PI/2; g.position.set(-halfL-0.06, tlY, zSide); visual.add(g);
+    };
+    createTL(halfW - 0.25); createTL(-halfW + 0.25);
+    if(p.rearGarnish) {
+        const garn = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.2, p.width*0.45), garnishMat);
+        garn.position.set(-halfL - 0.051, tlY, 0); visual.add(garn);
+    }
+
+    if(p.bumperF) {
+        const bf = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, p.width + 0.2), bumperMat);
+        bf.position.set(halfL - (0.15/p.noseH)*p.noseSlant + 0.08, p.lift + 0.15, 0); bf.rotation.z = faceAngle; visual.add(bf);
+    }
+    if(p.bumperR) {
+        const br = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, p.width + 0.2), bumperMat);
+        br.position.set(-halfL - 0.08, p.lift + 0.1, 0); visual.add(br);
+    }
+
+    if(p.spoilerAngle > 0) {
+        const sS = new THREE.Shape(); sS.moveTo(0,0); sS.lineTo(p.spoilerAngle,0); sS.lineTo(0,0.15); sS.closePath();
+        const sp = new THREE.Mesh(new THREE.ExtrudeGeometry(sS, {depth:p.width, bevelEnabled:false}), bodyMat);
+        sp.position.set(halfL - 0.05, p.lift, -halfW); visual.add(sp);
+    }
+
+    const createM = (z) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 16).rotateZ(Math.PI/2), mufflerMat);
+        m.position.set(-halfL-0.1, p.lift-0.05, z); visual.add(m);
+    };
+    const mO = halfW - 0.4;
+    if(p.mufflerType === 'Single') createM(-mO); else if(p.mufflerType === 'Dual') { createM(-mO+0.1); createM(-mO-0.1); } else if(p.mufflerType === 'Double') { createM(-mO); createM(mO); }
+
+    visual.rotation.y = Math.PI / 2;
+
+    return { group: container, wheels, bodyMat, color: parseInt(p.color.replace('#','0x')), hp: 100, dead: false, design: p };
+}
+
+function createCar(color) { return createCarFromConfig(null, color); }
 
 const MAX_SPEED = 2.5, ACCEL = 0.08, FRICTION = 0.96, GRAVITY = 0.1, MAX_ZOOM_LEVEL = 2.0;
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 200, 1500);
-
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x87ceeb); scene.fog = new THREE.Fog(0x87ceeb, 200, 1500);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 8000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
-
-function updateCamera() {
-    const width = window.innerWidth, height = window.innerHeight, aspect = width / height;
-    renderer.setSize(width, height);
-    camera.aspect = aspect;
-    const baseFov = 75; 
-    if (aspect < 1) camera.fov = (2 * Math.atan(Math.tan((baseFov * Math.PI / 180) / 2) / aspect)) * 180 / Math.PI;
-    else camera.fov = baseFov;
-    camera.updateProjectionMatrix();
-}
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(window.devicePixelRatio); renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; document.body.appendChild(renderer.domElement);
+function updateCamera() { const w = window.innerWidth, h = window.innerHeight; renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix(); }
 window.addEventListener('resize', updateCamera); updateCamera();
-
 scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-const sun = new THREE.DirectionalLight(0xffffff, 1.5);
-sun.position.set(100, 150, 100); sun.castShadow = true;
-sun.shadow.camera.left = -100; sun.shadow.camera.right = 100;
-sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100;
-sun.shadow.mapSize.set(2048, 2048); scene.add(sun);
-
-const mirrorCamera = new THREE.PerspectiveCamera(40, 3.0, 0.1, 500);
-const mirrorRenderTarget = new THREE.WebGLRenderTarget(256, 85);
-const mirrorMaterial = new THREE.MeshBasicMaterial({ map: mirrorRenderTarget.texture });
-const mirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 0.08), mirrorMaterial);
-scene.add(mirrorMesh);
-
-function getHeight(x, z) {
-    return Math.sin(x * 0.04) * 5 + Math.cos(z * 0.03) * 7 + Math.sin((x + z) * 0.02) * 4;
-}
-
+const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(100, 150, 100); sun.castShadow = true;
+sun.shadow.camera.left = -100; sun.shadow.camera.right = 100; sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100; sun.shadow.mapSize.set(2048, 2048); scene.add(sun);
+const mirrorCamera = new THREE.PerspectiveCamera(40, 3.0, 0.1, 500); const mirrorRenderTarget = new THREE.WebGLRenderTarget(256, 85);
+const mirrorMaterial = new THREE.MeshBasicMaterial({ map: mirrorRenderTarget.texture }); const mirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 0.08), mirrorMaterial); scene.add(mirrorMesh);
+function getHeight(x, z) { return Math.sin(x * 0.04) * 5 + Math.cos(z * 0.03) * 7 + Math.sin((x + z) * 0.02) * 4; }
 const chunks = new Map();
 function updateChunks(px, pz) {
     const cx = Math.floor(px/400), cz = Math.floor(pz/400);
@@ -251,229 +382,127 @@ function updateChunks(px, pz) {
             const key = `${x},${z}`;
             if(!chunks.has(key)) {
                 const geo = new THREE.PlaneGeometry(400, 400, 40, 40); geo.rotateX(-Math.PI/2);
-                const pos = geo.attributes.position;
-                for(let i=0; i<pos.count; i++) pos.setY(i, getHeight(pos.getX(i)+x*400, pos.getZ(i)+z*400));
-                geo.computeVertexNormals();
-                const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x998877, roughness: 0.8, metalness: 0.2 }));
-                m.position.set(x*400, 0, z*400); m.receiveShadow = true;
-                scene.add(m); chunks.set(key, m);
+                const pos = geo.attributes.position; for(let i=0; i<pos.count; i++) pos.setY(i, getHeight(pos.getX(i)+x*400, pos.getZ(i)+z*400));
+                geo.computeVertexNormals(); const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x998877, roughness: 0.8, metalness: 0.2 }));
+                m.position.set(x*400, 0, z*400); m.receiveShadow = true; scene.add(m); chunks.set(key, m);
             }
         }
     }
 }
-
 const particles = [];
 function spawnDust(pos, isSpark = false, isSmoke = false, isSand = false) {
     let color = isSpark ? 0xffffff : 0xd2c08a; if (isSmoke) color = 0x333333; if (isSand) color = 0x8b7355;
     const p = new THREE.Mesh(new THREE.SphereGeometry(isSpark?0.2:(isSmoke?0.6:0.4), 4, 4), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6 }));
-    p.position.copy(pos);
-    const vel = isSmoke ? new THREE.Vector3((Math.random()-0.5)*0.2, 0.2+Math.random()*0.2, (Math.random()-0.5)*0.2) : new THREE.Vector3((Math.random()-0.5)*0.3, Math.random()*0.5 + 0.2, (Math.random()-0.5)*0.3);
+    p.position.copy(pos); const vel = isSmoke ? new THREE.Vector3((Math.random()-0.5)*0.2, 0.2+Math.random()*0.2, (Math.random()-0.5)*0.2) : new THREE.Vector3((Math.random()-0.5)*0.3, Math.random()*0.5 + 0.2, (Math.random()-0.5)*0.3);
     if (isSand) vel.set((Math.random()-0.5)*15, (Math.random()-0.2)*0.5, (Math.random()-0.5)*15);
-    p.userData = { life: 1.0, vel: vel, type: isSmoke ? 'smoke' : (isSand ? 'sand' : 'dust') };
-    scene.add(p); particles.push(p);
+    p.userData = { life: 1.0, vel: vel, type: isSmoke ? 'smoke' : (isSand ? 'sand' : 'dust') }; scene.add(p); particles.push(p);
 }
-
 function spawnDebris(pos, color, scale, count = 5) {
-    const geo = new THREE.BoxGeometry(scale, scale, scale);
-    const mat = new THREE.MeshStandardMaterial({ color });
+    const geo = new THREE.BoxGeometry(scale, scale, scale); const mat = new THREE.MeshStandardMaterial({ color });
     for(let i=0; i<count; i++) {
-        const p = new THREE.Mesh(geo, mat);
-        p.position.copy(pos).add(new THREE.Vector3((Math.random()-0.5)*2, (Math.random())*2, (Math.random()-0.5)*2));
-        p.userData = { life: 1.0+Math.random(), vel: new THREE.Vector3((Math.random()-0.5)*1.5, Math.random()*0.8+0.5, (Math.random()-0.5)*1.5), rot: new THREE.Vector3((Math.random()-0.5)*0.5, (Math.random()-0.5)*0.5, (Math.random()-0.5)*0.5), type: 'debris' };
+        const p = new THREE.Mesh(geo, mat); p.position.copy(pos).add(new THREE.Vector3((Math.random()-0.5)*2, Math.random()*2, (Math.random()-0.5)*2));
+        p.userData = { life: 1.0+Math.random(), vel: new THREE.Vector3((Math.random()-0.5)*1.5, Math.random()*0.8+0.5, (Math.random()-0.5)*1.5), rot: new THREE.Vector3(Math.random()*0.5, Math.random()*0.5, Math.random()*0.5), type: 'debris' };
         scene.add(p); particles.push(p);
     }
 }
 
-function createCar(color) {
-    const group = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.3 });
-    const glassMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.8, transparent: true, opacity: 0.85 });
-    const baseBody = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.7, 4.6), bodyMat);
-    baseBody.position.y = 0.85; baseBody.castShadow = true; baseBody.receiveShadow = true;
-    group.add(baseBody);
-    const cabin = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.6, 0.75, 4).rotateY(Math.PI/4), [glassMat, bodyMat, bodyMat]);
-    cabin.scale.set(1.0, 1.0, 1.3); cabin.position.set(0, 1.55, 0.25); cabin.castShadow = true; group.add(cabin);
-    const lightGeo = new THREE.BoxGeometry(0.6, 0.2, 0.1);
-    const headL = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xffffff })); headL.position.set(0.8, 0.9, -2.3); group.add(headL);
-    const headR = headL.clone(); headR.position.x = -0.8; group.add(headR);
-    const tailL = new THREE.Mesh(lightGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 })); tailL.position.set(0.8, 0.9, 2.3); group.add(tailL);
-    const tailR = tailL.clone(); tailR.position.x = -0.8; group.add(tailR);
-    const wheels = [];
-    [[1.35,0.6,-1.6],[-1.35,0.6,-1.6],[1.35,0.6,1.6],[-1.35,0.6,1.6]].forEach(off => {
-        const wheelGroup = new THREE.Group();
-        wheelGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,0.5,16).rotateZ(Math.PI/2), new THREE.MeshStandardMaterial({ color: 0x111111 })));
-        wheelGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,0.55,8).rotateZ(Math.PI/2), new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8 })));
-        wheelGroup.position.set(...off); wheelGroup.castShadow = true; group.add(wheelGroup); wheels.push(wheelGroup);
-    });
-    return { group, wheels, bodyMat, color, hp: 100, dead: false };
-}
-
-const player = { ...createCar(0xcc2222), speed: 0, lastSpeed: 0, vY: 0, yaw: 0, pitch: 0, roll: 0, impactV: new THREE.Vector3() };
-scene.add(player.group);
+let player = createCarFromConfig(carConfigs.player, 0xcc2222);
+player.speed = player.lastSpeed = player.vY = player.yaw = player.pitch = player.roll = 0; player.impactV = new THREE.Vector3(); scene.add(player.group);
 
 let enemies = [];
 const enemyColors = [0x00cc00, 0xcccc00, 0xcc22cc, 0xeeeeee, 0x2244cc, 0xcc5500];
-
 function spawnEnemyAt(x, z) {
-    const col = enemyColors[Math.floor(Math.random() * enemyColors.length)];
-    const ent = { ...createCar(col), speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, attackTimer: 0, impactV: new THREE.Vector3(), color: col };
+    const slotIdx = 1 + Math.floor(Math.random()*4);
+    const slotDesign = carConfigs['enemy'+slotIdx];
+    const col = enemyColors[Math.floor(Math.random()*enemyColors.length)];
+    const ent = { ...createCarFromConfig(slotDesign, col), speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, attackTimer: 0, impactV: new THREE.Vector3(), color: col };
     ent.group.position.set(x, 10, z); scene.add(ent.group); enemies.push(ent);
 }
-
 function updateEnemiesCount(count) {
     enemies.forEach(e => scene.remove(e.group)); enemies = [];
-    for(let i=0; i<count; i++) {
-        const angle = player.yaw + Math.PI + (Math.random()-0.5);
-        spawnEnemyAt(player.group.position.x + Math.sin(angle)*50, player.group.position.z + Math.cos(angle)*50);
-    }
+    for(let i=0; i<count; i++) { const a = player.yaw + Math.PI + (Math.random()-0.5); spawnEnemyAt(player.group.position.x + Math.sin(a)*60, player.group.position.z + Math.cos(a)*60); }
 }
 
-let gameState = 'TOP'; 
-let killCount = 0; playerMoney = 0; currentStage = 1; currentCargo = 0; maxCargo = 1; missionState = 'pickup'; stageEnemyCount = 0;
-
-// 砂嵐関連
-let sandstormIntensity = 0; let sandstormPeak = false; let sandstormCycleTimer = 0;
+let gameState = 'TOP', killCount = 0, playerMoney = 0, currentStage = 1, currentCargo = 0, maxCargo = 1, missionState = 'pickup', stageEnemyCount = 0;
+let sandstormIntensity = 0, sandstormPeak = false, sandstormCycleTimer = 0;
 const sandstormClouds = new THREE.Group(); scene.add(sandstormClouds);
-
-function createCloudTexture() {
-    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-    grad.addColorStop(0, 'rgba(90, 74, 58, 1)'); grad.addColorStop(1, 'rgba(90, 74, 58, 0)');
-    ctx.fillStyle = grad; ctx.fillRect(0, 0, 256, 256);
-    return new THREE.CanvasTexture(canvas);
-}
-const cloudTex = createCloudTexture();
-function createSandWall() {
-    sandstormClouds.clear();
-    const mat = new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, opacity: 0, fog: false, depthWrite: false });
-    for(let i=0; i<15; i++) {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(1200, 800), mat);
-        m.position.set((Math.random()-0.5)*1500, 300 + (Math.random()-0.5)*200, (Math.random()-0.5)*400);
-        m.rotation.z = Math.random() * Math.PI; sandstormClouds.add(m);
-    }
-}
+const cloudTex = (() => { const c=document.createElement('canvas'); c.width=c.height=256; const ctx=c.getContext('2d'); const g=ctx.createRadialGradient(128,128,0,128,128,128); g.addColorStop(0,'rgba(90,74,58,1)'); g.addColorStop(1,'rgba(90,74,58,0)'); ctx.fillStyle=g; ctx.fillRect(0,0,256,256); return new THREE.CanvasTexture(c); })();
+function createSandWall() { sandstormClouds.clear(); const mat=new THREE.MeshBasicMaterial({map:cloudTex,transparent:true,opacity:0,fog:false,depthWrite:false}); for(let i=0; i<15; i++){ const m=new THREE.Mesh(new THREE.PlaneGeometry(1200,800),mat); m.position.set((Math.random()-0.5)*1500,300+(Math.random()-0.5)*200,(Math.random()-0.5)*400); m.rotation.z=Math.random()*Math.PI; sandstormClouds.add(m); } }
 createSandWall();
 
-// === リプレイシステム ===
-let replayBuffer = [];
-let replayIndex = 0;
-let isReplaying = false;
-
+// --- リプレイ ---
+let replayBuffer = [], replayIndex = 0, isReplaying = false;
 function recordFrame() {
-    const frame = {
-        p: { pos: {x: player.group.position.x, y: player.group.position.y, z: player.group.position.z}, quat: {_x: player.group.quaternion.x, _y: player.group.quaternion.y, _z: player.group.quaternion.z, _w: player.group.quaternion.w}, speed: player.speed, hp: player.hp, dead: player.dead },
-        e: enemies.map(en => ({ pos: {x: en.group.position.x, y: en.group.position.y, z: en.group.position.z}, quat: {_x: en.group.quaternion.x, _y: en.group.quaternion.y, _z: en.group.quaternion.z, _w: en.group.quaternion.w}, speed: en.speed, hp: en.hp, dead: en.dead, color: en.color })),
-        sand: { intensity: sandstormIntensity, cycle: sandstormCycleTimer, peak: sandstormPeak },
-        target: {x: targetPos.x, y: targetPos.y, z: targetPos.z},
+    replayBuffer.push({
+        p: { pos: {x:player.group.position.x, y:player.group.position.y, z:player.group.position.z}, quat: {_x:player.group.quaternion.x, _y:player.group.quaternion.y, _z:player.group.quaternion.z, _w:player.group.quaternion.w}, hp: player.hp, dead: player.dead, speed: player.speed, design: player.design },
+        e: enemies.map(en => ({ pos: {x:en.group.position.x, y:en.group.position.y, z:en.group.position.z}, quat: {_x:en.group.quaternion.x, _y:en.group.quaternion.y, _z:en.group.quaternion.z, _w:en.group.quaternion.w}, hp: en.hp, dead: en.dead, speed: en.speed, color: en.color, design: en.design })),
+        sand: { intensity: sandstormIntensity, peak: sandstormPeak, cycle: sandstormCycleTimer },
+        target: {x:targetPos.x, y:targetPos.y, z:targetPos.z},
         mission: { type: missionState, cargo: currentCargo, max: maxCargo, stage: currentStage }
-    };
-    replayBuffer.push(frame);
+    });
 }
-
 function startReplay(data) {
     if (!data || data.length === 0) return;
-    replayBuffer = data; replayIndex = 0; isReplaying = true; gameState = 'PLAY'; 
-    const firstFrame = data[0]; currentStage = firstFrame.mission.stage;
+    replayBuffer = data; replayIndex = 0; isReplaying = true; gameState = 'PLAY'; const f = data[0];
     
-    // 【改善】車両の完全復旧
-    player.bodyMat.color.set(0xcc2222); player.group.visible = true;
-    player.group.position.set(firstFrame.p.pos.x, firstFrame.p.pos.y, firstFrame.p.pos.z);
-    if (!player.group.parent) scene.add(player.group);
-    smoothedCamPos.copy(player.group.position);
-
+    scene.remove(player.group); 
+    player = { ...createCarFromConfig(f.p.design, 0xcc2222), speed:0, lastSpeed:0, vY:0, yaw:0, pitch:0, roll:0, impactV: new THREE.Vector3() };
+    player.group.position.set(f.p.pos.x, f.p.pos.y, f.p.pos.z); scene.add(player.group); smoothedCamPos.copy(player.group.position);
+    
     enemies.forEach(e => scene.remove(e.group));
-    enemies = firstFrame.e.map(edata => {
-        const ent = { ...createCar(edata.color), dead: false, speed: 0, color: edata.color };
-        ent.group.position.set(edata.pos.x, edata.pos.y, edata.pos.z);
-        scene.add(ent.group); return ent;
-    });
-
-    document.getElementById('top-screen').style.display = 'none';
-    document.getElementById('result-screen').style.display = 'none';
-    document.getElementById('post-replay-screen').style.display = 'none';
-    document.getElementById('replay-ui').style.display = 'block';
-    document.getElementById('hud').style.display = 'flex';
-    document.getElementById('mission-info').style.display = 'block';
-    document.getElementById('zoomSlider').style.display = 'block'; 
-    initAudio();
-    const playlist = ['mh.mp3', 'as.mp3', 'fu.mp3', 'vp.mp3', 'pr.mp3'];
-    bgmAudio.src = playlist[(currentStage - 1) % playlist.length];
-    bgmAudio.play().catch(e => {});
+    enemies = f.e.map(ed => { const ent = { ...createCarFromConfig(ed.design, ed.color), dead: false, speed: 0, color: ed.color }; ent.group.position.set(ed.pos.x, ed.pos.y, ed.pos.z); scene.add(ent.group); return ent; });
+    
+    document.getElementById('top-screen').style.display='none'; document.getElementById('result-screen').style.display='none'; document.getElementById('post-replay-screen').style.display='none';
+    document.getElementById('replay-ui').style.display='block'; document.getElementById('hud').style.display='flex'; document.getElementById('mission-info').style.display='block'; document.getElementById('zoomSlider').style.display='block';
+    initAudio(); const pl=['mh.mp3','as.mp3','fu.mp3','vp.mp3','pr.mp3']; bgmAudio.src=pl[(f.mission.stage-1)%pl.length]; bgmAudio.play().catch(e=>{});
 }
-
 function exitReplay() { isReplaying = false; document.getElementById('replay-ui').style.display = 'none'; document.getElementById('post-replay-screen').style.display = 'flex'; }
-function saveCurrentReplay() { const blob = new Blob([JSON.stringify(replayBuffer)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `replay_stage${currentStage}.json`; a.click(); }
+function saveCurrentReplay() { const b = new Blob([JSON.stringify(replayBuffer)], {type:'application/json'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href=u; a.download=`replay_st${currentStage}.json`; a.click(); }
 
 document.getElementById('save-replay-btn').addEventListener('click', saveCurrentReplay);
 document.getElementById('post-replay-save').addEventListener('click', saveCurrentReplay);
 document.getElementById('gallery-btn').addEventListener('click', () => { document.getElementById('replay-loader').click(); });
-document.getElementById('replay-loader').addEventListener('change', (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const reader = new FileReader(); reader.onload = (f) => { startReplay(JSON.parse(f.target.result)); }; reader.readAsText(file);
-});
+document.getElementById('replay-loader').addEventListener('change', (e) => { const file = e.target.files[0]; if(!file)return; const r=new FileReader(); r.onload=(f)=>{startReplay(JSON.parse(f.target.result));}; r.readAsText(file); });
 document.getElementById('local-replay-btn').addEventListener('click', () => { startReplay([...replayBuffer]); });
 document.getElementById('post-replay-restart').addEventListener('click', () => { startReplay([...replayBuffer]); });
 document.getElementById('exit-replay-btn').addEventListener('click', exitReplay);
-document.getElementById('post-replay-exit').addEventListener('click', () => {
-    document.getElementById('post-replay-screen').style.display = 'none';
-    if (replayBuffer.length > 0 && (gameState === 'CLEAR' || gameState === 'PLAY')) { document.getElementById('result-screen').style.display = 'flex'; gameState = 'CLEAR'; }
-    else document.getElementById('top-screen').style.display = 'flex';
-    document.getElementById('hud').style.display = 'none'; document.getElementById('mission-info').style.display = 'none';
-});
+document.getElementById('post-replay-exit').addEventListener('click', () => { document.getElementById('post-replay-screen').style.display = 'none'; if(replayBuffer.length>0&&(gameState==='CLEAR'||gameState==='PLAY')){ document.getElementById('result-screen').style.display='flex'; gameState='CLEAR'; } else document.getElementById('top-screen').style.display='flex'; document.getElementById('hud').style.display='none'; document.getElementById('mission-info').style.display='none'; });
 
-// =======================
+let bgmEnabled = true, bgmVolume = 0.5; const bgmAudio = new Audio(); bgmAudio.loop = true;
+function updateBgmVolume() { if(!bgmEnabled){ bgmAudio.volume=0; if(!bgmAudio.paused)bgmAudio.pause(); } else { bgmAudio.volume=bgmVolume; if(bgmAudio.paused&&gameState==='PLAY')bgmAudio.play().catch(e=>{}); } }
 
-let bgmEnabled = true; let bgmVolume = 0.5; const bgmAudio = new Audio(); bgmAudio.loop = true; bgmAudio.volume = bgmVolume; 
-function updateBgmVolume() { if (!bgmEnabled) { bgmAudio.volume = 0; if (!bgmAudio.paused) bgmAudio.pause(); } else { bgmAudio.volume = bgmVolume; if (bgmAudio.paused && gameState === 'PLAY') bgmAudio.play().catch(e => {}); } }
-
-const beaconGeo = new THREE.CylinderGeometry(40, 40, 5000, 32);
 const beaconRedMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, fog: false });
 const beaconGreenMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5, fog: false });
-const beaconMesh = new THREE.Mesh(beaconGeo, beaconRedMat); beaconMesh.position.y = 2500; scene.add(beaconMesh);
-
+const beaconMesh = new THREE.Mesh(new THREE.CylinderGeometry(40,40,5000,32), beaconRedMat); beaconMesh.position.y = 2500; scene.add(beaconMesh);
 let targetPos = new THREE.Vector3();
 function setNextObjective(type) {
-    missionState = type; const angle = Math.random() * Math.PI * 2; 
-    targetPos.set(player.group.position.x + Math.sin(angle) * 5250, 0, player.group.position.z + Math.cos(angle) * 5250);
-    if (type === 'pickup') { beaconMesh.material = beaconRedMat; document.getElementById('mission-type').innerText = "PICKUP (RED BEAM)"; document.getElementById('mission-type').style.color = "#ff3333"; }
-    else { beaconMesh.material = beaconGreenMat; document.getElementById('mission-type').innerText = "DELIVER (GREEN BEAM)"; document.getElementById('mission-type').style.color = "#33ff33"; }
-    document.getElementById('cargo-count').innerText = currentCargo; document.getElementById('cargo-max').innerText = maxCargo; document.getElementById('stage-num').innerText = currentStage;
+    missionState = type; const a = Math.random()*Math.PI*2; targetPos.set(player.group.position.x + Math.sin(a)*5250, 0, player.group.position.z + Math.cos(a)*5250);
+    if(type==='pickup'){ beaconMesh.material=beaconRedMat; document.getElementById('mission-type').innerText="PICKUP (RED BEAM)"; document.getElementById('mission-type').style.color="#ff3333"; }
+    else { beaconMesh.material=beaconGreenMat; document.getElementById('mission-type').innerText="DELIVER (GREEN BEAM)"; document.getElementById('mission-type').style.color="#33ff33"; }
+    document.getElementById('cargo-count').innerText=currentCargo; document.getElementById('cargo-max').innerText=maxCargo; document.getElementById('stage-num').innerText=currentStage;
 }
-
 function initStage(stage) {
-    currentStage = stage; currentCargo = 0; killCount = 0; gameState = 'PLAY'; 
-    replayBuffer = []; isReplaying = false;
-    document.getElementById('hud').style.display = 'flex'; document.getElementById('mission-info').style.display = 'block'; document.getElementById('fullscreenButton').style.display = 'block';
-    if(window.matchMedia("(pointer: coarse)").matches) document.getElementById('zoomSlider').style.display = 'block';
-    if (stage >= 10) maxCargo = 3; else if (stage >= 4) maxCargo = 2; else maxCargo = 1;
-    stageEnemyCount = stage === 1 ? 1 : (stage === 2 ? 1 : (stage === 3 ? 2 : 3));
+    currentStage = stage; currentCargo = killCount = 0; gameState = 'PLAY'; replayBuffer = []; isReplaying = false;
+    scene.remove(player.group); player = { ...createCarFromConfig(carConfigs.player, 0xcc2222), speed:0, lastSpeed:0, vY:0, yaw:0, pitch:0, roll:0, impactV: new THREE.Vector3() }; scene.add(player.group);
+    document.getElementById('hud').style.display='flex'; document.getElementById('mission-info').style.display='block'; document.getElementById('fullscreenButton').style.display='block';
+    if(window.matchMedia("(pointer: coarse)").matches) document.getElementById('zoomSlider').style.display='block';
+    maxCargo = stage >= 10 ? 3 : (stage >= 4 ? 2 : 1); stageEnemyCount = stage <= 2 ? 1 : (stage === 3 ? 2 : 3);
     updateEnemiesCount(stageEnemyCount); setNextObjective('pickup'); showMsg("STAGE " + stage + " START");
-    if (bgmEnabled) { const playlist = ['mh.mp3', 'as.mp3', 'fu.mp3', 'vp.mp3', 'pr.mp3']; bgmAudio.src = playlist[(stage - 1) % playlist.length]; bgmAudio.play().catch(e => {}); }
+    if(bgmEnabled){ const pl=['mh.mp3','as.mp3','fu.mp3','vp.mp3','pr.mp3']; bgmAudio.src=pl[(stage-1)%pl.length]; bgmAudio.play().catch(e=>{}); }
 }
+function showMsg(t, dur=3000){ const m=document.getElementById('msg'); m.innerText=t; m.style.display='block'; setTimeout(()=>m.style.display='none',dur); }
+function showResultScreen(){ gameState='CLEAR'; document.getElementById('result-screen').style.display='flex'; bgmAudio.pause(); if(pGain){pGain.gain.cancelScheduledValues(audioCtx.currentTime);pGain.gain.setValueAtTime(0,audioCtx.currentTime);} playSFX('jin.mp3'); playerMoney+=1000+killCount*100; document.getElementById('p-money').innerText=playerMoney; document.getElementById('kill-disp').innerText=killCount; document.getElementById('money-bonus').innerText=killCount*100; document.getElementById('total-money-disp').innerText=playerMoney; }
 
-function showMsg(text, duration = 3000) { const m = document.getElementById('msg'); m.innerText = text; m.style.display = 'block'; setTimeout(() => { m.style.display = 'none'; }, duration); }
-function showResultScreen() {
-    gameState = 'CLEAR'; const screen = document.getElementById('result-screen'); bgmAudio.pause();
-    if(pGain) { pGain.gain.cancelScheduledValues(audioCtx.currentTime); pGain.gain.setValueAtTime(0, audioCtx.currentTime); }
-    playSFX('jin.mp3'); const missionReward = 1000, killBonus = killCount * 100; playerMoney += missionReward + killBonus;
-    document.getElementById('p-money').innerText = playerMoney; document.getElementById('kill-disp').innerText = killCount; document.getElementById('money-bonus').innerText = killBonus; document.getElementById('total-money-disp').innerText = playerMoney; screen.style.display = 'flex';
-}
-
-document.getElementById('next-btn').addEventListener('click', () => { document.getElementById('result-screen').style.display = 'none'; initStage(parseInt(currentStage, 10) + 1); });
-document.getElementById('start-btn').addEventListener('click', () => { document.getElementById('top-screen').style.display = 'none'; initAudio(); initStage(parseInt(document.getElementById('stage-choice').value, 10)); });
-document.getElementById('gear-btn').addEventListener('click', () => { document.getElementById('top-screen').style.display = 'none'; document.getElementById('settings-screen').style.display = 'flex'; });
-document.getElementById('settings-close').addEventListener('click', () => { document.getElementById('settings-screen').style.display = 'none'; document.getElementById('top-screen').style.display = 'flex'; });
+document.getElementById('next-btn').addEventListener('click', () => { document.getElementById('result-screen').style.display='none'; initStage(parseInt(currentStage,10)+1); });
+document.getElementById('start-btn').addEventListener('click', () => { document.getElementById('top-screen').style.display='none'; initAudio(); initStage(parseInt(document.getElementById('stage-choice').value, 10)); });
+document.getElementById('gear-btn').addEventListener('click', () => { document.getElementById('top-screen').style.display='none'; document.getElementById('settings-screen').style.display='flex'; });
+document.getElementById('settings-close').addEventListener('click', () => { document.getElementById('settings-screen').style.display='none'; document.getElementById('top-screen').style.display='flex'; });
 document.getElementById('bgm-toggle').addEventListener('change', (e) => { bgmEnabled = e.target.checked; updateBgmVolume(); });
 document.getElementById('bgm-volume').addEventListener('input', (e) => { bgmVolume = parseFloat(e.target.value); updateBgmVolume(); });
 
 let audioCtx, pOsc, pGain;
-function initAudio() { 
-    if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; }
-    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } 
-    pOsc = audioCtx.createOscillator(); pOsc.type = 'sawtooth'; pGain = audioCtx.createGain(); pGain.gain.value = 0; pOsc.connect(pGain).connect(audioCtx.destination); pOsc.start();
-}
-function playSFX(filename) { if (!audioCtx) initAudio(); if (!audioCtx) return; const source = audioCtx.createBufferSource(); fetch(filename).then(r => r.arrayBuffer()).then(b => audioCtx.decodeAudioData(b)).then(d => { source.buffer = d; source.connect(audioCtx.destination); source.start(0); }).catch(e => {}); }
+function initAudio() { if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; } try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } pOsc = audioCtx.createOscillator(); pOsc.type = 'sawtooth'; pGain = audioCtx.createGain(); pGain.gain.value = 0; pOsc.connect(pGain).connect(audioCtx.destination); pOsc.start(); }
+function playSFX(f) { if (!audioCtx) initAudio(); if (!audioCtx) return; const s = audioCtx.createBufferSource(); fetch(f).then(r => r.arrayBuffer()).then(b => audioCtx.decodeAudioData(b)).then(d => { s.buffer = d; s.connect(audioCtx.destination); s.start(0); }).catch(e => {}); }
 
 const keys = {}; window.addEventListener("keydown", e => { keys[e.code] = true; if(gameState==='PLAY') initAudio(); }); window.addEventListener("keyup", e => { keys[e.code] = false; });
 let lookYaw = 0, lookPitch = 0, zoomLevel = 0.8, smoothedCamPos = new THREE.Vector3();
@@ -493,70 +522,48 @@ function animate() {
     if (gameState === 'CLEAR' && !isReplaying) { renderer.render(scene, camera); return; }
 
     const now = audioCtx ? audioCtx.currentTime : 0;
-    const timeFactor = Date.now() * 0.0001; 
-    let skyL = 0.4 + Math.sin(timeFactor) * 0.3;
-
     if (isReplaying) {
         const f = replayBuffer[replayIndex]; if (!f) { exitReplay(); return; }
-        const prevF = replayIndex > 0 ? replayBuffer[replayIndex - 1] : null;
-        if (prevF && f.p.hp < prevF.p.hp) { playSFX(f.p.hp <= 0 ? 'crash.mp3' : 'ecrs.mp3'); if (f.p.hp <= 0) spawnDebris(player.group.position, player.color, 1.5, 15); }
-        // 【修正】JSONデータの座標と回転を個別にセット
-        player.group.position.set(f.p.pos.x, f.p.pos.y, f.p.pos.z);
-        player.group.quaternion.set(f.p.quat._x, f.p.quat._y, f.p.quat._z, f.p.quat._w);
+        const prevF = replayIndex > 0 ? replayBuffer[replayIndex-1] : null;
+        if (prevF && f.p.hp < prevF.p.hp) { playSFX(f.p.hp <= 0 ? 'crash.mp3' : 'ecrs.mp3'); if(f.p.hp <= 0) spawnDebris(player.group.position, player.color, 1.5, 15); }
+        player.group.position.set(f.p.pos.x, f.p.pos.y, f.p.pos.z); player.group.quaternion.set(f.p.quat._x, f.p.quat._y, f.p.quat._z, f.p.quat._w);
         player.hp = f.p.hp; player.dead = f.p.dead; player.speed = f.p.speed;
-        if (!player.dead) player.bodyMat.color.set(0xcc2222); else player.bodyMat.color.set(0);
-        sandstormIntensity = f.sand.intensity; sandstormCycleTimer = f.sand.cycle; sandstormPeak = f.sand.peak;
+        
+        // 記録されたデザインから色をセット
+        const pCol = (f.p.design ? f.p.design.color : 0xcc2222);
+        player.bodyMat.color.set(!player.dead ? pCol : 0);
+        
+        sandstormIntensity = f.sand.intensity; sandstormPeak = f.sand.peak; sandstormCycleTimer = f.sand.cycle;
         targetPos.set(f.target.x, f.target.y, f.target.z);
-        missionState = f.mission.type; currentCargo = f.mission.cargo; maxCargo = f.mission.max; currentStage = f.mission.stage;
-        document.getElementById('p-hp').innerText = Math.floor(player.hp); document.getElementById('cargo-count').innerText = currentCargo; document.getElementById('cargo-max').innerText = maxCargo; document.getElementById('stage-num').innerText = currentStage;
-        document.getElementById('replay-info').innerText = `REPLAY - STAGE ${currentStage} (${Math.floor(replayIndex/60)}s / ${Math.floor(replayBuffer.length/60)}s)`;
-        f.e.forEach((edata, idx) => { 
-            if (enemies[idx]) {
-                const prevE = prevF ? prevF.e[idx] : null;
-                if (prevE && edata.dead && !prevE.dead) { enemies[idx].bodyMat.color.set(0); spawnDebris(new THREE.Vector3(edata.pos.x, edata.pos.y, edata.pos.z), edata.color, 1.5, 15); playSFX('crash.mp3'); }
-                else if (prevE && edata.hp < prevE.hp) { playSFX('crs.mp3'); for (let i=0; i<5; i++) spawnDust(enemies[idx].group.position, true); }
-                if (!edata.dead) enemies[idx].bodyMat.color.set(edata.color); else enemies[idx].bodyMat.color.set(0);
-                enemies[idx].group.position.set(edata.pos.x, edata.pos.y, edata.pos.z);
-                enemies[idx].group.quaternion.set(edata.quat._x, edata.quat._y, edata.quat._z, edata.quat._w);
-                enemies[idx].speed = edata.speed; enemies[idx].dead = edata.dead; 
-            } 
-        });
+        document.getElementById('p-hp').innerText = Math.floor(player.hp); document.getElementById('cargo-count').innerText = f.mission.cargo; document.getElementById('stage-num').innerText = f.mission.stage;
+        document.getElementById('replay-info').innerText = `REPLAY - STAGE ${f.mission.stage} (${Math.floor(replayIndex/60)}s / ${Math.floor(replayBuffer.length/60)}s)`;
+        f.e.forEach((ed, i) => { if(enemies[i]) { 
+            const pe = prevF ? prevF.e[i] : null;
+            if (pe && ed.dead && !pe.dead) { enemies[i].bodyMat.color.set(0); spawnDebris(new THREE.Vector3(ed.pos.x, ed.pos.y, ed.pos.z), ed.color, 1.5, 15); playSFX('crash.mp3'); }
+            else if (pe && ed.hp < pe.hp) { playSFX('crs.mp3'); for(let k=0;k<5;k++) spawnDust(enemies[i].group.position, true); }
+            const eCol = (ed.design ? ed.design.color : ed.color);
+            if(!ed.dead) enemies[i].bodyMat.color.set(eCol); else enemies[i].bodyMat.color.set(0);
+            enemies[i].group.position.set(ed.pos.x, ed.pos.y, ed.pos.z); enemies[i].group.quaternion.set(ed.quat._x, ed.quat._y, ed.quat._z, ed.quat._w); enemies[i].speed = ed.speed; enemies[i].dead = ed.dead;
+        }});
         replayIndex++; if (replayIndex >= replayBuffer.length) exitReplay();
     } else {
-        if (currentStage >= 5) {
-            sandstormCycleTimer += 1/60;
-            if (sandstormCycleTimer > 15 && sandstormCycleTimer <= 25) sandstormIntensity = (sandstormCycleTimer - 15) / 10;
-            else if (sandstormCycleTimer > 25 && sandstormCycleTimer <= 30) { if (!sandstormPeak) { sandstormPeak = true; showMsg("SANDSTORM PEAK!", 2000); } sandstormIntensity = 1.0; }
-            else if (sandstormCycleTimer > 30) { sandstormCycleTimer = 0; sandstormPeak = false; }
-            else sandstormIntensity = THREE.MathUtils.lerp(sandstormIntensity, 0, 0.01);
-        } else sandstormIntensity = 0;
+        if (currentStage >= 5) { sandstormCycleTimer += 1/60; if (sandstormCycleTimer > 15 && sandstormCycleTimer <= 25) sandstormIntensity = (sandstormCycleTimer-15)/10; else if (sandstormCycleTimer > 25 && sandstormCycleTimer <= 30) { if(!sandstormPeak){sandstormPeak=true; showMsg("SANDSTORM PEAK!", 2000);} sandstormIntensity=1.0; } else if (sandstormCycleTimer > 30) { sandstormCycleTimer=0; sandstormPeak=false; } else sandstormIntensity = THREE.MathUtils.lerp(sandstormIntensity, 0, 0.01); } else sandstormIntensity = 0;
         recordFrame();
     }
 
-    const stormColor = new THREE.Color(0x8b7355).lerp(new THREE.Color(0x87ceeb), 1.0 - sandstormIntensity);
-    scene.background.copy(stormColor);
-    if (scene.fog) { scene.fog.color.copy(stormColor); scene.fog.near = THREE.MathUtils.lerp(200, sandstormPeak ? 2 : 15, sandstormIntensity); scene.fog.far = THREE.MathUtils.lerp(1500, sandstormPeak ? 25 : 100, sandstormIntensity); }
+    const stormCol = new THREE.Color(0x8b7355).lerp(new THREE.Color(0x87ceeb), 1.0 - sandstormIntensity);
+    scene.background.copy(stormCol); if (scene.fog) { scene.fog.color.copy(stormCol); scene.fog.near = THREE.MathUtils.lerp(200, sandstormPeak?2:15, sandstormIntensity); scene.fog.far = THREE.MathUtils.lerp(1500, sandstormPeak?25:100, sandstormIntensity); }
     sandstormClouds.visible = !sandstormPeak && sandstormIntensity > 0.1;
-    if (sandstormClouds.visible) {
-        const dirToTarget = new THREE.Vector3().subVectors(targetPos, player.group.position).normalize();
-        sandstormClouds.position.copy(player.group.position).add(dirToTarget.multiplyScalar(400));
-        sandstormClouds.lookAt(player.group.position); sandstormClouds.children.forEach(m => m.material.opacity = sandstormIntensity * 0.8);
-    }
+    if (sandstormClouds.visible) { const d = new THREE.Vector3().subVectors(targetPos, player.group.position).normalize(); sandstormClouds.position.copy(player.group.position).add(d.multiplyScalar(400)); sandstormClouds.lookAt(player.group.position); sandstormClouds.children.forEach(m => m.material.opacity = sandstormIntensity * 0.8); }
     beaconMesh.visible = (sandstormIntensity < 0.8);
     const noise = document.getElementById('noise-overlay'); noise.style.opacity = sandstormIntensity * 0.4;
     if (sandstormIntensity > 0) noise.style.backgroundPosition = `${Math.random()*1000}px ${Math.random()*1000}px`;
-    if (sandstormIntensity > 0.4 && Math.random() < sandstormIntensity) {
-        const camDir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
-        spawnDust(camera.position.clone().add(camDir.multiplyScalar(3)).add(new THREE.Vector3((Math.random()-0.5)*15, (Math.random()-0.5)*15, (Math.random()-0.5)*15)), false, false, true);
-    }
+    if (sandstormIntensity > 0.4 && Math.random() < sandstormIntensity) { const cd = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion); spawnDust(camera.position.clone().add(cd.multiplyScalar(3)).add(new THREE.Vector3((Math.random()-0.5)*15, (Math.random()-0.5)*15, (Math.random()-0.5)*15)), false, false, true); }
     beaconMesh.position.set(targetPos.x, getHeight(targetPos.x, targetPos.z) + 2495, targetPos.z);
     
     if (!isReplaying) {
-        const distToTarget = player.group.position.distanceTo(targetPos);
-        if (distToTarget < 30) {
-            if (missionState === 'pickup') { showMsg("CARGO PICKED UP!"); player.hp = 100; setNextObjective('deliver'); }
-            else { currentCargo++; player.hp = 100; if (currentCargo >= maxCargo) showResultScreen(); else { showMsg("Next one!"); targetPos.set(999999, 999999, 999999); setTimeout(() => setNextObjective('pickup'), 1500); } }
-        }
+        const d2t = player.group.position.distanceTo(targetPos);
+        if (d2t < 30) { if (missionState === 'pickup') { showMsg("CARGO PICKED UP!"); player.hp = 100; setNextObjective('deliver'); } else { currentCargo++; player.hp = 100; if (currentCargo >= maxCargo) showResultScreen(); else { showMsg("Next one!"); targetPos.set(999999, 999999, 999999); setTimeout(() => setNextObjective('pickup'), 1500); } } }
     }
 
     updateChunks(player.group.position.x, player.group.position.z);
@@ -572,12 +579,9 @@ function animate() {
 
     const entities = [player, ...enemies];
     if (!isReplaying) {
-        if (enemies.length < stageEnemyCount) {
-            const sa = player.yaw + Math.PI + (Math.random()-0.5); spawnEnemyAt(player.group.position.x + Math.sin(sa)*70, player.group.position.z + Math.cos(sa)*70);
-        }
+        if (enemies.length < stageEnemyCount) { const sa = player.yaw + Math.PI + (Math.random()-0.5); spawnEnemyAt(player.group.position.x + Math.sin(sa)*70, player.group.position.z + Math.cos(sa)*70); }
         entities.forEach(ent => {
-            const isP = (ent === player); if (ent.dead) ent.speed *= 0.95;
-            if (!isP && ent.dead && ent.group.parent === null) return;
+            const isP = (ent === player); if (ent.dead) ent.speed *= 0.95; if (!isP && ent.dead && ent.group.parent === null) return;
             ent.lastSpeed = ent.speed; let turnInput = 0;
             if(isP && !ent.dead) {
                 if(keys.KeyW) ent.speed += ACCEL; if(keys.KeyS) ent.speed -= ACCEL;
@@ -585,10 +589,10 @@ function animate() {
                 if (touchLeftId !== -1) { const dy = touchState.left.currentY - touchState.left.startY, dx = touchState.left.currentX - touchState.left.startX; if (dy < -15) ent.speed += ACCEL * 1.5; else if (dy > 20) ent.speed -= ACCEL; if (dx < -20) { ent.yaw += 0.05; turnInput = 1; } else if (dx > 20) { ent.yaw -= 0.05; turnInput = -1; } }
                 ent.speed *= FRICTION;
             } else if (!isP && !ent.dead) {
-                enemies.forEach(other => { if (ent === other || other.dead) return; const d = ent.group.position.distanceTo(other.group.position); if (d < 5.5) ent.group.position.add(new THREE.Vector3().subVectors(ent.group.position, other.group.position).normalize().multiplyScalar(0.12)); });
-                const tpVec = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
+                enemies.forEach(other => { if (ent === other || other.dead) return; if (ent.group.position.distanceTo(other.group.position) < 5.5) ent.group.position.add(new THREE.Vector3().subVectors(ent.group.position, other.group.position).normalize().multiplyScalar(0.12)); });
+                const tpv = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
                 ent.speed = THREE.MathUtils.lerp(ent.speed, Math.abs(player.speed) + 0.5, 0.02);
-                let dy = (Math.atan2(tpVec.x, tpVec.z) + Math.PI) - ent.yaw; while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
+                let dy = (Math.atan2(tpv.x, tpv.z) + Math.PI) - ent.yaw; while(dy < -Math.PI) dy += Math.PI*2; while(dy > Math.PI) dy -= Math.PI*2;
                 const step = dy * 0.025; ent.yaw += step; turnInput = THREE.MathUtils.clamp(step * 20, -1, 1);
             }
             const fw = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
@@ -596,10 +600,8 @@ function animate() {
             const hF = getHeight(ent.group.position.x + fw.x*2.3, ent.group.position.z + fw.z*2.3), hB = getHeight(ent.group.position.x - fw.x*2.3, ent.group.position.z - fw.z*2.3);
             const rw = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
             const hR = getHeight(ent.group.position.x + rw.x*1.25, ent.group.position.z + rw.z*1.25), hL = getHeight(ent.group.position.x - rw.x*1.25, ent.group.position.z - rw.z*1.25);
-            const avgY = (hF + hB + hR + hL) / 4 + 0.12; 
-            if(isP) { ent.vY -= GRAVITY; ent.group.position.y += ent.vY; if(ent.group.position.y <= avgY) { ent.group.position.y = avgY; ent.vY = 0; } } else ent.group.position.y = avgY;
-            ent.pitch = THREE.MathUtils.lerp(ent.pitch, Math.atan2(hF - hB, 4.6), 0.1);
-            ent.roll = THREE.MathUtils.lerp(ent.roll, Math.atan2(hR - hL, 2.5) - turnInput*Math.abs(ent.speed)*0.06, 0.1);
+            const avgY = (hF + hB + hR + hL) / 4 + 0.12; if(isP) { ent.vY -= GRAVITY; ent.group.position.y += ent.vY; if(ent.group.position.y <= avgY) { ent.group.position.y = avgY; ent.vY = 0; } } else ent.group.position.y = avgY;
+            ent.pitch = THREE.MathUtils.lerp(ent.pitch, Math.atan2(hF - hB, 4.6), 0.1); ent.roll = THREE.MathUtils.lerp(ent.roll, Math.atan2(hR - hL, 2.5) - turnInput*Math.abs(ent.speed)*0.06, 0.1);
             ent.group.quaternion.setFromEuler(new THREE.Euler(ent.pitch, ent.yaw, ent.roll, 'YXZ'));
         });
         if (!player.dead) {
@@ -610,10 +612,7 @@ function animate() {
                     if (new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)).dot(dir) > 0.3) {
                         enemy.hp -= 20; player.hp += 5; enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3'); for (let i=0; i<5; i++) spawnDust(enemy.group.position, true);
                         if(enemy.hp <= 0) { enemy.dead = true; killCount++; player.hp += 10; enemy.bodyMat.color.set(0); spawnDebris(enemy.group.position, 0, 0.8, 30); playSFX('crash.mp3'); setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000); }
-                    } else { 
-                        player.hp -= 5; player.impactV.add(dir.multiplyScalar(-0.8)); spawnDust(player.group.position, false); playSFX('ecrs.mp3'); 
-                        (document.getElementById('redFlash')).style.opacity = '0.6'; setTimeout(() => (document.getElementById('redFlash')).style.opacity = '0', 100); 
-                    }
+                    } else { player.hp -= 5; player.impactV.add(dir.multiplyScalar(-0.8)); spawnDust(player.group.position, false); playSFX('ecrs.mp3'); document.getElementById('redFlash').style.opacity = '0.6'; setTimeout(() => document.getElementById('redFlash').style.opacity = '0', 100); }
                     document.getElementById('p-hp').innerText = Math.floor(Math.max(0, player.hp));
                     if (player.hp <= 0) { player.dead = true; player.speed = 0; document.getElementById('msg').innerText = "GAME OVER"; document.getElementById('msg').style.display = 'block'; playSFX('crash.mp3'); setTimeout(() => location.reload(), 5000); }
                 }
@@ -623,8 +622,8 @@ function animate() {
 
     entities.forEach(ent => {
         if (ent.dead && Math.random() > 0.8) spawnDust(ent.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)), false, true);
-        const avgY = getHeight(ent.group.position.x, ent.group.position.z) + 0.12;
-        if(!ent.dead && Math.abs(ent.speed) > 0.4 && ent.group.position.y <= avgY + 0.5) {
+        const ay = getHeight(ent.group.position.x, ent.group.position.z) + 0.12;
+        if(!ent.dead && Math.abs(ent.speed) > 0.4 && ent.group.position.y <= ay + 0.5) {
             [[1.35,0,-1.6],[-1.35,0,-1.6],[1.35,0,1.6],[-1.35,0,1.6]].forEach(off => {
                 if(Math.random() > 0.8) spawnDust(new THREE.Vector3(...off).applyQuaternion(ent.group.quaternion).add(ent.group.position));
             });
@@ -633,10 +632,9 @@ function animate() {
 
     const cp = new THREE.Vector3(0, 2.4, 0.5), tp = new THREE.Vector3(0, 4.5, 12), dp = new THREE.Vector3(0, 70, 150);
     let co = (zoomLevel <= 1.0) ? new THREE.Vector3().lerpVectors(cp, tp, zoomLevel) : new THREE.Vector3().lerpVectors(tp, dp, Math.min(1.0, (zoomLevel - 1.0)/(MAX_ZOOM_LEVEL - 1.0)));
-    const bq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, isReplaying ? 0 : player.yaw, 0)); 
+    const bq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, isReplaying ? 0 : player.yaw, 0));
     const mq = new THREE.Quaternion().setFromEuler(new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ'));
-    let fq; 
-    if (zoomLevel <= 1.0) fq = new THREE.Quaternion().slerpQuaternions(player.group.quaternion.clone(), bq, zoomLevel).multiply(mq);
+    let fq; if (zoomLevel <= 1.0) fq = new THREE.Quaternion().slerpQuaternions(player.group.quaternion.clone(), bq, zoomLevel).multiply(mq);
     else { const cpl = player.group.position.clone().add(co.clone().applyQuaternion(bq)), tc = new THREE.Camera(); tc.position.copy(cpl); tc.lookAt(player.group.position); fq = tc.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, lookYaw, 0))); }
     smoothedCamPos.lerp(player.group.position.clone().add(co.clone().applyQuaternion(fq)), zoomLevel < 0.15 ? 1.0 : (zoomLevel < 1.0 ? 0.2 : 0.3));
     camera.position.copy(smoothedCamPos); camera.quaternion.copy(fq);
