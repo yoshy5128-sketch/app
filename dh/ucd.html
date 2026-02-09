@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ultimate Car Designer - Game Ready Edition</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        #output-area {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 35%; background: rgba(0,0,0,0.95); 
+            color: #0f0; font-family: monospace; padding: 15px; box-sizing: border-box; display: none; 
+            overflow-y: scroll; border-top: 2px solid #ff9900; z-index: 2000;
+        }
+        .close-btn { position: absolute; top: 10px; right: 20px; color: #fff; cursor: pointer; background: #c00; padding: 5px 12px; border-radius: 4px; }
+        .lil-gui { --width: 320px; }
+    </style>
+</head>
+<body>
+
+<div id="output-area">
+    <div class="close-btn" onclick="document.getElementById('output-area').style.display='none'">CLOSE</div>
+    <pre id="code-output"></pre>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lil-gui@0.17.0/dist/lil-gui.umd.min.js"></script>
+
+<script>
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050505);
+    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(10, 5, 10);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(10, 20, 10); scene.add(sun);
+    
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    scene.add(new THREE.GridHelper(20, 20, 0x444444, 0x222222));
+
+    const params = {
+        color: '#cc2222',
+        width: 2.2,
+        totalLength: 5.0,
+        lift: 0.4,
+        noseH: 0.6,
+        noseSlant: 0.2,      
+        spoilerAngle: 0.5,   
+        hoodL: 1.6,
+        hoodH: 0.8,
+        fSlant: 0.8,
+        roofH: 1.5,
+        roofL: 1.5,
+        rSlant: 1.0,
+        trunkH: 0.9,
+        tailH: 0.7,
+        wheelSizeFront: 0.45,
+        wheelSizeRear: 0.45,
+        wheelTread: 0.1,
+        wheelColor: '#ffffff',
+        headlights: 'Round_2', 
+        tailLights: 'Dual',
+        mufflerType: 'Single',
+        bumperF: true,
+        bumperR: true,
+        bumperColor: '#dddddd',
+        frontGrill: true,
+        grillColor: '#111111',
+        rearGarnish: true,
+        garnishColor: '#111111',
+        saveName: 'Custom_Car_1',
+        saveDesign: () => saveToLocal(),
+        loadDesign: () => loadFromLocal(),
+        exportCode: () => exportToCode(),
+        downloadJSON: () => downloadJSON() // 追加：ダウンロード関数
+    };
+
+    let carGroup = null;
+
+    function createCar() {
+        if(carGroup) scene.remove(carGroup);
+        carGroup = new THREE.Group();
+
+        const bodyMat = new THREE.MeshStandardMaterial({ color: params.color, roughness: 0.4, metalness: 0.5 });
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 1, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+        const tireMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const wheelMat = new THREE.MeshStandardMaterial({ color: params.wheelColor, metalness: 0.9, roughness: 0.1 });
+        const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+        const tailMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const bumperMat = new THREE.MeshStandardMaterial({ color: params.bumperColor, metalness: 0.8, roughness: 0.2 });
+        const grillMat = new THREE.MeshStandardMaterial({ color: params.grillColor, metalness: 0.7, roughness: 0.3 });
+        const garnishMat = new THREE.MeshStandardMaterial({ color: params.garnishColor, metalness: 0.7, roughness: 0.3 });
+        const mufflerMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 1.0, roughness: 0.2 });
+
+        const halfL = params.totalLength / 2;
+        const halfW = params.width / 2;
+        const faceAngle = Math.atan2(params.noseSlant, params.noseH); 
+
+        // 1. 下部ボディ
+        const baseShape = new THREE.Shape();
+        baseShape.moveTo(halfL, 0); 
+        baseShape.lineTo(halfL - params.noseSlant, params.noseH);
+        baseShape.lineTo(halfL - params.hoodL, params.hoodH);
+        baseShape.lineTo(halfL - params.hoodL - params.fSlant - params.roofL - params.rSlant, params.trunkH);
+        baseShape.lineTo(-halfL, params.tailH);
+        baseShape.lineTo(-halfL, 0);
+        baseShape.closePath();
+
+        const bodyGeo = new THREE.ExtrudeGeometry(baseShape, { depth: params.width, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05 });
+        const bodyBase = new THREE.Mesh(bodyGeo, bodyMat);
+        bodyBase.position.set(0, params.lift, -halfW);
+        carGroup.add(bodyBase);
+
+        // 2. ルーフ
+        const roofGeo = new THREE.BoxGeometry(params.roofL, 0.05, params.width);
+        const roof = new THREE.Mesh(roofGeo, bodyMat);
+        const roofX = halfL - params.hoodL - params.fSlant - (params.roofL / 2);
+        roof.position.set(roofX, params.lift + params.roofH, 0);
+        carGroup.add(roof);
+
+        // 3. ガラス
+        const gW = params.width * 0.96;
+        const addGlass = (start, end) => {
+            const dx = end[0] - start[0]; const dy = end[1] - start[1];
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx);
+            const glass = new THREE.Mesh(new THREE.BoxGeometry(len, 0.02, gW), glassMat);
+            glass.position.set(start[0] + dx/2, params.lift + start[1] + dy/2, 0);
+            glass.rotation.z = angle;
+            carGroup.add(glass);
+        };
+        addGlass([halfL - params.hoodL, params.hoodH], [halfL - params.hoodL - params.fSlant, params.roofH]); 
+        addGlass([halfL - params.hoodL - params.fSlant - params.roofL, params.roofH], [halfL - params.hoodL - params.fSlant - params.roofL - params.rSlant, params.trunkH]);
+        const sideShape = new THREE.Shape();
+        sideShape.moveTo(halfL - params.hoodL, params.hoodH);
+        sideShape.lineTo(halfL - params.hoodL - params.fSlant, params.roofH);
+        sideShape.lineTo(halfL - params.hoodL - params.fSlant - params.roofL, params.roofH);
+        sideShape.lineTo(halfL - params.hoodL - params.fSlant - params.roofL - params.rSlant, params.trunkH);
+        const sGeo = new THREE.ShapeGeometry(sideShape);
+        const sL = new THREE.Mesh(sGeo, glassMat); sL.position.set(0, params.lift, halfW + 0.01); carGroup.add(sL);
+        const sR = sL.clone(); sR.position.z = -halfW - 0.01; carGroup.add(sR);
+
+        // 4. ホイール & タイヤ (スポークデザイン・前後別)
+        const wheelZ = halfW + 0.15 + params.wheelTread;
+        const wheelPos = [
+            { x: halfL - 0.9, z: wheelZ, size: params.wheelSizeFront, side: 1 }, 
+            { x: halfL - 0.9, z: -wheelZ, size: params.wheelSizeFront, side: -1 }, 
+            { x: -halfL + 0.9, z: wheelZ, size: params.wheelSizeRear, side: 1 }, 
+            { x: -halfL + 0.9, z: -wheelZ, size: params.wheelSizeRear, side: -1 }
+        ];
+        wheelPos.forEach(p => {
+            const wGroup = new THREE.Group();
+            wGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(p.size, p.size, 0.3, 32).rotateX(Math.PI/2), tireMat));
+            wGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(p.size*0.75, p.size*0.75, 0.31, 32).rotateX(Math.PI/2), wheelMat));
+            for(let i=0; i < 5; i++) {
+                const spoke = new THREE.Mesh(new THREE.BoxGeometry(p.size * 1.45, 0.08, 0.08), wheelMat);
+                spoke.position.z = 0.16 * p.side; 
+                spoke.rotation.z = (i / 5) * Math.PI;
+                wGroup.add(spoke);
+            }
+            wGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.35, 16).rotateX(Math.PI/2), wheelMat));
+            wGroup.position.set(p.x, p.size, p.z);
+            carGroup.add(wGroup);
+        });
+
+        // 5. ヘッドライト
+        const hlZ = halfW - 0.25;
+        const hlRelY = params.noseH - 0.22; 
+        const hlX = halfL - (hlRelY / params.noseH) * params.noseSlant; 
+        const createHL = (zSide) => {
+            const g = new THREE.Group();
+            if(params.headlights === 'Round_2') g.add(new THREE.Mesh(new THREE.CircleGeometry(0.18, 24).rotateY(Math.PI/2), lightMat));
+            else if(params.headlights === 'Square_2') g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.22).rotateY(Math.PI/2), lightMat));
+            else if(params.headlights === 'Square_4') {
+                [0.12, -0.12].forEach(o => { 
+                    const m = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.14).rotateY(Math.PI/2), lightMat); 
+                    m.position.z = o; g.add(m); 
+                });
+            }
+            g.rotation.z = faceAngle;
+            g.position.set(hlX + 0.061, params.lift + hlRelY, zSide);
+            carGroup.add(g);
+        };
+        createHL(hlZ); createHL(-hlZ);
+
+        // 6. フロントグリル
+        if(params.frontGrill) {
+            const grill = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.25, params.width * 0.45), grillMat);
+            grill.rotation.z = faceAngle;
+            grill.position.set(hlX + 0.051, params.lift + hlRelY, 0);
+            carGroup.add(grill);
+        }
+
+        // 7. テールランプ
+        const tlZ = halfW - 0.25; const tlY = params.lift + params.tailH - 0.25;
+        const createTL = (zSide) => {
+            const g = new THREE.Group();
+            if(params.tailLights === 'Round') g.add(new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), tailMat));
+            else if(params.tailLights === 'Dual') { [0.12, -0.12].forEach(o => { const m = new THREE.Mesh(new THREE.CircleGeometry(0.1, 24), tailMat); m.position.x = o; g.add(m); }); }
+            else g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.2), tailMat));
+            g.rotation.y = -Math.PI/2; g.position.set(-halfL - 0.06, tlY, zSide); carGroup.add(g);
+        };
+        createTL(tlZ); createTL(-tlZ);
+        if(params.rearGarnish) {
+            const garn = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.2, params.width * 0.45), garnishMat);
+            garn.position.set(-halfL - 0.051, tlY, 0); carGroup.add(garn);
+        }
+
+        // 8. バンパー
+        if(params.bumperF) {
+            const bf = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, params.width + 0.2), bumperMat);
+            const bRelY = 0.15;
+            const bfX = halfL - (bRelY / params.noseH) * params.noseSlant;
+            bf.rotation.z = faceAngle;
+            bf.position.set(bfX + 0.08, params.lift + bRelY, 0); carGroup.add(bf);
+        }
+        if(params.bumperR) {
+            const br = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, params.width + 0.2), bumperMat);
+            br.position.set(-halfL - 0.08, params.lift + 0.1, 0); carGroup.add(br);
+        }
+
+        // 9. 出っ歯
+        if(params.spoilerAngle > 0) {
+            const sShape = new THREE.Shape();
+            sShape.moveTo(0, 0); sShape.lineTo(params.spoilerAngle, 0); sShape.lineTo(0, 0.15); sShape.closePath();
+            const sGeo = new THREE.ExtrudeGeometry(sShape, { depth: params.width, bevelEnabled: false });
+            const spoiler = new THREE.Mesh(sGeo, bodyMat);
+            spoiler.position.set(halfL - 0.05, params.lift, -halfW); 
+            carGroup.add(spoiler);
+        }
+
+        // 10. マフラー
+        const createMuffler = (zPos) => {
+            const m = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 16).rotateZ(Math.PI/2), mufflerMat);
+            m.position.set(-halfL - 0.1, params.lift - 0.05, zPos);
+            carGroup.add(m);
+        };
+        const mOffset = halfW - 0.4;
+        if(params.mufflerType === 'Single') createMuffler(-mOffset);
+        else if(params.mufflerType === 'Dual') { createMuffler(-mOffset + 0.1); createMuffler(-mOffset - 0.1); }
+        else if(params.mufflerType === 'Double') { createMuffler(-mOffset); createMuffler(mOffset); }
+
+        scene.add(carGroup);
+    }
+
+    // JSONダウンロード機能
+    function downloadJSON() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(params, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", params.saveName + ".json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    function saveToLocal() { localStorage.setItem('CAR_DESIGN_' + params.saveName, JSON.stringify(params)); alert('ブラウザに保存しました'); }
+    function loadFromLocal() {
+        const data = localStorage.getItem('CAR_DESIGN_' + params.saveName);
+        if(data) { Object.assign(params, JSON.parse(data)); gui.controllers.forEach(c => c.updateDisplay()); gui.folders.forEach(f => f.controllers.forEach(c => c.updateDisplay())); createCar(); alert('読み込みました'); }
+    }
+
+    const gui = new lil.GUI();
+    gui.addColor(params, 'color').name('ボディカラー').onChange(createCar);
+    const f1 = gui.addFolder('1. 基本サイズ');
+    f1.add(params, 'totalLength', 3.5, 7.0).name('全長').onChange(createCar);
+    f1.add(params, 'width', 1.8, 4.0).name('全幅').onChange(createCar);
+    f1.add(params, 'lift', 0.1, 1.2).name('地上高').onChange(createCar);
+    f1.add(params, 'wheelSizeFront', 0.2, 0.8).name('前輪サイズ').onChange(createCar);
+    f1.add(params, 'wheelSizeRear', 0.2, 0.8).name('後輪サイズ').onChange(createCar);
+
+    const f2 = gui.addFolder('2. シルエット');
+    f2.add(params, 'noseH', 0.1, 1.2).name('先端高').onChange(createCar);
+    f2.add(params, 'noseSlant', 0.0, 1.0).name('ノーズ角度').onChange(createCar);
+    f2.add(params, 'spoilerAngle', 0.0, 1.5).name('出っ歯角度').onChange(createCar);
+    f2.add(params, 'hoodL', 0.5, 3.0).name('ボンネット長').onChange(createCar);
+    f2.add(params, 'hoodH', 0.3, 1.8).name('ボンネット高').onChange(createCar);
+    f2.add(params, 'fSlant', 0.1, 2.0).name('Fガラス傾斜').onChange(createCar);
+    f2.add(params, 'roofH', 1.0, 3.0).name('ルーフ高').onChange(createCar);
+    f2.add(params, 'rSlant', 0.1, 2.0).name('Rガラス傾斜').onChange(createCar);
+    f2.add(params, 'trunkH', 0.3, 2.0).name('トランク高').onChange(createCar);
+
+    const f3 = gui.addFolder('3. パーツ詳細');
+    f3.add(params, 'headlights', ['Round_2', 'Square_2', 'Square_4']).name('ヘッドライト').onChange(createCar);
+    f3.add(params, 'tailLights', ['Single', 'Dual', 'Round']).name('テールランプ').onChange(createCar);
+    f3.add(params, 'mufflerType', ['Single', 'Dual', 'Double']).name('マフラー').onChange(createCar);
+    f3.addColor(params, 'wheelColor').name('ホイール色').onChange(createCar);
+    f3.add(params, 'wheelTread', -0.2, 0.8).name('ハミタイ量').onChange(createCar);
+    f3.add(params, 'bumperF').name('前バンパー').onChange(createCar);
+    f3.add(params, 'bumperR').name('後バンパー').onChange(createCar);
+    f3.addColor(params, 'bumperColor').name('バンパー色').onChange(createCar);
+    f3.add(params, 'frontGrill').name('フロントグリル').onChange(createCar);
+    f3.addColor(params, 'grillColor').name('グリル色').onChange(createCar);
+    f3.add(params, 'rearGarnish').name('リアガーニッシュ').onChange(createCar);
+    f3.addColor(params, 'garnishColor').name('ガーニッシュ色').onChange(createCar);
+
+    const f4 = gui.addFolder('4. 保存・出力');
+    f4.add(params, 'saveName').name('データ名');
+    f4.add(params, 'saveDesign').name('▶ ブラウザ保存');
+    f4.add(params, 'loadDesign').name('◀ ブラウザ読込');
+    f4.add(params, 'downloadJSON').name('💾 JSONダウンロード'); // 追加
+    gui.add(params, 'exportCode').name('▶ コードを表示');
+
+    createCar();
+    function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+    animate();
+    window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+    function exportToCode() { document.getElementById('code-output').innerText = JSON.stringify(params, null, 2); document.getElementById('output-area').style.display = 'block'; }
+</script>
+</body>
+</html>
