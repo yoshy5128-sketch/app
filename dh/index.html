@@ -47,6 +47,10 @@
         background-size: cover; background-color: #333;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
         z-index: 3000;
+        overflow-y: auto; /* スクロールを許可 */
+        padding-top: 20px; /* 上部のパディング */
+        padding-bottom: 100px; /* 下部のパディングを増やす */
+        box-sizing: border-box; /* paddingをheightに含める */
     }
     .top-title {
         font-family: sans-serif; font-size: 60px; color: #fff; 
@@ -113,14 +117,24 @@
     #garage-screen {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0, 0, 0, 0.95); display: none;
-        flex-direction: column; justify-content: center; align-items: center;
+        flex-direction: column; justify-content: flex-start; /* 上から配置 */
+        align-items: center;
         z-index: 3500; font-family: sans-serif; color: #fff;
+        overflow-y: auto; /* スクロールを許可 */
+        padding-top: 50px; /* 上部のパディング */
+        padding-bottom: 150px; /* 下部のパディングを増やす */
+        box-sizing: border-box; /* paddingをheightに含める */
     }
     .garage-slot {
-        margin-bottom: 15px; width: 420px; padding: 15px; background: #222;
+        margin-bottom: 10px; width: 450px; padding: 10px; background: #222;
         border: 1px solid #444; border-radius: 10px; display: flex; justify-content: space-between; align-items: center;
     }
-    .garage-slot span { font-weight: bold; font-size: 18px; }
+    .garage-slot-info {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .garage-slot span { font-weight: bold; font-size: 16px; margin-bottom: 8px; }
     .load-json-btn { background: #ff9900; border: none; color: #000; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
 
     #noise-overlay {
@@ -162,12 +176,60 @@
 
 <div id="garage-screen">
     <div class="settings-title">CAR GARAGE</div>
-    <div class="garage-slot"><span>PLAYER CAR</span><button class="load-json-btn" onclick="openCarLoader('player')">LOAD JSON</button></div>
-    <div class="garage-slot"><span>ENEMY 1</span><button class="load-json-btn" onclick="openCarLoader('enemy1')">LOAD JSON</button></div>
-    <div class="garage-slot"><span>ENEMY 2</span><button class="load-json-btn" onclick="openCarLoader('enemy2')">LOAD JSON</button></div>
-    <div class="garage-slot"><span>ENEMY 3</span><button class="load-json-btn" onclick="openCarLoader('enemy3')">LOAD JSON</button></div>
-    <div class="garage-slot"><span>ENEMY 4</span><button class="load-json-btn" onclick="openCarLoader('enemy4')">LOAD JSON</button></div>
-    <button id="settings-close" onclick="document.getElementById('garage-screen').style.display='none'; document.getElementById('top-screen').style.display='flex';">BACK</button>
+    <div class="garage-slot">
+        <canvas id="preview-player" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>PLAYER CAR</span>
+            <div style="display: flex; gap: 10px;">
+                <button class="load-json-btn" onclick="openCarLoader('player')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=player'" style="background: #0088cc;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div class="garage-slot">
+        <canvas id="preview-enemy1" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>ENEMY 1</span>
+            <div style="display: flex; gap: 10px;">
+                <button class="load-json-btn" onclick="openCarLoader('enemy1')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=enemy1'" style="background: #0088cc;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div class="garage-slot">
+        <canvas id="preview-enemy2" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>ENEMY 2</span>
+            <div style="display: flex; gap: 10px;">
+                <button class="load-json-btn" onclick="openCarLoader('enemy2')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=enemy2'" style="background: #0088cc;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div class="garage-slot">
+        <canvas id="preview-enemy3" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>ENEMY 3</span>
+            <div style="display: flex; gap: 10px;">
+                <button class="load-json-btn" onclick="openCarLoader('enemy3')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=enemy3'" style="background: #0088cc;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div class="garage-slot">
+        <canvas id="preview-enemy4" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>ENEMY 4</span>
+            <div style="display: flex; gap: 10px;">
+                <button class="load-json-btn" onclick="openCarLoader('enemy4')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=enemy4'" style="background: #0088cc;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div style="display: flex; justify-content: center; gap: 20px; width: 450px; margin-top: 30px;">
+        <button class="btn-sub" onclick="resetCarConfigs()" style="background-color: #8b0000; flex-basis: 150px;">RESET ALL</button>
+        <button class="btn-sub" onclick="closeGarage()" style="background-color: #555555; flex-basis: 150px;">BACK</button>
+    </div>
 </div>
 
 <div id="top-screen">
@@ -175,7 +237,7 @@
     <div id="debug-stage-select">DEBUG STAGE SELECT: <select id="stage-choice"></select></div>
     <div class="top-btns">
         <div class="btn-large" id="start-btn">GAME START</div>
-        <div class="btn-sub" onclick="document.getElementById('top-screen').style.display='none'; document.getElementById('garage-screen').style.display='flex';">GARAGE</div>
+        <div class="btn-sub" onclick="openGarage()">GARAGE</div>
         <div class="btn-sub" id="gallery-btn">REPLAY GALLERY</div>
     </div>
     <div id="gear-btn">&#9881;</div>
@@ -215,13 +277,39 @@ const stageChoice = document.getElementById('stage-choice');
 for(let i=1; i<=30; i++){ const opt = document.createElement('option'); opt.value = i; opt.innerText = "STAGE " + i; stageChoice.appendChild(opt); }
 
 // --- ガレージ設定 ---
-const carConfigs = { player: null, enemy1: null, enemy2: null, enemy3: null, enemy4: null };
+const carSlots = ['player', 'enemy1', 'enemy2', 'enemy3', 'enemy4'];
+const carConfigs = {};
+carSlots.forEach(slot => {
+    const savedConfig = localStorage.getItem('carConfig_' + slot);
+    carConfigs[slot] = savedConfig ? JSON.parse(savedConfig) : null;
+});
+
+function resetCarConfigs() {
+    if (confirm('すべてのカスタムカー設定をリセットしますか？')) {
+        carSlots.forEach(slot => {
+            localStorage.removeItem('carConfig_' + slot);
+        });
+        alert('設定がリセットされました。');
+        location.reload();
+    }
+}
+
 function openCarLoader(slot) {
     const l = document.getElementById('car-loader');
     l.onchange = (e) => {
         const file = e.target.files[0]; if(!file) return;
         const reader = new FileReader();
-        reader.onload = (f) => { try { carConfigs[slot] = JSON.parse(f.target.result); alert(slot.toUpperCase() + " LOADED!"); } catch(e){ alert("Invalid JSON"); } };
+        reader.onload = (f) => { 
+            try { 
+                const parsedConfig = JSON.parse(f.target.result);
+                carConfigs[slot] = parsedConfig;
+                localStorage.setItem('carConfig_' + slot, JSON.stringify(parsedConfig));
+                alert(slot.toUpperCase() + " LOADED and SAVED!"); 
+                updateGaragePreview(slot, parsedConfig); // プレビューを更新
+            } catch(e){ 
+                alert("Invalid JSON"); 
+            } 
+        };
         reader.readAsText(file);
     };
     l.click();
@@ -230,13 +318,14 @@ function openCarLoader(slot) {
 function createCarFromConfig(design, defCol) {
     const p = design || {
         color: '#' + defCol.toString(16).padStart(6, '0'),
-        width: 2.2, totalLength: 5.0, lift: 0.4, noseH: 0.6, noseSlant: 0.2, spoilerAngle: 0.5,
+        width: 2.2, roofWidth: 1.8, totalLength: 5.0, lift: 0.4, noseH: 0.6, noseSlant: 0.2, spoilerAngle: 0.2,
         hoodL: 1.6, hoodH: 0.8, fSlant: 0.8, roofH: 1.5, roofL: 1.5, rSlant: 1.0, trunkH: 0.9, tailH: 0.7,
         wheelSizeFront: 0.45, wheelSizeRear: 0.45, wheelTread: 0.1, wheelColor: '#ffffff',
         headlights: 'Round_2', tailLights: 'Dual', mufflerType: 'Single',
         bumperF: true, bumperR: true, bumperColor: '#dddddd', frontGrill: true, grillColor: '#111111',
         rearGarnish: true, garnishColor: '#111111'
     };
+    if (!p.roofWidth) p.roofWidth = p.width * 0.8; // 古いデータ用互換性
 
     const container = new THREE.Group();
     const visual = new THREE.Group(); 
@@ -256,6 +345,7 @@ function createCarFromConfig(design, defCol) {
     const halfL = p.totalLength / 2; const halfW = p.width / 2;
     const faceAngle = Math.atan2(p.noseSlant, p.noseH);
 
+    // ボディベース
     const bShape = new THREE.Shape();
     bShape.moveTo(halfL, 0); 
     bShape.lineTo(halfL - p.noseSlant, p.noseH);
@@ -268,25 +358,52 @@ function createCarFromConfig(design, defCol) {
     bodyBase.position.set(0, p.lift, -halfW); bodyBase.castShadow = bodyBase.receiveShadow = true;
     visual.add(bodyBase);
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(p.roofL, 0.05, p.width), bodyMat);
-    roof.position.set(halfL - p.hoodL - p.fSlant - (p.roofL / 2), p.lift + p.roofH, 0); visual.add(roof);
+    // 天井
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(p.roofL, 0.05, p.roofWidth), bodyMat);
+    const roofX = halfL - p.hoodL - p.fSlant - (p.roofL / 2);
+    roof.position.set(roofX, p.lift + p.roofH, 0); visual.add(roof);
 
-    const addG = (s, e) => {
-        const dx = e[0]-s[0], dy = e[1]-s[1], len = Math.sqrt(dx*dx+dy*dy);
-        const g = new THREE.Mesh(new THREE.BoxGeometry(len, 0.02, p.width*0.96), glassMat);
-        g.position.set(s[0]+dx/2, p.lift+s[1]+dy/2, 0); g.rotation.z = Math.atan2(dy, dx); visual.add(g);
+    // 前後ガラス（台形ジオメトリ：下端はボディ幅、上端は天井幅）
+    const addG = (s, e, startWidth, endWidth) => {
+        const geo = new THREE.BufferGeometry();
+        const wS = startWidth * 0.49; // ガラスの幅
+        const wE = endWidth * 0.49;
+        const verts = new Float32Array([
+            s[0], s[1], -wS,   s[0], s[1], wS,   e[0], e[1], wE,
+            s[0], s[1], -wS,   e[0], e[1], wE,   e[0], e[1], -wE
+        ]);
+        geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        geo.computeVertexNormals();
+        const mesh = new THREE.Mesh(geo, glassMat);
+        mesh.position.y = p.lift;
+        visual.add(mesh);
     };
-    addG([halfL-p.hoodL, p.hoodH], [halfL-p.hoodL-p.fSlant, p.roofH]);
-    addG([halfL-p.hoodL-p.fSlant-p.roofL, p.roofH], [halfL-p.hoodL-p.fSlant-p.roofL-p.rSlant, p.trunkH]);
+    addG([halfL-p.hoodL, p.hoodH], [halfL-p.hoodL-p.fSlant, p.roofH], p.width, p.roofWidth);
+    addG([halfL-p.hoodL-p.fSlant-p.roofL, p.roofH], [halfL-p.hoodL-p.fSlant-p.roofL-p.rSlant, p.trunkH], p.roofWidth, p.width);
     
-    const sideShape = new THREE.Shape();
-    sideShape.moveTo(halfL - p.hoodL, p.hoodH);
-    sideShape.lineTo(halfL - p.hoodL - p.fSlant, p.roofH);
-    sideShape.lineTo(halfL - p.hoodL - p.fSlant - p.roofL, p.roofH);
-    sideShape.lineTo(halfL - p.hoodL - p.fSlant - p.roofL - p.rSlant, p.trunkH);
-    const sL = new THREE.Mesh(new THREE.ShapeGeometry(sideShape), glassMat); sL.position.set(0, p.lift, halfW + 0.01); visual.add(sL);
-    const sR = sL.clone(); sR.position.z = -halfW - 0.01; visual.add(sR);
+    // サイドガラス（CS同様の台形）
+    [1, -1].forEach(side => {
+        const geo = new THREE.BufferGeometry();
+        const hW = halfW + 0.005; 
+        const rW = p.roofWidth / 2 + 0.005; 
+        const pts = [
+            new THREE.Vector3(halfL - p.hoodL, p.hoodH, hW * side), 
+            new THREE.Vector3(halfL - p.hoodL - p.fSlant, p.roofH, rW * side), 
+            new THREE.Vector3(halfL - p.hoodL - p.fSlant - p.roofL, p.roofH, rW * side), 
+            new THREE.Vector3(halfL - p.hoodL - p.fSlant - p.roofL - p.rSlant, p.trunkH, hW * side) 
+        ];
+        const verts = new Float32Array([
+            pts[0].x, pts[0].y, pts[0].z,  pts[1].x, pts[1].y, pts[1].z,  pts[2].x, pts[2].y, pts[2].z,
+            pts[0].x, pts[0].y, pts[0].z,  pts[2].x, pts[2].y, pts[2].z,  pts[3].x, pts[3].y, pts[3].z
+        ]);
+        geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        geo.computeVertexNormals();
+        const mesh = new THREE.Mesh(geo, glassMat);
+        mesh.position.y = p.lift;
+        visual.add(mesh);
+    });
 
+    // ホイール
     const wheels = []; const wheelZ = halfW + 0.15 + p.wheelTread;
     const wPosArr = [
         {x:halfL-0.9, z:wheelZ, s:p.wheelSizeFront, side:1}, {x:halfL-0.9, z:-wheelZ, s:p.wheelSizeFront, side:-1}, 
@@ -303,21 +420,40 @@ function createCarFromConfig(design, defCol) {
         wg.position.set(pos.x, pos.s, pos.z); visual.add(wg); wheels.push(wg);
     });
 
+    // ヘッドライト（シンメトリー対応）
     const hlRelY = p.noseH - 0.22; const hlX = halfL - (hlRelY / p.noseH) * p.noseSlant;
-    const createHL = (zSide) => {
+    const createHL = (zSide, isLeft) => {
         const g = new THREE.Group();
-        if(p.headlights === 'Round_2') g.add(new THREE.Mesh(new THREE.CircleGeometry(0.18, 24).rotateY(Math.PI/2), lightMat));
-        else if(p.headlights === 'Square_2') g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.22).rotateY(Math.PI/2), lightMat));
-        else if(p.headlights === 'Square_4') { [0.12,-0.12].forEach(o=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(0.2,0.14).rotateY(Math.PI/2), lightMat); m.position.z=o; g.add(m); }); }
+        let hlMesh;
+        if(p.headlights === 'Round_2') hlMesh = new THREE.Mesh(new THREE.CircleGeometry(0.18, 24).rotateY(Math.PI/2), lightMat);
+        else if(p.headlights === 'Square_2') hlMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.22).rotateY(Math.PI/2), lightMat);
+        else if(p.headlights === 'Square_4') {
+            hlMesh = new THREE.Group();
+            [0.12,-0.12].forEach(o=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(0.2,0.14).rotateY(Math.PI/2), lightMat); m.position.z=o; hlMesh.add(m); });
+        }
+        else if(p.headlights === 'Round_Dual'){
+            hlMesh = new THREE.Group();
+            [0.12,-0.12].forEach(o=>{const m=new THREE.Mesh(new THREE.CircleGeometry(0.1,24).rotateY(Math.PI/2),lightMat);m.position.z=o;hlMesh.add(m);});
+        }
+        else if(p.headlights === 'Custom' && p.customHeadlightShape) {
+            const shape = new THREE.Shape();
+            p.customHeadlightShape.forEach((pt, idx) => { if(idx===0) shape.moveTo(pt.x, pt.y); else shape.lineTo(pt.x, pt.y); });
+            hlMesh = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateY(Math.PI/2), lightMat);
+        }
+        if(hlMesh) {
+            if(isLeft) hlMesh.scale.z = -1; // ミラーリング
+            g.add(hlMesh);
+        }
         g.position.set(hlX+0.061, p.lift+hlRelY, zSide); g.rotation.z = faceAngle; visual.add(g);
     };
-    createHL(halfW - 0.25); createHL(-halfW + 0.25);
+    createHL(halfW - 0.25, false); createHL(-halfW + 0.25, true);
 
     if(p.frontGrill) {
         const grill = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.25, p.width*0.45), grillMat);
         grill.position.set(hlX+0.051, p.lift+hlRelY, 0); grill.rotation.z = faceAngle; visual.add(grill);
     }
 
+    // テールライト
     const tlY = p.lift + p.tailH - 0.25;
     const createTL = (zSide) => {
         const g = new THREE.Group();
@@ -332,9 +468,14 @@ function createCarFromConfig(design, defCol) {
         garn.position.set(-halfL - 0.051, tlY, 0); visual.add(garn);
     }
 
+    // バンパー（フロントは水平に修正）
     if(p.bumperF) {
         const bf = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, p.width + 0.2), bumperMat);
-        bf.position.set(halfL - (0.15/p.noseH)*p.noseSlant + 0.08, p.lift + 0.15, 0); bf.rotation.z = faceAngle; visual.add(bf);
+        // ノーズの角度計算に基づき位置を決め、回転は0（水平）にする
+        const bfX = halfL - (0.15/p.noseH)*p.noseSlant;
+        bf.position.set(bfX + 0.08, p.lift + 0.15, 0); 
+        bf.rotation.z = 0; // 水平固定
+        visual.add(bf);
     }
     if(p.bumperR) {
         const br = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, p.width + 0.2), bumperMat);
@@ -415,7 +556,7 @@ function spawnEnemyAt(x, z) {
     const slotIdx = 1 + Math.floor(Math.random()*4);
     const slotDesign = carConfigs['enemy'+slotIdx];
     const col = enemyColors[Math.floor(Math.random()*enemyColors.length)];
-    const ent = { ...createCarFromConfig(slotDesign, col), speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, attackTimer: 0, impactV: new THREE.Vector3(), color: col };
+    const ent = { ...createCarFromConfig((slotDesign && slotDesign.width && slotDesign.totalLength && slotDesign.noseH) ? slotDesign : null, col), speed: 0, lastSpeed: 0, yaw: Math.random()*Math.PI*2, pitch: 0, roll: 0, attackTimer: 0, impactV: new THREE.Vector3(), color: col };
     ent.group.position.set(x, 10, z); scene.add(ent.group); enemies.push(ent);
 }
 function updateEnemiesCount(count) {
@@ -516,6 +657,110 @@ window.addEventListener('touchmove', e => { e.preventDefault(); for (let i = 0; 
 window.addEventListener('touchend', e => { for (let i = 0; i < e.changedTouches.length; i++) { const t = e.changedTouches[i]; if (t.identifier === touchLeftId) { touchLeftId = -1; keys.KeyW = keys.KeyS = keys.KeyA = keys.KeyD = false; } else if (t.identifier === touchRightId) touchRightId = -1; } }, {passive: false});
 document.getElementById('fullscreenButton').addEventListener('click', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => console.warn(err)); else document.exitFullscreen(); });
 
+
+const garagePreview = {
+    renderers: {},
+    scenes: {},
+    cameras: {},
+    cars: {},
+    animationId: null
+};
+
+function initGaragePreview() {
+    if (Object.keys(garagePreview.renderers).length > 0) return; // 初期化済み
+
+    carSlots.forEach(slot => {
+        const canvas = document.getElementById('preview-' + slot);
+        if (!canvas) return;
+
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(canvas.width, canvas.height);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, canvas.width / canvas.height, 0.1, 100);
+        camera.position.set(4, 2.5, 4);
+        camera.lookAt(0, 0, 0);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const light = new THREE.DirectionalLight(0xffffff, 1.0);
+        light.position.set(5, 10, 7.5);
+        scene.add(light);
+        
+        garagePreview.renderers[slot] = renderer;
+        garagePreview.scenes[slot] = scene;
+        garagePreview.cameras[slot] = camera;
+
+        updateGaragePreview(slot, carConfigs[slot] ? carConfigs[slot] : null);
+    });
+}
+
+function updateGaragePreview(slot, config) {
+    const scene = garagePreview.scenes[slot];
+    if (!scene) return;
+
+    // 既存の車を削除
+    if (garagePreview.cars[slot]) {
+        scene.remove(garagePreview.cars[slot].group);
+    }
+    
+    // スロットごとのデフォルトカラーを定義
+    const defaultColors = {
+        player: 0xcc2222,
+        enemy1: 0x00cc00,
+        enemy2: 0xcccc00,
+        enemy3: 0xcc22cc,
+        enemy4: 0xeeeeee
+    };
+    const defaultColor = defaultColors[slot] || 0x888888;
+
+    const carData = createCarFromConfig(
+        (config && config.width && config.totalLength && config.noseH) ? config : null, // configが完全なデザインならそれを使い、不完全ならnullをdesignに渡す
+        (config && config.color) ? parseInt(config.color.replace('#','0x')) : defaultColor // configにcolorがあればそれを使い、そうでなければdefaultColorを使う
+    );
+    const carGroup = carData.group;
+    
+    // プレビュー用にサイズと位置を調整
+    const box = new THREE.Box3().setFromObject(carGroup);
+    const size = box.getSize(new THREE.Vector3());
+    const scale = 5 / size.length();
+    carGroup.scale.set(scale, scale, scale);
+    box.setFromObject(carGroup); // スケール適用後のサイズを再計算
+    const center = box.getCenter(new THREE.Vector3());
+    carGroup.position.sub(center); // 中心を原点に移動
+
+    scene.add(carGroup);
+    garagePreview.cars[slot] = { group: carGroup, config: config };
+}
+
+function animateGaragePreview() {
+    garagePreview.animationId = requestAnimationFrame(animateGaragePreview);
+    for (const slot in garagePreview.cars) {
+        if (garagePreview.cars[slot] && garagePreview.cars[slot].group) {
+            garagePreview.cars[slot].group.rotation.y += 0.01;
+            garagePreview.renderers[slot].render(garagePreview.scenes[slot], garagePreview.cameras[slot]);
+        }
+    }
+}
+
+function openGarage() {
+    document.getElementById('top-screen').style.display = 'none';
+    document.getElementById('garage-screen').style.display = 'flex';
+    initGaragePreview();
+    if(garagePreview.animationId === null) {
+      animateGaragePreview();
+    }
+}
+
+function closeGarage() {
+    if (garagePreview.animationId) {
+        cancelAnimationFrame(garagePreview.animationId);
+        garagePreview.animationId = null;
+    }
+    document.getElementById('garage-screen').style.display = 'none';
+    document.getElementById('top-screen').style.display = 'flex';
+}
+
 function animate() {
     requestAnimationFrame(animate);
     if (gameState === 'TOP' || gameState === 'SETTINGS') { renderer.render(scene, camera); if(pGain && audioCtx) pGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); return; }
@@ -611,7 +856,7 @@ function animate() {
                     const dir = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
                     if (new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)).dot(dir) > 0.3) {
                         enemy.hp -= 20; player.hp += 5; enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3'); for (let i=0; i<5; i++) spawnDust(enemy.group.position, true);
-                        if(enemy.hp <= 0) { enemy.dead = true; killCount++; player.hp += 10; enemy.bodyMat.color.set(0); spawnDebris(enemy.group.position, 0, 0.8, 30); playSFX('crash.mp3'); setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000); }
+                        if(enemy.hp <= 0) { enemy.dead = true; killCount++; player.hp += 10; enemy.bodyMat.color.set(0); spawnDebris(enemy.group.position, enemy.color, 0.8, 30); playSFX('crash.mp3'); setTimeout(() => { scene.remove(enemy.group); enemies.splice(idx, 1); }, 2000); }
                     } else { player.hp -= 5; player.impactV.add(dir.multiplyScalar(-0.8)); spawnDust(player.group.position, false); playSFX('ecrs.mp3'); document.getElementById('redFlash').style.opacity = '0.6'; setTimeout(() => document.getElementById('redFlash').style.opacity = '0', 100); }
                     document.getElementById('p-hp').innerText = Math.floor(Math.max(0, player.hp));
                     if (player.hp <= 0) { player.dead = true; player.speed = 0; document.getElementById('msg').innerText = "GAME OVER"; document.getElementById('msg').style.display = 'block'; playSFX('crash.mp3'); setTimeout(() => location.reload(), 5000); }
@@ -650,6 +895,12 @@ function animate() {
     renderer.render(scene, camera);
 }
 animate();
+
+// カスタムショップから戻ってきた場合にガレージを開く
+if (sessionStorage.getItem('openGarage') === 'true') {
+    openGarage();
+    sessionStorage.removeItem('openGarage');
+}
 </script>
 </body>
 </html>
