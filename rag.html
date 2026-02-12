@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Ragdoll Stand & Walk - Stable Version</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; }
+        #overlay { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="overlay">
+        状態: <span id="status">読込中...</span><br>
+        <small>※画面が表示されない場合はネット接続を確認してください</small>
+    </div>
+
+    <!-- ライブラリを通常のスクリプトタグで読み込み (ESMを使わない) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
+    <script>
+        // ライブラリが読み込まれたか確認
+        if (typeof THREE === 'undefined' || typeof CANNON === 'undefined') {
+            document.getElementById('status').innerText = 'ライブラリの読み込みに失敗しました';
+        } else {
+            init();
+        }
+
+        function init() {
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = '準備中...';
+
+            // --- THREE.JS SETUP ---
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222233);
+
+            const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(8, 5, 8);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            const light = new THREE.DirectionalLight(0xffffff, 1);
+            light.position.set(10, 20, 10);
+            light.castShadow = true;
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0x666666));
+
+            // --- CANNON.JS SETUP ---
+            const world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 10;
+
+            // 地面
+            const groundMat = new CANNON.Material();
+            const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane(), material: groundMat });
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            world.addBody(groundBody);
+
+            const groundMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(100, 100),
+                new THREE.MeshStandardMaterial({ color: 0x444444 })
+            );
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+
+            // --- RAGDOLL BUILDER ---
+            const objects = [];
+            function createBox(w, h, d, mass, pos, color) {
+                const body = new CANNON.Body({
+                    mass: mass,
+                    shape: new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)),
+                    position: new CANNON.Vec3(pos.x, pos.y, pos.z),
+                    linearDamping: 0.1,
+                    angularDamping: 0.5
+                });
+                world.addBody(body);
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color }));
+                mesh.castShadow = true;
+                scene.add(mesh);
+                objects.push({ body, mesh });
+                return body;
+            }
+
+            function createHinge(bodyA, bodyB, pivotA, pivotB, axis) {
+                const c = new CANNON.HingeConstraint(bodyA, bodyB, {
+                    pivotA: pivotA, axisA: axis,
+                    pivotB: pivotB, axisB: axis
+                });
+                c.enableMotor();
+                world.addConstraint(c);
+                return c;
+            }
+
+            // パーツ作成
+            const xAxis = new CANNON.Vec3(1, 0, 0);
+            const torso = createBox(0.6, 1.0, 0.3, 8, {x:0, y:3, z:0}, 0xffaa00);
+            const head  = createBox(0.4, 0.4, 0.4, 2, {x:0, y:3.8, z:0}, 0xffccaa);
+            createHinge(torso, head, new CANNON.Vec3(0, 0.6, 0), new CANNON.Vec3(0, -0.25, 0), xAxis);
+
+            // 腕
+            const armL1 = createBox(0.2, 0.5, 0.2, 1, {x:-0.5, y:3.3, z:0}, 0x00ffaa);
+            const armL2 = createBox(0.18, 0.5, 0.18, 1, {x:-0.5, y:2.8, z:0}, 0x00cc88);
+            const shoulderL = createHinge(torso, armL1, new CANNON.Vec3(-0.4, 0.4, 0), new CANNON.Vec3(0, 0.25, 0), xAxis);
+            const elbowL = createHinge(armL1, armL2, new CANNON.Vec3(0, -0.25, 0), new CANNON.Vec3(0, 0.25, 0), xAxis);
+
+            const armR1 = createBox(0.2, 0.5, 0.2, 1, {x:0.5, y:3.3, z:0}, 0x00ffaa);
+            const armR2 = createBox(0.18, 0.5, 0.18, 1, {x:0.5, y:2.8, z:0}, 0x00cc88);
+            const shoulderR = createHinge(torso, armR1, new CANNON.Vec3(0.4, 0.4, 0), new CANNON.Vec3(0, 0.25, 0), xAxis);
+            const elbowR = createHinge(armR1, armR2, new CANNON.Vec3(0, -0.25, 0), new CANNON.Vec3(0, 0.25, 0), xAxis);
+
+            // 足
+            const legL1 = createBox(0.25, 0.7, 0.25, 3, {x:-0.25, y:2.2, z:0}, 0x00aaff);
+            const legL2 = createBox(0.22, 0.7, 0.22, 2, {x:-0.25, y:1.5, z:0}, 0x0088cc);
+            const footL = createBox(0.3, 0.15, 0.5, 1, {x:-0.25, y:1.1, z:0.1}, 0x333333);
+            const hipL = createHinge(torso, legL1, new CANNON.Vec3(-0.25, -0.5, 0), new CANNON.Vec3(0, 0.35, 0), xAxis);
+            const kneeL = createHinge(legL1, legL2, new CANNON.Vec3(0, -0.35, 0), new CANNON.Vec3(0, 0.35, 0), xAxis);
+            const ankleL = createHinge(legL2, footL, new CANNON.Vec3(0, -0.35, 0), new CANNON.Vec3(0, 0.05, -0.1), xAxis);
+
+            const legR1 = createBox(0.25, 0.7, 0.25, 3, {x:0.25, y:2.2, z:0}, 0x00aaff);
+            const legR2 = createBox(0.22, 0.7, 0.22, 2, {x:0.25, y:1.5, z:0}, 0x0088cc);
+            const footR = createBox(0.3, 0.15, 0.5, 1, {x:0.25, y:1.1, z:0.1}, 0x333333);
+            const hipR = createHinge(torso, legR1, new CANNON.Vec3(0.25, -0.5, 0), new CANNON.Vec3(0, 0.35, 0), xAxis);
+            const kneeR = createHinge(legR1, legR2, new CANNON.Vec3(0, -0.35, 0), new CANNON.Vec3(0, 0.35, 0), xAxis);
+            const ankleR = createHinge(legR2, footR, new CANNON.Vec3(0, -0.35, 0), new CANNON.Vec3(0, 0.05, -0.1), xAxis);
+
+            // --- CONTROL ---
+            let state = "GET_UP";
+            let clock = 0;
+
+            function animate() {
+                requestAnimationFrame(animate);
+                world.step(1/60);
+                clock += 0.05;
+
+                // 転倒判定
+                const worldUp = new CANNON.Vec3(0, 1, 0);
+                const torsoUp = torso.quaternion.vmult(worldUp);
+                const isUpright = torsoUp.y > 0.8;
+
+                if (state === "GET_UP") {
+                    statusEl.innerText = "起き上がり中...";
+                    // 関節をリセット
+                    [hipL, hipR, kneeL, kneeR, ankleL, ankleR].forEach(h => h.setMotorSpeed(0));
+                    
+                    // 姿勢復元トルク
+                    const torque = torsoUp.cross(worldUp);
+                    torso.torque.x += torque.x * 120;
+                    torso.torque.z += torque.z * 120;
+
+                    // 補助浮力（バク宙防止のため高さを制限）
+                    if (torso.position.y < 2.2) {
+                        torso.applyForce(new CANNON.Vec3(0, 120, 0), torso.position);
+                    }
+
+                    if (isUpright && torso.position.y > 2.0) state = "WALK";
+                } else {
+                    statusEl.innerText = "歩行中";
+                    // 姿勢維持
+                    const torque = torsoUp.cross(worldUp);
+                    torso.torque.x += torque.x * 150;
+                    torso.torque.z += torque.z * 150;
+                    
+                    // 歩行アニメ
+                    const cycle = clock * 6;
+                    hipL.setMotorSpeed(Math.sin(cycle) * 5);
+                    hipR.setMotorSpeed(Math.sin(cycle + Math.PI) * 5);
+                    kneeL.setMotorSpeed((Math.sin(cycle + Math.PI*0.5)+1)*3);
+                    kneeR.setMotorSpeed((Math.sin(cycle + Math.PI*1.5)+1)*3);
+
+                    torso.applyForce(new CANNON.Vec3(0, 0, 15), torso.position);
+                    if (!isUpright && torso.position.y < 1.5) state = "GET_UP";
+                }
+
+                // 表示更新
+                objects.forEach(obj => {
+                    obj.mesh.position.copy(obj.body.position);
+                    obj.mesh.quaternion.copy(obj.body.quaternion);
+                });
+
+                camera.position.x = torso.position.x + 6;
+                camera.position.z = torso.position.z + 6;
+                camera.lookAt(torso.position);
+
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        window.addEventListener('resize', () => {
+            if (typeof renderer !== 'undefined') {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+    </script>
+</body>
+</html>
