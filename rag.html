@@ -2,202 +2,150 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Ragdoll Stand & Walk - Stable Version</title>
+    <title>Complete Humanoid Ragdoll</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #111; font-family: sans-serif; }
-        #overlay { position: absolute; top: 10px; left: 10px; color: white; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background: #1a1a2e; font-family: sans-serif; }
+        #hud { position: absolute; top: 10px; left: 10px; color: #0f0; background: rgba(0,0,0,0.8); padding: 10px; border: 1px solid #0f0; z-index: 100; }
     </style>
 </head>
 <body>
-    <div id="overlay">
-        状態: <span id="status">読込中...</span><br>
-        <small>※画面が表示されない場合はネット接続を確認してください</small>
+    <div id="hud">
+        <b>Robust Humanoid Ragdoll - Full Body</b><br>
+        Status: <span id="state-text">GET_UP</span>
     </div>
 
-    <!-- ライブラリを通常のスクリプトタグで読み込み (ESMを使わない) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 
     <script>
-        // ライブラリが読み込まれたか確認
-        if (typeof THREE === 'undefined' || typeof CANNON === 'undefined') {
-            document.getElementById('status').innerText = 'ライブラリの読み込みに失敗しました';
-        } else {
-            init();
-        }
+        let world, scene, camera, renderer, objects = [], joints = [];
+        const stateText = document.getElementById('state-text');
 
         function init() {
-            const statusEl = document.getElementById('status');
-            statusEl.innerText = '準備中...';
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(6, 4, 8);
 
-            // --- THREE.JS SETUP ---
-            const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x222233);
-
-            const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-            camera.position.set(8, 5, 8);
-
-            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            const light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(10, 20, 10);
-            light.castShadow = true;
-            scene.add(light);
-            scene.add(new THREE.AmbientLight(0x666666));
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const sun = new THREE.DirectionalLight(0xffffff, 1);
+            sun.position.set(10, 20, 10);
+            sun.castShadow = true;
+            scene.add(sun);
+            scene.add(new THREE.GridHelper(50, 50, 0x444444, 0x222222));
 
-            // --- CANNON.JS SETUP ---
-            const world = new CANNON.World();
+            world = new CANNON.World();
             world.gravity.set(0, -9.82, 0);
-            world.broadphase = new CANNON.NaiveBroadphase();
-            world.solver.iterations = 10;
+            world.solver.iterations = 20;
 
-            // 地面
-            const groundMat = new CANNON.Material();
-            const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane(), material: groundMat });
+            const groundBody = new CANNON.Body({ mass: 0 });
+            groundBody.addShape(new CANNON.Plane());
             groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
             world.addBody(groundBody);
 
-            const groundMesh = new THREE.Mesh(
-                new THREE.PlaneGeometry(100, 100),
-                new THREE.MeshStandardMaterial({ color: 0x444444 })
-            );
-            groundMesh.rotation.x = -Math.PI / 2;
-            groundMesh.receiveShadow = true;
-            scene.add(groundMesh);
-
-            // --- RAGDOLL BUILDER ---
-            const objects = [];
-            function createBox(w, h, d, mass, pos, color) {
-                const body = new CANNON.Body({
-                    mass: mass,
-                    shape: new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)),
-                    position: new CANNON.Vec3(pos.x, pos.y, pos.z),
-                    linearDamping: 0.1,
-                    angularDamping: 0.5
-                });
-                world.addBody(body);
-                const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color }));
-                mesh.castShadow = true;
-                scene.add(mesh);
-                objects.push({ body, mesh });
-                return body;
-            }
-
-            function createHinge(bodyA, bodyB, pivotA, pivotB, axis) {
-                const c = new CANNON.HingeConstraint(bodyA, bodyB, {
-                    pivotA: pivotA, axisA: axis,
-                    pivotB: pivotB, axisB: axis
-                });
-                c.enableMotor();
-                world.addConstraint(c);
-                return c;
-            }
-
-            // パーツ作成
-            const xAxis = new CANNON.Vec3(1, 0, 0);
-            const torso = createBox(0.6, 1.0, 0.3, 8, {x:0, y:3, z:0}, 0xffaa00);
-            const head  = createBox(0.4, 0.4, 0.4, 2, {x:0, y:3.8, z:0}, 0xffccaa);
-            createHinge(torso, head, new CANNON.Vec3(0, 0.6, 0), new CANNON.Vec3(0, -0.25, 0), xAxis);
-
-            // 腕
-            const armL1 = createBox(0.2, 0.5, 0.2, 1, {x:-0.5, y:3.3, z:0}, 0x00ffaa);
-            const armL2 = createBox(0.18, 0.5, 0.18, 1, {x:-0.5, y:2.8, z:0}, 0x00cc88);
-            const shoulderL = createHinge(torso, armL1, new CANNON.Vec3(-0.4, 0.4, 0), new CANNON.Vec3(0, 0.25, 0), xAxis);
-            const elbowL = createHinge(armL1, armL2, new CANNON.Vec3(0, -0.25, 0), new CANNON.Vec3(0, 0.25, 0), xAxis);
-
-            const armR1 = createBox(0.2, 0.5, 0.2, 1, {x:0.5, y:3.3, z:0}, 0x00ffaa);
-            const armR2 = createBox(0.18, 0.5, 0.18, 1, {x:0.5, y:2.8, z:0}, 0x00cc88);
-            const shoulderR = createHinge(torso, armR1, new CANNON.Vec3(0.4, 0.4, 0), new CANNON.Vec3(0, 0.25, 0), xAxis);
-            const elbowR = createHinge(armR1, armR2, new CANNON.Vec3(0, -0.25, 0), new CANNON.Vec3(0, 0.25, 0), xAxis);
-
-            // 足
-            const legL1 = createBox(0.25, 0.7, 0.25, 3, {x:-0.25, y:2.2, z:0}, 0x00aaff);
-            const legL2 = createBox(0.22, 0.7, 0.22, 2, {x:-0.25, y:1.5, z:0}, 0x0088cc);
-            const footL = createBox(0.3, 0.15, 0.5, 1, {x:-0.25, y:1.1, z:0.1}, 0x333333);
-            const hipL = createHinge(torso, legL1, new CANNON.Vec3(-0.25, -0.5, 0), new CANNON.Vec3(0, 0.35, 0), xAxis);
-            const kneeL = createHinge(legL1, legL2, new CANNON.Vec3(0, -0.35, 0), new CANNON.Vec3(0, 0.35, 0), xAxis);
-            const ankleL = createHinge(legL2, footL, new CANNON.Vec3(0, -0.35, 0), new CANNON.Vec3(0, 0.05, -0.1), xAxis);
-
-            const legR1 = createBox(0.25, 0.7, 0.25, 3, {x:0.25, y:2.2, z:0}, 0x00aaff);
-            const legR2 = createBox(0.22, 0.7, 0.22, 2, {x:0.25, y:1.5, z:0}, 0x0088cc);
-            const footR = createBox(0.3, 0.15, 0.5, 1, {x:0.25, y:1.1, z:0.1}, 0x333333);
-            const hipR = createHinge(torso, legR1, new CANNON.Vec3(0.25, -0.5, 0), new CANNON.Vec3(0, 0.35, 0), xAxis);
-            const kneeR = createHinge(legR1, legR2, new CANNON.Vec3(0, -0.35, 0), new CANNON.Vec3(0, 0.35, 0), xAxis);
-            const ankleR = createHinge(legR2, footR, new CANNON.Vec3(0, -0.35, 0), new CANNON.Vec3(0, 0.05, -0.1), xAxis);
-
-            // --- CONTROL ---
-            let state = "GET_UP";
-            let clock = 0;
-
-            function animate() {
-                requestAnimationFrame(animate);
-                world.step(1/60);
-                clock += 0.05;
-
-                // 転倒判定
-                const worldUp = new CANNON.Vec3(0, 1, 0);
-                const torsoUp = torso.quaternion.vmult(worldUp);
-                const isUpright = torsoUp.y > 0.8;
-
-                if (state === "GET_UP") {
-                    statusEl.innerText = "起き上がり中...";
-                    // 関節をリセット
-                    [hipL, hipR, kneeL, kneeR, ankleL, ankleR].forEach(h => h.setMotorSpeed(0));
-                    
-                    // 姿勢復元トルク
-                    const torque = torsoUp.cross(worldUp);
-                    torso.torque.x += torque.x * 120;
-                    torso.torque.z += torque.z * 120;
-
-                    // 補助浮力（バク宙防止のため高さを制限）
-                    if (torso.position.y < 2.2) {
-                        torso.applyForce(new CANNON.Vec3(0, 120, 0), torso.position);
-                    }
-
-                    if (isUpright && torso.position.y > 2.0) state = "WALK";
-                } else {
-                    statusEl.innerText = "歩行中";
-                    // 姿勢維持
-                    const torque = torsoUp.cross(worldUp);
-                    torso.torque.x += torque.x * 150;
-                    torso.torque.z += torque.z * 150;
-                    
-                    // 歩行アニメ
-                    const cycle = clock * 6;
-                    hipL.setMotorSpeed(Math.sin(cycle) * 5);
-                    hipR.setMotorSpeed(Math.sin(cycle + Math.PI) * 5);
-                    kneeL.setMotorSpeed((Math.sin(cycle + Math.PI*0.5)+1)*3);
-                    kneeR.setMotorSpeed((Math.sin(cycle + Math.PI*1.5)+1)*3);
-
-                    torso.applyForce(new CANNON.Vec3(0, 0, 15), torso.position);
-                    if (!isUpright && torso.position.y < 1.5) state = "GET_UP";
-                }
-
-                // 表示更新
-                objects.forEach(obj => {
-                    obj.mesh.position.copy(obj.body.position);
-                    obj.mesh.quaternion.copy(obj.body.quaternion);
-                });
-
-                camera.position.x = torso.position.x + 6;
-                camera.position.z = torso.position.z + 6;
-                camera.lookAt(torso.position);
-
-                renderer.render(scene, camera);
-            }
+            setupFullRagdoll();
             animate();
         }
 
-        window.addEventListener('resize', () => {
-            if (typeof renderer !== 'undefined') {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+        function createPart(w, h, d, mass, pos, color) {
+            const body = new CANNON.Body({
+                mass: mass,
+                position: new CANNON.Vec3(pos.x, pos.y, pos.z),
+                shape: new CANNON.Box(new CANNON.Vec3(w/2, h/2, d/2)),
+                angularDamping: 0.6, linearDamping: 0.1
+            });
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color }));
+            mesh.castShadow = true;
+            scene.add(mesh);
+            world.addBody(body);
+            objects.push({ body, mesh });
+            return body;
+        }
+
+        function addJoint(bodyA, bodyB, pA, pB, low, up) {
+            const c = new CANNON.HingeConstraint(bodyA, bodyB, {
+                pivotA: pA, pivotB: pB, axisA: new CANNON.Vec3(1, 0, 0), axisB: new CANNON.Vec3(1, 0, 0)
+            });
+            c.collideConnected = false;
+            c.lowerLimit = low; c.upperLimit = up;
+            c.enableLowerLimit = true; c.enableUpperLimit = true;
+            world.addConstraint(c);
+            joints.push(c);
+            return c;
+        }
+
+        let torso;
+        function setupFullRagdoll() {
+            // 胴体 (青)
+            torso = createPart(0.6, 0.9, 0.3, 10, {x:0, y:3, z:0}, 0x1565c0);
+            // 頭 (肌色)
+            const head = createPart(0.4, 0.4, 0.4, 2, {x:0, y:3.8, z:0}, 0xffccaa);
+            addJoint(torso, head, new CANNON.Vec3(0, 0.5, 0), new CANNON.Vec3(0, -0.25, 0), -0.3, 0.3);
+
+            // 腕 (肩-肘の2段構成)
+            const makeArm = (side) => {
+                const uArm = createPart(0.2, 0.5, 0.2, 2, {x:side*0.45, y:3.3, z:0}, 0x1565c0); // 上腕
+                const lArm = createPart(0.18, 0.5, 0.18, 1, {x:side*0.45, y:2.8, z:0}, 0xffccaa); // 前腕
+                addJoint(torso, uArm, new CANNON.Vec3(side*0.35, 0.35, 0), new CANNON.Vec3(0, 0.25, 0), -1.5, 1.5);
+                addJoint(uArm, lArm, new CANNON.Vec3(0, -0.25, 0), new CANNON.Vec3(0, 0.25, 0), 0, 1.5);
+            };
+            makeArm(-1); makeArm(1);
+
+            // 足 (股-膝の2段構成)
+            const makeLeg = (side) => {
+                const uLeg = createPart(0.25, 0.6, 0.25, 5, {x:side*0.2, y:2.3, z:0}, 0x333333); // 太もも
+                const lLeg = createPart(0.22, 0.6, 0.22, 4, {x:side*0.2, y:1.6, z:0}, 0x333333); // すね
+                addJoint(torso, uLeg, new CANNON.Vec3(side*0.2, -0.5, 0), new CANNON.Vec3(0, 0.35, 0), -1, 1);
+                addJoint(uLeg, lLeg, new CANNON.Vec3(0, -0.3, 0), new CANNON.Vec3(0, 0.3, 0), -1.5, 0);
+            };
+            makeLeg(-1); makeLeg(1);
+        }
+
+        let mode = "GET_UP", timer = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            world.step(1/60);
+            timer += 0.05;
+
+            const torsoUp = torso.quaternion.vmult(new CANNON.Vec3(0, 1, 0));
+
+            if (mode === "GET_UP") {
+                stateText.innerText = "GET_UP";
+                const torque = torsoUp.cross(new CANNON.Vec3(0, 1, 0));
+                torso.torque.x += torque.x * 500;
+                torso.torque.z += torque.z * 500;
+                if (torsoUp.y > 0.9 && torso.position.y > 1.6) mode = "WALK";
+            } else {
+                stateText.innerText = "WALK";
+                const cycle = Math.sin(timer * 6);
+                joints.forEach((j, i) => {
+                    j.enableMotor();
+                    j.setMotorSpeed(i % 2 === 0 ? cycle * 5 : -cycle * 5);
+                });
+                const torque = torsoUp.cross(new CANNON.Vec3(0, 1, 0));
+                torso.torque.x += torque.x * 400;
+                torso.torque.z += torque.z * 400;
+                torso.applyForce(new CANNON.Vec3(0, 0, 15), torso.position);
+                if (torsoUp.y < 0.7) mode = "GET_UP";
             }
-        });
+
+            objects.forEach(obj => {
+                obj.mesh.position.set(obj.body.position.x, obj.body.position.y, obj.body.position.z);
+                obj.mesh.quaternion.set(obj.body.quaternion.x, obj.body.quaternion.y, obj.body.quaternion.z, obj.body.quaternion.w);
+            });
+
+            camera.position.lerp(new THREE.Vector3(torso.position.x + 5, torso.position.y + 2, torso.position.z + 5), 0.1);
+            camera.lookAt(torso.position.x, torso.position.y, torso.position.z);
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
     </script>
 </body>
 </html>
