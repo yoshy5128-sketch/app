@@ -1,0 +1,2289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ROADRAGE</title>
+<style>
+    body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
+    /* UI系スタイル */
+    #msg { position: absolute; top: 40%; width: 100%; text-align: center; color: #ff3333; font-family: sans-serif; font-size: 40px; font-weight: bold; text-shadow: 2px 2px 0 #000; display: none; pointer-events: none; z-index: 1020; }
+    .touch-area { position: absolute; top: 0; width: 50%; height: 100%; z-index: 1000; display: none; }
+    .touch-left { left: 0; }
+    .touch-right { right: 0; }
+    @media (pointer: coarse) { .touch-area { display: block; } }
+    #fullscreenButton { position: absolute; top: 15px; left: 15px; font-family: sans-serif; font-size: 24px; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 8px 12px; border-radius: 8px; cursor: pointer; user-select: none; z-index: 1010; line-height: 1; display: none; }
+    #zoomSlider { position: absolute; right: -75px; top: 50%; transform: translateY(-50%) rotate(-90deg); width: 200px; height: 10px; -webkit-appearance: none; background: rgba(255, 255, 255, 0.3); outline: none; border-radius: 5px; opacity: 0.7; transition: opacity .2s; z-index: 1010; display: none; }
+    #zoomSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #4CAF50; cursor: pointer; }
+    
+    #hud { position: absolute; top: 5px; width: 100%; display: flex; justify-content: flex-start; gap: 30px; color: white; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; padding-left: 15px; display: none; }
+    #mission-info { position: absolute; top: 5px; width: 100%; text-align: right; color: #ffff00; font-family: sans-serif; font-weight: bold; text-shadow: 2px 2px 2px #000; pointer-events: none; z-index: 1010; font-size: 18px; padding-right: 15px; display: none; }
+
+    #result-screen {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.85); display: none;
+        flex-direction: column; justify-content: center; align-items: center;
+        color: white; font-family: sans-serif; z-index: 2000;
+    }
+    #result-title { font-size: 50px; color: #ffff00; margin-bottom: 20px; text-shadow: 0 0 10px orange; }
+    #mission-bonus { font-size: 36px; color: #00ffff; margin-bottom: 10px; text-shadow: 0 0 5px cyan; }
+    #result-bonus { font-size: 30px; margin-bottom: 20px; color: #00ff00; }
+    #result-total { font-size: 32px; margin-bottom: 40px; color: #ffffff; border-top: 2px solid #555; padding-top: 10px; }
+    
+    .result-btns { display: flex; gap: 15px; }
+    #next-btn, .replay-btn, .post-btn {
+        padding: 15px 30px; font-size: 20px; color: white;
+        border: 2px solid #fff; border-radius: 10px; cursor: pointer;
+        font-weight: bold; text-shadow: 1px 1px 0 #000;
+    }
+    #next-btn { background: #00cc00; }
+    .replay-btn { background: #0088ff; }
+    #save-replay-btn { background: #ff8800; }
+    
+    .money-text { color: #88ff88; }
+
+    #top-screen {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: url('top.png') no-repeat center center;
+        background-size: cover; background-color: #333;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        z-index: 3000;
+        overflow-y: auto;
+        padding-top: 20px;
+        padding-bottom: 100px;
+        box-sizing: border-box;
+        touch-action: pan-y;
+    }
+    .top-title {
+        font-family: sans-serif; font-size: 60px; color: #fff; 
+        text-shadow: 4px 4px 0 #000, -1px -1px 0 #000; margin-bottom: 20px; font-weight: 900;
+    }
+
+    #debug-stage-select {
+        margin-bottom: 20px; color: white; font-family: sans-serif; font-size: 20px;
+        background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px;
+    }
+    #debug-stage-select select { font-size: 18px; padding: 5px; cursor: pointer; }
+
+    .top-btns { display: flex; flex-direction: column; gap: 15px; align-items: center; }
+    .btn-large {
+        padding: 20px 60px; font-size: 30px; background: #ff4400; color: white;
+        border: 3px solid #fff; border-radius: 15px; cursor: pointer;
+        font-weight: bold; font-family: sans-serif; box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    }
+    .btn-sub {
+        padding: 10px 40px; font-size: 20px; background: #444; color: white;
+        border: 2px solid #fff; border-radius: 10px; cursor: pointer;
+    }
+
+    @media (pointer: coarse) and (orientation: landscape) {
+        #top-screen {
+            justify-content: flex-start;
+            padding-top: 10px;
+            padding-bottom: 20px;
+        }
+        .top-title {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+        #debug-stage-select {
+            margin-bottom: 10px;
+            font-size: 16px;
+            padding: 8px;
+        }
+        #debug-stage-select select {
+            font-size: 16px;
+            padding: 4px;
+        }
+        .top-btns {
+            gap: 10px;
+        }
+        .btn-large {
+            padding: 14px 40px;
+            font-size: 22px;
+            border-radius: 12px;
+        }
+        .btn-sub {
+            padding: 8px 28px;
+            font-size: 16px;
+            border-radius: 10px;
+        }
+        #gear-btn {
+            top: 10px;
+            right: 10px;
+            font-size: 32px;
+        }
+    }
+    
+    #gear-btn {
+        position: absolute; top: 20px; right: 20px;
+        font-size: 40px; color: #fff; cursor: pointer;
+        text-shadow: 2px 2px 5px #000; user-select: none;
+        z-index: 3100;
+    }
+
+    #settings-screen {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.9); display: none;
+        flex-direction: column; justify-content: center; align-items: center;
+        z-index: 3100; font-family: sans-serif; color: #fff;
+    }
+    .settings-title { font-size: 40px; margin-bottom: 40px; border-bottom: 2px solid #555; padding-bottom: 10px; width: 80%; text-align: center; }
+    .setting-item { margin-bottom: 30px; width: 300px; display: flex; justify-content: space-between; align-items: center; font-size: 24px; }
+    input[type=range] { width: 150px; cursor: pointer; }
+    #settings-close {
+        margin-top: 40px; padding: 10px 30px; font-size: 20px;
+        background: #555; color: #fff; border: 1px solid #aaa; border-radius: 5px; cursor: pointer;
+    }
+
+    #replay-ui {
+        position: absolute; top: 15px; right: 15px; width: auto; text-align: right;
+        z-index: 4000; display: none; font-family: sans-serif; pointer-events: none;
+    }
+    #replay-info { color: #00ccff; font-size: 16px; font-weight: bold; text-shadow: 1px 1px 2px #000; margin-bottom: 5px; }
+    #exit-replay-btn {
+        pointer-events: auto; padding: 5px 15px; font-size: 14px; background: #ff3333; color: white;
+        border: 1px solid #fff; border-radius: 5px; cursor: pointer;
+    }
+
+    #post-replay-screen {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.8); display: none;
+        flex-direction: column; justify-content: center; align-items: center;
+        color: white; font-family: sans-serif; z-index: 4100;
+    }
+    #post-replay-title { font-size: 40px; color: #00ccff; margin-bottom: 30px; font-weight: bold; }
+
+    #garage-screen {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.95); display: none;
+        flex-direction: column; justify-content: flex-start;
+        align-items: center;
+        z-index: 3500; font-family: sans-serif; color: #fff;
+        overflow-y: auto;
+        padding-top: 50px;
+        padding-bottom: 150px;
+        box-sizing: border-box;
+        touch-action: pan-y;
+    }
+    .garage-slot {
+        margin-bottom: 15px; width: 90%; max-width: 500px; padding: 15px; background: #222;
+        border: 1px solid #444; border-radius: 12px; display: flex; flex-wrap: wrap; justify-content: space-around; align-items: center;
+        gap: 10px;
+    }
+    .garage-slot-info {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex: 1;
+        min-width: 150px;
+    }
+    .garage-slot span { font-weight: bold; font-size: 18px; margin-bottom: 12px; color: #ff9900; }
+    .garage-btn-container { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+    .load-json-btn { background: #ff9900; border: none; color: #000; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+
+    #noise-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 1035; opacity: 0;
+        background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAV7uOTAAAABlBMVEUAAAD///+l2Z/dAAAAnUlEQVQoz9XQMQ7EIAxEUb9S7n/mSKEUKXInS9ZfGZ9mNo6XzOfz+Xw+n8/n8/l8Pp/P5/P5fD6fz+fz+Xw+n8/n8/l8Pp/P5/P5fD6fz+fz+Xw+n8/n8/l8Pp/P5/P5fD6fz+fz+Xw+n8/n8/l8Pp/P5/P5fD6fz+fz+Xw+nz/I5wdpAwGfALp9XAAAAABJRU5ErkJggg==");
+        background-size: 200px 200px;
+    }
+
+    #whiteout-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none; z-index: 1034; opacity: 0;
+        background: radial-gradient(circle at 50% 45%, rgba(255,255,255,0.85) 0%, rgba(240,248,255,0.55) 35%, rgba(220,235,255,0.25) 70%, rgba(220,235,255,0.05) 100%);
+        mix-blend-mode: screen;
+    }
+
+    #orientation-screen {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.92);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 5000;
+        font-family: sans-serif;
+        color: #fff;
+        text-align: center;
+        padding: 20px;
+        box-sizing: border-box;
+    }
+    #orientation-title { font-size: 28px; font-weight: 900; margin-bottom: 14px; }
+    #orientation-desc { font-size: 18px; opacity: 0.9; line-height: 1.5; margin-bottom: 22px; }
+    #enter-fullscreen-btn {
+        padding: 14px 28px; font-size: 20px; font-weight: 900;
+        border: 2px solid #fff; border-radius: 12px;
+        background: #ff4400; color: #fff;
+        cursor: pointer;
+    }
+    #enter-fullscreen-btn[disabled] { opacity: 0.45; cursor: default; }
+
+</style>
+</head>
+<body>
+
+<div id="hud">
+    <div>HP: <span id="p-hp">100</span></div>
+    <div class="money-text">$<span id="p-money">0</span></div>
+    <div>STAGE: <span id="stage-num">1</span></div>
+</div>
+<div id="mission-info">
+    MISSION: <span id="mission-type">PICKUP</span> (Target: <span id="cargo-count">0</span>/<span id="cargo-max">1</span>)
+</div>
+
+<div id="msg">MESSAGE</div>
+<div id="noise-overlay"></div>
+<div id="whiteout-overlay"></div>
+
+<div id="orientation-screen">
+    <div id="orientation-title">横向きでプレイしてください</div>
+    <div id="orientation-desc">端末を横向きにしてから、タップして開始してください。</div>
+    <button id="enter-fullscreen-btn" disabled>タップして開始</button>
+</div>
+
+<div id="replay-ui">
+    <div id="replay-info">REPLAY MODE</div>
+    <div id="exit-replay-btn">EXIT</div>
+</div>
+
+<div id="post-replay-screen">
+    <div id="post-replay-title">REPLAY FINISHED</div>
+    <div class="result-btns">
+        <div class="post-btn replay-btn" id="post-replay-restart">RESTART</div>
+        <div class="post-btn replay-btn" style="background:#ff8800;" id="post-replay-save">SAVE</div>
+        <div class="post-btn" style="background:#444;" id="post-replay-exit">BACK</div>
+    </div>
+</div>
+
+<div id="garage-screen">
+    <div class="settings-title">CAR GARAGE</div>
+    <div class="garage-slot">
+        <canvas id="preview-player" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>PLAYER CAR</span>
+            <div class="garage-btn-container">
+                <button class="load-json-btn" onclick="openCarLoader('player')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=player'" style="background: #0088cc; color:#fff;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div class="garage-slot">
+        <canvas id="preview-enemy1" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>ENEMY 1</span>
+            <div class="garage-btn-container">
+                <button class="load-json-btn" onclick="openCarLoader('enemy1')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=enemy1'" style="background: #0088cc; color:#fff;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div class="garage-slot">
+        <canvas id="preview-enemy2" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>ENEMY 2</span>
+            <div class="garage-btn-container">
+                <button class="load-json-btn" onclick="openCarLoader('enemy2')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=enemy2'" style="background: #0088cc; color:#fff;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div class="garage-slot">
+        <canvas id="preview-enemy3" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>ENEMY 3</span>
+            <div class="garage-btn-container">
+                <button class="load-json-btn" onclick="openCarLoader('enemy3')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=enemy3'" style="background: #0088cc; color:#fff;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div class="garage-slot">
+        <canvas id="preview-enemy4" width="120" height="80"></canvas>
+        <div class="garage-slot-info">
+            <span>ENEMY 4</span>
+            <div class="garage-btn-container">
+                <button class="load-json-btn" onclick="openCarLoader('enemy4')">LOAD JSON</button>
+                <button class="load-json-btn" onclick="location.href='cs.html?slot=enemy4'" style="background: #0088cc; color:#fff;">CUSTOM</button>
+            </div>
+        </div>
+    </div>
+    <div style="display: flex; justify-content: center; gap: 12px; width: 100%; max-width:450px; margin-top: 30px; flex-wrap: wrap;">
+        <button class="btn-sub" onclick="resetCarConfigs()" style="background-color: #8b0000; flex:1; min-width: 140px;">RESET ALL</button>
+        <button class="btn-sub" onclick="setCurrentAsDefault()" style="background-color: #006400; flex:1; min-width: 140px;">SET AS DEFAULT</button>
+        <button class="btn-sub" onclick="exportDefaultCarPack()" style="background-color: #4444aa; flex:1; min-width: 140px;">EXPORT DEFAULTS</button>
+        <button class="btn-sub" onclick="importDefaultCarPack()" style="background-color: #aa4444; flex:1; min-width: 140px;">IMPORT DEFAULTS</button>
+        <button class="btn-sub" onclick="closeGarage()" style="background-color: #555555; flex:1; min-width: 140px;">BACK</button>
+    </div>
+</div>
+
+<div id="top-screen">
+    <div class="top-title">ROADRAGE</div>
+    <div id="debug-stage-select">DEBUG STAGE SELECT: <select id="stage-choice"></select></div>
+    <div class="top-btns">
+        <div class="btn-large" id="start-btn">GAME START</div>
+        <div class="btn-sub" onclick="openGarage()">GARAGE</div>
+    </div>
+    <div id="gear-btn">&#9881;</div>
+</div>
+
+<div id="settings-screen">
+    <div class="settings-title">SETTINGS</div>
+    <div class="setting-item"><span class="setting-label">BGM</span><input type="checkbox" id="bgm-toggle" checked></div>
+    <div class="setting-item"><span class="setting-label">VOLUME</span><input type="range" id="bgm-volume" min="0" max="1" step="0.1" value="0.3"></div>
+    <div id="settings-close">BACK</div>
+</div>
+
+<div id="result-screen">
+    <div id="result-title">STAGE CLEAR</div>
+    <div id="mission-bonus">Mission Complete $1000</div>
+    <div id="result-bonus">Enemy Kill x <span id="kill-disp">0</span> x 100 = $<span id="money-bonus">0</span></div>
+    <div id="result-total">TOTAL MONEY: $<span id="total-money-disp">0</span></div>
+    <div class="result-btns">
+        <div id="next-btn">Next Stage</div>
+    </div>
+</div>
+
+<div class="touch-area touch-left"></div>
+<div class="touch-area touch-right"></div>
+<div id="fullscreenButton">★</div>
+<input type="range" id="zoomSlider" min="0" max="2" step="0.01" value="0.8">
+<div id="redFlash" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: red; opacity: 0; pointer-events: none; z-index: 1030; transition: opacity 0.1s ease-out;"></div>
+
+<input type="file" id="replay-loader" style="display:none" accept=".json">
+<input type="file" id="car-loader" style="display:none" accept=".json">
+<input type="file" id="car-pack-loader" style="display:none" accept=".json">
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script>
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+const stageChoice = document.getElementById('stage-choice');
+for(let i=1; i<=30; i++){ const opt = document.createElement('option'); opt.value = i; opt.innerText = "STAGE " + i; stageChoice.appendChild(opt); }
+
+// --- ガレージ設定 ---
+const carSlots = ['player', 'enemy1', 'enemy2', 'enemy3', 'enemy4'];
+const carConfigs = {};
+carSlots.forEach(slot => {
+    const savedConfig = localStorage.getItem('carConfig_' + slot);
+    const defaultConfig = localStorage.getItem('carConfigDefault_' + slot);
+    carConfigs[slot] = savedConfig ? JSON.parse(savedConfig) : (defaultConfig ? JSON.parse(defaultConfig) : null);
+});
+
+function resetCarConfigs() {
+    if (confirm('すべてのカスタムカー設定をリセットしますか？')) {
+        carSlots.forEach(slot => {
+            localStorage.removeItem('carConfig_' + slot);
+        });
+        alert('設定がリセットされました。');
+        location.reload();
+    }
+}
+
+function setCurrentAsDefault() {
+    if (confirm('現在読み込まれている車設定をデフォルトに設定しますか？')) {
+        carSlots.forEach(slot => {
+            localStorage.setItem('carConfigDefault_' + slot, JSON.stringify(carConfigs[slot]));
+        });
+        alert('デフォルトが更新されました。');
+    }
+}
+
+function exportDefaultCarPack() {
+    const pack = {
+        format: 'threejs-drive-car-defaults',
+        version: 1,
+        createdAt: new Date().toISOString(),
+        slots: {}
+    };
+    carSlots.forEach(slot => {
+        const v = localStorage.getItem('carConfigDefault_' + slot);
+        pack.slots[slot] = v ? JSON.parse(v) : null;
+    });
+    const b = new Blob([JSON.stringify(pack)], { type: 'application/json' });
+    const u = URL.createObjectURL(b);
+    const a = document.createElement('a');
+    a.href = u;
+    a.download = 'car_defaults.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(u), 1000);
+}
+
+function importDefaultCarPack() {
+    const l = document.getElementById('car-pack-loader');
+    l.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (f) => {
+            try {
+                const pack = JSON.parse(f.target.result);
+                if (!pack || pack.format !== 'threejs-drive-car-defaults' || pack.version !== 1 || !pack.slots) {
+                    alert('Invalid car defaults pack');
+                    return;
+                }
+                carSlots.forEach(slot => {
+                    const cfg = Object.prototype.hasOwnProperty.call(pack.slots, slot) ? pack.slots[slot] : null;
+                    localStorage.setItem('carConfigDefault_' + slot, JSON.stringify(cfg));
+                    carConfigs[slot] = cfg;
+                    updateGaragePreview(slot, cfg);
+                });
+                alert('デフォルトをインポートしました。');
+            } catch (err) {
+                alert('Invalid JSON');
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
+    l.click();
+}
+
+function openCarLoader(slot) {
+    const l = document.getElementById('car-loader');
+    l.onchange = (e) => {
+        const file = e.target.files[0]; if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (f) => { 
+            try { 
+                const parsedConfig = JSON.parse(f.target.result);
+                carConfigs[slot] = parsedConfig;
+                localStorage.setItem('carConfig_' + slot, JSON.stringify(parsedConfig));
+                alert(slot.toUpperCase() + " LOADED and SAVED!"); 
+                updateGaragePreview(slot, parsedConfig); 
+            } catch(e){ alert("Invalid JSON"); } 
+        };
+        reader.readAsText(file);
+    };
+    l.click();
+}
+
+function createCarFromConfig(design, defCol) {
+    const p = design || {
+        color: '#' + defCol.toString(16).padStart(6, '0'),
+        width: 2.2, roofWidth: 1.8, totalLength: 5.0, lift: 0.4, noseH: 0.6, noseSlant: 0.2, spoilerAngle: 0.2,
+        hoodL: 1.6, hoodH: 0.8, fSlant: 0.8, roofH: 1.5, roofL: 1.5, rSlant: 1.0, trunkH: 0.9, tailH: 0.7,
+        wheelSizeFront: 0.45, wheelSizeRear: 0.45, wheelTread: 0.1, wheelColor: '#ffffff',
+        headlights: 'Round_2', tailLights: 'Dual', mufflerType: 'Single',
+        bumperF: true, bumperR: true, bumperColor: '#dddddd', frontGrill: true, grillColor: '#111111',
+        rearGarnish: true, garnishColor: '#111111'
+    };
+    if (!p.roofWidth) p.roofWidth = p.width * 0.8;
+
+    const container = new THREE.Group();
+    const visual = new THREE.Group(); 
+    container.add(visual);
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.4, metalness: 0.5 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 1, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+    const wheelMat = new THREE.MeshStandardMaterial({ color: p.wheelColor, metalness: 0.9, roughness: 0.1 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+    const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+
+    const bodyHex = parseInt(String(p.color).replace('#','0x'));
+    const bodyR = ((bodyHex >> 16) & 255) / 255;
+    const bodyG = ((bodyHex >> 8) & 255) / 255;
+    const bodyB = (bodyHex & 255) / 255;
+    const bodyIsRedLike = (bodyR > 0.6 && bodyG < 0.35 && bodyB < 0.35);
+
+    const brakeOffColor = bodyIsRedLike ? 0x070707 : 0x140808;
+    const brakeOnColor = 0xff0000;
+    const brakeOffIntensity = 0.14;
+    const brakeOnIntensity = 11.0;
+
+    const brakeMat = new THREE.MeshStandardMaterial({ color: brakeOffColor, emissive: brakeOnColor, emissiveIntensity: brakeOffIntensity, roughness: 0.18, metalness: 0.0 });
+    brakeMat.toneMapped = false;
+    const bumperMat = new THREE.MeshStandardMaterial({ color: p.bumperColor || 0xdddddd });
+    const grillMat = new THREE.MeshStandardMaterial({ color: p.grillColor || 0x111111 });
+    const garnishMat = new THREE.MeshStandardMaterial({ color: p.garnishColor || 0x111111 });
+    const mufflerMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 1.0 });
+
+    const halfL = p.totalLength / 2; const halfW = p.width / 2;
+    const faceAngle = Math.atan2(p.noseSlant, p.noseH);
+
+    const bShape = new THREE.Shape();
+    bShape.moveTo(halfL, 0); 
+    bShape.lineTo(halfL - p.noseSlant, p.noseH);
+    bShape.lineTo(halfL - p.hoodL, p.hoodH);
+    bShape.lineTo(halfL - p.hoodL - p.fSlant - p.roofL - p.rSlant, p.trunkH);
+    bShape.lineTo(-halfL, p.tailH);
+    bShape.lineTo(-halfL, 0);
+    bShape.closePath();
+    const bodyBase = new THREE.Mesh(new THREE.ExtrudeGeometry(bShape, { depth: p.width, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05 }), bodyMat);
+    bodyBase.position.set(0, p.lift, -halfW); bodyBase.castShadow = bodyBase.receiveShadow = true;
+    visual.add(bodyBase);
+
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(p.roofL, 0.05, p.roofWidth), bodyMat);
+    roof.position.set(halfL - p.hoodL - p.fSlant - (p.roofL / 2), p.lift + p.roofH, 0); visual.add(roof);
+
+    const addG = (s, e, sw, ew) => {
+        const geo = new THREE.BufferGeometry();
+        const wS = sw * 0.49; const wE = ew * 0.49;
+        const verts = new Float32Array([
+            s[0], s[1], -wS,   s[0], s[1], wS,   e[0], e[1], wE,
+            s[0], s[1], -wS,   e[0], e[1], wE,   e[0], e[1], -wE
+        ]);
+        geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        geo.computeVertexNormals();
+        const mesh = new THREE.Mesh(geo, glassMat);
+        mesh.position.y = p.lift; visual.add(mesh);
+    };
+    addG([halfL-p.hoodL, p.hoodH], [halfL-p.hoodL-p.fSlant, p.roofH], p.width, p.roofWidth);
+    addG([halfL-p.hoodL-p.fSlant-p.roofL, p.roofH], [halfL-p.hoodL-p.fSlant-p.roofL-p.rSlant, p.trunkH], p.roofWidth, p.width);
+    
+    [1, -1].forEach(side => {
+        const geo = new THREE.BufferGeometry();
+        const hW = halfW + 0.005; const rW = p.roofWidth / 2 + 0.005;
+        const pts = [
+            new THREE.Vector3(halfL - p.hoodL, p.hoodH, hW * side), 
+            new THREE.Vector3(halfL - p.hoodL - p.fSlant, p.roofH, rW * side), 
+            new THREE.Vector3(halfL - p.hoodL - p.fSlant - p.roofL, p.roofH, rW * side), 
+            new THREE.Vector3(halfL - p.hoodL - p.fSlant - p.roofL - p.rSlant, p.trunkH, hW * side) 
+        ];
+        const verts = new Float32Array([
+            pts[0].x, pts[0].y, pts[0].z,  pts[1].x, pts[1].y, pts[1].z,  pts[2].x, pts[2].y, pts[2].z,
+            pts[0].x, pts[0].y, pts[0].z,  pts[2].x, pts[2].y, pts[2].z,  pts[3].x, pts[3].y, pts[3].z
+        ]);
+        geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        geo.computeVertexNormals();
+        const mesh = new THREE.Mesh(geo, glassMat); mesh.position.y = p.lift; visual.add(mesh);
+    });
+
+    const wheels = []; const wheelZ = halfW + 0.15 + p.wheelTread;
+    const wPosArr = [
+        {x:halfL-0.9, z:wheelZ, s:p.wheelSizeFront, side:1}, {x:halfL-0.9, z:-wheelZ, s:p.wheelSizeFront, side:-1}, 
+        {x:-halfL+0.9, z:wheelZ, s:p.wheelSizeRear, side:1}, {x:-halfL+0.9, z:-wheelZ, s:p.wheelSizeRear, side:-1}
+    ];
+    wPosArr.forEach(pos => {
+        const wg = new THREE.Group();
+        wg.add(new THREE.Mesh(new THREE.CylinderGeometry(pos.s, pos.s, 0.3, 32).rotateX(Math.PI/2), tireMat));
+        wg.add(new THREE.Mesh(new THREE.CylinderGeometry(pos.s*0.75, pos.s*0.75, 0.31, 32).rotateX(Math.PI/2), wheelMat));
+        for(let i=0; i<5; i++) {
+            const spoke = new THREE.Mesh(new THREE.BoxGeometry(pos.s*1.45, 0.08, 0.08), wheelMat);
+            spoke.position.z = 0.16 * pos.side; spoke.rotation.z = (i/5)*Math.PI; wg.add(spoke);
+        }
+        wg.position.set(pos.x, pos.s, pos.z); visual.add(wg); wheels.push(wg);
+    });
+
+    const hlRelY = p.noseH - 0.22; const hlX = halfL - (hlRelY / p.noseH) * p.noseSlant;
+    const createHL = (zSide, isLeft) => {
+        const g = new THREE.Group();
+        let hlMesh;
+        if(p.headlights === 'Round_2') hlMesh = new THREE.Mesh(new THREE.CircleGeometry(0.18, 24).rotateY(Math.PI/2), lightMat);
+        else if(p.headlights === 'Square_2') hlMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 0.22).rotateY(Math.PI/2), lightMat);
+        else if(p.headlights === 'Square_4') {
+            hlMesh = new THREE.Group();
+            [0.12,-0.12].forEach(o=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(0.2,0.14).rotateY(Math.PI/2), lightMat); m.position.z=o; hlMesh.add(m); });
+        }
+        else if(p.headlights === 'Round_Dual'){
+            hlMesh = new THREE.Group();
+            [0.12,-0.12].forEach(o=>{const m=new THREE.Mesh(new THREE.CircleGeometry(0.1,24).rotateY(Math.PI/2),lightMat);m.position.z=o;hlMesh.add(m);});
+        }
+        else if(p.headlights === 'Custom' && p.customHeadlightShape) {
+            const shape = new THREE.Shape();
+            p.customHeadlightShape.forEach((pt, idx) => { if(idx===0) shape.moveTo(pt.x, pt.y); else shape.lineTo(pt.x, pt.y); });
+            hlMesh = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateY(Math.PI/2), lightMat);
+        }
+        if(hlMesh) { if(isLeft) hlMesh.scale.z = -1; g.add(hlMesh); }
+        g.position.set(hlX+0.061, p.lift+hlRelY, zSide); g.rotation.z = faceAngle; visual.add(g);
+    };
+    createHL(halfW - 0.25, false); createHL(-halfW + 0.25, true);
+
+    if(p.frontGrill) {
+        const grill = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.25, p.width*0.45), grillMat);
+        grill.position.set(hlX+0.051, p.lift+hlRelY, 0); grill.rotation.z = faceAngle; visual.add(grill);
+    }
+
+    const tlY = p.lift + p.tailH - 0.25;
+    const brakeLights = [];
+    const createTL = (zSide) => {
+        const g = new THREE.Group();
+        if(p.tailLights === 'Round') {
+            const m = new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), brakeMat);
+            g.add(m); brakeLights.push(m);
+        }
+        else if(p.tailLights === 'Dual') {
+            [0.12,-0.12].forEach(o=>{ const m=new THREE.Mesh(new THREE.CircleGeometry(0.1, 24), brakeMat); m.position.x=o; g.add(m); brakeLights.push(m); });
+        }
+        else {
+            const m = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.2), brakeMat);
+            g.add(m); brakeLights.push(m);
+        }
+        g.rotation.y = -Math.PI/2; g.position.set(-halfL-0.06, tlY, zSide); visual.add(g);
+    };
+    createTL(halfW - 0.25); createTL(-halfW + 0.25);
+    if(p.rearGarnish) {
+        const garn = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.2, p.width*0.45), garnishMat);
+        garn.position.set(-halfL - 0.051, tlY, 0); visual.add(garn);
+    }
+
+    if(p.bumperF) {
+        const bf = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, p.width + 0.2), bumperMat);
+        const bfX = halfL - (0.15/p.noseH)*p.noseSlant;
+        bf.position.set(bfX + 0.08, p.lift + 0.15, 0); 
+        bf.rotation.z = 0; visual.add(bf);
+    }
+    if(p.bumperR) {
+        const br = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, p.width + 0.2), bumperMat);
+        br.position.set(-halfL - 0.08, p.lift + 0.1, 0); visual.add(br);
+    }
+
+    if(p.spoilerAngle > 0) {
+        const sS = new THREE.Shape(); sS.moveTo(0,0); sS.lineTo(p.spoilerAngle,0); sS.lineTo(0,0.15); sS.closePath();
+        const sp = new THREE.Mesh(new THREE.ExtrudeGeometry(sS, {depth:p.width, bevelEnabled:false}), bodyMat);
+        sp.position.set(halfL - 0.05, p.lift, -halfW); visual.add(sp);
+    }
+
+    const createM = (z) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.6, 16).rotateZ(Math.PI/2), mufflerMat);
+        m.position.set(-halfL-0.1, p.lift-0.05, z); visual.add(m);
+    };
+    const mO = halfW - 0.4;
+    if(p.mufflerType === 'Single') createM(-mO); else if(p.mufflerType === 'Dual') { createM(-mO+0.1); createM(-mO-0.1); } else if(p.mufflerType === 'Double') { createM(-mO); createM(mO); }
+
+    // ドアミラーの追加
+    if(p.doorMirrors){ 
+        const mGeo = new THREE.BoxGeometry(0.3, 0.2, 0.05);
+        const sGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.1);
+        const mL = new THREE.Group(); 
+        
+        const mirrorBody = new THREE.Mesh(mGeo, bodyMat);
+        mirrorBody.position.y = 0.15;
+        mirrorBody.position.x = -0.15;
+        mL.add(mirrorBody);
+        
+        const sL = new THREE.Mesh(sGeo, bodyMat);
+        sL.position.y = 0.05;
+        sL.rotation.x = Math.PI / 2;
+        mL.add(sL); 
+        
+        mL.position.set(halfL - p.hoodL, p.lift + p.hoodH, halfW + 0.1);
+        mL.rotation.y = Math.PI / 4;
+        visual.add(mL); 
+        
+        const mR = mL.clone(); 
+        mR.position.z = -halfW - 0.1;
+        mR.rotation.y *= -1; 
+        visual.add(mR); 
+    }
+
+    visual.rotation.y = Math.PI / 2;
+
+    return { group: container, visual, glassMat, wheels, bodyMat, brakeMat, brakeLights, brakeOffColor, brakeOnColor, brakeOffIntensity, brakeOnIntensity, color: parseInt(p.color.replace('#','0x')), hp: 100, dead: false, design: p };
+}
+
+function createCar(color) { return createCarFromConfig(null, color); }
+
+const MAX_SPEED = 2.5, ACCEL = 0.08, FRICTION = 0.96, GRAVITY = 0.1, MAX_ZOOM_LEVEL = 2.0;
+const IS_MOBILE = window.matchMedia("(pointer: coarse)").matches;
+const PLAYER_ACCEL = ACCEL * (IS_MOBILE ? 0.72 : 1.0);
+const PLAYER_MAX_SPEED = MAX_SPEED * (IS_MOBILE ? 0.88 : 1.0);
+const ROAD_WIDTH = 45; // 道幅を少し広げる
+const GUARDRAIL_HEIGHT = 2.5;
+const scene = new THREE.Scene();
+const MAP_HIGHWAY = 1, MAP_DESERT = 2, MAP_PASS = 3, MAP_SNOW = 4;
+let currentMapType = MAP_DESERT;
+let nightMode = false;
+
+const highwayRoadPath = [
+    [0, 0, 5],
+    [1200, 10, 5],
+    [2400, -15, 5],
+    [3600, 20, 5],
+    [4800, -10, 5],
+    [6000, 8, 5],
+    [7500, 0, 5]
+];
+
+const desertRoadPath = [
+    [0, 0, 5],
+    [1200, -25, 5],
+    [2400, 30, 5],
+    [3600, -35, 5],
+    [4800, 28, 5],
+    [6000, -18, 5],
+    [7500, 0, 5]
+];
+
+const passRoadPath = [
+    [0, 0, 7],
+    [450, 140, 7],
+    [900, -160, 7],
+    [1300, 180, 7],
+    [1650, -190, 7],
+    [2000, 200, 7],
+    [2350, -210, 7],
+    [2700, 220, 7],
+    [3050, -200, 7],
+    [3450, 190, 7],
+    [3900, -170, 7],
+    [4300, 160, 7],
+    [4650, -210, 7],
+    [5000, 230, 7],
+    [5350, -240, 7],
+    [5700, 245, 7],
+    [6050, -235, 7],
+    [6400, 220, 7],
+    [6750, -210, 7],
+    [7100, 185, 7],
+    [7500, 0, 7]
+];
+
+const snowRoadPath = [
+    [0, 0, 9],
+    [700, 85, 9],
+    [1400, -95, 9],
+    [2100, 105, 9],
+    [2800, -110, 9],
+    [3500, 120, 9],
+    [4300, -110, 9],
+    [5200, 95, 9],
+    [6200, -70, 9],
+    [7500, 0, 9]
+];
+
+let roadPath = desertRoadPath;
+
+function getRoadWidth(z) {
+    if (currentMapType === MAP_PASS) return ROAD_WIDTH * 0.92;
+    if (currentMapType === MAP_SNOW) return ROAD_WIDTH * 0.92;
+    return ROAD_WIDTH;
+}
+
+function setMapType(t) {
+    currentMapType = t;
+    if (t === MAP_HIGHWAY) roadPath = highwayRoadPath;
+    else if (t === MAP_PASS) roadPath = passRoadPath;
+    else if (t === MAP_SNOW) roadPath = snowRoadPath;
+    else roadPath = desertRoadPath;
+
+    if (t === MAP_HIGHWAY) {
+        scene.background = new THREE.Color(0x87b7ff);
+        if (scene.fog) scene.fog.color.set(0x87b7ff);
+    } else if (t === MAP_SNOW) {
+        scene.background = new THREE.Color(0xdfefff);
+        if (scene.fog) scene.fog.color.set(0xdfefff);
+    } else if (t === MAP_PASS) {
+        scene.background = new THREE.Color(0x8fb0d8);
+        if (scene.fog) scene.fog.color.set(0x8fb0d8);
+    } else {
+        scene.background = new THREE.Color(0x87ceeb);
+        if (scene.fog) scene.fog.color.set(0x87ceeb);
+    }
+}
+scene.background = new THREE.Color(0x87ceeb); scene.fog = new THREE.Fog(0x87ceeb, 200, 1500);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 8000);
+const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(window.devicePixelRatio); renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; document.body.appendChild(renderer.domElement);
+function updateCamera() { const w = window.innerWidth, h = window.innerHeight; renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix(); }
+window.addEventListener('resize', updateCamera); updateCamera();
+scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(100, 150, 100); sun.castShadow = true;
+sun.shadow.camera.left = -100; sun.shadow.camera.right = 100; sun.shadow.camera.top = 100; sun.shadow.camera.bottom = -100; sun.shadow.mapSize.set(2048, 2048); scene.add(sun);
+const mirrorCamera = new THREE.PerspectiveCamera(40, 3.0, 0.1, 500); const mirrorRenderTarget = new THREE.WebGLRenderTarget(256, 85);
+mirrorRenderTarget.texture.repeat.x = -1;
+mirrorRenderTarget.texture.offset.x = 1;
+const mirrorMaterial = new THREE.MeshBasicMaterial({ map: mirrorRenderTarget.texture }); const mirrorMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 0.08), mirrorMaterial); scene.add(mirrorMesh);
+const mirrorFrameMat = new THREE.LineBasicMaterial({ color: 0x111111 });
+const mirrorFrameGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(-0.125, -0.04, 0),
+    new THREE.Vector3(0.125, -0.04, 0),
+    new THREE.Vector3(0.125, 0.04, 0),
+    new THREE.Vector3(-0.125, 0.04, 0),
+    new THREE.Vector3(-0.125, -0.04, 0)
+]);
+const mirrorFrameMesh = new THREE.Line(mirrorFrameGeo, mirrorFrameMat);
+scene.add(mirrorFrameMesh);
+
+function disposeObject3D(obj) {
+    if (!obj) return;
+    obj.traverse?.((c) => {
+        if (c && c.geometry && c.geometry.dispose && !(c.geometry.userData && c.geometry.userData.shared)) c.geometry.dispose();
+        if (c && c.material) {
+            if (Array.isArray(c.material)) c.material.forEach(m => m && m.dispose && !(m.userData && m.userData.shared) && m.dispose());
+            else if (c.material.dispose && !(c.material.userData && c.material.userData.shared)) c.material.dispose();
+        }
+    });
+    if (obj.geometry && obj.geometry.dispose && !(obj.geometry.userData && obj.geometry.userData.shared)) obj.geometry.dispose();
+    if (obj.material) {
+        if (Array.isArray(obj.material)) obj.material.forEach(m => m && m.dispose && !(m.userData && m.userData.shared) && m.dispose());
+        else if (obj.material.dispose && !(obj.material.userData && obj.material.userData.shared)) obj.material.dispose();
+    }
+}
+function findSegment(z) {
+    if (z < roadPath[0][0]) return 0;
+    const lastSegment = roadPath.length - 2;
+    for (let i = 0; i < lastSegment; i++) {
+        if (z >= roadPath[i][0] && z < roadPath[i+1][0]) {
+            return i;
+        }
+    }
+    return lastSegment;
+}
+
+function getRoadX(z) {
+    const segmentIndex = findSegment(z);
+    const start = roadPath[segmentIndex];
+    const end = roadPath[segmentIndex + 1];
+
+    const segmentZ = z - start[0];
+    const segmentLength = end[0] - start[0];
+    if (segmentLength === 0) return start[1];
+    const progress = segmentZ / segmentLength;
+
+    // Cosine Interpolation for smooth curves
+    const t = (1 - Math.cos(progress * Math.PI)) / 2;
+    return start[1] * (1 - t) + end[1] * t;
+}
+
+function getRoadHeight(z) {
+    const segmentIndex = findSegment(z);
+    const start = roadPath[segmentIndex];
+    const end = roadPath[segmentIndex + 1];
+
+    const segmentZ = z - start[0];
+    const segmentLength = end[0] - start[0];
+    if (segmentLength === 0) return start[2];
+    const progress = segmentZ / segmentLength;
+    
+    // Linear interpolation for height to create steady slopes
+    return start[2] + (end[2] - start[2]) * progress;
+}
+
+function getHeight(x, z) {
+    const roadX = getRoadX(z);
+    const roadH = getRoadHeight(z);
+    const shoulder = (currentMapType === MAP_PASS) ? 9.0 : 5.0;
+    const buffer = (currentMapType === MAP_PASS) ? 3.0 : 0.0;
+    const flatBoundary = getRoadWidth(z) / 2 + shoulder + buffer; // 路肩として平坦な領域を確保
+    if (Math.abs(x - roadX) < flatBoundary) {
+        return roadH; // 道路とその隣接エリア（ガードレールを少し超えるまで）は平坦
+    }
+    if (currentMapType === MAP_HIGHWAY) {
+        return roadH + Math.sin(x * 0.03) * 1.2 + Math.cos(z * 0.02) * 1.8;
+    }
+    if (currentMapType === MAP_PASS || currentMapType === MAP_SNOW) {
+        const d = Math.abs(x - roadX) - flatBoundary;
+        const wall = 14 + Math.min(95, d * d * 0.12);
+        const rough = (currentMapType === MAP_SNOW)
+            ? (Math.sin(x * 0.03) * 2.0 + Math.cos(z * 0.02) * 2.5)
+            : (Math.sin(x * 0.035) * 5.0 + Math.cos(z * 0.03) * 6.0);
+        return roadH + wall + rough;
+    }
+    return Math.sin(x * 0.04) * 5 + Math.cos(z * 0.03) * 7;
+}
+const chunks = new Map();
+const snowMounds = [];
+
+const MAX_CHUNK_BUILDS_PER_FRAME = 1;
+const MAX_CHUNK_DISPOSE_PER_FRAME = 4;
+const chunkBuildQueue = [];
+const chunkBuildSet = new Set();
+const chunkDisposeQueue = [];
+
+const chunkShared = (() => {
+    const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, metalness: 0.2 });
+    groundMat.userData = { ...(groundMat.userData || {}), shared: true };
+
+    const guardrailMat = new THREE.MeshStandardMaterial({color: 0xffffff, roughness: 0.5, metalness: 0.8});
+    guardrailMat.userData = { ...(guardrailMat.userData || {}), shared: true };
+
+    const postRadius = 0.2;
+    const postHeight = (GUARDRAIL_HEIGHT + 0.2) / 2;
+    const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, postHeight, 8);
+    postGeo.userData = { ...(postGeo.userData || {}), shared: true };
+
+    const lampPoleHeight = 11.5;
+    const lampPoleRadius = 0.18;
+    const lampPoleGeo = new THREE.CylinderGeometry(lampPoleRadius, lampPoleRadius, lampPoleHeight, 10);
+    lampPoleGeo.userData = { ...(lampPoleGeo.userData || {}), shared: true };
+
+    const lampArmLen = 2.6;
+    const lampArmGeo = new THREE.BoxGeometry(lampArmLen, 0.14, 0.14);
+    lampArmGeo.userData = { ...(lampArmGeo.userData || {}), shared: true };
+
+    const lampHeadGeo = new THREE.SphereGeometry(0.32, 10, 10);
+    lampHeadGeo.userData = { ...(lampHeadGeo.userData || {}), shared: true };
+
+    const lampPoleMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.35, metalness: 0.7 });
+    lampPoleMat.userData = { ...(lampPoleMat.userData || {}), shared: true };
+
+    const lampHeadMat = new THREE.MeshStandardMaterial({ color: 0xfff2cc, emissive: 0xffeeaa, emissiveIntensity: 1.4, roughness: 0.2, metalness: 0.0 });
+    lampHeadMat.userData = { ...(lampHeadMat.userData || {}), shared: true };
+
+    const moundMat = new THREE.MeshStandardMaterial({ color: 0xfafcff, roughness: 0.95, metalness: 0.0 });
+    moundMat.userData = { ...(moundMat.userData || {}), shared: true };
+
+    const moundGeo = new THREE.DodecahedronGeometry(1.0, 0);
+    moundGeo.userData = { ...(moundGeo.userData || {}), shared: true };
+
+    const centerLineMat = new THREE.MeshBasicMaterial({color: 0xffffff});
+    centerLineMat.userData = { ...(centerLineMat.userData || {}), shared: true };
+
+    return {
+        groundMat,
+        guardrailMat,
+        postGeo,
+        postRadius,
+        postHeight,
+        railRadius: 0.25,
+        lampPoleHeight,
+        lampArmLen,
+        lampPoleGeo,
+        lampArmGeo,
+        lampHeadGeo,
+        lampPoleMat,
+        lampHeadMat,
+        moundMat,
+        moundGeo,
+        centerLineMat
+    };
+})();
+
+function enqueueChunkDispose(obj) {
+    if (!obj) return;
+    chunkDisposeQueue.push(obj);
+}
+
+function enqueueChunkBuild(x, z) {
+    const key = `${x},${z}`;
+    if (chunks.has(key)) return;
+    if (chunkBuildSet.has(key)) return;
+    chunkBuildSet.add(key);
+    chunkBuildQueue.push({ x, z, key });
+}
+
+function buildChunk(x, z, key) {
+    const geo = new THREE.PlaneGeometry(400, 400, 40, 40);
+    geo.rotateX(-Math.PI/2);
+    const pos = geo.attributes.position;
+    const colors = [];
+    let roadColor = new THREE.Color(0x333333);
+    let groundColor;
+    if (currentMapType === MAP_HIGHWAY) groundColor = new THREE.Color(0x2f7d32);
+    else if (currentMapType === MAP_SNOW) groundColor = new THREE.Color(0xf2f7ff);
+    else if (currentMapType === MAP_PASS) groundColor = new THREE.Color(0x5b6a58);
+    else groundColor = new THREE.Color(0x998877);
+
+    if (currentMapType === MAP_PASS) roadColor = new THREE.Color(0x555555);
+    else if (currentMapType === MAP_SNOW) roadColor = new THREE.Color(0xe6e6e6);
+
+    for(let i=0; i<pos.count; i++) {
+        const wx = pos.getX(i) + x*400;
+        const wz = pos.getZ(i) + z*400;
+        const wy = getHeight(wx, wz);
+        pos.setY(i, wy);
+
+        const roadX = getRoadX(wz);
+        const shoulder = (currentMapType === MAP_PASS) ? 9.0 : 5.0;
+        const guardrailBoundary = getRoadWidth(wz) / 2 + shoulder;
+        if (Math.abs(wx - roadX) < guardrailBoundary) {
+            colors.push(roadColor.r, roadColor.g, roadColor.b);
+        } else {
+            if (currentMapType === MAP_PASS) {
+                const roadH = getRoadHeight(wz);
+                const h = THREE.MathUtils.clamp((wy - roadH) / 120, 0, 1);
+                const noise = 0.5 + 0.5 * Math.sin(wx * 0.018 + wz * 0.012);
+                const t = THREE.MathUtils.clamp(Math.pow(h, 1.65) * 0.75 + noise * 0.25, 0, 1);
+                const cA = new THREE.Color(0x0b3d1e);
+                const cB = new THREE.Color(0x8b6b3f);
+                const c = cA.lerp(cB, t);
+                colors.push(c.r, c.g, c.b);
+            } else {
+                colors.push(groundColor.r, groundColor.g, groundColor.b);
+            }
+        }
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, chunkShared.groundMat);
+    m.position.set(x*400, 0, z*400);
+    m.receiveShadow = true;
+    scene.add(m);
+    chunks.set(key, m);
+
+    [-1, 1].forEach(side => {
+        const railPoints = [];
+        const posts = new THREE.Group();
+
+        for(let i = 0; i <= 40; i++) {
+            const rz = z*400 + i*10;
+            const rx = getRoadX(rz) + (getRoadWidth(rz) / 2 + chunkShared.postRadius) * side;
+            const groundY = getRoadHeight(rz);
+
+            railPoints.push(new THREE.Vector3(rx, groundY + chunkShared.postHeight / 2, rz));
+
+            if (i % 4 === 0 && i < 40) {
+               if (currentMapType === MAP_HIGHWAY && i % 32 === 0) {
+                   const lamp = new THREE.Group();
+                   const pole = new THREE.Mesh(chunkShared.lampPoleGeo, chunkShared.lampPoleMat);
+                   pole.position.set(rx, groundY + chunkShared.lampPoleHeight / 2, rz);
+                   pole.castShadow = true;
+                   lamp.add(pole);
+
+                   const arm = new THREE.Mesh(chunkShared.lampArmGeo, chunkShared.lampPoleMat);
+                   arm.position.set(rx - side * (chunkShared.lampArmLen * 0.5), groundY + chunkShared.lampPoleHeight - 0.25, rz);
+                   arm.castShadow = true;
+                   lamp.add(arm);
+
+                   const head = new THREE.Mesh(chunkShared.lampHeadGeo, chunkShared.lampHeadMat);
+                   head.position.set(rx - side * chunkShared.lampArmLen, groundY + chunkShared.lampPoleHeight - 0.85, rz);
+                   lamp.add(head);
+
+                   if (nightMode) {
+                       const light = new THREE.PointLight(0xfff2cc, 1.2, 35, 2.0);
+                       light.position.set(rx - side * chunkShared.lampArmLen, groundY + chunkShared.lampPoleHeight - 0.85, rz);
+                       lamp.add(light);
+                   }
+
+                   posts.add(lamp);
+               } else {
+                   const post = new THREE.Mesh(chunkShared.postGeo, chunkShared.guardrailMat);
+                   post.position.set(rx, groundY + chunkShared.postHeight / 2, rz);
+                   post.castShadow = true;
+                   posts.add(post);
+               }
+            }
+        }
+
+        const curve = new THREE.CatmullRomCurve3(railPoints);
+        const rail = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, chunkShared.railRadius, 6, false), chunkShared.guardrailMat);
+        rail.castShadow = true;
+        scene.add(rail);
+        chunks.set(`${key}_rail_${side}`, rail);
+
+        scene.add(posts);
+        chunks.set(`${key}_posts_${side}`, posts);
+    });
+
+    if (currentMapType === MAP_SNOW) {
+        const moundGroup = new THREE.Group();
+        const roll = Math.random();
+        const moundCount = (roll < 0.70) ? 0 : ((roll < 0.95) ? 1 : 2);
+        for (let k = 0; k < moundCount; k++) {
+            const rz = z*400 + 40 + Math.random() * 320;
+            const rw = getRoadWidth(rz);
+            const rx = getRoadX(rz) + (Math.random() - 0.5) * (rw - 10);
+            const ry = getRoadHeight(rz) + 0.9;
+            const mnd = new THREE.Mesh(chunkShared.moundGeo, chunkShared.moundMat);
+            const s = 1.2 + Math.random() * 1.4;
+            mnd.scale.set(1.8*s, 1.0*s, 1.8*s);
+            mnd.position.set(rx, ry, rz);
+            mnd.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+            mnd.castShadow = true;
+            moundGroup.add(mnd);
+            snowMounds.push({ mesh: mnd, r: 2.3*s, dead: false });
+        }
+        scene.add(moundGroup);
+        chunks.set(`${key}_mounds`, moundGroup);
+    }
+
+    const vertices = [];
+    const lineWidth = 0.2;
+    const dashSize = 5;
+    const gapSize = 5;
+
+    for(let i = 0; i < 40; i++) {
+        if ( (i % (dashSize + gapSize)) < dashSize ) {
+            const z1 = z*400 + i*10;
+            const z2 = z*400 + (i+1)*10;
+
+            const x1 = getRoadX(z1);
+            const x2 = getRoadX(z2);
+
+            const y1 = getRoadHeight(z1) + 0.05;
+            const y2 = getRoadHeight(z2) + 0.05;
+
+            const dir = new THREE.Vector3(x2 - x1, y2 - y1, z2 - z1).normalize();
+            const perpendicular = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+
+            const p1 = new THREE.Vector3(x1, y1, z1);
+            const p2 = new THREE.Vector3(x2, y2, z2);
+
+            const v1 = p1.clone().add(perpendicular.clone().multiplyScalar(-lineWidth));
+            const v2 = p1.clone().add(perpendicular.clone().multiplyScalar(lineWidth));
+            const v3 = p2.clone().add(perpendicular.clone().multiplyScalar(lineWidth));
+            const v4 = p2.clone().add(perpendicular.clone().multiplyScalar(-lineWidth));
+
+            vertices.push(v1.x, v1.y, v1.z,  v2.x, v2.y, v2.z,  v3.x, v3.y, v3.z);
+            vertices.push(v1.x, v1.y, v1.z,  v3.x, v3.y, v3.z,  v4.x, v4.y, v4.z);
+        }
+    }
+
+    if (vertices.length > 0) {
+        const centerLineGeo = new THREE.BufferGeometry();
+        centerLineGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        centerLineGeo.computeVertexNormals();
+
+        const centerLine = new THREE.Mesh(centerLineGeo, chunkShared.centerLineMat);
+        scene.add(centerLine);
+        chunks.set(`${key}_centerline`, centerLine);
+    }
+}
+
+function processChunkBuildQueue() {
+    for (let i = 0; i < MAX_CHUNK_BUILDS_PER_FRAME && chunkBuildQueue.length > 0; i++) {
+        const item = chunkBuildQueue.shift();
+        if (!item) continue;
+        chunkBuildSet.delete(item.key);
+        if (chunks.has(item.key)) continue;
+        buildChunk(item.x, item.z, item.key);
+    }
+}
+
+function processChunkDisposeQueue() {
+    for (let i = 0; i < MAX_CHUNK_DISPOSE_PER_FRAME && chunkDisposeQueue.length > 0; i++) {
+        const obj = chunkDisposeQueue.shift();
+        if (!obj) continue;
+        try { disposeObject3D(obj); } catch (e) {}
+    }
+}
+
+function updateChunks(px, pz) {
+    const cx = Math.floor(px/400), cz = Math.floor(pz/400);
+    for(let x=cx-2; x<=cx+2; x++) {
+        for(let z=cz-2; z<=cz+2; z++) {
+            enqueueChunkBuild(x, z);
+        }
+    }
+
+    for (const [k, obj] of chunks) {
+        const coordPart = String(k).split('_')[0];
+        const parts = coordPart.split(',');
+        if (parts.length < 2) continue;
+        const x = parseInt(parts[0], 10);
+        const z = parseInt(parts[1], 10);
+        if (!Number.isFinite(x) || !Number.isFinite(z)) continue;
+        if (x < cx - 3 || x > cx + 3 || z < cz - 3 || z > cz + 3) {
+            if (obj) {
+                try { scene.remove(obj); } catch (e) {}
+                enqueueChunkDispose(obj);
+            }
+            chunks.delete(k);
+        }
+    }
+}
+const particles = [];
+
+const MAX_PARTICLES = 420;
+const particleShared = (() => {
+    const sphereGeo = {
+        spark: new THREE.SphereGeometry(0.2, 4, 4),
+        dust: new THREE.SphereGeometry(0.4, 4, 4),
+        smoke: new THREE.SphereGeometry(0.6, 4, 4),
+        sand: new THREE.SphereGeometry(0.4, 4, 4),
+        snow: new THREE.SphereGeometry(0.55, 4, 4)
+    };
+    Object.values(sphereGeo).forEach(g => { g.userData = { ...(g.userData || {}), shared: true }; });
+
+    const mats = {
+        spark: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }),
+        dust: new THREE.MeshBasicMaterial({ color: 0xd2c08a, transparent: true, opacity: 0.6 }),
+        smoke: new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.6 }),
+        sand: new THREE.MeshBasicMaterial({ color: 0x8b7355, transparent: true, opacity: 0.6 }),
+        snow: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 })
+    };
+    Object.values(mats).forEach(m => { m.userData = { ...(m.userData || {}), shared: true }; });
+
+    return { sphereGeo, mats };
+})();
+
+function spawnDust(pos, isSpark = false, isSmoke = false, isSand = false, isSnow = false) {
+    const type = isSnow ? 'snow' : (isSmoke ? 'smoke' : (isSand ? 'sand' : (isSpark ? 'spark' : 'dust')));
+    const geo = particleShared.sphereGeo[type] || particleShared.sphereGeo.dust;
+    const mat = particleShared.mats[type] || particleShared.mats.dust;
+    const p = new THREE.Mesh(geo, mat);
+    p.position.copy(pos);
+    const vel = isSmoke
+        ? new THREE.Vector3((Math.random()-0.5)*0.2, 0.2+Math.random()*0.2, (Math.random()-0.5)*0.2)
+        : new THREE.Vector3((Math.random()-0.5)*(isSnow?0.8:0.3), Math.random()*(isSnow?1.2:0.5) + 0.2, (Math.random()-0.5)*(isSnow?0.8:0.3));
+    if (isSand) vel.set((Math.random()-0.5)*15, (Math.random()-0.2)*0.5, (Math.random()-0.5)*15);
+    p.userData = { life: 1.0, vel: vel, type };
+    scene.add(p);
+    particles.push(p);
+
+    if (particles.length > MAX_PARTICLES) {
+        const old = particles.shift();
+        if (old) {
+            scene.remove(old);
+        }
+    }
+}
+function spawnDebris(pos, color, scale, count = 5) {
+    const geo = new THREE.BoxGeometry(scale, scale, scale); const mat = new THREE.MeshStandardMaterial({ color });
+    for(let i=0; i<count; i++) {
+        const p = new THREE.Mesh(geo, mat); p.position.copy(pos).add(new THREE.Vector3((Math.random()-0.5)*2, Math.random()*2, (Math.random()-0.5)*2));
+        p.userData = { life: 1.0+Math.random(), vel: new THREE.Vector3((Math.random()-0.5)*1.5, Math.random()*0.8+0.5, (Math.random()-0.5)*1.5), rot: new THREE.Vector3(Math.random()*0.5, Math.random()*0.5, Math.random()*0.5), type: 'debris' };
+        scene.add(p); particles.push(p);
+    }
+}
+
+let player = createCarFromConfig(carConfigs.player, 0xcc2222);
+player.speed = player.lastSpeed = player.vY = player.yaw = player.pitch = player.roll = 0; player.impactV = new THREE.Vector3(); scene.add(player.group);
+
+let enemies = [];
+const enemyColors = [0x00cc00, 0xcccc00, 0xcc22cc, 0xeeeeee, 0x2244cc, 0xcc5500];
+let oncomingCars = [];
+let nextOncomingSpawnZ = 0;
+const ONCOMING_SPAWN_INTERVAL = 1000;
+const ONCOMING_SPAWN_AHEAD = 1200;
+const ONCOMING_DESPAWN_BEHIND = 260;
+const ONCOMING_SPEED = 1.65;
+const ONCOMING_COLLISION_RADIUS = 3.8;
+const ONCOMING_MAX_SPAWNS_PER_FRAME = 1;
+function spawnOncomingCar(spawnZ) {
+    const roadCenterX = getRoadX(spawnZ);
+    const laneOffset = Math.max(6.0, getRoadWidth(spawnZ) * 0.25);
+    const x = roadCenterX + laneOffset;
+    const y = getHeight(x, spawnZ);
+
+    const col = enemyColors[Math.floor(Math.random()*enemyColors.length)];
+    const slotIdx = 1 + Math.floor(Math.random()*4);
+    const slotDesign = carConfigs['enemy'+slotIdx];
+    const car = { ...createCarFromConfig((slotDesign && slotDesign.width && slotDesign.totalLength && slotDesign.noseH) ? slotDesign : null, col), speed: ONCOMING_SPEED, yaw: 0, impactV: new THREE.Vector3(), dead: false };
+    car.group.position.set(x, y, spawnZ);
+    car.group.quaternion.setFromEuler(new THREE.Euler(0, car.yaw, 0));
+    scene.add(car.group);
+    oncomingCars.push(car);
+}
+function spawnEnemyAt(x, z) {
+    const slotIdx = 1 + Math.floor(Math.random()*4);
+    const slotDesign = carConfigs['enemy'+slotIdx];
+    
+    // スロットにデザインがある場合はその色を使用し、ない場合のみランダムなデフォルトカラーを使用
+    let col;
+    if (slotDesign && slotDesign.color) {
+        col = parseInt(slotDesign.color.replace('#','0x'));
+    } else {
+        col = enemyColors[Math.floor(Math.random()*enemyColors.length)];
+    }
+
+    const ent = { ...createCarFromConfig((slotDesign && slotDesign.width && slotDesign.totalLength && slotDesign.noseH) ? slotDesign : null, col), speed: 0, lastSpeed: 0, yaw: Math.PI, pitch: 0, roll: 0, attackTimer: 0, impactV: new THREE.Vector3(), color: col, ai: { mode: 'race', t: 0, nextDecision: 0, targetOffset: 0, brakeUntil: 0, reverseUntil: 0, tauntUntil: 0 } };
+    const sy = (currentMapType === MAP_HIGHWAY) ? getHeight(x, z) : getRoadHeight(z);
+    ent.group.position.set(x, sy, z);
+    ent.group.quaternion.setFromEuler(new THREE.Euler(0, ent.yaw, 0));
+    scene.add(ent.group); enemies.push(ent);
+}
+function updateEnemiesCount(count) {
+    enemies.forEach(e => { if (e && e.group) { scene.remove(e.group); disposeObject3D(e.group); } });
+    enemies = [];
+    for(let i=0; i<count; i++) {
+        const baseZ = player.group.position.z;
+        const sx = getRoadX(baseZ) + (Math.random()-0.5) * (getRoadWidth(baseZ) * 0.35);
+        const sz = baseZ - 6 - i * 3;
+        spawnEnemyAt(sx, sz);
+    }
+}
+
+let gameState = 'TOP', killCount = 0, playerMoney = 0, currentStage = 1, currentCargo = 0, maxCargo = 1, missionState = 'pickup', stageEnemyCount = 0;
+let sandstormIntensity = 0, sandstormPeak = false, sandstormCycleTimer = 0;
+let blizzardIntensity = 0, blizzardPeak = false, blizzardCycleTimer = 0;
+const sandstormClouds = new THREE.Group(); scene.add(sandstormClouds);
+const cloudTex = (() => { const c=document.createElement('canvas'); c.width=c.height=256; const ctx=c.getContext('2d'); const g=ctx.createRadialGradient(128,128,0,128,128,128); g.addColorStop(0,'rgba(90,74,58,1)'); g.addColorStop(1,'rgba(90,74,58,0)'); ctx.fillStyle=g; ctx.fillRect(0,0,256,256); return new THREE.CanvasTexture(c); })();
+function createSandWall() { sandstormClouds.clear(); const mat=new THREE.MeshBasicMaterial({map:cloudTex,transparent:true,opacity:0,fog:false,depthWrite:false}); for(let i=0; i<15; i++){ const m=new THREE.Mesh(new THREE.PlaneGeometry(1200,800),mat); m.position.set((Math.random()-0.5)*1500,300+(Math.random()-0.5)*200,(Math.random()-0.5)*400); m.rotation.z=Math.random()*Math.PI; sandstormClouds.add(m); } }
+createSandWall();
+
+// --- リプレイ ---
+const REPLAY_ENABLED = false;
+let replayBuffer = [], replayIndex = 0, isReplaying = false;
+function recordFrame() {
+    if (!REPLAY_ENABLED) return;
+    replayBuffer.push({
+        p: { pos: {x:player.group.position.x, y:player.group.position.y, z:player.group.position.z}, quat: {_x:player.group.quaternion.x, _y:player.group.quaternion.y, _z:player.group.quaternion.z, _w:player.group.quaternion.w}, hp: player.hp, dead: player.dead, speed: player.speed, design: player.design },
+        e: enemies.map(en => ({ pos: {x:en.group.position.x, y:en.group.position.y, z:en.group.position.z}, quat: {_x:en.group.quaternion.x, _y:en.group.quaternion.y, _z:en.group.quaternion.z, _w:en.group.quaternion.w}, hp: en.hp, dead: en.dead, speed: en.speed, color: en.color, design: en.design })),
+        sand: { intensity: sandstormIntensity, peak: sandstormPeak, cycle: sandstormCycleTimer },
+        target: {x:targetPos.x, y:targetPos.y, z:targetPos.z},
+        mission: { type: missionState, cargo: currentCargo, max: maxCargo, stage: currentStage }
+    });
+}
+function startReplay(data) {
+    if (!REPLAY_ENABLED) return;
+    if (!data || data.length === 0) return;
+    replayBuffer = data; replayIndex = 0; isReplaying = true; gameState = 'PLAY'; const f = data[0];
+    scene.remove(player.group); 
+    player = { ...createCarFromConfig(f.p.design, 0xcc2222), speed:0, lastSpeed:0, vY:0, yaw:0, pitch:0, roll:0, impactV: new THREE.Vector3() };
+    player.group.position.set(f.p.pos.x, f.p.pos.y, f.p.pos.z); scene.add(player.group); smoothedCamPos.copy(player.group.position);
+    enemies.forEach(e => scene.remove(e.group));
+    enemies = f.e.map(ed => { const ent = { ...createCarFromConfig(ed.design, ed.color), dead: false, speed: 0, color: ed.color }; ent.group.position.set(ed.pos.x, ed.pos.y, ed.pos.z); scene.add(ent.group); return ent; });
+    document.getElementById('top-screen').style.display='none'; document.getElementById('result-screen').style.display='none'; document.getElementById('post-replay-screen').style.display='none';
+    document.getElementById('replay-ui').style.display='block'; document.getElementById('hud').style.display='flex'; document.getElementById('mission-info').style.display='block'; document.getElementById('zoomSlider').style.display='block';
+    initAudio(); const pl=['mh.mp3','as.mp3','fu.mp3','vp.mp3','pr.mp3']; bgmAudio.src=pl[(f.mission.stage-1)%pl.length]; bgmAudio.play().catch(e=>{});
+}
+function exitReplay() { isReplaying = false; document.getElementById('replay-ui').style.display = 'none'; document.getElementById('post-replay-screen').style.display = 'flex'; }
+function saveCurrentReplay() { const b = new Blob([JSON.stringify(replayBuffer)], {type:'application/json'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href=u; a.download=`replay_st${currentStage}.json`; a.click(); }
+
+if (REPLAY_ENABLED) {
+    document.getElementById('save-replay-btn').addEventListener('click', saveCurrentReplay);
+    document.getElementById('post-replay-save').addEventListener('click', saveCurrentReplay);
+    document.getElementById('gallery-btn').addEventListener('click', () => { document.getElementById('replay-loader').click(); });
+    document.getElementById('replay-loader').addEventListener('change', (e) => { const file = e.target.files[0]; if(!file)return; const r=new FileReader(); r.onload=(f)=>{startReplay(JSON.parse(f.target.result));}; r.readAsText(file); });
+    document.getElementById('local-replay-btn').addEventListener('click', () => { startReplay([...replayBuffer]); });
+    document.getElementById('post-replay-restart').addEventListener('click', () => { startReplay([...replayBuffer]); });
+    document.getElementById('exit-replay-btn').addEventListener('click', exitReplay);
+} else {
+    const ru = document.getElementById('replay-ui');
+    if (ru) ru.style.display = 'none';
+    const rl = document.getElementById('replay-loader');
+    if (rl) rl.value = '';
+}
+document.getElementById('post-replay-exit').addEventListener('click', () => { document.getElementById('post-replay-screen').style.display = 'none'; if(replayBuffer.length>0&&(gameState==='CLEAR'||gameState==='PLAY')){ document.getElementById('result-screen').style.display='flex'; gameState='CLEAR'; } else showTopScreen(); document.getElementById('hud').style.display='none'; document.getElementById('mission-info').style.display='none'; });
+
+let bgmEnabled = true, bgmVolume = 0.5; const bgmAudio = new Audio(); bgmAudio.loop = true;
+function updateBgmVolume() { if(!bgmEnabled){ bgmAudio.volume=0; if(!bgmAudio.paused)bgmAudio.pause(); } else { bgmAudio.volume=bgmVolume; if(bgmAudio.paused&&gameState==='PLAY')bgmAudio.play().catch(e=>{}); } }
+
+const beaconRedMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, fog: false });
+const beaconGreenMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5, fog: false });
+const beaconMesh = new THREE.Mesh(new THREE.CylinderGeometry(40,40,5000,32), beaconRedMat); beaconMesh.position.y = 2500; scene.add(beaconMesh);
+let targetPos = new THREE.Vector3();
+function setNextObjective() {
+    missionState = 'goal';
+    const GOAL_DISTANCE = 15750; // 5250 * 3
+    // ゴールをZ軸の前方に設定
+    targetPos.set(getRoadX(player.group.position.z + GOAL_DISTANCE), getRoadHeight(player.group.position.z + GOAL_DISTANCE), player.group.position.z + GOAL_DISTANCE);
+    
+    beaconMesh.material = beaconGreenMat;
+    document.getElementById('mission-info').innerHTML = `MISSION: <span style="color:#33ff33;">REACH THE GOAL</span>`;
+    document.getElementById('stage-num').innerText=currentStage;
+}
+function initStage(stage) {
+    currentStage = stage; currentCargo = killCount = 0; gameState = 'PLAY'; replayBuffer = []; isReplaying = false;
+    const mapStage = ((stage - 1) % 4) + 1;
+    setMapType(mapStage);
+    sandstormIntensity = 0; sandstormPeak = false; sandstormCycleTimer = 0;
+    blizzardIntensity = 0; blizzardPeak = false; blizzardCycleTimer = 0;
+    document.getElementById('noise-overlay').style.opacity = 0;
+    document.getElementById('whiteout-overlay').style.opacity = 0;
+    // ステージ跨ぎでの負荷蓄積を防ぐ
+    chunkBuildQueue.length = 0;
+    chunkBuildSet.clear();
+    chunkDisposeQueue.length = 0;
+    for (const [k, obj] of chunks) {
+        if (obj) {
+            scene.remove(obj);
+            enqueueChunkDispose(obj);
+        }
+    }
+    chunks.clear();
+    snowMounds.length = 0;
+    for (let i = oncomingCars.length - 1; i >= 0; i--) {
+        const oc = oncomingCars[i];
+        if (oc && oc.group) { scene.remove(oc.group); disposeObject3D(oc.group); }
+    }
+    oncomingCars.length = 0;
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        scene.remove(p);
+        if (p && p.geometry && p.geometry.dispose) p.geometry.dispose();
+        if (p && p.material) {
+            if (Array.isArray(p.material)) p.material.forEach(m => m && m.dispose && m.dispose());
+            else if (p.material.dispose) p.material.dispose();
+        }
+    }
+    particles.length = 0;
+    scene.remove(player.group);
+    disposeObject3D(player.group);
+    player = { ...createCarFromConfig(carConfigs.player, 0xcc2222), speed:0, lastSpeed:0, vY:0, yaw:Math.PI, pitch:0, roll:0, impactV: new THREE.Vector3(), laneOffset: 0, lastYaw: Math.PI, isDrifting: false };
+    {
+        const spawnZ = 0;
+        const spawnX = getRoadX(spawnZ);
+        const spawnY = getRoadHeight(spawnZ);
+        player.group.position.set(spawnX, spawnY, spawnZ);
+        player.group.quaternion.setFromEuler(new THREE.Euler(0, player.yaw, 0));
+    }
+    scene.add(player.group);
+    lookYaw = 0; lookPitch = 0; zoomLevel = 0.8;
+    smoothedCamPos.copy(player.group.position);
+    document.getElementById('hud').style.display='flex'; document.getElementById('mission-info').style.display='block'; document.getElementById('fullscreenButton').style.display='block';
+    if(window.matchMedia("(pointer: coarse)").matches) document.getElementById('zoomSlider').style.display='block';
+    stageEnemyCount = stage <= 2 ? 1 : (stage === 3 ? 2 : 3); // 敵の数はとりあえずそのまま
+    updateEnemiesCount(stageEnemyCount);
+    nextOncomingSpawnZ = Math.ceil((player.group.position.z + ONCOMING_SPAWN_AHEAD) / ONCOMING_SPAWN_INTERVAL) * ONCOMING_SPAWN_INTERVAL;
+    setNextObjective(); // 引数なしで呼び出し
+    showMsg("STAGE " + stage + " START");
+    if(bgmEnabled){ const pl=['mh.mp3','as.mp3','fu.mp3','vp.mp3','pr.mp3']; bgmAudio.src=pl[(stage-1)%pl.length]; bgmAudio.play().catch(e=>{}); }
+}
+function showMsg(t, dur=3000){ const m=document.getElementById('msg'); m.innerText=t; m.style.display='block'; setTimeout(()=>m.style.display='none',dur); }
+function showResultScreen(){ gameState='CLEAR'; document.getElementById('result-screen').style.display='flex'; bgmAudio.pause(); if(pGain){pGain.gain.cancelScheduledValues(audioCtx.currentTime);pGain.gain.setValueAtTime(0,audioCtx.currentTime);} playSFX('jin.mp3'); playerMoney+=1000+killCount*100; document.getElementById('p-money').innerText=playerMoney; document.getElementById('kill-disp').innerText=killCount; document.getElementById('money-bonus').innerText=killCount*100; document.getElementById('total-money-disp').innerText=playerMoney; }
+
+document.getElementById('next-btn').addEventListener('click', () => {
+    document.getElementById('result-screen').style.display='none';
+    const nextStage = parseInt(currentStage, 10) + 1;
+    const mapStage = ((nextStage - 1) % 4) + 1;
+    if (mapStage === MAP_HIGHWAY && nextStage > 1) {
+        sessionStorage.setItem('resumeStage', String(nextStage));
+        location.reload();
+        return;
+    }
+    initStage(nextStage);
+});
+document.getElementById('start-btn').addEventListener('click', () => { document.getElementById('top-screen').style.display='none'; initAudio(); initStage(parseInt(document.getElementById('stage-choice').value, 10)); });
+document.getElementById('gear-btn').addEventListener('click', () => { document.getElementById('top-screen').style.display='none'; document.getElementById('settings-screen').style.display='flex'; });
+document.getElementById('settings-close').addEventListener('click', () => { document.getElementById('settings-screen').style.display='none'; showTopScreen(); });
+document.getElementById('bgm-toggle').addEventListener('change', (e) => { bgmEnabled = e.target.checked; updateBgmVolume(); });
+document.getElementById('bgm-volume').addEventListener('input', (e) => { bgmVolume = parseFloat(e.target.value); updateBgmVolume(); });
+
+{
+    const rs = sessionStorage.getItem('resumeStage');
+    if (rs) {
+        sessionStorage.removeItem('resumeStage');
+        const st = parseInt(rs, 10);
+        const sc = document.getElementById('stage-choice');
+        if (sc && Number.isFinite(st)) sc.value = String(st);
+    }
+}
+
+let audioCtx, pOsc, pGain;
+function initAudio() { if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; } try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } pOsc = audioCtx.createOscillator(); pOsc.type = 'sawtooth'; pGain = audioCtx.createGain(); pGain.gain.value = 0; pOsc.connect(pGain).connect(audioCtx.destination); pOsc.start(); }
+function playSFX(f) { if (!audioCtx) initAudio(); if (!audioCtx) return; const s = audioCtx.createBufferSource(); fetch(f).then(r => r.arrayBuffer()).then(b => audioCtx.decodeAudioData(b)).then(d => { s.buffer = d; s.connect(audioCtx.destination); s.start(0); }).catch(e => {}); }
+
+const keys = {}; window.addEventListener("keydown", e => { keys[e.code] = true; if(gameState==='PLAY') initAudio(); }); window.addEventListener("keyup", e => { keys[e.code] = false; });
+let lookYaw = 0, lookPitch = 0, zoomLevel = 0.8, smoothedCamPos = new THREE.Vector3();
+let touchLeftId = -1, touchRightId = -1, touchState = { left: { startX: 0, startY: 0, currentX: 0, currentY: 0 }, right: { startX: 0, startY: 0, currentX: 0, currentY: 0 } };
+addEventListener("wheel", e => { zoomLevel = Math.max(0, Math.min(MAX_ZOOM_LEVEL, zoomLevel + e.deltaY*0.001)); }, {passive:true});
+renderer.domElement.addEventListener("mousedown", () => { if(gameState==='PLAY') { renderer.domElement.requestPointerLock(); initAudio(); } });
+document.addEventListener("mousemove", e => { if (document.pointerLockElement === renderer.domElement) { lookYaw -= e.movementX * 0.003; lookPitch = Math.max(-0.6, Math.min(0.6, lookPitch - e.movementY * 0.003)); } });
+document.getElementById('zoomSlider').addEventListener('input', e => { zoomLevel = parseFloat(e.target.value); });
+window.addEventListener('touchstart', e => { if(gameState==='PLAY') initAudio(); for (let i = 0; i < e.changedTouches.length; i++) { const t = e.changedTouches[i]; if (t.clientX < window.innerWidth / 2) { touchLeftId = t.identifier; touchState.left = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, currentY: t.clientY }; } else { touchRightId = t.identifier; touchState.right = { startX: t.clientX, startY: t.clientY, currentX: t.clientX, currentY: t.clientY }; } } }, {passive: false});
+window.addEventListener('touchmove', e => { if(gameState === 'PLAY') e.preventDefault(); for (let i = 0; i < e.changedTouches.length; i++) { const t = e.changedTouches[i]; if (t.identifier === touchLeftId) { touchState.left.currentX = t.clientX; touchState.left.currentY = t.clientY; } else if (t.identifier === touchRightId) { lookYaw -= (t.clientX - touchState.right.currentX) * 0.005; lookPitch = THREE.MathUtils.clamp(lookPitch - (t.clientY - touchState.right.currentY) * 0.005, -0.6, 0.6); touchState.right.currentX = t.clientX; touchState.right.currentY = t.clientY; } } }, {passive: false});
+window.addEventListener('touchend', e => { for (let i = 0; i < e.changedTouches.length; i++) { const t = e.changedTouches[i]; if (t.identifier === touchLeftId) { touchLeftId = -1; keys.KeyW = keys.KeyS = keys.KeyA = keys.KeyD = false; } else if (t.identifier === touchRightId) touchRightId = -1; } }, {passive: false});
+document.getElementById('fullscreenButton').addEventListener('click', () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(err => console.warn(err)); else document.exitFullscreen(); });
+
+if (IS_MOBILE) {
+    const fsb = document.getElementById('fullscreenButton');
+    if (fsb) fsb.style.display = 'none';
+}
+
+
+const garagePreview = { renderers: {}, scenes: {}, cameras: {}, cars: {}, animationId: null };
+
+function initGaragePreview() {
+    if (Object.keys(garagePreview.renderers).length > 0) return;
+    carSlots.forEach(slot => {
+        const canvas = document.getElementById('preview-' + slot); if (!canvas) return;
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio); renderer.setSize(canvas.width, canvas.height);
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, canvas.width / canvas.height, 0.1, 100);
+        camera.position.set(4, 2.5, 4); camera.lookAt(0, 0, 0);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const light = new THREE.DirectionalLight(0xffffff, 1.0); light.position.set(5, 10, 7.5); scene.add(light);
+        garagePreview.renderers[slot] = renderer; garagePreview.scenes[slot] = scene; garagePreview.cameras[slot] = camera;
+        updateGaragePreview(slot, carConfigs[slot] ? carConfigs[slot] : null);
+    });
+}
+
+function updateGaragePreview(slot, config) {
+    const scene = garagePreview.scenes[slot]; if (!scene) return;
+    if (garagePreview.cars[slot]) { scene.remove(garagePreview.cars[slot].group); }
+    const defaultColors = { player: 0xcc2222, enemy1: 0x00cc00, enemy2: 0xcccc00, enemy3: 0xcc22cc, enemy4: 0xeeeeee };
+    const defaultColor = defaultColors[slot] || 0x888888;
+    const carData = createCarFromConfig( (config && config.width && config.totalLength && config.noseH) ? config : null, (config && config.color) ? parseInt(config.color.replace('#','0x')) : defaultColor );
+    const carGroup = carData.group;
+    const box = new THREE.Box3().setFromObject(carGroup);
+    const size = box.getSize(new THREE.Vector3()); const scale = 5 / size.length();
+    carGroup.scale.set(scale, scale, scale); box.setFromObject(carGroup);
+    const center = box.getCenter(new THREE.Vector3()); carGroup.position.sub(center);
+    scene.add(carGroup); garagePreview.cars[slot] = { group: carGroup, config: config };
+}
+
+function animateGaragePreview() {
+    garagePreview.animationId = requestAnimationFrame(animateGaragePreview);
+    for (const slot in garagePreview.cars) { if (garagePreview.cars[slot] && garagePreview.cars[slot].group) { garagePreview.cars[slot].group.rotation.y += 0.01; garagePreview.renderers[slot].render(garagePreview.scenes[slot], garagePreview.cameras[slot]); } }
+}
+
+function openGarage() { document.getElementById('top-screen').style.display = 'none'; document.getElementById('garage-screen').style.display = 'flex'; initGaragePreview(); if(garagePreview.animationId === null) { animateGaragePreview(); } }
+function showTopScreen() {
+    const top = document.getElementById('top-screen');
+    top.style.display = 'flex';
+    top.scrollTop = 0;
+    window.scrollTo(0, 0);
+    requestAnimationFrame(() => { top.scrollTop = 0; });
+}
+function closeGarage() { if (garagePreview.animationId) { cancelAnimationFrame(garagePreview.animationId); garagePreview.animationId = null; } document.getElementById('garage-screen').style.display = 'none'; showTopScreen(); }
+
+function returnToTopFromGameOver() {
+    try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
+    gameState = 'TOP';
+    const hud = document.getElementById('hud'); if (hud) hud.style.display = 'none';
+    const mi = document.getElementById('mission-info'); if (mi) mi.style.display = 'none';
+    const z = document.getElementById('zoomSlider'); if (z) z.style.display = 'none';
+    const rs = document.getElementById('result-screen'); if (rs) rs.style.display = 'none';
+    const prs = document.getElementById('post-replay-screen'); if (prs) prs.style.display = 'none';
+    const rui = document.getElementById('replay-ui'); if (rui) rui.style.display = 'none';
+    const msg = document.getElementById('msg'); if (msg) msg.style.display = 'none';
+    showTopScreen();
+}
+
+const orientationScreen = document.getElementById('orientation-screen');
+const enterFullscreenBtn = document.getElementById('enter-fullscreen-btn');
+function isLandscape() { return window.innerWidth > window.innerHeight; }
+function updateEntryGate() {
+    if (!IS_MOBILE) { orientationScreen.style.display = 'none'; return; }
+    if (document.fullscreenElement) { orientationScreen.style.display = 'none'; return; }
+
+    orientationScreen.style.display = 'flex';
+    document.getElementById('top-screen').style.display = 'none';
+    if (!isLandscape()) {
+        document.getElementById('orientation-title').innerText = '横向きでプレイしてください';
+        document.getElementById('orientation-desc').innerText = '端末を横向きにしてから、タップして開始してください。';
+        enterFullscreenBtn.disabled = true;
+    } else {
+        document.getElementById('orientation-title').innerText = 'タップして開始';
+        document.getElementById('orientation-desc').innerText = 'フルスクリーンでTOP画面を表示します。';
+        enterFullscreenBtn.disabled = false;
+    }
+}
+enterFullscreenBtn.addEventListener('click', async () => {
+    if (enterFullscreenBtn.disabled) return;
+    try {
+        await document.documentElement.requestFullscreen();
+    } catch(e) {}
+    orientationScreen.style.display = 'none';
+    showTopScreen();
+});
+window.addEventListener('resize', updateEntryGate);
+window.addEventListener('orientationchange', updateEntryGate);
+document.addEventListener('fullscreenchange', updateEntryGate);
+updateEntryGate();
+
+function animate() {
+    requestAnimationFrame(animate);
+    if (gameState === 'TOP' || gameState === 'SETTINGS') { renderer.render(scene, camera); if(pGain && audioCtx) pGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); return; }
+    if (gameState === 'CLEAR' && !isReplaying) { renderer.render(scene, camera); return; }
+    const now = audioCtx ? audioCtx.currentTime : 0;
+    const nowMs = performance.now();
+    if (isReplaying) {
+        const f = replayBuffer[replayIndex]; if (!f) { exitReplay(); return; }
+        const prevF = replayIndex > 0 ? replayBuffer[replayIndex-1] : null;
+        if (prevF && f.p.hp < prevF.p.hp) { playSFX(f.p.hp <= 0 ? 'crash.mp3' : 'ecrs.mp3'); if(f.p.hp <= 0) spawnDebris(player.group.position, player.bodyMat.color.getHex(), 1.5, 15); }
+        player.group.position.set(f.p.pos.x, f.p.pos.y, f.p.pos.z); player.group.quaternion.set(f.p.quat._x, f.p.quat._y, f.p.quat._z, f.p.quat._w);
+        player.hp = f.p.hp; player.dead = f.p.dead; player.speed = f.p.speed;
+        const pCol = (f.p.design ? f.p.design.color : 0xcc2222); player.bodyMat.color.set(!player.dead ? pCol : 0);
+        sandstormIntensity = f.sand.intensity; sandstormPeak = f.sand.peak; sandstormCycleTimer = f.sand.cycle;
+        targetPos.set(f.target.x, f.target.y, f.target.z);
+        document.getElementById('p-hp').innerText = Math.floor(player.hp); document.getElementById('cargo-count').innerText = f.mission.cargo; document.getElementById('stage-num').innerText = f.mission.stage;
+        document.getElementById('replay-info').innerText = `REPLAY - STAGE ${f.mission.stage} (${Math.floor(replayIndex/60)}s / ${Math.floor(replayBuffer.length/60)}s)`;
+        f.e.forEach((ed, i) => { if(enemies[i]) { 
+            const pe = prevF ? prevF.e[i] : null;
+            if (pe && ed.dead && !pe.dead) { enemies[i].bodyMat.color.set(0); spawnDebris(new THREE.Vector3(ed.pos.x, ed.pos.y, ed.pos.z), enemies[i].bodyMat.color.getHex(), 1.5, 15); playSFX('crash.mp3'); }
+            else if (pe && ed.hp < pe.hp) { playSFX('crs.mp3'); for(let k=0;k<5;k++) spawnDust(enemies[i].group.position, true); }
+            const eCol = (ed.design ? ed.design.color : ed.color); if(!ed.dead) enemies[i].bodyMat.color.set(eCol); else enemies[i].bodyMat.color.set(0);
+            enemies[i].group.position.set(ed.pos.x, ed.pos.y, ed.pos.z); enemies[i].group.quaternion.set(ed.quat._x, ed.quat._y, ed.quat._z, ed.quat._w); enemies[i].speed = ed.speed; enemies[i].dead = ed.dead;
+        }});
+        replayIndex++; if (replayIndex >= replayBuffer.length) exitReplay();
+    } else {
+        if (currentMapType === MAP_DESERT) {
+            sandstormCycleTimer += 1/60;
+            if (sandstormCycleTimer > 14 && sandstormCycleTimer <= 24) sandstormIntensity = (sandstormCycleTimer - 14) / 10;
+            else if (sandstormCycleTimer > 24 && sandstormCycleTimer <= 30) {
+                if (!sandstormPeak) { sandstormPeak = true; showMsg("SANDSTORM!", 1800); }
+                sandstormIntensity = 1.0;
+            } else if (sandstormCycleTimer > 30) { sandstormCycleTimer = 0; sandstormPeak = false; }
+            else sandstormIntensity = THREE.MathUtils.lerp(sandstormIntensity, 0, 0.015);
+        } else {
+            sandstormIntensity = THREE.MathUtils.lerp(sandstormIntensity, 0, 0.04);
+            sandstormPeak = false;
+            sandstormCycleTimer = 0;
+        }
+
+        if (currentMapType === MAP_SNOW) {
+            blizzardCycleTimer += 1/60;
+            if (blizzardCycleTimer > 10 && blizzardCycleTimer <= 18) blizzardIntensity = (blizzardCycleTimer - 10) / 8;
+            else if (blizzardCycleTimer > 18 && blizzardCycleTimer <= 24) {
+                if (!blizzardPeak) { blizzardPeak = true; showMsg("BLIZZARD!", 1800); }
+                blizzardIntensity = 1.0;
+            } else if (blizzardCycleTimer > 24) { blizzardCycleTimer = 0; blizzardPeak = false; }
+            else blizzardIntensity = THREE.MathUtils.lerp(blizzardIntensity, 0, 0.02);
+        } else {
+            blizzardIntensity = THREE.MathUtils.lerp(blizzardIntensity, 0, 0.04);
+            blizzardPeak = false;
+            blizzardCycleTimer = 0;
+        }
+        recordFrame();
+    }
+
+    const noise = document.getElementById('noise-overlay');
+    const whiteout = document.getElementById('whiteout-overlay');
+
+    if (currentMapType === MAP_DESERT && sandstormIntensity > 0.01) {
+        const stormCol = new THREE.Color(0x8b7355).lerp(new THREE.Color(0x87ceeb), 1.0 - sandstormIntensity);
+        scene.background.copy(stormCol);
+        if (scene.fog) {
+            scene.fog.color.copy(stormCol);
+            scene.fog.near = THREE.MathUtils.lerp(200, sandstormPeak ? 2 : 15, sandstormIntensity);
+            scene.fog.far = THREE.MathUtils.lerp(1500, sandstormPeak ? 25 : 110, sandstormIntensity);
+        }
+        sandstormClouds.visible = !sandstormPeak && sandstormIntensity > 0.1;
+        if (sandstormClouds.visible) {
+            const d = new THREE.Vector3().subVectors(targetPos, player.group.position).normalize();
+            sandstormClouds.position.copy(player.group.position).add(d.multiplyScalar(400));
+            sandstormClouds.lookAt(player.group.position);
+            sandstormClouds.children.forEach(m => m.material.opacity = sandstormIntensity * 0.8);
+        }
+        beaconMesh.visible = (sandstormIntensity < 0.8);
+        noise.style.opacity = sandstormIntensity * 0.4;
+        if (sandstormIntensity > 0) noise.style.backgroundPosition = `${Math.random()*1000}px ${Math.random()*1000}px`;
+        if (sandstormIntensity > 0.4 && Math.random() < sandstormIntensity * 0.25) {
+            const cd = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+            spawnDust(camera.position.clone().add(cd.multiplyScalar(3)).add(new THREE.Vector3((Math.random()-0.5)*15, (Math.random()-0.5)*15, (Math.random()-0.5)*15)), false, false, true);
+        }
+        whiteout.style.opacity = 0;
+    } else {
+        sandstormClouds.visible = false;
+        noise.style.opacity = 0;
+        if (sandstormIntensity <= 0.01) beaconMesh.visible = true;
+    }
+
+    if (currentMapType === MAP_SNOW && blizzardIntensity > 0.01) {
+        const baseCol = new THREE.Color(0xdfefff);
+        const stormCol = baseCol.clone().lerp(new THREE.Color(0xffffff), 0.35 + 0.55 * blizzardIntensity);
+        scene.background.copy(stormCol);
+        if (scene.fog) {
+            scene.fog.color.copy(stormCol);
+            scene.fog.near = THREE.MathUtils.lerp(180, blizzardPeak ? 4 : 10, blizzardIntensity);
+            scene.fog.far = THREE.MathUtils.lerp(1500, blizzardPeak ? 55 : 130, blizzardIntensity);
+        }
+        whiteout.style.opacity = blizzardIntensity * 0.65;
+        noise.style.opacity = Math.max(parseFloat(noise.style.opacity) || 0, blizzardIntensity * 0.15);
+        if (blizzardIntensity > 0) noise.style.backgroundPosition = `${Math.random()*1000}px ${Math.random()*1000}px`;
+        if (Math.random() < 0.35 * blizzardIntensity) {
+            const cd = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+            spawnDust(camera.position.clone().add(cd.multiplyScalar(3)).add(new THREE.Vector3((Math.random()-0.5)*18, (Math.random()-0.5)*12, (Math.random()-0.5)*18)), false, false, false, true);
+        }
+        beaconMesh.visible = (blizzardIntensity < 0.85);
+    } else {
+        whiteout.style.opacity = 0;
+    }
+
+    if ((currentMapType === MAP_HIGHWAY || currentMapType === MAP_PASS) && sandstormIntensity < 0.01 && blizzardIntensity < 0.01) {
+        if (scene.fog) {
+            const fogI = (currentMapType === MAP_PASS) ? 0.55 : 0.35;
+            const baseCol = currentMapType === MAP_PASS ? new THREE.Color(0x8fb0d8) : new THREE.Color(0x87b7ff);
+            scene.fog.color.copy(baseCol);
+            scene.fog.near = THREE.MathUtils.lerp(200, 90, fogI);
+            scene.fog.far = THREE.MathUtils.lerp(1500, 650, fogI);
+        }
+    }
+    beaconMesh.position.set(targetPos.x, getHeight(targetPos.x, targetPos.z) + 2495, targetPos.z);
+    let entities = [player, ...enemies];
+    if (!isReplaying) {
+        const d2t = player.group.position.distanceTo(targetPos);
+        if (d2t < 50) { // 判定距離を少し広げる
+    if (missionState === 'goal') {
+        showResultScreen();
+    }
+}
+    }
+    updateChunks(player.group.position.x, player.group.position.z);
+    processChunkBuildQueue();
+    processChunkDisposeQueue();
+    if (!isReplaying && gameState === 'PLAY' && currentMapType === MAP_HIGHWAY) {
+        let spawned = 0;
+        while (spawned < ONCOMING_MAX_SPAWNS_PER_FRAME && player.group.position.z + ONCOMING_SPAWN_AHEAD >= nextOncomingSpawnZ) {
+            spawnOncomingCar(nextOncomingSpawnZ);
+            nextOncomingSpawnZ += ONCOMING_SPAWN_INTERVAL;
+            spawned++;
+        }
+    }
+
+    if (!isReplaying && gameState === 'PLAY' && currentMapType === MAP_HIGHWAY) {
+        for (let i = oncomingCars.length - 1; i >= 0; i--) {
+            const oc = oncomingCars[i];
+            if (!oc || !oc.group) { oncomingCars.splice(i, 1); continue; }
+
+            if (oc.group.position.z < player.group.position.z - ONCOMING_DESPAWN_BEHIND) {
+                scene.remove(oc.group);
+                disposeObject3D(oc.group);
+                oncomingCars.splice(i, 1);
+                continue;
+            }
+
+            const z = oc.group.position.z;
+            const roadCenterX = getRoadX(z);
+            const laneOffset = Math.max(6.0, getRoadWidth(z) * 0.25);
+            const desiredX = roadCenterX + laneOffset;
+            oc.group.position.x = THREE.MathUtils.lerp(oc.group.position.x, desiredX, 0.12);
+
+            oc.group.position.z -= oc.speed;
+            oc.group.position.add(oc.impactV);
+            oc.impactV.multiplyScalar(0.9);
+            // 衝突減速で停車し続けるのを防ぐ（じわっと巡航速度へ復帰）
+            oc.speed = THREE.MathUtils.lerp(oc.speed, ONCOMING_SPEED, 0.02);
+            oc.group.position.y = getHeight(oc.group.position.x, oc.group.position.z);
+            oc.group.quaternion.setFromEuler(new THREE.Euler(0, 0, 0));
+
+            // 衝突：プレイヤー
+            if (!player.dead && oc.group.position.distanceTo(player.group.position) < ONCOMING_COLLISION_RADIUS) {
+                const dir = new THREE.Vector3().subVectors(player.group.position, oc.group.position).normalize();
+                player.speed *= 0.25;
+                oc.speed *= 0.25;
+                player.impactV.add(dir.multiplyScalar(0.9));
+                oc.impactV.add(dir.multiplyScalar(-0.9));
+            }
+
+            // 衝突：敵
+            for (let ei = 0; ei < enemies.length; ei++) {
+                const e = enemies[ei];
+                if (!e || e.dead || !e.group || e.group.parent === null) continue;
+                if (oc.group.position.distanceTo(e.group.position) < ONCOMING_COLLISION_RADIUS) {
+                    const dir = new THREE.Vector3().subVectors(e.group.position, oc.group.position).normalize();
+                    e.speed *= 0.25;
+                    oc.speed *= 0.25;
+                    e.impactV.add(dir.multiplyScalar(0.9));
+                    oc.impactV.add(dir.multiplyScalar(-0.9));
+                }
+            }
+        }
+    }
+    sun.position.set(player.group.position.x + 50, 150, player.group.position.z + 50); sun.target = player.group;
+    for(let i = particles.length - 1; i >= 0; i--){
+        const p = particles[i]; p.userData.life -= 0.015; p.position.add(p.userData.vel);
+        if (p.userData.type === 'debris') { p.rotation.x += p.userData.rot.x; p.userData.vel.y -= 0.02; const h = getHeight(p.position.x, p.position.z); if(p.position.y < h) { p.position.y = h; p.userData.vel.y *= -0.5; } p.scale.setScalar(p.userData.life * 0.5); }
+        else if (p.userData.type === 'sand') { p.material.opacity = p.userData.life * 0.4; p.scale.setScalar(1 + (1.0 - p.userData.life) * 8); }
+        else { p.scale.setScalar(p.userData.type === 'smoke' ? (1 + (1.0 - p.userData.life) * 3) : (1 + (1.0 - p.userData.life) * 4)); p.material.opacity = p.userData.life * 0.6; }
+        if(p.userData.life <= 0){
+            scene.remove(p);
+            if (p.geometry && p.geometry.dispose && !(p.geometry.userData && p.geometry.userData.shared)) p.geometry.dispose();
+            if (p.material) {
+                if (Array.isArray(p.material)) p.material.forEach(m => m && m.dispose && !(m.userData && m.userData.shared) && m.dispose());
+                else if (p.material.dispose && !(p.material.userData && p.material.userData.shared)) p.material.dispose();
+            }
+            particles.splice(i, 1);
+        }
+    }
+    if (!isReplaying) {
+        // dead/sceneから外れた敵を掃除（補充できるようにする）
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const e = enemies[i];
+            if (!e) { enemies.splice(i, 1); continue; }
+            if (e.dead || !e.group || e.group.parent === null) {
+                if (e.group && e.group.parent) scene.remove(e.group);
+                if (e.group) disposeObject3D(e.group);
+                enemies.splice(i, 1);
+            }
+        }
+
+        // 生存している敵数を基準に補充
+        const aliveCount = enemies.filter(e => e && !e.dead && e.group && e.group.parent !== null).length;
+        if (aliveCount < stageEnemyCount) {
+            const need = stageEnemyCount - aliveCount;
+            for (let n = 0; n < need; n++) {
+                const sa = player.yaw + Math.PI + (Math.random()-0.5);
+                const roadWidth = getRoadWidth(player.group.position.z);
+                const laneOffset = (Math.random() - 0.5) * roadWidth * 0.8;
+                spawnEnemyAt(player.group.position.x + Math.sin(sa)*70 + laneOffset, player.group.position.z + Math.cos(sa)*70);
+            }
+        }
+
+        entities = [player, ...enemies];
+        entities.forEach(ent => {
+    const isP = (ent === player); if (ent.dead) ent.speed *= 0.95; if (!isP && ent.dead && ent.group.parent === null) return;
+    ent.lastSpeed = ent.speed; let turnInput = 0;
+
+    // --- Start of AI and Controls ---
+    if(isP && !ent.dead) {
+        // Player controls for speed
+        if(keys.KeyW) ent.speed += PLAYER_ACCEL; if(keys.KeyS) ent.speed -= PLAYER_ACCEL;
+        
+        // --- Start of new steering logic ---
+        let laneChangeInput = 0;
+        // Adjusted for intuitive control: A=Left, D=Right
+        if(keys.KeyA) { laneChangeInput = 0.5; }  // Swapped to correct direction
+        if(keys.KeyD) { laneChangeInput = -0.5; } // Swapped to correct direction
+
+        if (touchLeftId !== -1) { 
+            const dy = touchState.left.currentY - touchState.left.startY, dx = touchState.left.currentX - touchState.left.startX; 
+            if (dy < -1) { 
+                const p = THREE.MathUtils.clamp(((-dy) - 1) / 40, 0, 1);
+                ent.speed += PLAYER_ACCEL * (0.55 + 1.35 * p);
+            } else if (dy > 10) { 
+                const p = THREE.MathUtils.clamp((dy - 10) / 55, 0, 1);
+                ent.speed -= PLAYER_ACCEL * (0.25 + 0.95 * p);
+            }
+            if (dx < -20) { laneChangeInput = 0.5; } 
+            else if (dx > 20) { laneChangeInput = -0.5; }
+        }
+
+        ent.speed = THREE.MathUtils.clamp(ent.speed, -PLAYER_MAX_SPEED * 0.55, PLAYER_MAX_SPEED);
+
+        ent.isBraking = !!keys.KeyS || (touchLeftId !== -1 && (touchState.left.currentY - touchState.left.startY) > 10);
+
+        // ドリフト状態の判定
+        const steeringThreshold = 0.4; // ハンドルを切り込む強さの閾値
+        const speedThreshold = 0.5;    // ドリフト開始の最低速度
+        ent.isDrifting = (Math.abs(laneChangeInput) > steeringThreshold && ent.speed > speedThreshold);
+
+        // Update lane offset
+        ent.laneOffset = (ent.laneOffset || 0) + laneChangeInput;
+        const maxOffset = getRoadWidth(ent.group.position.z) / 2 - 2.0;
+        ent.laneOffset = THREE.MathUtils.clamp(ent.laneOffset, -maxOffset, maxOffset);
+
+        // Calculate target X position based on road curve and lane offset
+        const idealX = getRoadX(ent.group.position.z) + ent.laneOffset;
+
+        // Smoothly correct the car's actual X position towards the target X
+        ent.group.position.x = THREE.MathUtils.lerp(ent.group.position.x, idealX, 0.15);
+
+        // ---車の向き(yaw)とタイヤの操舵(steering)の新しいロジック---
+        const lookAhead = 10.0; // 少し先を見る距離を長くして、より滑らかに
+        const currentX = ent.group.position.x;
+        // 少し先の目標X座標 (laneOffset を考慮)
+        const futureIdealX = getRoadX(ent.group.position.z + lookAhead) + ent.laneOffset;
+        
+        // 現在位置から少し先の目標位置への角度を計算 (これが車の進行方向)
+        const angleToTarget = Math.atan2(futureIdealX - currentX, lookAhead);
+        const targetYaw = angleToTarget + Math.PI;
+
+        // 実際の旋回量を取得
+        const yawChange = ent.yaw - (ent.lastYaw || ent.yaw);
+
+        // ドリフト角（オーバーステア）の計算
+        // 実際の旋回量とスピードに応じてドリフト角を計算
+        const driftFactor = Math.abs(ent.speed / MAX_SPEED) * 4.0; // ドリフトの度合いをさらに大きく
+        const driftAngle = yawChange * -1 * driftFactor;
+
+        // 進行方向の角度にドリフト角を加算して、車体の最終的な向きを決定
+        const finalYaw = targetYaw + driftAngle;
+
+        // ヨーを目標角度に滑らかに補間
+        ent.yaw = THREE.MathUtils.lerp(ent.yaw, finalYaw, 0.15);
+
+        // タイヤの操舵角を、実際の旋回量とプレーヤー入力の両方から計算
+        if (isP) {
+            // 実際の旋回量から基本的な操舵角を計算（符号を修正）
+            const autoSteeringAngle = yawChange * 30;
+            
+            // プレーヤーの車線変更入力も加味
+            const playerSteeringInput = laneChangeInput * 0.4;
+            
+            const totalSteeringAngle = autoSteeringAngle + playerSteeringInput;
+
+            if (ent.wheels && ent.wheels.length >= 2) {
+                // 操舵角を滑らかに適用し、最大切れ角を制限
+                let clampedAngle = THREE.MathUtils.clamp(totalSteeringAngle, -0.6, 0.6);
+
+                // ドリフト中はカウンターを当てる
+                if (ent.isDrifting) {
+                    // laneChangeInputが正（左に切っている）なら右にカウンター、負（右に切っている）なら左にカウンター
+                    const counterSteerAmount = laneChangeInput * -0.5; // 調整が必要
+                    clampedAngle += counterSteerAmount; // カウンターを操舵角に加算
+                    clampedAngle = THREE.MathUtils.clamp(clampedAngle, -0.6, 0.6); // 再度クランプして最大切れ角を維持
+                }
+
+                ent.wheels[0].rotation.y = THREE.MathUtils.lerp(ent.wheels[0].rotation.y, clampedAngle, 0.2);
+                ent.wheels[1].rotation.y = THREE.MathUtils.lerp(ent.wheels[1].rotation.y, clampedAngle, 0.2);
+            }
+        }
+        
+        // この turnInput はAIの操舵計算などで使われる可能性があるため残す
+        turnInput = laneChangeInput !== 0 ? (laneChangeInput > 0 ? -1 : 1) : 0;
+        // --- End of new steering logic ---
+
+        ent.speed *= FRICTION;
+    } else if (!isP && !ent.dead) {
+        const nowMs = performance.now();
+        if (!ent.ai) ent.ai = { mode: 'race', t: 0, nextDecision: 0, targetOffset: 0, brakeUntil: 0, reverseUntil: 0, tauntUntil: 0, rearHuntUntil: 0 };
+        if (!ent.ai.rearHuntUntil) ent.ai.rearHuntUntil = 0;
+
+        const toP = new THREE.Vector3().subVectors(player.group.position, ent.group.position);
+        const dz = toP.z;
+        const dx = toP.x;
+        const relZ = player.group.position.z - ent.group.position.z; // >0: プレイヤーが前, <0: 敵が前
+        const distToPlayer = Math.sqrt(dx*dx + dz*dz);
+
+        const roadCenterX = getRoadX(ent.group.position.z);
+        const maxOffset = ROAD_WIDTH / 2 - 2.0;
+
+        if (ent.ai.offroadT === undefined) ent.ai.offroadT = 0;
+        const offroad = Math.abs(ent.group.position.x - roadCenterX) > maxOffset * 0.98;
+        if (offroad) ent.ai.offroadT += 1/60;
+        else ent.ai.offroadT = Math.max(0, ent.ai.offroadT - 2/60);
+
+        // --- stuck detection / recovery ---
+        if (ent.ai.lastZ === undefined) { ent.ai.lastZ = ent.group.position.z; ent.ai.stuckT = 0; }
+        const dzFrame = Math.abs(ent.group.position.z - ent.ai.lastZ);
+        ent.ai.lastZ = ent.group.position.z;
+        if (Math.abs(ent.speed) < 0.05 && dzFrame < 0.02) ent.ai.stuckT += 1/60;
+        else ent.ai.stuckT = Math.max(0, ent.ai.stuckT - 2/60);
+
+        // 長時間停滞 or プレイヤーから離れすぎたら、プレイヤー近くに戻して常に攻撃参加させる
+        if (ent.ai.stuckT > 2.0 || ent.ai.offroadT > 1.2 || distToPlayer > 260) {
+            const baseZ = player.group.position.z;
+            const sx = getRoadX(baseZ) + (Math.random()-0.5) * (ROAD_WIDTH * 0.35);
+            const sz = baseZ - 18 - Math.random() * 12;
+            const sy = (currentMapType === MAP_HIGHWAY) ? getHeight(sx, sz) : getRoadHeight(sz);
+            ent.group.position.set(sx, sy, sz);
+            ent.speed = Math.max(player.speed * 0.85, MAX_SPEED * 0.35);
+            ent.impactV.set(0,0,0);
+            ent.ai.stuckT = 0;
+            ent.ai.offroadT = 0;
+            ent.ai.rearHuntUntil = 0;
+            ent.ai.brakeUntil = 0;
+            ent.ai.reverseUntil = 0;
+        }
+
+        // --- decision ---
+        if (!player.dead && nowMs >= ent.ai.nextDecision) {
+            ent.ai.nextDecision = nowMs + 350 + Math.random() * 350;
+
+            // 基本は中央
+            ent.ai.targetOffset = THREE.MathUtils.clamp(ent.ai.targetOffset, -maxOffset, maxOffset);
+
+            // プレイヤーの前後関係
+            const playerAhead = (player.group.position.z > ent.group.position.z);
+            const enemyAhead = !playerAhead;
+
+            // 近距離なら攻撃モード優先
+            if (distToPlayer < 60) ent.ai.mode = 'engage';
+            else ent.ai.mode = 'race';
+
+            // 抜き/煽り/攻撃のトリガ
+            // 重要: 逃げ切り防止のため、常にプレイヤー付近の横位置を取りにいく（ブロック走行）
+            const playerLat = THREE.MathUtils.clamp(player.group.position.x - roadCenterX, -maxOffset, maxOffset);
+            const blockSide = (Math.random() < 0.5 ? -1 : 1);
+
+            // ブロック走行の基準オフセット（プレイヤーの少し横）
+            const blockOffset = THREE.MathUtils.clamp(playerLat + blockSide * 2.6, -maxOffset, maxOffset);
+            const centerOffset = THREE.MathUtils.clamp(playerLat, -maxOffset, maxOffset);
+
+            if (ent.ai.mode === 'engage') {
+                // engage: 基本はプレイヤーの横〜真上を塞ぎにいく
+                ent.ai.targetOffset = (distToPlayer < 22) ? blockOffset : centerOffset;
+
+                // C優先: 一度前に出た場合、わざと減速して後ろに回り込む（rearHunt）
+                if (enemyAhead && distToPlayer < 55) {
+                    if (Math.random() < 0.65) {
+                        ent.ai.rearHuntUntil = nowMs + 1800 + Math.random() * 1400;
+                        ent.ai.tauntUntil = Math.max(ent.ai.tauntUntil, nowMs + 1200);
+                    }
+                }
+
+                // 敵が前、プレイヤーが後ろ近い -> ブレーキチェック（頻度アップ）
+                if (enemyAhead && distToPlayer < 35) {
+                    if (Math.random() < 0.60) {
+                        ent.ai.brakeUntil = nowMs + 900 + Math.random() * 900;
+                        ent.ai.tauntUntil = nowMs + 1400;
+                    }
+                }
+
+                // 横当て（並走距離）: かなり狙う
+                if (Math.abs(dz) < 14 && Math.abs(dx) < 14) {
+                    if (Math.random() < 0.75) {
+                        const side = Math.sign(dx) === 0 ? (Math.random() < 0.5 ? -1 : 1) : Math.sign(dx);
+                        ent.ai.targetOffset = THREE.MathUtils.clamp(playerLat + side * 3.2, -maxOffset, maxOffset);
+                        ent.ai.tauntUntil = nowMs + 1000;
+                    }
+                }
+
+                // 敵が後ろで近い -> 煽り追突（頻度アップ）
+                if (playerAhead && distToPlayer < 65) {
+                    if (Math.random() < 0.88) {
+                        ent.ai.targetOffset = THREE.MathUtils.clamp(playerLat + (Math.random() < 0.5 ? -1 : 1) * 1.8, -maxOffset, maxOffset);
+                        ent.ai.tauntUntil = nowMs + 1200;
+                    }
+                }
+
+                // バックアタック（敵が前で近い）
+                if (enemyAhead && distToPlayer < 22 && Math.random() < 0.28) {
+                    ent.ai.reverseUntil = nowMs + 550 + Math.random() * 350;
+                    ent.ai.tauntUntil = nowMs + 900;
+                }
+            } else {
+                // race: ゴールへ向かいつつ、なるべくプレイヤーの近くで走って邪魔をする
+                if (distToPlayer < 90) ent.ai.targetOffset = blockOffset;
+                else ent.ai.targetOffset = 0;
+            }
+        }
+
+        // --- path tracing (player-like) ---
+        ent.laneOffset = ent.laneOffset || 0;
+        ent.laneOffset = THREE.MathUtils.lerp(ent.laneOffset, ent.ai.targetOffset, 0.08);
+        ent.laneOffset = THREE.MathUtils.clamp(ent.laneOffset, -maxOffset, maxOffset);
+
+        const idealX = getRoadX(ent.group.position.z) + ent.laneOffset;
+        ent.group.position.x = THREE.MathUtils.lerp(ent.group.position.x, idealX, 0.18);
+
+        const lookAhead = 12.0;
+        const futureIdealX = getRoadX(ent.group.position.z + lookAhead) + ent.laneOffset;
+        const angleToTarget = Math.atan2(futureIdealX - ent.group.position.x, lookAhead);
+        const targetYaw = angleToTarget + Math.PI;
+        ent.yaw = THREE.MathUtils.lerp(ent.yaw, targetYaw, 0.14);
+
+        // --- speed ---
+        // 逃げ切り防止: Z方向(進行方向)の相対距離で前後バンドに閉じ込める
+        const playerMaxLike = MAX_SPEED * 0.95;
+        const bandBack = 28;   // 敵がこの距離以上「後ろ」なら強く詰める (relZ > bandBack)
+        const bandFront = 18;  // 敵がこの距離以上「前」なら抑制する (relZ < -bandFront)
+        const hardBack = 70;   // かなり離れた後方（敵が大きく遅れている）
+        const hardFront = 55;  // かなり離れた前方（敵が大きく先行している）
+        let targetSpeed = player.speed;
+
+        ent.isBraking = false;
+
+        if (player.dead) {
+            targetSpeed = Math.min(ent.speed, playerMaxLike * 0.6);
+        } else {
+            // 前後バンド制御（relZベース）
+            // relZ > 0: プレイヤーが前（敵が後ろ） -> 追走
+            // relZ < 0: 敵が前 -> 逃げないよう減速/同速
+
+            if (relZ > hardBack) {
+                // かなり後ろ: 全力で詰める
+                targetSpeed = playerMaxLike;
+            } else if (relZ > bandBack) {
+                // 後ろ: しっかり加速して追う
+                targetSpeed = Math.min(player.speed + 1.35, playerMaxLike);
+            } else if (relZ > 8) {
+                // 近い後ろ: 煽り圧をかける
+                targetSpeed = Math.min(player.speed + 0.85, playerMaxLike * 0.97);
+            } else if (relZ >= -bandFront) {
+                // ほぼ並走〜少し前: 近距離キープ（邪魔し続ける）
+                targetSpeed = Math.min(player.speed + 0.25, playerMaxLike * 0.90);
+            } else if (relZ >= -hardFront) {
+                // 前に出すぎ: プレイヤーに合わせて落とす
+                targetSpeed = Math.max(player.speed - 0.20, playerMaxLike * 0.50);
+            } else {
+                // かなり前: 強制的に待つ（逃げ切り禁止）
+                targetSpeed = Math.max(player.speed - 0.35, playerMaxLike * 0.45);
+            }
+
+            // rearHunt: C(後方煽り追突)を成立させるため、バンド内で「前->後ろ」へ回る
+            if (nowMs < ent.ai.rearHuntUntil) {
+                if (relZ < -4) {
+                    // 自分が前: まず減速してプレイヤーに抜かせる
+                    targetSpeed = Math.max(player.speed - 0.30, playerMaxLike * 0.42);
+                } else if (relZ > 6) {
+                    // もう後ろ: 強く詰める
+                    targetSpeed = Math.min(player.speed + 1.45, playerMaxLike);
+                    ent.ai.tauntUntil = Math.max(ent.ai.tauntUntil, nowMs + 700);
+                }
+            }
+
+            // ブレーキチェック
+            if (nowMs < ent.ai.brakeUntil) {
+                targetSpeed = Math.min(targetSpeed, playerMaxLike * 0.35);
+            }
+
+            // バックアタック
+            if (nowMs < ent.ai.reverseUntil) {
+                targetSpeed = -playerMaxLike * 0.25;
+            }
+        }
+
+        // プレイヤー近傍では速度追従を速くして「並走/妨害」を成立させる
+        const spLerp = Math.abs(relZ) < 80 ? 0.08 : 0.045;
+        ent.speed = THREE.MathUtils.lerp(ent.speed, targetSpeed, spLerp);
+
+        if (nowMs < ent.ai.brakeUntil || targetSpeed < ent.lastSpeed - 0.03) ent.isBraking = true;
+
+        // 煽り中の微妙な加速/減速ゆらぎ
+        if (nowMs < ent.ai.tauntUntil) {
+            ent.speed += (Math.random()-0.5) * 0.02;
+        }
+
+        // 他の敵との衝突回避（最小）
+        enemies.forEach(other => {
+            if (ent === other || other.dead) return;
+            if (ent.group.position.distanceTo(other.group.position) < 7.5) {
+                const awayVec = new THREE.Vector3().subVectors(ent.group.position, other.group.position).normalize();
+                ent.group.position.add(awayVec.multiplyScalar(0.15));
+            }
+        });
+    }
+    // --- End of AI and Controls ---
+
+    const fw = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
+    ent.group.position.addScaledVector(fw, ent.speed); ent.group.position.add(ent.impactV); ent.impactV.multiplyScalar(0.9);
+
+    // --- Guardrail collision (Simplified) ---
+    const roadX = getRoadX(ent.group.position.z);
+    const halfRoadWidth = getRoadWidth(ent.group.position.z) / 2 - 1.2;
+
+    // 端付近でのガクガク抑制（敵のみ）：ガードレール沿いに張り付く前に中央へ戻す
+    if (ent !== player && !ent.dead) {
+        const dxToRoad = ent.group.position.x - roadX;
+        const lim = halfRoadWidth;
+        const start = lim * 0.78;
+        const over = Math.max(0, Math.abs(dxToRoad) - start);
+        const p = THREE.MathUtils.clamp(over / Math.max(0.0001, (lim - start)), 0, 1);
+        if (p > 0) {
+            const dir = -Math.sign(dxToRoad || 1);
+            ent.impactV.x += dir * (0.06 + 0.10 * p);
+            if (ent.laneOffset !== undefined) ent.laneOffset = THREE.MathUtils.lerp(ent.laneOffset, 0, 0.06 + 0.14 * p);
+        }
+    }
+
+    if (ent.group.position.x > roadX + halfRoadWidth) {
+        ent.group.position.x = roadX + halfRoadWidth;
+        ent.speed *= 0.92;
+        ent.impactV.x = THREE.MathUtils.lerp(ent.impactV.x, -0.55, 0.6);
+        if (ent !== player && ent.laneOffset !== undefined) ent.laneOffset = Math.min(ent.laneOffset, halfRoadWidth - 3.0);
+    } else if (ent.group.position.x < roadX - halfRoadWidth) {
+        ent.group.position.x = roadX - halfRoadWidth;
+        ent.speed *= 0.92;
+        ent.impactV.x = THREE.MathUtils.lerp(ent.impactV.x, 0.55, 0.6);
+        if (ent !== player && ent.laneOffset !== undefined) ent.laneOffset = Math.max(ent.laneOffset, -halfRoadWidth + 3.0);
+    }
+
+    if (currentMapType === MAP_SNOW && !ent.dead) {
+        for (let mi = 0; mi < snowMounds.length; mi++) {
+            const mnd = snowMounds[mi];
+            if (!mnd || mnd.dead || !mnd.mesh || mnd.mesh.parent === null) continue;
+            const dx = ent.group.position.x - mnd.mesh.position.x;
+            const dz = ent.group.position.z - mnd.mesh.position.z;
+            const rr = (mnd.r || 2.5) + 1.6;
+            if (dx*dx + dz*dz < rr*rr) {
+                ent.speed *= 0.25;
+                ent.impactV.add(new THREE.Vector3(dx, 0, dz).normalize().multiplyScalar(0.6));
+                const p0 = mnd.mesh.position.clone();
+                for (let k = 0; k < 28; k++) spawnDust(p0, false, false, false, true);
+                spawnDebris(p0, 0xffffff, 0.7, 22);
+                mnd.dead = true;
+                scene.remove(mnd.mesh);
+                break;
+            }
+        }
+    }
+
+    const hF = getHeight(ent.group.position.x + fw.x*2.3, ent.group.position.z + fw.z*2.3), hB = getHeight(ent.group.position.x - fw.x*2.3, ent.group.position.z - fw.z*2.3);
+    const rw = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), ent.yaw);
+    const hR = getHeight(ent.group.position.x + rw.x*1.25, ent.group.position.z + rw.z*1.25), hL = getHeight(ent.group.position.x - rw.x*1.25, ent.group.position.z - rw.z*1.25);
+    
+    // Y座標は道路の高さに合わせる
+    const roadH = getRoadHeight(ent.group.position.z);
+    if(ent.vY !== undefined) { // Player
+        ent.vY -= GRAVITY;
+        ent.group.position.y += ent.vY;
+        if(ent.group.position.y < roadH) {
+            ent.group.position.y = roadH;
+            ent.vY = 0;
+        }
+    } else { // Enemy
+        ent.group.position.y = (currentMapType === MAP_HIGHWAY) ? getHeight(ent.group.position.x, ent.group.position.z) : roadH;
+    }
+
+    // ロールの計算を実際の旋回量ベースに変更
+    let curveRollInput = 0;
+    if (isP) { // プレイヤーの場合のみ旋回量からロールを計算
+        const yawChange = ent.yaw - (ent.lastYaw || ent.yaw);
+        // 旋回量にスケールをかけてロールの大きさを調整し、急な変化をクランプ
+        curveRollInput = THREE.MathUtils.clamp(yawChange * 30, -1, 1);
+    }
+
+    ent.pitch = THREE.MathUtils.lerp(ent.pitch, Math.atan2(hF - hB, 4.6), 0.1); 
+    // プレーヤー入力(turnInput)ではなく、実際の旋回量(curveRollInput)から計算したロールを適用
+    ent.roll = THREE.MathUtils.lerp(ent.roll, Math.atan2(hR - hL, 2.5) - curveRollInput * Math.abs(ent.speed) * 0.05, 0.1); // 傾きをさらに弱める
+        ent.group.quaternion.setFromEuler(new THREE.Euler(ent.pitch, ent.yaw, ent.roll, 'YXZ'));
+        
+        // 次のフレームのために yaw を保存
+        if(isP) ent.lastYaw = ent.yaw;
+    
+            // この古い操舵ロジックは if(isP) ブロック内に移動し不要になったため削除
+    
+            
+    
+            // タイヤの回転
+    
+            if (ent.wheels && ent.wheels.length > 0) {        const wheelRadiusFront = ent.design.wheelSizeFront || 0.45;
+        const wheelRadiusRear = ent.design.wheelSizeRear || 0.45;
+        const rotationAmountFront = ent.speed / wheelRadiusFront;
+        const rotationAmountRear = ent.speed / wheelRadiusRear;
+
+        ent.wheels[0].rotation.z += rotationAmountFront;
+        ent.wheels[1].rotation.z += rotationAmountFront;
+        ent.wheels[2].rotation.z += rotationAmountRear;
+        ent.wheels[3].rotation.z += rotationAmountRear;
+    }
+
+            if (ent.brakeMat) {
+                ent.brakeMat.emissiveIntensity = ent.isBraking ? (ent.brakeOnIntensity ?? 11.0) : (ent.brakeOffIntensity ?? 0.08);
+                ent.brakeMat.color.setHex(ent.isBraking ? (ent.brakeOnColor ?? 0xff0000) : (ent.brakeOffColor ?? 0x140808));
+            }
+});
+        if (!player.dead) {
+            enemies.forEach((enemy, idx) => {
+                if(enemy.dead) return; const dist = player.group.position.distanceTo(enemy.group.position);
+                if (dist < 3.8) {
+                    const dir = new THREE.Vector3().subVectors(enemy.group.position, player.group.position).normalize();
+                    if (new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)).dot(dir) > 0.3) {
+                        enemy.hp -= 20; player.hp += 5; enemy.impactV.add(dir.multiplyScalar(1.5)); playSFX('crs.mp3'); for (let i=0; i<5; i++) spawnDust(enemy.group.position, true);
+                        if(enemy.hp <= 0) {
+                            enemy.dead = true;
+                            killCount++;
+                            player.hp += 10;
+                            enemy.bodyMat.color.set(0);
+                            spawnDebris(enemy.group.position, enemy.bodyMat.color.getHex(), 0.8, 30);
+                            playSFX('crash.mp3');
+                            if (!enemy._removeScheduled) {
+                                enemy._removeScheduled = true;
+                                setTimeout(() => {
+                                    try { if (enemy.group) scene.remove(enemy.group); } catch (e) {}
+                                    try { if (enemy.group) disposeObject3D(enemy.group); } catch (e) {}
+                                    const rmIdx = enemies.indexOf(enemy);
+                                    if (rmIdx !== -1) enemies.splice(rmIdx, 1);
+                                }, 2000);
+                            }
+                        }
+                    } else { player.hp -= 5; player.impactV.add(dir.multiplyScalar(-0.8)); spawnDust(player.group.position, false); playSFX('ecrs.mp3'); document.getElementById('redFlash').style.opacity = '0.6'; setTimeout(() => document.getElementById('redFlash').style.opacity = '0', 100); }
+                    document.getElementById('p-hp').innerText = Math.floor(Math.max(0, player.hp));
+                    if (player.hp <= 0) {
+                        player.dead = true;
+                        player.speed = 0;
+                        const msgEl = document.getElementById('msg');
+                        msgEl.innerText = "GAME OVER";
+                        msgEl.style.display = 'block';
+                        playSFX('crash.mp3');
+                        setTimeout(() => returnToTopFromGameOver(), 2500);
+                    }
+                }
+            });
+        }
+    }
+    entities.forEach(ent => { if (ent.dead && Math.random() > 0.8) spawnDust(ent.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)), false, true); const ay = getHeight(ent.group.position.x, ent.group.position.z) + 0.12; if(!ent.dead && Math.abs(ent.speed) > 0.4 && ent.group.position.y <= ay + 0.5) { /* [[1.35,0,-1.6],[-1.35,0,-1.6],[1.35,0,1.6],[-1.35,0,1.6]].forEach(off => { if(Math.random() > 0.8) spawnDust(new THREE.Vector3(...off).applyQuaternion(ent.group.quaternion).add(ent.group.position)); }); */ } 
+        // ドリフト中の煙パーティクル
+        if (ent !== player && ent.isDrifting && Math.random() > 0.6) { // 煙の発生頻度を調整
+            if (ent.wheels && ent.wheels.length >= 4) {
+                // 後輪の位置から煙を出す
+                // ワールド座標に変換
+                const rearLeftWheelWorldPos = ent.wheels[2].getWorldPosition(new THREE.Vector3());
+                const rearRightWheelWorldPos = ent.wheels[3].getWorldPosition(new THREE.Vector3());
+                
+                spawnDust(rearLeftWheelWorldPos, false, true); // 白い煙を出す (isSmoke = true)
+                spawnDust(rearRightWheelWorldPos, false, true);
+            }
+        }
+    });
+    const cp = new THREE.Vector3(0, 1.25, 0.25), tp = new THREE.Vector3(0, 4.5, 12), dp = new THREE.Vector3(0, 70, 150);
+    let co = (zoomLevel <= 1.0) ? new THREE.Vector3().lerpVectors(cp, tp, zoomLevel) : new THREE.Vector3().lerpVectors(tp, dp, Math.min(1.0, (zoomLevel - 1.0)/(MAX_ZOOM_LEVEL - 1.0)));
+    const bq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, isReplaying ? 0 : player.yaw, 0));
+    const mq = new THREE.Quaternion().setFromEuler(new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ'));
+    let fq; if (zoomLevel <= 1.0) fq = new THREE.Quaternion().slerpQuaternions(player.group.quaternion.clone(), bq, zoomLevel).multiply(mq);
+    else { const cpl = player.group.position.clone().add(co.clone().applyQuaternion(bq)), tc = new THREE.Camera(); tc.position.copy(cpl); tc.lookAt(player.group.position); fq = tc.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, lookYaw, 0))); }
+    smoothedCamPos.lerp(player.group.position.clone().add(co.clone().applyQuaternion(fq)), zoomLevel < 0.15 ? 1.0 : (zoomLevel < 1.0 ? 0.2 : 0.3));
+    camera.position.copy(smoothedCamPos); camera.quaternion.copy(fq);
+    if (player && player.visual) player.visual.visible = !(zoomLevel < 0.15);
+    if (player && player.glassMat) player.glassMat.opacity = (zoomLevel < 0.15) ? 0.0 : 0.9;
+    if (zoomLevel < 0.15) {
+        mirrorMesh.visible = true;
+        mirrorFrameMesh.visible = true;
+        const mpos = camera.position.clone().add(new THREE.Vector3(0, 0.24, -0.41).applyQuaternion(camera.quaternion));
+        mirrorMesh.position.copy(mpos);
+        mirrorFrameMesh.position.copy(mpos);
+        mirrorMesh.quaternion.copy(camera.quaternion);
+        mirrorFrameMesh.quaternion.copy(camera.quaternion);
+        mirrorCamera.position.copy(player.group.position).add(new THREE.Vector3(0, 2.6, 0).applyQuaternion(player.group.quaternion));
+        mirrorCamera.quaternion.setFromEuler(new THREE.Euler(0, (isReplaying ? 0 : player.yaw) + Math.PI, 0));
+        renderer.setRenderTarget(mirrorRenderTarget);
+        renderer.render(scene, mirrorCamera);
+        renderer.setRenderTarget(null);
+    } else {
+        mirrorMesh.visible = false;
+        mirrorFrameMesh.visible = false;
+    }
+    if(audioCtx && !player.dead && gameState === 'PLAY') { pGain.gain.setTargetAtTime(0.3, now, 0.05); pOsc.frequency.setTargetAtTime(70 + Math.abs(player.speed) * 60, now, 0.05); } else if(pGain) pGain.gain.setTargetAtTime(0, now, 0.05);
+    renderer.render(scene, camera);
+}
+animate();
+if (sessionStorage.getItem('openGarage') === 'true') { openGarage(); sessionStorage.removeItem('openGarage'); }
+</script>
+</body>
+</html>
