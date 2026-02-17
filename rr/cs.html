@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ultimate Car Designer - Game Ready Edition</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        #output-area {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 35%; background: rgba(0,0,0,0.95); 
+            color: #0f0; font-family: monospace; padding: 15px; box-sizing: border-box; display: none; 
+            overflow-y: scroll; border-top: 2px solid #ff9900; z-index: 2000;
+        }
+        .close-btn { position: absolute; top: 10px; right: 20px; color: #fff; cursor: pointer; background: #c00; padding: 5px 12px; border-radius: 4px; }
+        .lil-gui { --width: 320px; }
+        #headlight-editor-modal {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: flex-start; /* 上端から配置してスクロール可能に */
+            z-index: 5000;
+            overflow-y: auto; /* 縦スクロールを有効化 */
+            padding: 20px 0; /* 上下に余白 */
+            -webkit-overflow-scrolling: touch;
+        }
+        #editor-panel {
+            width: 90%;
+            max-width: 600px;
+            background: #282828;
+            border: 2px solid #555;
+            padding: 20px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            text-align: center;
+            margin-bottom: 20px; /* スクロール時の底面余白 */
+        }
+        #editor-canvas {
+            background: #111;
+            cursor: crosshair;
+            width: 100%;
+            height: auto;
+            touch-action: none;
+        }
+        .editor-buttons {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .editor-btn {
+            padding: 10px 20px;
+            background: #444;
+            color: #fff;
+            border: 1px solid #666;
+            cursor: pointer;
+        }
+        .editor-btn.primary {
+            background: #0088cc;
+        }
+    </style>
+</head>
+<body>
+
+<div id="fullscreenButton" style="position: absolute; top: 10px; left: 10px; z-index: 6000; background: rgba(0,0,0,0.55); color: #fff; width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; user-select: none; cursor: pointer;">⛶</div>
+
+<div id="output-area">
+    <div class="close-btn" onclick="document.getElementById('output-area').style.display='none'">CLOSE</div>
+    <pre id="code-output"></pre>
+</div>
+
+<div id="headlight-editor-modal">
+    <div id="editor-panel">
+        <h3 style="color: #fff; margin-top: 0;">Headlight Shape Editor</h3>
+        <canvas id="editor-canvas" width="560" height="300"></canvas>
+        <div class="editor-buttons">
+            <button class="editor-btn" id="editor-reset">Reset</button>
+            <button class="editor-btn primary" id="editor-save">Save & Close</button>
+            <button class="editor-btn" id="editor-cancel">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lil-gui@0.17.0/dist/lil-gui.umd.min.js"></script>
+
+<script>
+    const IS_MOBILE = window.matchMedia("(pointer: coarse)").matches;
+    const fsb = document.getElementById('fullscreenButton');
+    function updateFullscreenButton() {
+        if (!fsb) return;
+        if (!IS_MOBILE) { fsb.style.display = 'none'; return; }
+        fsb.style.display = document.fullscreenElement ? 'none' : 'flex';
+    }
+    if (fsb) {
+        fsb.addEventListener('click', () => {
+            if (document.fullscreenElement) return;
+            document.documentElement.requestFullscreen().catch(() => {});
+        });
+    }
+    document.addEventListener('fullscreenchange', updateFullscreenButton);
+    updateFullscreenButton();
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050505);
+    const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(10, 5, 10);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(10, 20, 10); scene.add(sun);
+    
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    scene.add(new THREE.GridHelper(20, 20, 0x444444, 0x222222));
+
+    let currentSlot = null;
+    const defaultParams = {
+        color: '#cc2222', width: 2.2, roofWidth: 1.8, totalLength: 5.0, lift: 0.4, noseH: 0.6, noseSlant: 0.2, spoilerAngle: 0.2,
+        hoodL: 1.6, hoodH: 0.8, fSlant: 0.8, roofH: 1.5, roofL: 1.5, rSlant: 1.0, trunkH: 0.9, tailH: 0.7,
+        wheelSizeFront: 0.45, wheelSizeRear: 0.45, wheelTread: 0.1, wheelColor: '#ffffff', tireWidth: 0.3, wheelDesign: 'Spoke_5',
+        headlights: 'Round_2', tailLights: 'Dual', mufflerType: 'Single', doorMirrors: true,
+        bumperF: true, bumperR: true, bumperColor: '#dddddd', frontGrill: true, grillColor: '#111111',
+        rearGarnish: true, garnishColor: '#111111'
+    };
+    const params = { ...defaultParams };
+
+    params.saveDesign = () => currentSlot ? saveForGarage() : saveToLocal();
+    params.loadDesign = () => loadFromLocal();
+    params.exportCode = () => exportToCode();
+    params.downloadJSON = () => downloadJSON();
+    params.editHeadlights = () => { initHeadlightEditor(); };
+    params.backToGarage = () => { if(currentSlot) { sessionStorage.setItem('openGarage', 'true'); window.location.href = 'index.html'; } };
+
+    let carGroup = null;
+
+    function createCar() {
+        if(carGroup) scene.remove(carGroup);
+        carGroup = new THREE.Group();
+
+        const bodyMat = new THREE.MeshStandardMaterial({ color: params.color, roughness: 0.4, metalness: 0.5 });
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.1, metalness: 1, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+        const tireMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const wheelMat = new THREE.MeshStandardMaterial({ color: params.wheelColor, metalness: 0.9, roughness: 0.1 });
+        const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+        const tailMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const bumperMat = new THREE.MeshStandardMaterial({ color: params.bumperColor, metalness: 0.8, roughness: 0.2 });
+        const grillMat = new THREE.MeshStandardMaterial({ color: params.grillColor, metalness: 0.7, roughness: 0.3 });
+        const garnishMat = new THREE.MeshStandardMaterial({ color: params.garnishColor, metalness: 0.7, roughness: 0.3 });
+        const mufflerMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 1.0, roughness: 0.2 });
+
+        const halfL = params.totalLength / 2; const halfW = params.width / 2; const faceAngle = Math.atan2(params.noseSlant, params.noseH);
+        const baseShape = new THREE.Shape();
+        baseShape.moveTo(halfL, 0); baseShape.lineTo(halfL - params.noseSlant, params.noseH); baseShape.lineTo(halfL - params.hoodL, params.hoodH);
+        baseShape.lineTo(halfL - params.hoodL - params.fSlant - params.roofL - params.rSlant, params.trunkH);
+        baseShape.lineTo(-halfL, params.tailH); baseShape.lineTo(-halfL, 0); baseShape.closePath();
+        const bodyGeo = new THREE.ExtrudeGeometry(baseShape, { depth: params.width, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05 });
+        const bodyBase = new THREE.Mesh(bodyGeo, bodyMat); bodyBase.position.set(0, params.lift, -halfW); carGroup.add(bodyBase);
+        
+        const roofGeo = new THREE.BoxGeometry(params.roofL, 0.05, params.roofWidth); const roof = new THREE.Mesh(roofGeo, bodyMat);
+        const roofX = halfL - params.hoodL - params.fSlant - (params.roofL / 2); roof.position.set(roofX, params.lift + params.roofH, 0); carGroup.add(roof);
+
+        const addGlass = (s, e, sw, ew) => {
+            const geo = new THREE.BufferGeometry();
+            const wS = sw * 0.49; const wE = ew * 0.49;
+            const verts = new Float32Array([
+                s[0], s[1], -wS,   s[0], s[1], wS,   e[0], e[1], wE,
+                s[0], s[1], -wS,   e[0], e[1], wE,   e[0], e[1], -wE
+            ]);
+            geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+            geo.computeVertexNormals();
+            const glass = new THREE.Mesh(geo, glassMat); glass.position.y = params.lift; carGroup.add(glass);
+        };
+        addGlass([halfL - params.hoodL, params.hoodH], [halfL - params.hoodL - params.fSlant, params.roofH], params.width, params.roofWidth);
+        addGlass([halfL - params.hoodL - params.fSlant - params.roofL, params.roofH], [halfL - params.hoodL - params.fSlant - params.roofL - params.rSlant, params.trunkH], params.roofWidth, params.width);
+
+        [1, -1].forEach(side => {
+            const geo = new THREE.BufferGeometry();
+            const hW = halfW + 0.005; const rW = params.roofWidth / 2 + 0.005;
+            const pts = [
+                new THREE.Vector3(halfL - params.hoodL, params.hoodH, hW * side),
+                new THREE.Vector3(halfL - params.hoodL - params.fSlant, params.roofH, rW * side),
+                new THREE.Vector3(halfL - params.hoodL - params.fSlant - params.roofL, params.roofH, rW * side),
+                new THREE.Vector3(halfL - params.hoodL - params.fSlant - params.roofL - params.rSlant, params.trunkH, hW * side)
+            ];
+            const verts = new Float32Array([
+                pts[0].x, pts[0].y, pts[0].z,  pts[1].x, pts[1].y, pts[1].z,  pts[2].x, pts[2].y, pts[2].z,
+                pts[0].x, pts[0].y, pts[0].z,  pts[2].x, pts[2].y, pts[2].z,  pts[3].x, pts[3].y, pts[3].z
+            ]);
+            geo.setAttribute('position', new THREE.BufferAttribute(verts, 3)); geo.computeVertexNormals();
+            const mesh = new THREE.Mesh(geo, glassMat); mesh.position.y = params.lift; carGroup.add(mesh);
+        });
+
+        const wheelZ = halfW + 0.15 + params.wheelTread;
+        const wheelPos = [ { x: halfL - 0.9, z: wheelZ, size: params.wheelSizeFront, side: 1 }, { x: halfL - 0.9, z: -wheelZ, size: params.wheelSizeFront, side: -1 }, { x: -halfL + 0.9, z: wheelZ, size: params.wheelSizeRear, side: 1 }, { x: -halfL + 0.9, z: -wheelZ, size: params.wheelSizeRear, side: -1 }];
+        wheelPos.forEach(p=>{ 
+            const wg=new THREE.Group(); 
+            wg.add(new THREE.Mesh(new THREE.CylinderGeometry(p.size,p.size,params.tireWidth,32).rotateX(Math.PI/2),tireMat)); 
+            wg.add(new THREE.Mesh(new THREE.CylinderGeometry(p.size*0.75,p.size*0.75,params.tireWidth+0.01,32).rotateX(Math.PI/2),wheelMat));
+            if(params.wheelDesign === 'Spoke_5'){ for(let i=0;i<5;i++){ const s=new THREE.Mesh(new THREE.BoxGeometry(p.size*1.45,0.08,0.08),wheelMat); s.position.z=(params.tireWidth/2+0.01)*p.side; s.rotation.z=(i/5)*Math.PI; wg.add(s); } }
+            else if(params.wheelDesign === 'Twist_7'){ for(let i=0;i<7;i++){ const s=new THREE.Mesh(new THREE.BoxGeometry(p.size*1.5,0.06,0.06),wheelMat); s.position.z=(params.tireWidth/2+0.01)*p.side; s.rotation.z=(i/7)*Math.PI + (p.side * 0.2); wg.add(s); } }
+            else if(params.wheelDesign === 'Dish'){ const d=new THREE.Mesh(new THREE.CylinderGeometry(p.size*0.7,p.size*0.72,params.tireWidth+0.02,32).rotateX(Math.PI/2),wheelMat); wg.add(d);}
+            wg.add(new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,params.tireWidth+0.05,16).rotateX(Math.PI/2),wheelMat)); 
+            wg.position.set(p.x,p.size,p.z); carGroup.add(wg); 
+        });
+
+        const hlZ=halfW-0.25, hlRelY=params.noseH-0.22, hlX=halfL-(hlRelY/params.noseH)*params.noseSlant;
+        const createHL=(z, isLeft)=>{ const g=new THREE.Group();
+            let hlMesh;
+            if(params.headlights==='Round_2') hlMesh = new THREE.Mesh(new THREE.CircleGeometry(0.18,24).rotateY(Math.PI/2),lightMat);
+            else if(params.headlights==='Square_2') hlMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.35,0.22).rotateY(Math.PI/2),lightMat);
+            else if(params.headlights==='Square_4'){ hlMesh=new THREE.Group(); [0.12,-0.12].forEach(o=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(0.2,0.14).rotateY(Math.PI/2),lightMat);m.position.z=o;hlMesh.add(m);}); }
+            else if(params.headlights==='Round_Dual'){ hlMesh=new THREE.Group(); [0.12,-0.12].forEach(o=>{const m=new THREE.Mesh(new THREE.CircleGeometry(0.1,24).rotateY(Math.PI/2),lightMat);m.position.z=o;hlMesh.add(m);}); }
+            else if(params.headlights==='Custom' && params.customHeadlightShape && params.customHeadlightShape.length > 0) {
+                const shape = new THREE.Shape();
+                params.customHeadlightShape.forEach((pt, idx) => { if(idx===0) shape.moveTo(pt.x, pt.y); else shape.lineTo(pt.x, pt.y); });
+                hlMesh = new THREE.Mesh(new THREE.ShapeGeometry(shape).rotateY(Math.PI/2), lightMat);
+            }
+            if(hlMesh) { if(isLeft) hlMesh.scale.z = -1; g.add(hlMesh); }
+            g.rotation.z=faceAngle; g.position.set(hlX+0.061,params.lift+hlRelY,z); carGroup.add(g);
+        }; createHL(hlZ, false); createHL(-hlZ, true);
+
+        if(params.frontGrill){ const grill=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.25,params.width*0.45),grillMat); grill.rotation.z=faceAngle; grill.position.set(hlX+0.051,params.lift+hlRelY,0); carGroup.add(grill); }
+        const tlZ=halfW-0.25, tlY=params.lift+params.tailH-0.25;
+        const createTL=z=>{ const g=new THREE.Group();
+            if(params.tailLights==='Round')g.add(new THREE.Mesh(new THREE.CircleGeometry(0.15,24),tailMat));
+            else if(params.tailLights==='Dual'){[0.12,-0.12].forEach(o=>{const m=new THREE.Mesh(new THREE.CircleGeometry(0.1,24),tailMat);m.position.x=o;g.add(m);});}
+            else if(params.tailLights==='Single_Bar') g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.5,0.2),tailMat));
+            else if(params.tailLights==='Vertical_Slim'){const m=new THREE.Mesh(new THREE.PlaneGeometry(0.1,0.5),tailMat); m.position.x=0.0; m.rotation.z=Math.PI/2; g.add(m); }
+            else if(params.tailLights==='Dual_Square'){[0.12,-0.12].forEach(o=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(0.15,0.15),tailMat);m.position.x=o;g.add(m);});}
+            g.rotation.y=-Math.PI/2; g.position.set(-halfL-0.06,tlY,z); carGroup.add(g);}; createTL(tlZ); createTL(-tlZ);
+        if(params.rearGarnish){ const garn=new THREE.Mesh(new THREE.BoxGeometry(0.02,0.2,params.width*0.45),garnishMat); garn.position.set(-halfL-0.051,tlY,0); carGroup.add(garn); }
+        if(params.bumperF){ const bf=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,params.width+0.2),bumperMat); const bRelY=0.15,bfX=halfL-(bRelY/params.noseH)*params.noseSlant; bf.rotation.z=0; bf.position.set(bfX+0.08,params.lift+bRelY,0); carGroup.add(bf);}
+        if(params.bumperR){ const br=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.15,params.width+0.2),bumperMat); br.position.set(-halfL-0.08,params.lift+0.1,0); carGroup.add(br);}
+        if(params.spoilerAngle > 0){ const sS=new THREE.Shape(); sS.moveTo(0,0);sS.lineTo(params.spoilerAngle,0);sS.lineTo(0,0.15);sS.closePath(); const sG=new THREE.ExtrudeGeometry(sS,{depth:params.width,bevelEnabled:false}); const sp=new THREE.Mesh(sG,bodyMat); sp.position.set(halfL-0.05,params.lift - 0.05,-halfW); carGroup.add(sp);}
+        const createM=z=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.6,16).rotateZ(Math.PI/2),mufflerMat);m.position.set(-halfL-0.1,params.lift-0.05,z);carGroup.add(m);};
+        const mO=halfW-0.4; if(params.mufflerType==='Single')createM(-mO); else if(params.mufflerType==='Dual'){createM(-mO+0.1);createM(-mO-0.1);} else if(params.mufflerType==='Double'){createM(-mO);createM(mO);}
+        if(params.doorMirrors){ 
+            const mGeo=new THREE.BoxGeometry(0.3,0.2,0.05); const sGeo=new THREE.CylinderGeometry(0.03,0.03,0.1); const mL=new THREE.Group(); 
+            const mirrorBody = new THREE.Mesh(mGeo,bodyMat); mirrorBody.position.y = 0.15; mirrorBody.position.x = -0.15; mL.add(mirrorBody);
+            const sL=new THREE.Mesh(sGeo,bodyMat); sL.position.y = 0.05; sL.rotation.x = Math.PI/2; mL.add(sL); 
+            mL.position.set(halfL-params.hoodL,params.lift+params.hoodH,halfW+0.1); mL.rotation.y=Math.PI/4; carGroup.add(mL); 
+            const mR=mL.clone(); mR.position.z=-halfW-0.1; mR.rotation.y*=-1; carGroup.add(mR); 
+        }
+        scene.add(carGroup);
+    }
+    
+    function downloadJSON() {
+        const designData = (({ saveDesign, loadDesign, exportCode, downloadJSON, backToGarage, ...rest }) => rest)(params);
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(designData, null, 2));
+        const a = document.createElement('a'); a.href = dataStr; a.download = (currentSlot || 'CustomCar') + ".json"; a.click(); a.remove();
+    }
+    function saveToLocal() { localStorage.setItem('CAR_DESIGN_STANDALONE', JSON.stringify(params)); alert('ブラウザに保存しました'); }
+    function loadFromLocal() { const data = localStorage.getItem('CAR_DESIGN_STANDALONE'); if(data){ Object.assign(params, JSON.parse(data)); gui.controllers.forEach(c=>c.updateDisplay()); gui.folders.forEach(f=>f.controllers.forEach(c=>c.updateDisplay())); createCar(); alert('読み込みました'); } }
+    function saveForGarage() { if(!currentSlot) return; localStorage.setItem('carConfig_' + currentSlot, JSON.stringify(params)); alert(currentSlot.toUpperCase() + ' design saved!'); window.location.href = 'index.html'; }
+    function loadForGarage() { 
+        if(!currentSlot) return; 
+        const data = localStorage.getItem('carConfig_' + currentSlot); 
+        const defaultColors = { player: '#cc2222', enemy1: '#00cc00', enemy2: '#cccc00', enemy3: '#cc22cc', enemy4: '#eeeeee' };
+        if(data){ Object.assign(params, JSON.parse(data)); } 
+        else { Object.assign(params, defaultParams); params.color = defaultColors[currentSlot] || '#888888'; }
+        gui.controllers.forEach(c=>c.updateDisplay()); gui.folders.forEach(f=>f.controllers.forEach(c=>c.updateDisplay()));
+        createCar(); 
+    }
+    
+    const gui = new lil.GUI();
+    gui.addColor(params, 'color').name('ボディカラー').onChange(createCar);
+    const f1 = gui.addFolder('1. 基本サイズ');
+    f1.add(params, 'totalLength', 3.5, 7.0).name('全長').onChange(createCar);
+    f1.add(params, 'width', 1.8, 4.0).name('全幅').onChange(createCar);
+    f1.add(params, 'lift', 0.1, 1.2).name('地上高').onChange(createCar);
+    f1.add(params, 'wheelSizeFront', 0.2, 0.8).name('前輪サイズ').onChange(createCar);
+    f1.add(params, 'wheelSizeRear', 0.2, 0.8).name('後輪サイズ').onChange(createCar);
+    const f2 = gui.addFolder('2. シルエット');
+    f2.add(params, 'noseH', 0.1, 1.2).name('先端高').onChange(createCar);
+    f2.add(params, 'noseSlant', 0.0, 1.0).name('ノーズ角度').onChange(createCar);
+    f2.add(params, 'spoilerAngle', 0.0, 1.5).name('出っ歯角度').onChange(createCar);
+    f2.add(params, 'hoodL', 0.5, 3.0).name('ボンネット長').onChange(createCar);
+    f2.add(params, 'hoodH', 0.3, 1.8).name('ボンネット高').onChange(createCar);
+    f2.add(params, 'fSlant', 0.1, 2.0).name('Fガラス傾斜').onChange(createCar);
+    f2.add(params, 'roofH', 1.0, 3.0).name('ルーフ高').onChange(createCar);
+    f2.add(params, 'roofL', 0.5, 4.0).name('キャビン長').onChange(createCar);
+    f2.add(params, 'rSlant', 0.1, 2.0).name('Rガラス傾斜').onChange(createCar);
+    f2.add(params, 'trunkH', 0.3, 2.0).name('トランク高').onChange(createCar);
+    f2.add(params, 'roofWidth', 1.0, 4.0).name('ルーフ幅').onChange(createCar);
+    const f3 = gui.addFolder('3. パーツ詳細');
+    f3.add(params, 'headlights', ['Round_2', 'Square_2', 'Square_4', 'Round_Dual', 'Custom']).name('ヘッドライト').onChange(createCar);
+    f3.add(params, 'editHeadlights').name('ヘッドライト編集');
+    f3.add(params, 'tailLights', ['Single_Bar', 'Dual', 'Round', 'Vertical_Slim', 'Dual_Square']).name('テールランプ').onChange(createCar);
+    f3.add(params, 'mufflerType', ['Single', 'Dual', 'Double']).name('マフラー').onChange(createCar);
+    f3.add(params, 'doorMirrors').name('ドアミラー').onChange(createCar);
+    f3.add(params, 'tireWidth', 0.2, 0.6).name('タイヤ太さ').onChange(createCar);
+    f3.addColor(params, 'wheelColor').name('ホイール色').onChange(createCar);
+    f3.add(params, 'wheelDesign', ['Spoke_5', 'Twist_7', 'Dish']).name('ホイールデザイン').onChange(createCar);
+    f3.add(params, 'wheelTread', -0.2, 0.8).name('ハミタイ量').onChange(createCar);
+    f3.add(params, 'bumperF').name('前バンパー').onChange(createCar);
+    f3.add(params, 'bumperR').name('後バンパー').onChange(createCar);
+    f3.addColor(params, 'bumperColor').name('バンパー色').onChange(createCar);
+    f3.add(params, 'frontGrill').name('フロントグリル').onChange(createCar);
+    f3.addColor(params, 'grillColor').name('グリル色').onChange(createCar);
+    f3.add(params, 'rearGarnish').name('リアガーニッシュ').onChange(createCar);
+    f3.addColor(params, 'garnishColor').name('ガーニッシュ色').onChange(createCar);
+    const f4 = gui.addFolder('4. 保存・出力');
+    
+    window.onload = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const slot = urlParams.get('slot');
+        if (slot) {
+            currentSlot = slot; gui.title('Editing: ' + slot.toUpperCase()); loadForGarage();
+            f4.add(params, 'saveDesign').name('✅ SAVE & BACK to GARAGE');
+            f4.add(params, 'backToGarage').name('↩️ BACK (no save)');
+            f4.add(params, 'downloadJSON').name('💾 Download JSON');
+        } else {
+            f4.add(params, 'saveDesign').name('▶ ブラウザ保存');
+            f4.add(params, 'loadDesign').name('◀ ブラウザ読込');
+            f4.add(params, 'downloadJSON').name('💾 JSONダウンロード');
+            createCar();
+        }
+    };
+
+    function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+    animate();
+    window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+    
+    const editorModal = document.getElementById('headlight-editor-modal');
+    const editorCanvas = document.getElementById('editor-canvas');
+    const editorCtx = editorCanvas.getContext('2d');
+    const editorSaveBtn = document.getElementById('editor-save');
+    const editorCancelBtn = document.getElementById('editor-cancel');
+    const editorResetBtn = document.getElementById('editor-reset');
+
+    let defaultHeadlightShapes = {
+        'Round_2': [{x: 0.2, y: 0.2}, {x: 0.8, y: 0.2}, {x: 0.8, y: 0.8}, {x: 0.2, y: 0.8}],
+        'Square_2': [{x: 0.2, y: 0.2}, {x: 0.8, y: 0.2}, {x: 0.8, y: 0.8}, {x: 0.2, y: 0.8}],
+        'Square_4': [{x: 0.2, y: 0.2}, {x: 0.8, y: 0.2}, {x: 0.8, y: 0.8}, {x: 0.2, y: 0.8}],
+        'Round_Dual': [{x: 0.2, y: 0.2}, {x: 0.8, y: 0.2}, {x: 0.8, y: 0.8}, {x: 0.2, y: 0.8}]
+    };
+    
+    function transformCanvasToShapeCoords(points, canvasWidth, canvasHeight) {
+        const shapePoints = []; const scaleX = 0.8 / canvasWidth; const scaleY = 0.6 / canvasHeight;
+        points.forEach(p => { const tx = (p.x - canvasWidth / 2) * scaleX; const ty = -(p.y - canvasHeight / 2) * scaleY; shapePoints.push(new THREE.Vector2(tx, ty)); });
+        return shapePoints;
+    }
+
+    let currentEditShape = []; let initialEditShape = []; let draggingPoint = null;
+
+    function initHeadlightEditor() {
+        editorModal.style.display = 'flex';
+        if (params.headlights === 'Custom' && params.customHeadlightShape) {
+            currentEditShape = params.customHeadlightShape.map(p => ({ x: (p.x / (0.8 / editorCanvas.width)) + editorCanvas.width / 2, y: -(p.y / (0.6 / editorCanvas.height)) + editorCanvas.height / 2 }));
+        } else {
+            const defaultShape = defaultHeadlightShapes[params.headlights] || defaultHeadlightShapes['Round_2'];
+            currentEditShape = defaultShape.map(p => ({ x: p.x * editorCanvas.width, y: p.y * editorCanvas.height }));
+        }
+        initialEditShape = JSON.parse(JSON.stringify(currentEditShape));
+        drawHeadlightShape();
+    }
+
+    function drawHeadlightShape() {
+        editorCtx.clearRect(0, 0, editorCanvas.width, editorCanvas.height);
+        editorCtx.lineWidth = 2; editorCtx.strokeStyle = '#fff'; editorCtx.fillStyle = 'rgba(255,255,255,0.1)';
+        if (currentEditShape.length > 0) {
+            editorCtx.beginPath(); editorCtx.moveTo(currentEditShape[0].x, currentEditShape[0].y);
+            for (let i = 1; i < currentEditShape.length; i++) editorCtx.lineTo(currentEditShape[i].x, currentEditShape[i].y);
+            editorCtx.closePath(); editorCtx.fill(); editorCtx.stroke();
+            editorCtx.fillStyle = '#00f';
+            currentEditShape.forEach(p => { editorCtx.beginPath(); editorCtx.arc(p.x, p.y, 14, 0, Math.PI * 2); editorCtx.fill(); editorCtx.strokeStyle = '#fff'; editorCtx.stroke(); });
+        }
+    }
+
+    function handleStart(e) {
+        const rect = editorCanvas.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        const mouseX = (touch.clientX - rect.left) * (editorCanvas.width / rect.width);
+        const mouseY = (touch.clientY - rect.top) * (editorCanvas.height / rect.height);
+        for (let i = 0; i < currentEditShape.length; i++) {
+            const p = currentEditShape[i]; const dist = Math.sqrt(Math.pow(mouseX - p.x, 2) + Math.pow(mouseY - p.y, 2));
+            if (dist < 30) { draggingPoint = i; break; }
+        }
+    }
+
+    function handleMove(e) {
+        if (draggingPoint !== null) {
+            if(e.touches) e.preventDefault(); // 編集中のスクロールを防止
+            const rect = editorCanvas.getBoundingClientRect();
+            const touch = e.touches ? e.touches[0] : e;
+            currentEditShape[draggingPoint].x = (touch.clientX - rect.left) * (editorCanvas.width / rect.width);
+            currentEditShape[draggingPoint].y = (touch.clientY - rect.top) * (editorCanvas.height / rect.height);
+            drawHeadlightShape();
+        }
+    }
+
+    editorCanvas.addEventListener('mousedown', handleStart);
+    editorCanvas.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', () => { draggingPoint = null; });
+    editorCanvas.addEventListener('touchstart', handleStart, { passive: true });
+    editorCanvas.addEventListener('touchmove', handleMove, { passive: false });
+    editorCanvas.addEventListener('touchend', () => { draggingPoint = null; });
+
+    editorCancelBtn.addEventListener('click', () => { editorModal.style.display = 'none'; });
+    editorResetBtn.addEventListener('click', () => { currentEditShape = JSON.parse(JSON.stringify(initialEditShape)); drawHeadlightShape(); });
+    editorSaveBtn.addEventListener('click', () => {
+        params.customHeadlightShape = transformCanvasToShapeCoords(currentEditShape, editorCanvas.width, editorCanvas.height);
+        params.headlights = 'Custom'; createCar(); editorModal.style.display = 'none';
+    });
+</script>
+</body>
+</html>
