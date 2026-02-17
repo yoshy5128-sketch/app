@@ -2354,13 +2354,12 @@ function animate() {
     if(audioCtx && !player.dead && gameState === 'PLAY') { pGain.gain.setTargetAtTime(0.3, now, 0.05); pOsc.frequency.setTargetAtTime(70 + Math.abs(player.speed) * 60, now, 0.05); } else if(pGain) pGain.gain.setTargetAtTime(0, now, 0.05);
     renderer.render(scene, camera);
     if (zoomLevel >= 0.15 && hudMirrorEnabled) {
-        const pxRatio = renderer.getPixelRatio();
         const rect = hudMirrorFrame ? hudMirrorFrame.getBoundingClientRect() : null;
         if (rect && rect.width >= 2 && rect.height >= 2) {
-            const x = Math.floor(rect.left * pxRatio);
-            const y = Math.floor((window.innerHeight - rect.bottom) * pxRatio);
-            const w = Math.floor(rect.width * pxRatio);
-            const h = Math.floor(rect.height * pxRatio);
+            const x = Math.floor(rect.left);
+            const y = Math.floor(window.innerHeight - rect.bottom);
+            const w = Math.floor(rect.width);
+            const h = Math.floor(rect.height);
             const prevAutoClear = renderer.autoClear;
             renderer.autoClear = false;
             renderer.setScissorTest(true);
@@ -2369,7 +2368,7 @@ function animate() {
             renderer.clearDepth();
             renderer.render(mirrorHudScene, mirrorHudCamera);
             renderer.setScissorTest(false);
-            renderer.setViewport(0, 0, Math.floor(window.innerWidth * pxRatio), Math.floor(window.innerHeight * pxRatio));
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
             renderer.autoClear = prevAutoClear;
         }
     }
