@@ -124,6 +124,51 @@
             right: 10px;
             font-size: 32px;
         }
+        #hud {
+            top: 4px;
+            gap: 16px;
+            padding-left: 8px;
+            font-size: 15px;
+        }
+        #mission-info {
+            top: 4px;
+            font-size: 14px;
+            padding-right: 8px;
+        }
+        #hud-mirror-frame {
+            left: 8px;
+            top: 38px;
+            width: 192px;
+            height: 64px;
+            border-width: 1px;
+        }
+        #settings-screen {
+            justify-content: flex-start;
+            overflow-y: auto;
+            padding: 12px 0 20px;
+            box-sizing: border-box;
+        }
+        .settings-title {
+            font-size: 30px;
+            margin-bottom: 18px;
+            width: 92%;
+        }
+        .setting-item {
+            margin-bottom: 16px;
+            width: min(92vw, 420px);
+            font-size: 18px;
+        }
+        #settings-close {
+            margin-top: 16px;
+            font-size: 18px;
+            padding: 8px 22px;
+        }
+        #result-title { font-size: 34px; margin-bottom: 10px; }
+        #mission-bonus { font-size: 24px; margin-bottom: 8px; }
+        #result-bonus { font-size: 20px; margin-bottom: 10px; }
+        #result-total { font-size: 22px; margin-bottom: 18px; }
+        #next-btn, .replay-btn, .post-btn { padding: 10px 16px; font-size: 16px; }
+        #zoomSlider { right: -84px; width: 176px; }
     }
     
     #gear-btn {
@@ -1353,8 +1398,6 @@ document.getElementById('post-replay-exit').addEventListener('click', () => { do
 
 let bgmEnabled = true, bgmVolume = 0.5; const bgmAudio = new Audio(); bgmAudio.loop = true;
 let hudMirrorEnabled = true;
-const HUD_MIRROR_W = 256;
-const HUD_MIRROR_H = 85;
 function updateBgmVolume() { if(!bgmEnabled){ bgmAudio.volume=0; if(!bgmAudio.paused)bgmAudio.pause(); } else { bgmAudio.volume=bgmVolume; if(bgmAudio.paused&&gameState==='PLAY')bgmAudio.play().catch(e=>{}); } }
 
 const beaconRedMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, fog: false });
@@ -2310,20 +2353,23 @@ function animate() {
     renderer.render(scene, camera);
     if (zoomLevel >= 0.15 && hudMirrorEnabled) {
         const pxRatio = renderer.getPixelRatio();
-        const x = Math.floor(15 * pxRatio);
-        const y = Math.floor((window.innerHeight - 48 - HUD_MIRROR_H) * pxRatio);
-        const w = Math.floor(HUD_MIRROR_W * pxRatio);
-        const h = Math.floor(HUD_MIRROR_H * pxRatio);
-        const prevAutoClear = renderer.autoClear;
-        renderer.autoClear = false;
-        renderer.setScissorTest(true);
-        renderer.setViewport(x, y, w, h);
-        renderer.setScissor(x, y, w, h);
-        renderer.clearDepth();
-        renderer.render(mirrorHudScene, mirrorHudCamera);
-        renderer.setScissorTest(false);
-        renderer.setViewport(0, 0, Math.floor(window.innerWidth * pxRatio), Math.floor(window.innerHeight * pxRatio));
-        renderer.autoClear = prevAutoClear;
+        const rect = hudMirrorFrame ? hudMirrorFrame.getBoundingClientRect() : null;
+        if (rect && rect.width >= 2 && rect.height >= 2) {
+            const x = Math.floor(rect.left * pxRatio);
+            const y = Math.floor((window.innerHeight - rect.bottom) * pxRatio);
+            const w = Math.floor(rect.width * pxRatio);
+            const h = Math.floor(rect.height * pxRatio);
+            const prevAutoClear = renderer.autoClear;
+            renderer.autoClear = false;
+            renderer.setScissorTest(true);
+            renderer.setViewport(x, y, w, h);
+            renderer.setScissor(x, y, w, h);
+            renderer.clearDepth();
+            renderer.render(mirrorHudScene, mirrorHudCamera);
+            renderer.setScissorTest(false);
+            renderer.setViewport(0, 0, Math.floor(window.innerWidth * pxRatio), Math.floor(window.innerHeight * pxRatio));
+            renderer.autoClear = prevAutoClear;
+        }
     }
 }
 animate();
