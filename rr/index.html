@@ -41,6 +41,7 @@
     #result-title { font-size: 50px; color: #ffff00; margin-bottom: 20px; text-shadow: 0 0 10px orange; }
     #mission-bonus { font-size: 36px; color: #00ffff; margin-bottom: 10px; text-shadow: 0 0 5px cyan; }
     #result-bonus { font-size: 30px; margin-bottom: 20px; color: #00ff00; }
+    #result-headon { font-size: 28px; margin-bottom: 18px; color: #ffcc55; }
     #result-total { font-size: 32px; margin-bottom: 40px; color: #ffffff; border-top: 2px solid #555; padding-top: 10px; }
     
     .result-btns { display: flex; gap: 15px; }
@@ -168,9 +169,17 @@
         #result-title { font-size: 34px; margin-bottom: 10px; }
         #mission-bonus { font-size: 24px; margin-bottom: 8px; }
         #result-bonus { font-size: 20px; margin-bottom: 10px; }
+        #result-headon { font-size: 18px; margin-bottom: 10px; }
         #result-total { font-size: 22px; margin-bottom: 18px; }
         #next-btn, .replay-btn, .post-btn { padding: 10px 16px; font-size: 16px; }
         #zoomSlider { right: -84px; width: 176px; }
+        #perf-stats {
+            top: 52px;
+            right: 8px;
+            min-width: 145px;
+            padding: 4px 6px;
+            font-size: 10px;
+        }
     }
     
     #gear-btn {
@@ -197,6 +206,24 @@
     #replay-ui {
         position: absolute; top: 15px; right: 15px; width: auto; text-align: right;
         z-index: 4000; display: none; font-family: sans-serif; pointer-events: none;
+    }
+    #perf-stats {
+        position: absolute;
+        top: 66px;
+        right: 12px;
+        min-width: 170px;
+        padding: 6px 8px;
+        background: rgba(0, 0, 0, 0.72);
+        color: #8cff66;
+        border: 1px solid rgba(140,255,102,0.45);
+        border-radius: 6px;
+        font-family: Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.35;
+        white-space: pre;
+        pointer-events: none;
+        z-index: 4010;
+        display: none;
     }
     #replay-info { color: #00ccff; font-size: 16px; font-weight: bold; text-shadow: 1px 1px 2px #000; margin-bottom: 5px; }
     #exit-replay-btn {
@@ -391,6 +418,7 @@
     <div class="setting-item"><span class="setting-label">BGM</span><input type="checkbox" id="bgm-toggle" checked></div>
     <div class="setting-item"><span class="setting-label">VOLUME</span><input type="range" id="bgm-volume" min="0" max="1" step="0.1" value="0.3"></div>
     <div class="setting-item"><span class="setting-label">HUD MIRROR</span><input type="checkbox" id="hud-mirror-toggle" checked></div>
+    <div class="setting-item"><span class="setting-label">PERFORMANCE HUD</span><input type="checkbox" id="perf-hud-toggle"></div>
     <div id="settings-close">BACK</div>
 </div>
 
@@ -398,6 +426,7 @@
     <div id="result-title">STAGE CLEAR</div>
     <div id="mission-bonus">Mission Complete $1000</div>
     <div id="result-bonus">Enemy Kill x <span id="kill-disp">0</span> x 100 = $<span id="money-bonus">0</span></div>
+    <div id="result-headon">HEAD-ON CRASH! 500 x <span id="headon-disp">0</span> = $<span id="headon-bonus">0</span></div>
     <div id="result-total">TOTAL MONEY: $<span id="total-money-disp">0</span></div>
     <div class="result-btns">
         <div id="next-btn">Next Stage</div>
@@ -407,6 +436,7 @@
 <div class="touch-area touch-left"></div>
 <div class="touch-area touch-right"></div>
 <div id="hud-mirror-frame"></div>
+<div id="perf-stats"></div>
 <div id="fullscreenButton">★</div>
 <input type="range" id="zoomSlider" min="0" max="2" step="0.01" value="0.8">
 <div id="redFlash" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: red; opacity: 0; pointer-events: none; z-index: 1030; transition: opacity 0.1s ease-out;"></div>
@@ -516,6 +546,172 @@ function openCarLoader(slot) {
         reader.readAsText(file);
     };
     l.click();
+}
+
+const TANKER_TRACTOR_DESIGN = {
+    "color": "#a39f9f",
+    "width": 3.6058,
+    "roofWidth": 3.159,
+    "totalLength": 6.048,
+    "lift": 0.4,
+    "noseH": 1.2,
+    "noseSlant": 0.166,
+    "spoilerAngle": 0.162,
+    "hoodL": 0.5,
+    "hoodH": 1.77,
+    "fSlant": 0.3363,
+    "roofH": 2.842,
+    "roofL": 2.17,
+    "rSlant": 0.1,
+    "trunkH": 0.8534,
+    "tailH": 0.7,
+    "wheelSizeFront": 0.642,
+    "wheelSizeRear": 0.642,
+    "wheelTread": -0.193,
+    "wheelColor": "#ffffff",
+    "tireWidth": 0.3,
+    "wheelDesign": "Spoke_5",
+    "headlights": "Custom",
+    "tailLights": "Dual",
+    "mufflerType": "Single",
+    "doorMirrors": true,
+    "bumperF": false,
+    "bumperR": true,
+    "bumperColor": "#dddddd",
+    "frontGrill": true,
+    "grillColor": "#858585",
+    "rearGarnish": true,
+    "garnishColor": "#111111",
+    "customHeadlightShape": [
+        { "x": -0.24, "y": 0.18 },
+        { "x": 0.268, "y": 0.16133877789120607 },
+        { "x": 0.2826666666666667, "y": -0.23253609450196883 },
+        { "x": -0.248, "y": -0.22693597783287145 }
+    ]
+};
+
+function createTankerTrailer(tractorDesign) {
+    const d = tractorDesign || TANKER_TRACTOR_DESIGN;
+    const trailer = new THREE.Group();
+    const trailerWheels = [];
+    const trailerLen = Math.max(7.8, (d.totalLength || 6.0) * 1.35);
+    const trailerW = Math.max(2.8, (d.width || 3.0) * 0.98);
+    const tankR = Math.max(1.05, trailerW * 0.45);
+    const frameH = 0.22;
+    const lift = d.lift || 0.4;
+    const colorHex = parseInt(String(d.color || '#a39f9f').replace('#', '0x'));
+    const wheelCol = parseInt(String(d.wheelColor || '#ffffff').replace('#', '0x'));
+
+    const tankMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.35, metalness: 0.65 });
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x4e4e4e, roughness: 0.55, metalness: 0.45 });
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+    const wheelMat = new THREE.MeshStandardMaterial({ color: wheelCol, roughness: 0.2, metalness: 0.8 });
+    const trailerBrakeMat = new THREE.MeshStandardMaterial({ color: 0xff3333, emissive: 0xff0000, emissiveIntensity: 4.0, roughness: 0.2, metalness: 0.0 });
+
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(trailerLen, frameH, trailerW * 0.9), frameMat);
+    frame.position.set(0, lift + 0.42, 0);
+    trailer.add(frame);
+
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(tankR, tankR, trailerLen * 0.92, 24, 1).rotateZ(Math.PI / 2), tankMat);
+    tank.position.set(0, lift + 0.42 + tankR + 0.05, 0);
+    trailer.add(tank);
+
+    const capF = new THREE.Mesh(new THREE.SphereGeometry(tankR * 0.96, 18, 14), tankMat);
+    capF.scale.set(0.55, 1.0, 1.0);
+    capF.position.set(trailerLen * 0.46, lift + 0.42 + tankR + 0.05, 0);
+    trailer.add(capF);
+    const capR = capF.clone();
+    capR.position.x = -trailerLen * 0.46;
+    trailer.add(capR);
+
+    const wheelR = Math.max(0.52, (d.wheelSizeRear || 0.64) * 0.9);
+    const wheelZ = (trailerW * 0.5) + 0.18;
+    const axleXs = [-trailerLen * 0.20, -trailerLen * 0.36];
+    axleXs.forEach(ax => {
+        [1, -1].forEach(side => {
+            const wg = new THREE.Group();
+            wg.userData = { ...(wg.userData || {}), radius: wheelR };
+            const tire = new THREE.Mesh(new THREE.CylinderGeometry(wheelR, wheelR, 0.3, 24).rotateX(Math.PI / 2), tireMat);
+            const rim = new THREE.Mesh(new THREE.CylinderGeometry(wheelR * 0.72, wheelR * 0.72, 0.31, 20).rotateX(Math.PI / 2), wheelMat);
+            wg.add(tire);
+            wg.add(rim);
+            wg.position.set(ax, wheelR + 0.03, wheelZ * side);
+            trailer.add(wg);
+            trailerWheels.push(wg);
+        });
+    });
+
+    const hitch = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.14, 0.16), frameMat);
+    hitch.position.set(trailerLen * 0.5 + 0.34, lift + 0.48, 0);
+    trailer.add(hitch);
+
+    const tlY = lift + 0.55;
+    const tlZ = trailerW * 0.5 - 0.45;
+    const panelDepth = 0.08;
+    const tailType = d.tailLights || 'Dual';
+    const tailPanelH = (tailType === 'Round') ? 0.38 : ((tailType === 'Dual') ? 0.54 : 0.32);
+    const rearPanel = new THREE.Mesh(
+        new THREE.BoxGeometry(panelDepth, tailPanelH, trailerW * 0.92),
+        frameMat
+    );
+    rearPanel.position.set(-trailerLen * 0.5 - 0.07, lift + 0.62, 0);
+    trailer.add(rearPanel);
+    const tlX = rearPanel.position.x - panelDepth * 0.5 - 0.02;
+    const addTrailerTL = (zSide) => {
+        const g = new THREE.Group();
+        if (tailType === 'Round') {
+            g.add(new THREE.Mesh(new THREE.CircleGeometry(0.15, 24), trailerBrakeMat));
+        } else if (tailType === 'Dual') {
+            [0.12, -0.12].forEach(o => {
+                const m = new THREE.Mesh(new THREE.CircleGeometry(0.1, 24), trailerBrakeMat);
+                m.position.x = o;
+                g.add(m);
+            });
+        } else {
+            g.add(new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.2), trailerBrakeMat));
+        }
+        g.rotation.y = -Math.PI / 2;
+        g.position.set(tlX, tlY, zSide);
+        trailer.add(g);
+    };
+    addTrailerTL(tlZ);
+    addTrailerTL(-tlZ);
+
+    return { group: trailer, wheels: trailerWheels, trailerLength: trailerLen };
+}
+
+function attachTankerTrailerToCar(car, tractorDesign) {
+    if (!car || !car.visual) return;
+    if (car.tankerTrailer && car.tankerTrailer.group) car.visual.remove(car.tankerTrailer.group);
+    if (car.tankerHitchPivot) car.visual.remove(car.tankerHitchPivot);
+    const d = tractorDesign || TANKER_TRACTOR_DESIGN;
+    const halfL = (d.totalLength || 6.0) * 0.5;
+    const trailer = createTankerTrailer(d);
+    const rearAxleX = -halfL + 0.9;
+    const targetTankFrontX = rearAxleX + 0.12;
+    const tankFrontLocalX = trailer.trailerLength * 0.46;
+    const mountX = targetTankFrontX - tankFrontLocalX;
+    const lift = d.lift || 0.4;
+    const trunkTopY = lift + (d.trunkH || 0.85);
+    const trailerFrameBottomY = lift + 0.42 - 0.11;
+    const mountY = (trunkTopY - trailerFrameBottomY) + 0.02;
+
+    const hitchPivot = new THREE.Group();
+    const hitchX = rearAxleX + 0.05;
+    hitchPivot.position.set(hitchX, mountY, 0);
+    trailer.group.position.set(mountX - hitchX, 0, 0);
+    hitchPivot.add(trailer.group);
+    car.visual.add(hitchPivot);
+
+    car.tankerTrailer = trailer;
+    car.tankerHitchPivot = hitchPivot;
+    car.trailerWheels = trailer.wheels || [];
+    car.tankerRig = { hitch: hitchPivot, angle: 0, lastPos: null };
+}
+
+function angleDeltaRad(a, b) {
+    const d = a - b;
+    return Math.atan2(Math.sin(d), Math.cos(d));
 }
 
 function createCarFromConfig(design, defCol) {
@@ -917,8 +1113,15 @@ function getRoadHeight(z) {
 function getHeight(x, z) {
     const roadX = getRoadX(z);
     const roadH = getRoadHeight(z);
-    const shoulder = (currentMapType === MAP_PASS) ? 10.0 : 5.0;
-    const buffer = (currentMapType === MAP_PASS) ? 10.0 : 0.0;
+    const passNarrowT = (currentMapType === MAP_PASS)
+        ? THREE.MathUtils.clamp((44 - getRoadWidth(z)) / 14, 0, 1)
+        : 0;
+    const shoulder = (currentMapType === MAP_PASS)
+        ? (10.8 + passNarrowT * 2.2)
+        : ((currentMapType === MAP_SNOW) ? 6.5 : 5.0);
+    const buffer = (currentMapType === MAP_PASS)
+        ? (12.0 + passNarrowT * 4.8)
+        : ((currentMapType === MAP_SNOW) ? 3.0 : 0.0);
     const flatBoundary = getRoadWidth(z) / 2 + shoulder + buffer; // 路肩として平坦な領域を確保
     if (Math.abs(x - roadX) < flatBoundary) {
         return roadH; // 道路とその隣接エリア（ガードレールを少し超えるまで）は平坦
@@ -929,14 +1132,14 @@ function getHeight(x, z) {
     if (currentMapType === MAP_PASS || currentMapType === MAP_SNOW) {
         const d = Math.abs(x - roadX) - flatBoundary;
         const wall = (currentMapType === MAP_PASS)
-            ? (10 + Math.min(95, Math.max(0, d - 8.0) * Math.max(0, d - 8.0) * 0.11))
-            : (14 + Math.min(95, d * d * 0.12));
+            ? (10 + Math.min(95, Math.max(0, d - (10.2 + passNarrowT * 1.6)) * Math.max(0, d - (10.2 + passNarrowT * 1.6)) * 0.11))
+            : (10 + Math.min(78, Math.max(0, d - 4.0) * Math.max(0, d - 4.0) * 0.09));
         const roughBase = (currentMapType === MAP_SNOW)
             ? (Math.sin(x * 0.03) * 2.0 + Math.cos(z * 0.02) * 2.5)
             : (Math.sin(x * 0.035) * 5.0 + Math.cos(z * 0.03) * 6.0);
         const roughScale = (currentMapType === MAP_PASS)
-            ? THREE.MathUtils.clamp((d - 6.0) / 24.0, 0, 1)
-            : 1.0;
+            ? THREE.MathUtils.clamp((d - (8.8 + passNarrowT * 1.6)) / 24.0, 0, 1)
+            : THREE.MathUtils.clamp((d - 1.5) / 16.0, 0, 1);
         const rough = roughBase * roughScale;
         return roadH + wall + rough;
     }
@@ -945,7 +1148,7 @@ function getHeight(x, z) {
 const chunks = new Map();
 const snowMounds = [];
 
-const MAX_CHUNK_BUILDS_PER_FRAME = 1;
+const MAX_CHUNK_BUILDS_PER_FRAME = 2;
 const MAX_CHUNK_DISPOSE_PER_FRAME = 4;
 const chunkBuildQueue = [];
 const chunkBuildSet = new Set();
@@ -1024,7 +1227,8 @@ function enqueueChunkBuild(x, z) {
 }
 
 function buildChunk(x, z, key) {
-    const geo = new THREE.PlaneGeometry(400, 400, 40, 40);
+    const terrainSeg = (currentMapType === MAP_SNOW) ? 28 : 40;
+    const geo = new THREE.PlaneGeometry(400, 400, terrainSeg, terrainSeg);
     geo.rotateX(-Math.PI/2);
     const pos = geo.attributes.position;
     const colors = [];
@@ -1045,7 +1249,10 @@ function buildChunk(x, z, key) {
         pos.setY(i, wy);
 
         const roadX = getRoadX(wz);
-        const shoulder = (currentMapType === MAP_PASS) ? 9.0 : 5.0;
+        const passNarrowColorT = (currentMapType === MAP_PASS)
+            ? THREE.MathUtils.clamp((44 - getRoadWidth(wz)) / 14, 0, 1)
+            : 0;
+        const shoulder = (currentMapType === MAP_PASS) ? (9.8 + passNarrowColorT * 1.8) : 5.0;
         const guardrailBoundary = getRoadWidth(wz) / 2 + shoulder;
         if (Math.abs(wx - roadX) < guardrailBoundary) {
             colors.push(roadColor.r, roadColor.g, roadColor.b);
@@ -1075,6 +1282,8 @@ function buildChunk(x, z, key) {
     [-1, 1].forEach(side => {
         const railPoints = [];
         const posts = new THREE.Group();
+        const postStep = (currentMapType === MAP_HIGHWAY) ? 4 : ((currentMapType === MAP_SNOW) ? 8 : 6);
+        const railSegments = (currentMapType === MAP_SNOW) ? 12 : 24;
 
         for(let i = 0; i <= 40; i++) {
             const rz = z*400 + i*10;
@@ -1083,7 +1292,7 @@ function buildChunk(x, z, key) {
 
             railPoints.push(new THREE.Vector3(rx, groundY + chunkShared.postHeight / 2, rz));
 
-            if (i % 4 === 0 && i < 40) {
+            if (i % postStep === 0 && i < 40) {
                if (currentMapType === MAP_HIGHWAY && i % 32 === 0) {
                    const lamp = new THREE.Group();
                    const pole = new THREE.Mesh(chunkShared.lampPoleGeo, chunkShared.lampPoleMat);
@@ -1117,7 +1326,7 @@ function buildChunk(x, z, key) {
         }
 
         const curve = new THREE.CatmullRomCurve3(railPoints);
-        const rail = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, chunkShared.railRadius, 6, false), chunkShared.guardrailMat);
+        const rail = new THREE.Mesh(new THREE.TubeGeometry(curve, railSegments, chunkShared.railRadius, 6, false), chunkShared.guardrailMat);
         rail.castShadow = true;
         scene.add(rail);
         chunks.set(`${key}_rail_${side}`, rail);
@@ -1148,46 +1357,48 @@ function buildChunk(x, z, key) {
         chunks.set(`${key}_mounds`, moundGroup);
     }
 
-    const vertices = [];
-    const lineWidth = 0.2;
-    const dashSize = 5;
-    const gapSize = 5;
+    if (currentMapType !== MAP_SNOW) {
+        const vertices = [];
+        const lineWidth = 0.2;
+        const dashSize = 5;
+        const gapSize = 5;
 
-    for(let i = 0; i < 40; i++) {
-        if ( (i % (dashSize + gapSize)) < dashSize ) {
-            const z1 = z*400 + i*10;
-            const z2 = z*400 + (i+1)*10;
+        for(let i = 0; i < 40; i++) {
+            if ( (i % (dashSize + gapSize)) < dashSize ) {
+                const z1 = z*400 + i*10;
+                const z2 = z*400 + (i+1)*10;
 
-            const x1 = getRoadX(z1);
-            const x2 = getRoadX(z2);
+                const x1 = getRoadX(z1);
+                const x2 = getRoadX(z2);
 
-            const y1 = getRoadHeight(z1) + 0.05;
-            const y2 = getRoadHeight(z2) + 0.05;
+                const y1 = getRoadHeight(z1) + 0.05;
+                const y2 = getRoadHeight(z2) + 0.05;
 
-            const dir = new THREE.Vector3(x2 - x1, y2 - y1, z2 - z1).normalize();
-            const perpendicular = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+                const dir = new THREE.Vector3(x2 - x1, y2 - y1, z2 - z1).normalize();
+                const perpendicular = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
 
-            const p1 = new THREE.Vector3(x1, y1, z1);
-            const p2 = new THREE.Vector3(x2, y2, z2);
+                const p1 = new THREE.Vector3(x1, y1, z1);
+                const p2 = new THREE.Vector3(x2, y2, z2);
 
-            const v1 = p1.clone().add(perpendicular.clone().multiplyScalar(-lineWidth));
-            const v2 = p1.clone().add(perpendicular.clone().multiplyScalar(lineWidth));
-            const v3 = p2.clone().add(perpendicular.clone().multiplyScalar(lineWidth));
-            const v4 = p2.clone().add(perpendicular.clone().multiplyScalar(-lineWidth));
+                const v1 = p1.clone().add(perpendicular.clone().multiplyScalar(-lineWidth));
+                const v2 = p1.clone().add(perpendicular.clone().multiplyScalar(lineWidth));
+                const v3 = p2.clone().add(perpendicular.clone().multiplyScalar(lineWidth));
+                const v4 = p2.clone().add(perpendicular.clone().multiplyScalar(-lineWidth));
 
-            vertices.push(v1.x, v1.y, v1.z,  v2.x, v2.y, v2.z,  v3.x, v3.y, v3.z);
-            vertices.push(v1.x, v1.y, v1.z,  v3.x, v3.y, v3.z,  v4.x, v4.y, v4.z);
+                vertices.push(v1.x, v1.y, v1.z,  v2.x, v2.y, v2.z,  v3.x, v3.y, v3.z);
+                vertices.push(v1.x, v1.y, v1.z,  v3.x, v3.y, v3.z,  v4.x, v4.y, v4.z);
+            }
         }
-    }
 
-    if (vertices.length > 0) {
-        const centerLineGeo = new THREE.BufferGeometry();
-        centerLineGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        centerLineGeo.computeVertexNormals();
+        if (vertices.length > 0) {
+            const centerLineGeo = new THREE.BufferGeometry();
+            centerLineGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            centerLineGeo.computeVertexNormals();
 
-        const centerLine = new THREE.Mesh(centerLineGeo, chunkShared.centerLineMat);
-        scene.add(centerLine);
-        chunks.set(`${key}_centerline`, centerLine);
+            const centerLine = new THREE.Mesh(centerLineGeo, chunkShared.centerLineMat);
+            scene.add(centerLine);
+            chunks.set(`${key}_centerline`, centerLine);
+        }
     }
 }
 
@@ -1293,24 +1504,120 @@ player.speed = player.lastSpeed = player.vY = player.yaw = player.pitch = player
 
 let enemies = [];
 const enemyColors = [0x00cc00, 0xcccc00, 0xcc22cc, 0xeeeeee, 0x2244cc, 0xcc5500];
+const oncomingCarColors = [0x66e0ff, 0xff66cc, 0xffd166, 0x7cff7c, 0xbdb2ff, 0xff8fab, 0x9bf6ff, 0xffadad];
 let oncomingCars = [];
 let nextOncomingSpawnZ = 0;
-const ONCOMING_SPAWN_INTERVAL = 1000;
+const ONCOMING_BASE_GAP = 1000;
 const ONCOMING_SPAWN_AHEAD = 1200;
 const ONCOMING_DESPAWN_BEHIND = 260;
-const ONCOMING_SPEED = 1.65;
+const ONCOMING_SPEED = 0.85;
 const ONCOMING_COLLISION_RADIUS = 3.8;
 const ONCOMING_MAX_SPAWNS_PER_FRAME = 1;
+const ONCOMING_ENABLED_MAPS = new Set([MAP_HIGHWAY, MAP_DESERT, MAP_PASS]);
+const ONCOMING_LANE_RATIO = 0.26;
+const ONCOMING_LANE_EDGE_MARGIN = 2.6;
+let oncomingBurstRemain = 0;
+function randRange(a, b) { return a + Math.random() * (b - a); }
+function getOncomingLaneX(z) {
+    const rw = getRoadWidth(z);
+    const narrowT = THREE.MathUtils.clamp((rw - 28) / 20, 0, 1); // 狭路では0, 広路では1
+    const laneRatio = THREE.MathUtils.lerp(0.18, ONCOMING_LANE_RATIO, narrowT);
+    const edgeMargin = THREE.MathUtils.lerp(3.3, ONCOMING_LANE_EDGE_MARGIN, narrowT);
+    const laneHalf = Math.max(4.2, Math.min(rw * laneRatio, rw * 0.5 - edgeMargin));
+    return getRoadX(z) + laneHalf;
+}
+function getOncomingTargetSpeed(z) {
+    const rwNow = getRoadWidth(z);
+    const narrowSlow = THREE.MathUtils.clamp((38 - rwNow) / 12, 0, 1);
+    const mapSpeedMul = (currentMapType === MAP_PASS) ? 0.45 : ((currentMapType === MAP_DESERT) ? 0.70 : 0.90);
+    return ONCOMING_SPEED * mapSpeedMul * (1.0 - 0.45 * narrowSlow);
+}
+function getPassBlindness(z) {
+    // 峠の見通しにくさを、先の道の曲がり量と道幅で近似する
+    const x0 = getRoadX(z + 40);
+    const x1 = getRoadX(z + 170);
+    const x2 = getRoadX(z + 320);
+    const bend = Math.abs(x2 - x1) + Math.abs(x1 - x0);
+    const bendT = THREE.MathUtils.clamp(bend / 120, 0, 1);
+    const rw = getRoadWidth(z + 140);
+    const narrowT = THREE.MathUtils.clamp((42 - rw) / 14, 0, 1);
+    return THREE.MathUtils.clamp(0.72 * bendT + 0.28 * narrowT, 0, 1);
+}
+function getOncomingSpawnGap() {
+    const mapMul = (currentMapType === MAP_PASS) ? 0.86 : ((currentMapType === MAP_DESERT) ? 0.92 : 1.0);
+    const stage = currentStage | 0;
+    let base, pLong, pBurst, pMid, burstExtra;
+    // ステージ帯ごとに「間の作り方」を変える
+    if (stage <= 5) {            // 序盤: 余裕を持たせる
+        base = 980;
+        pLong = 0.34; pBurst = 0.14; pMid = 0.22; burstExtra = 0.20;
+    } else if (stage <= 12) {    // 中盤: 標準的に揺らす
+        base = 860;
+        pLong = 0.24; pBurst = 0.22; pMid = 0.24; burstExtra = 0.30;
+    } else if (stage <= 20) {    // 後半: 詰まり気味
+        base = 730;
+        pLong = 0.16; pBurst = 0.34; pMid = 0.24; burstExtra = 0.42;
+    } else {                     // 終盤: フェイント多め
+        base = 670;
+        pLong = 0.22; pBurst = 0.30; pMid = 0.20; burstExtra = 0.50;
+    }
+    let baseGap = Math.max(460, base * mapMul);
+    if (currentMapType === MAP_PASS) {
+        const blind = getPassBlindness(nextOncomingSpawnZ || (player.group.position.z + ONCOMING_SPAWN_AHEAD));
+        baseGap *= THREE.MathUtils.lerp(1.00, 0.66, blind);
+        pLong = Math.max(0.08, pLong - 0.10 * blind);
+        pBurst = Math.min(0.62, pBurst + 0.16 * blind);
+        pMid = Math.max(0.12, pMid - 0.05 * blind);
+        burstExtra = Math.min(0.72, burstExtra + 0.18 * blind);
+    }
+    if (oncomingBurstRemain > 0) {
+        oncomingBurstRemain--;
+        return randRange(baseGap * 0.42, baseGap * 0.70);
+    }
+    const roll = Math.random();
+    if (roll < pLong) return randRange(baseGap * 1.20, baseGap * 1.95); // 息継ぎ
+    if (roll < pLong + pBurst) {
+        oncomingBurstRemain = 1 + (Math.random() < burstExtra ? 1 : 0); // 2-3台
+        return randRange(baseGap * 0.54, baseGap * 0.88);
+    }
+    if (roll < pLong + pBurst + pMid) return randRange(baseGap * 0.78, baseGap * 1.02);
+    return randRange(baseGap * 0.94, baseGap * 1.26);
+}
+function isEnemySpawnClear(x, z, minDist = 8.8) {
+    const minD2 = minDist * minDist;
+    for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+        if (!e || e.dead || !e.group || e.group.parent === null) continue;
+        const dx = e.group.position.x - x;
+        const dz = e.group.position.z - z;
+        if (dx * dx + dz * dz < minD2) return false;
+    }
+    if (player && player.group) {
+        const dxp = player.group.position.x - x;
+        const dzp = player.group.position.z - z;
+        if (dxp * dxp + dzp * dzp < 14 * 14) return false;
+    }
+    return true;
+}
 function spawnOncomingCar(spawnZ) {
-    const roadCenterX = getRoadX(spawnZ);
-    const laneOffset = Math.max(6.0, getRoadWidth(spawnZ) * 0.25);
-    const x = roadCenterX + laneOffset;
-    const y = getHeight(x, spawnZ);
+    const x = getOncomingLaneX(spawnZ);
+    const y = getRoadHeight(spawnZ);
 
-    const col = enemyColors[Math.floor(Math.random()*enemyColors.length)];
+    const canSpawnTanker = ONCOMING_ENABLED_MAPS.has(currentMapType);
+    const useTanker = canSpawnTanker && Math.random() < 0.28;
     const slotIdx = 1 + Math.floor(Math.random()*4);
     const slotDesign = carConfigs['enemy'+slotIdx];
-    const car = { ...createCarFromConfig((slotDesign && slotDesign.width && slotDesign.totalLength && slotDesign.noseH) ? slotDesign : null, col), speed: ONCOMING_SPEED, yaw: 0, impactV: new THREE.Vector3(), dead: false };
+    const fallbackCol = useTanker
+        ? parseInt(String(TANKER_TRACTOR_DESIGN.color || '#a39f9f').replace('#', '0x'))
+        : oncomingCarColors[Math.floor(Math.random() * oncomingCarColors.length)];
+    const fallbackHex = '#' + fallbackCol.toString(16).padStart(6, '0');
+    const chosenDesign = useTanker
+        ? TANKER_TRACTOR_DESIGN
+        : ((slotDesign && slotDesign.width && slotDesign.totalLength && slotDesign.noseH)
+            ? { ...slotDesign, color: fallbackHex }
+            : { ...TANKER_TRACTOR_DESIGN, color: fallbackHex });
+    const car = { ...createCarFromConfig(chosenDesign, fallbackCol), speed: getOncomingTargetSpeed(spawnZ), yaw: 0, impactV: new THREE.Vector3(), dead: false, isTanker: useTanker };
+    if (useTanker) attachTankerTrailerToCar(car, chosenDesign);
     car.group.position.set(x, y, spawnZ);
     car.group.quaternion.setFromEuler(new THREE.Euler(0, car.yaw, 0));
     scene.add(car.group);
@@ -1328,11 +1635,20 @@ function spawnEnemyAt(x, z) {
         col = enemyColors[Math.floor(Math.random()*enemyColors.length)];
     }
 
+    let sx = x, sz = z;
+    let ok = isEnemySpawnClear(sx, sz);
+    for (let a = 0; a < 8 && !ok; a++) {
+        const rr = 5 + a * 1.2;
+        sx = x + (Math.random() - 0.5) * rr * 2;
+        sz = z + (Math.random() - 0.5) * rr * 2;
+        ok = isEnemySpawnClear(sx, sz);
+    }
+    if (!ok) return null;
     const ent = { ...createCarFromConfig((slotDesign && slotDesign.width && slotDesign.totalLength && slotDesign.noseH) ? slotDesign : null, col), speed: 0, lastSpeed: 0, yaw: Math.PI, pitch: 0, roll: 0, attackTimer: 0, impactV: new THREE.Vector3(), color: col, ai: { mode: 'race', t: 0, nextDecision: 0, targetOffset: 0, brakeUntil: 0, reverseUntil: 0, tauntUntil: 0 } };
-    const sy = (currentMapType === MAP_HIGHWAY) ? getHeight(x, z) : getRoadHeight(z);
-    ent.group.position.set(x, sy, z);
+    const sy = (currentMapType === MAP_HIGHWAY) ? getHeight(sx, sz) : getRoadHeight(sz);
+    ent.group.position.set(sx, sy, sz);
     ent.group.quaternion.setFromEuler(new THREE.Euler(0, ent.yaw, 0));
-    scene.add(ent.group); enemies.push(ent);
+    scene.add(ent.group); enemies.push(ent); return ent;
 }
 function updateEnemiesCount(count) {
     enemies.forEach(e => { if (e && e.group) { scene.remove(e.group); disposeObject3D(e.group); } });
@@ -1345,7 +1661,7 @@ function updateEnemiesCount(count) {
     }
 }
 
-let gameState = 'TOP', killCount = 0, playerMoney = 0, currentStage = 1, currentCargo = 0, maxCargo = 1, missionState = 'pickup', stageEnemyCount = 0;
+let gameState = 'TOP', killCount = 0, headOnCrashCount = 0, playerMoney = 0, currentStage = 1, currentCargo = 0, maxCargo = 1, missionState = 'pickup', stageEnemyCount = 0;
 let sandstormIntensity = 0, sandstormPeak = false, sandstormCycleTimer = 0;
 let blizzardIntensity = 0, blizzardPeak = false, blizzardCycleTimer = 0;
 const sandstormClouds = new THREE.Group(); scene.add(sandstormClouds);
@@ -1400,7 +1716,55 @@ document.getElementById('post-replay-exit').addEventListener('click', () => { do
 
 let bgmEnabled = true, bgmVolume = 0.5; const bgmAudio = new Audio(); bgmAudio.loop = true;
 let hudMirrorEnabled = true;
+let perfHudEnabled = false;
+let perfFrameCounter = 0, perfLastFpsTs = performance.now(), perfCurrentFps = 0, perfLastUiTs = 0;
 function updateBgmVolume() { if(!bgmEnabled){ bgmAudio.volume=0; if(!bgmAudio.paused)bgmAudio.pause(); } else { bgmAudio.volume=bgmVolume; if(bgmAudio.paused&&gameState==='PLAY')bgmAudio.play().catch(e=>{}); } }
+function updatePerfHud(nowMs) {
+    if (!perfHudEnabled) return;
+    const panel = document.getElementById('perf-stats');
+    if (!panel) return;
+    perfFrameCounter++;
+    const dt = nowMs - perfLastFpsTs;
+    if (dt >= 1000) {
+        perfCurrentFps = Math.round((perfFrameCounter * 1000) / dt);
+        perfFrameCounter = 0;
+        perfLastFpsTs = nowMs;
+    }
+    if (nowMs - perfLastUiTs < 250) return;
+    perfLastUiTs = nowMs;
+    const info = renderer.info || {};
+    const r = info.render || {};
+    const m = info.memory || {};
+    const calls = r.calls || 0;
+    const tris = r.triangles || 0;
+    const geos = m.geometries || 0;
+    const texs = m.textures || 0;
+    let sev = 0; // 0=normal, 1=warn, 2=danger
+    const warn = (perfCurrentFps < 55 || calls > 320 || tris > 350000 || geos > 360 || texs > 80);
+    const dangerHard = (perfCurrentFps < 35 || calls > 900 || tris > 1200000 || geos > 520 || texs > 140);
+    const dangerCombo = (perfCurrentFps < 45) && (calls > 500 || tris > 550000 || geos > 420 || texs > 100);
+    if (warn) sev = Math.max(sev, 1);
+    if (dangerHard || dangerCombo) sev = Math.max(sev, 2);
+    if (sev === 2) {
+        panel.style.color = '#ff7070';
+        panel.style.borderColor = 'rgba(255,112,112,0.7)';
+        panel.style.background = 'rgba(55,0,0,0.78)';
+    } else if (sev === 1) {
+        panel.style.color = '#ffd166';
+        panel.style.borderColor = 'rgba(255,209,102,0.65)';
+        panel.style.background = 'rgba(50,36,0,0.75)';
+    } else {
+        panel.style.color = '#8cff66';
+        panel.style.borderColor = 'rgba(140,255,102,0.45)';
+        panel.style.background = 'rgba(0, 0, 0, 0.72)';
+    }
+    panel.textContent =
+`FPS ${perfCurrentFps}
+DC  ${calls}
+TRI ${tris}
+GEO ${geos}
+TEX ${texs}`;
+}
 
 const beaconRedMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, fog: false });
 const beaconGreenMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5, fog: false });
@@ -1417,7 +1781,7 @@ function setNextObjective() {
     document.getElementById('stage-num').innerText=currentStage;
 }
 function initStage(stage) {
-    currentStage = stage; currentCargo = killCount = 0; gameState = 'PLAY'; replayBuffer = []; isReplaying = false;
+    currentStage = stage; currentCargo = killCount = headOnCrashCount = 0; gameState = 'PLAY'; replayBuffer = []; isReplaying = false;
     const mapStage = ((stage - 1) % 4) + 1;
     setMapType(mapStage);
     sandstormIntensity = 0; sandstormPeak = false; sandstormCycleTimer = 0;
@@ -1473,13 +1837,14 @@ function initStage(stage) {
     if(window.matchMedia("(pointer: coarse)").matches) document.getElementById('zoomSlider').style.display='block';
     stageEnemyCount = stage <= 2 ? 1 : (stage === 3 ? 2 : 3); // 敵の数はとりあえずそのまま
     updateEnemiesCount(stageEnemyCount);
-    nextOncomingSpawnZ = Math.ceil((player.group.position.z + ONCOMING_SPAWN_AHEAD) / ONCOMING_SPAWN_INTERVAL) * ONCOMING_SPAWN_INTERVAL;
+    oncomingBurstRemain = 0;
+    nextOncomingSpawnZ = player.group.position.z + ONCOMING_SPAWN_AHEAD + getOncomingSpawnGap();
     setNextObjective(); // 引数なしで呼び出し
     showMsg("STAGE " + stage + " START");
     if(bgmEnabled){ const pl=['mh.mp3','as.mp3','fu.mp3','vp.mp3','pr.mp3']; bgmAudio.src=pl[(stage-1)%pl.length]; bgmAudio.play().catch(e=>{}); }
 }
 function showMsg(t, dur=3000){ const m=document.getElementById('msg'); m.innerText=t; m.style.display='block'; setTimeout(()=>m.style.display='none',dur); }
-function showResultScreen(){ gameState='CLEAR'; document.getElementById('result-screen').style.display='flex'; bgmAudio.pause(); if(pGain){pGain.gain.cancelScheduledValues(audioCtx.currentTime);pGain.gain.setValueAtTime(0,audioCtx.currentTime);} playSFX('jin.mp3'); playerMoney+=1000+killCount*100; document.getElementById('p-money').innerText=playerMoney; document.getElementById('kill-disp').innerText=killCount; document.getElementById('money-bonus').innerText=killCount*100; document.getElementById('total-money-disp').innerText=playerMoney; }
+function showResultScreen(){ gameState='CLEAR'; document.getElementById('result-screen').style.display='flex'; bgmAudio.pause(); if(pGain){pGain.gain.cancelScheduledValues(audioCtx.currentTime);pGain.gain.setValueAtTime(0,audioCtx.currentTime);} playSFX('jin.mp3'); const killBonus=killCount*100; const headOnBonus=headOnCrashCount*500; playerMoney+=1000+killBonus+headOnBonus; document.getElementById('p-money').innerText=playerMoney; document.getElementById('kill-disp').innerText=killCount; document.getElementById('money-bonus').innerText=killBonus; document.getElementById('headon-disp').innerText=headOnCrashCount; document.getElementById('headon-bonus').innerText=headOnBonus; document.getElementById('total-money-disp').innerText=playerMoney; }
 
 document.getElementById('next-btn').addEventListener('click', () => {
     document.getElementById('result-screen').style.display='none';
@@ -1492,6 +1857,7 @@ document.getElementById('settings-close').addEventListener('click', () => { docu
 document.getElementById('bgm-toggle').addEventListener('change', (e) => { bgmEnabled = e.target.checked; updateBgmVolume(); });
 document.getElementById('bgm-volume').addEventListener('input', (e) => { bgmVolume = parseFloat(e.target.value); updateBgmVolume(); });
 document.getElementById('hud-mirror-toggle').addEventListener('change', (e) => { hudMirrorEnabled = e.target.checked; });
+document.getElementById('perf-hud-toggle').addEventListener('change', (e) => { perfHudEnabled = e.target.checked; const p = document.getElementById('perf-stats'); if (p) p.style.display = perfHudEnabled ? 'block' : 'none'; });
 
 let audioCtx, pOsc, pGain;
 function initAudio() { if (audioCtx) { if (audioCtx.state === 'suspended') audioCtx.resume(); return; } try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } pOsc = audioCtx.createOscillator(); pOsc.type = 'sawtooth'; pGain = audioCtx.createGain(); pGain.gain.value = 0; pOsc.connect(pGain).connect(audioCtx.destination); pOsc.start(); }
@@ -1574,6 +1940,18 @@ function returnToTopFromGameOver() {
     const msg = document.getElementById('msg'); if (msg) msg.style.display = 'none';
     showTopScreen();
 }
+function triggerGameOver(message = "GAME OVER") {
+    if (player.dead) return;
+    player.dead = true;
+    player.speed = 0;
+    const msgEl = document.getElementById('msg');
+    if (msgEl) {
+        msgEl.innerText = message;
+        msgEl.style.display = 'block';
+    }
+    playSFX('crash.mp3');
+    setTimeout(() => returnToTopFromGameOver(), 2500);
+}
 
 const orientationScreen = document.getElementById('orientation-screen');
 const enterFullscreenBtn = document.getElementById('enter-fullscreen-btn');
@@ -1610,8 +1988,10 @@ updateEntryGate();
 function animate() {
     requestAnimationFrame(animate);
     const hudMirrorFrame = document.getElementById('hud-mirror-frame');
+    const perfStats = document.getElementById('perf-stats');
+    if (perfStats) perfStats.style.display = perfHudEnabled ? 'block' : 'none';
     if (gameState === 'TOP' || gameState === 'SETTINGS') { if (hudMirrorFrame) hudMirrorFrame.style.display = 'none'; renderer.render(scene, camera); if(pGain && audioCtx) pGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05); return; }
-    if (gameState === 'CLEAR' && !isReplaying) { if (hudMirrorFrame) hudMirrorFrame.style.display = 'none'; renderer.render(scene, camera); return; }
+    if (gameState === 'CLEAR' && !isReplaying) { if (hudMirrorFrame) hudMirrorFrame.style.display = 'none'; renderer.render(scene, camera); updatePerfHud(performance.now()); return; }
     const now = audioCtx ? audioCtx.currentTime : 0;
     const nowMs = performance.now();
     if (isReplaying) {
@@ -1739,16 +2119,16 @@ function animate() {
     updateChunks(player.group.position.x, player.group.position.z);
     processChunkBuildQueue();
     processChunkDisposeQueue();
-    if (!isReplaying && gameState === 'PLAY' && currentMapType === MAP_HIGHWAY) {
+    if (!isReplaying && gameState === 'PLAY' && ONCOMING_ENABLED_MAPS.has(currentMapType)) {
         let spawned = 0;
         while (spawned < ONCOMING_MAX_SPAWNS_PER_FRAME && player.group.position.z + ONCOMING_SPAWN_AHEAD >= nextOncomingSpawnZ) {
             spawnOncomingCar(nextOncomingSpawnZ);
-            nextOncomingSpawnZ += ONCOMING_SPAWN_INTERVAL;
+            nextOncomingSpawnZ += getOncomingSpawnGap();
             spawned++;
         }
     }
 
-    if (!isReplaying && gameState === 'PLAY' && currentMapType === MAP_HIGHWAY) {
+    if (!isReplaying && gameState === 'PLAY' && ONCOMING_ENABLED_MAPS.has(currentMapType)) {
         for (let i = oncomingCars.length - 1; i >= 0; i--) {
             const oc = oncomingCars[i];
             if (!oc || !oc.group) { oncomingCars.splice(i, 1); continue; }
@@ -1762,25 +2142,87 @@ function animate() {
 
             const z = oc.group.position.z;
             const roadCenterX = getRoadX(z);
-            const laneOffset = Math.max(6.0, getRoadWidth(z) * 0.25);
-            const desiredX = roadCenterX + laneOffset;
-            oc.group.position.x = THREE.MathUtils.lerp(oc.group.position.x, desiredX, 0.12);
+            const rwNow = getRoadWidth(z);
+            const roadHalf = rwNow * 0.5;
+            const desiredX = getOncomingLaneX(z);
+            const narrowT = THREE.MathUtils.clamp((rwNow - 28) / 20, 0, 1);
+            const laneFollow = THREE.MathUtils.lerp(0.45, (currentMapType === MAP_PASS ? 0.24 : 0.16), narrowT);
+            oc.group.position.x = THREE.MathUtils.lerp(oc.group.position.x, desiredX, laneFollow);
+            oc.group.position.x = THREE.MathUtils.clamp(oc.group.position.x, roadCenterX - roadHalf + 1.8, roadCenterX + roadHalf - 1.8);
 
             oc.group.position.z -= oc.speed;
             oc.group.position.add(oc.impactV);
             oc.impactV.multiplyScalar(0.9);
             // 衝突減速で停車し続けるのを防ぐ（じわっと巡航速度へ復帰）
-            oc.speed = THREE.MathUtils.lerp(oc.speed, ONCOMING_SPEED, 0.02);
-            oc.group.position.y = getHeight(oc.group.position.x, oc.group.position.z);
-            oc.group.quaternion.setFromEuler(new THREE.Euler(0, 0, 0));
+            const targetCruise = getOncomingTargetSpeed(z);
+            oc.speed = THREE.MathUtils.lerp(oc.speed, targetCruise, 0.04);
+            oc.group.position.y = getRoadHeight(oc.group.position.z);
+            {
+                const lookAhead = THREE.MathUtils.lerp(6.0, 10.0, THREE.MathUtils.clamp((rwNow - 28) / 20, 0, 1));
+                const aheadZ = oc.group.position.z - lookAhead;
+                const aheadX = getOncomingLaneX(aheadZ);
+                const dx = aheadX - oc.group.position.x;
+                const dz = aheadZ - oc.group.position.z;
+                const targetYaw = Math.atan2(-dx, -dz);
+                oc.yaw = THREE.MathUtils.lerp(oc.yaw || 0, targetYaw, (currentMapType === MAP_PASS) ? 0.28 : 0.22);
+                oc.group.quaternion.setFromEuler(new THREE.Euler(0, oc.yaw, 0));
+            }
+            const clampMargin = THREE.MathUtils.lerp(2.8, 1.8, THREE.MathUtils.clamp((rwNow - 28) / 20, 0, 1));
+            if (Math.abs(oc.group.position.x - roadCenterX) > roadHalf - (clampMargin + 0.5)) {
+                oc.impactV.x = 0;
+                oc.group.position.x = THREE.MathUtils.clamp(oc.group.position.x, roadCenterX - roadHalf + clampMargin, roadCenterX + roadHalf - clampMargin);
+            }
+            // 最終ガード: 狭路ではレーンへ強制復帰
+            if (rwNow < 32) {
+                oc.group.position.x = THREE.MathUtils.lerp(oc.group.position.x, desiredX, 0.55);
+                oc.impactV.x = 0;
+            }
+            if (oc.tankerRig && oc.tankerRig.hitch) {
+                const rig = oc.tankerRig;
+                if (!rig.lastPos) rig.lastPos = oc.group.position.clone();
+                const dx = oc.group.position.x - rig.lastPos.x;
+                const dz = oc.group.position.z - rig.lastPos.z;
+                const v = Math.hypot(dx, dz);
+                let desiredYaw = 0;
+                if (v > 0.001) {
+                    const moveYaw = Math.atan2(-dx, -dz); // -Z前進基準
+                    const tractorYaw = oc.group.rotation.y || 0;
+                    const rel = angleDeltaRad(moveYaw, tractorYaw);
+                    const isPass = (currentMapType === MAP_PASS);
+                    const maxA = THREE.MathUtils.degToRad(isPass ? 26 : 9);
+                    desiredYaw = THREE.MathUtils.clamp(rel * (isPass ? 1.7 : 0.8), -maxA, maxA);
+                }
+                rig.angle = THREE.MathUtils.lerp(rig.angle, desiredYaw, (currentMapType === MAP_PASS) ? 0.18 : 0.08);
+                rig.hitch.rotation.y = rig.angle;
+                rig.lastPos.copy(oc.group.position);
+            }
+            if (oc.trailerWheels && oc.trailerWheels.length) {
+                const spin = oc.speed / 0.58;
+                for (let wi = 0; wi < oc.trailerWheels.length; wi++) {
+                    oc.trailerWheels[wi].rotation.z += spin;
+                }
+            }
 
             // 衝突：プレイヤー
             if (!player.dead && oc.group.position.distanceTo(player.group.position) < ONCOMING_COLLISION_RADIUS) {
                 const dir = new THREE.Vector3().subVectors(player.group.position, oc.group.position).normalize();
-                player.speed *= 0.25;
-                oc.speed *= 0.25;
-                player.impactV.add(dir.multiplyScalar(0.9));
-                oc.impactV.add(dir.multiplyScalar(-0.9));
+                if (oc.isTanker) {
+                    player.hp = 0;
+                    document.getElementById('p-hp').innerText = 0;
+                    triggerGameOver("GAME OVER");
+                } else {
+                    player.hp = Math.max(0, player.hp - 50);
+                    player.speed *= 0.2;
+                    oc.speed *= 0.6;
+                    player.impactV.add(dir.multiplyScalar(1.1));
+                    oc.impactV.add(dir.multiplyScalar(-0.6));
+                    spawnDust(player.group.position, false);
+                    playSFX('ecrs.mp3');
+                    document.getElementById('redFlash').style.opacity = '0.7';
+                    setTimeout(() => document.getElementById('redFlash').style.opacity = '0', 120);
+                    document.getElementById('p-hp').innerText = Math.floor(player.hp);
+                    if (player.hp <= 0) triggerGameOver("GAME OVER");
+                }
             }
 
             // 衝突：敵
@@ -1788,6 +2230,21 @@ function animate() {
                 const e = enemies[ei];
                 if (!e || e.dead || !e.group || e.group.parent === null) continue;
                 if (oc.group.position.distanceTo(e.group.position) < ONCOMING_COLLISION_RADIUS) {
+                    if (currentMapType !== MAP_SNOW) {
+                        const crashPos = e.group.position.clone();
+                        const crashCol = (e.bodyMat && e.bodyMat.color) ? e.bodyMat.color.getHex() : 0xffffff;
+                        e.dead = true;
+                        showMsg("HEAD-ON CRASH!!", 1200);
+                        headOnCrashCount++;
+                        spawnDebris(crashPos, crashCol, 0.9, 18);
+                        playSFX('crash.mp3');
+                        try { scene.remove(e.group); } catch (ex) {}
+                        try { disposeObject3D(e.group); } catch (ex) {}
+                        enemies.splice(ei, 1);
+                        ei--;
+                        oc.speed *= 0.8;
+                        continue;
+                    }
                     const dir = new THREE.Vector3().subVectors(e.group.position, oc.group.position).normalize();
                     e.speed *= 0.25;
                     oc.speed *= 0.25;
@@ -1828,7 +2285,7 @@ function animate() {
         // 生存している敵数を基準に補充
         const aliveCount = enemies.filter(e => e && !e.dead && e.group && e.group.parent !== null).length;
         if (aliveCount < stageEnemyCount) {
-            const need = stageEnemyCount - aliveCount;
+                const need = stageEnemyCount - aliveCount;
             for (let n = 0; n < need; n++) {
                 const sa = player.yaw + Math.PI + (Math.random()-0.5);
                 const roadWidth = getRoadWidth(player.group.position.z);
@@ -2146,9 +2603,15 @@ function animate() {
         // 他の敵との衝突回避（最小）
         enemies.forEach(other => {
             if (ent === other || other.dead) return;
-            if (ent.group.position.distanceTo(other.group.position) < 7.5) {
-                const awayVec = new THREE.Vector3().subVectors(ent.group.position, other.group.position).normalize();
-                ent.group.position.add(awayVec.multiplyScalar(0.15));
+            if (!other.group || other.group.parent === null) return;
+            const d = ent.group.position.distanceTo(other.group.position);
+            if (d < 8.8) {
+                const awayVec = new THREE.Vector3().subVectors(ent.group.position, other.group.position);
+                if (awayVec.lengthSq() < 1e-5) awayVec.set((Math.random()-0.5), 0, (Math.random()-0.5));
+                awayVec.normalize();
+                const push = (8.8 - d) * 0.22;
+                ent.group.position.addScaledVector(awayVec, push);
+                ent.impactV.addScaledVector(awayVec, 0.06);
             }
         });
     }
@@ -2289,13 +2752,7 @@ function animate() {
                     } else { player.hp -= 5; player.impactV.add(dir.multiplyScalar(-0.8)); spawnDust(player.group.position, false); playSFX('ecrs.mp3'); document.getElementById('redFlash').style.opacity = '0.6'; setTimeout(() => document.getElementById('redFlash').style.opacity = '0', 100); }
                     document.getElementById('p-hp').innerText = Math.floor(Math.max(0, player.hp));
                     if (player.hp <= 0) {
-                        player.dead = true;
-                        player.speed = 0;
-                        const msgEl = document.getElementById('msg');
-                        msgEl.innerText = "GAME OVER";
-                        msgEl.style.display = 'block';
-                        playSFX('crash.mp3');
-                        setTimeout(() => returnToTopFromGameOver(), 2500);
+                        triggerGameOver("GAME OVER");
                     }
                 }
             });
@@ -2372,6 +2829,7 @@ function animate() {
             renderer.autoClear = prevAutoClear;
         }
     }
+    updatePerfHud(nowMs);
 }
 animate();
 if (sessionStorage.getItem('openGarage') === 'true') { openGarage(); sessionStorage.removeItem('openGarage'); }
