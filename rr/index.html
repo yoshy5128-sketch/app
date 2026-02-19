@@ -176,7 +176,8 @@
 
         /* モバイル（タッチ）デバイスではスライダーを画面内側に寄せる */
         @media (pointer: coarse), (max-width: 600px) {
-            #zoomSlider { right: 12px; }
+            /* 元の位置（-75〜-84px）から少しだけ内側に寄せる（小さな調整） */
+            #zoomSlider { right: -70px; }
         }
         #perf-stats {
             top: 52px;
