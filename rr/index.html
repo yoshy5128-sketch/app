@@ -173,6 +173,11 @@
         #result-total { font-size: 22px; margin-bottom: 18px; }
         #next-btn, .replay-btn, .post-btn { padding: 10px 16px; font-size: 16px; }
         #zoomSlider { right: -84px; width: 176px; }
+
+        /* モバイル（タッチ）デバイスではスライダーを画面内側に寄せる */
+        @media (pointer: coarse), (max-width: 600px) {
+            #zoomSlider { right: 12px; }
+        }
         #perf-stats {
             top: 52px;
             right: 8px;
