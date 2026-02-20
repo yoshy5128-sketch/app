@@ -444,7 +444,7 @@
 <div id="hud-mirror-frame"></div>
 <div id="perf-stats"></div>
 <div id="fullscreenButton">★</div>
-<input type="range" id="zoomSlider" min="0" max="2" step="0.01" value="0.8">
+<input type="range" id="zoomSlider" min="0" max="2" step="0.01" value="0.16">
 <div id="redFlash" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: red; opacity: 0; pointer-events: none; z-index: 1030; transition: opacity 0.1s ease-out;"></div>
 
 <input type="file" id="replay-loader" style="display:none" accept=".json">
@@ -535,64 +535,112 @@ function importDefaultCarPack() {
     l.click();
 }
 
-function openCarLoader(slot) {
-    const l = document.getElementById('car-loader');
-    l.onchange = (e) => {
-        const file = e.target.files[0]; if(!file) return;
-        const reader = new FileReader();
-        reader.onload = (f) => { 
-            try { 
-                const parsedConfig = JSON.parse(f.target.result);
-                carConfigs[slot] = parsedConfig;
-                localStorage.setItem('carConfig_' + slot, JSON.stringify(parsedConfig));
-                alert(slot.toUpperCase() + " LOADED and SAVED!"); 
-                updateGaragePreview(slot, parsedConfig); 
-            } catch(e){ alert("Invalid JSON"); } 
-        };
-        reader.readAsText(file);
-    };
-    l.click();
+function showMsg(t, dur=3000){
+    const m = document.getElementById('msg');
+    if (!m) return;
+    m.innerText = t;
+    m.style.display = 'block';
+    try {
+        const ut = String(t || '').toUpperCase();
+        if (ut.includes('HEAD')) {
+            // HEAD 系は常にコクピットミラー下の画面中央付近に固定表示する（ビューに依らない）
+            m.style.position = 'absolute';
+            m.style.left = '50%';
+            m.style.transform = 'translateX(-50%)';
+            m.style.width = 'auto';
+            m.style.textAlign = 'center';
+            m.style.fontSize = '20px';
+            // ミラーの下端を計算してその下に表示する（ミラー内へ重ならないように）
+            let placed = false;
+            try {
+                if (typeof mirrorMesh !== 'undefined' && mirrorMesh && typeof camera !== 'undefined' && camera && typeof renderer !== 'undefined' && renderer) {
+                    const hw = 0.125, hh = 0.04; // mirror plane half-size (world units)
+                    const corners = [
+                        new THREE.Vector3(-hw, -hh, 0), new THREE.Vector3(hw, -hh, 0),
+                        new THREE.Vector3(-hw, hh, 0), new THREE.Vector3(hw, hh, 0)
+                    ];
+                    const screenYs = [];
+                    for (let i = 0; i < corners.length; i++) {
+                        const v = corners[i].clone();
+                        mirrorMesh.localToWorld(v);
+                        v.project(camera);
+                        const y = (-v.y * 0.5 + 0.5) * window.innerHeight;
+                        screenYs.push(y);
+                    }
+                    const bottom = Math.max(...screenYs);
+                    if (isFinite(bottom)) {
+                        m.style.top = (Math.floor(bottom) + 6) + 'px';
+                        placed = true;
+                    }
+                }
+            } catch (e) {}
+            if (!placed) {
+                // フォールバック: 固定位置（コクピットミラー下相当）
+                m.style.top = '12%';
+            }
+            m.style.zIndex = 2000;
+        } else {
+            // 通常メッセージは中央大表示に戻す
+            m.style.position = 'absolute';
+            m.style.left = '0';
+            m.style.top = '40%';
+            m.style.width = '100%';
+            m.style.transform = 'none';
+            m.style.textAlign = 'center';
+            m.style.fontSize = '40px';
+        }
+    } catch (e) {
+        m.style.position = 'absolute';
+        m.style.left = '0';
+        m.style.top = '40%';
+        m.style.width = '100%';
+        m.style.transform = 'none';
+        m.style.textAlign = 'center';
+        m.style.fontSize = '40px';
+    }
+    setTimeout(() => { m.style.display = 'none'; }, dur);
 }
 
+// デフォルトのトラクター（タンクローリーの前部）デザイン — プレビューと同一の詳細デザイン
 const TANKER_TRACTOR_DESIGN = {
-    "color": "#a39f9f",
-    "width": 3.6058,
-    "roofWidth": 3.159,
-    "totalLength": 6.048,
-    "lift": 0.4,
-    "noseH": 1.2,
-    "noseSlant": 0.166,
-    "spoilerAngle": 0.162,
-    "hoodL": 0.5,
-    "hoodH": 1.77,
-    "fSlant": 0.3363,
-    "roofH": 2.842,
-    "roofL": 2.17,
-    "rSlant": 0.1,
-    "trunkH": 0.8534,
-    "tailH": 0.7,
-    "wheelSizeFront": 0.642,
-    "wheelSizeRear": 0.642,
-    "wheelTread": -0.193,
-    "wheelColor": "#ffffff",
-    "tireWidth": 0.3,
-    "wheelDesign": "Spoke_5",
-    "headlights": "Custom",
-    "tailLights": "Dual",
-    "mufflerType": "Single",
-    "doorMirrors": true,
-    "bumperF": false,
-    "bumperR": true,
-    "bumperColor": "#dddddd",
-    "frontGrill": true,
-    "grillColor": "#858585",
-    "rearGarnish": true,
-    "garnishColor": "#111111",
-    "customHeadlightShape": [
-        { "x": -0.24, "y": 0.18 },
-        { "x": 0.268, "y": 0.16133877789120607 },
-        { "x": 0.2826666666666667, "y": -0.23253609450196883 },
-        { "x": -0.248, "y": -0.22693597783287145 }
+    color: '#a39f9f',
+    width: 3.6058,
+    roofWidth: 3.159,
+    totalLength: 6.048,
+    lift: 0.4,
+    noseH: 1.2,
+    noseSlant: 0.166,
+    spoilerAngle: 0.162,
+    hoodL: 0.5,
+    hoodH: 1.77,
+    fSlant: 0.3363,
+    roofH: 2.842,
+    roofL: 2.17,
+    rSlant: 0.1,
+    trunkH: 0.8534,
+    tailH: 0.7,
+    wheelSizeFront: 0.642,
+    wheelSizeRear: 0.642,
+    wheelTread: -0.193,
+    wheelColor: '#ffffff',
+    tireWidth: 0.3,
+    wheelDesign: 'Spoke_5',
+    headlights: 'Custom',
+    tailLights: 'Dual',
+    mufflerType: 'Single',
+    doorMirrors: true,
+    bumperF: false,
+    bumperR: true,
+    bumperColor: '#dddddd',
+    frontGrill: true,
+    grillColor: '#858585',
+    rearGarnish: true,
+    garnishColor: '#111111',
+    customHeadlightShape: [
+        { x: -0.24, y: 0.18 },
+        { x: 0.268, y: 0.16133877789120607 },
+        { x: 0.2826666666666667, y: -0.23253609450196883 },
+        { x: -0.248, y: -0.22693597783287145 }
     ]
 };
 
@@ -1668,6 +1716,7 @@ function updateEnemiesCount(count) {
 }
 
 let gameState = 'TOP', killCount = 0, headOnCrashCount = 0, playerMoney = 0, currentStage = 1, currentCargo = 0, maxCargo = 1, missionState = 'pickup', stageEnemyCount = 0;
+let playerHadHeadOn = false; // true if player personally experienced a HEAD-ON crash this stage
 let sandstormIntensity = 0, sandstormPeak = false, sandstormCycleTimer = 0;
 let blizzardIntensity = 0, blizzardPeak = false, blizzardCycleTimer = 0;
 const sandstormClouds = new THREE.Group(); scene.add(sandstormClouds);
@@ -1787,7 +1836,7 @@ function setNextObjective() {
     document.getElementById('stage-num').innerText=currentStage;
 }
 function initStage(stage) {
-    currentStage = stage; currentCargo = killCount = headOnCrashCount = 0; gameState = 'PLAY'; replayBuffer = []; isReplaying = false;
+    currentStage = stage; currentCargo = killCount = headOnCrashCount = 0; playerHadHeadOn = false; gameState = 'PLAY'; replayBuffer = []; isReplaying = false;
     const mapStage = ((stage - 1) % 4) + 1;
     setMapType(mapStage);
     sandstormIntensity = 0; sandstormPeak = false; sandstormCycleTimer = 0;
@@ -1837,7 +1886,9 @@ function initStage(stage) {
         player.group.quaternion.setFromEuler(new THREE.Euler(0, player.yaw, 0));
     }
     scene.add(player.group);
-    lookYaw = 0; lookPitch = 0; zoomLevel = 0.8;
+    lookYaw = 0; lookPitch = 0; zoomLevel = 0.16; // start at one step before cockpit view
+    // Ensure UI slider reflects the starting zoom level
+    try { const zs = document.getElementById('zoomSlider'); if (zs) zs.value = String(zoomLevel); } catch (e) {}
     smoothedCamPos.copy(player.group.position);
     document.getElementById('hud').style.display='flex'; document.getElementById('mission-info').style.display='block'; document.getElementById('fullscreenButton').style.display='block';
     if(window.matchMedia("(pointer: coarse)").matches) document.getElementById('zoomSlider').style.display='block';
@@ -1849,8 +1900,23 @@ function initStage(stage) {
     showMsg("STAGE " + stage + " START");
     if(bgmEnabled){ const pl=['mh.mp3','as.mp3','fu.mp3','vp.mp3','pr.mp3']; bgmAudio.src=pl[(stage-1)%pl.length]; bgmAudio.play().catch(e=>{}); }
 }
-function showMsg(t, dur=3000){ const m=document.getElementById('msg'); m.innerText=t; m.style.display='block'; setTimeout(()=>m.style.display='none',dur); }
-function showResultScreen(){ gameState='CLEAR'; document.getElementById('result-screen').style.display='flex'; bgmAudio.pause(); if(pGain){pGain.gain.cancelScheduledValues(audioCtx.currentTime);pGain.gain.setValueAtTime(0,audioCtx.currentTime);} playSFX('jin.mp3'); const killBonus=killCount*100; const headOnBonus=headOnCrashCount*500; playerMoney+=1000+killBonus+headOnBonus; document.getElementById('p-money').innerText=playerMoney; document.getElementById('kill-disp').innerText=killCount; document.getElementById('money-bonus').innerText=killBonus; document.getElementById('headon-disp').innerText=headOnCrashCount; document.getElementById('headon-bonus').innerText=headOnBonus; document.getElementById('total-money-disp').innerText=playerMoney; }
+function showResultScreen(){
+    gameState='CLEAR';
+    document.getElementById('result-screen').style.display='flex';
+    bgmAudio.pause();
+    if(pGain){pGain.gain.cancelScheduledValues(audioCtx.currentTime);pGain.gain.setValueAtTime(0,audioCtx.currentTime);} 
+    playSFX('jin.mp3');
+    const killBonus = killCount * 100;
+    // If the player personally experienced a head-on crash this stage, do not award head-on bonus
+    const headOnBonus = playerHadHeadOn ? 0 : (headOnCrashCount * 500);
+    playerMoney += 1000 + killBonus + headOnBonus;
+    document.getElementById('p-money').innerText = playerMoney;
+    document.getElementById('kill-disp').innerText = killCount;
+    document.getElementById('money-bonus').innerText = killBonus;
+    document.getElementById('headon-disp').innerText = headOnCrashCount;
+    document.getElementById('headon-bonus').innerText = headOnBonus;
+    document.getElementById('total-money-disp').innerText = playerMoney;
+}
 
 document.getElementById('next-btn').addEventListener('click', () => {
     document.getElementById('result-screen').style.display='none';
@@ -1870,7 +1936,7 @@ function initAudio() { if (audioCtx) { if (audioCtx.state === 'suspended') audio
 function playSFX(f) { if (!audioCtx) initAudio(); if (!audioCtx) return; const s = audioCtx.createBufferSource(); fetch(f).then(r => r.arrayBuffer()).then(b => audioCtx.decodeAudioData(b)).then(d => { s.buffer = d; s.connect(audioCtx.destination); s.start(0); }).catch(e => {}); }
 
 const keys = {}; window.addEventListener("keydown", e => { keys[e.code] = true; if(gameState==='PLAY') initAudio(); }); window.addEventListener("keyup", e => { keys[e.code] = false; });
-let lookYaw = 0, lookPitch = 0, zoomLevel = 0.8, smoothedCamPos = new THREE.Vector3();
+let lookYaw = 0, lookPitch = 0, zoomLevel = 0.16, smoothedCamPos = new THREE.Vector3();
 let touchLeftId = -1, touchRightId = -1, touchState = { left: { startX: 0, startY: 0, currentX: 0, currentY: 0 }, right: { startX: 0, startY: 0, currentX: 0, currentY: 0 } };
 addEventListener("wheel", e => { zoomLevel = Math.max(0, Math.min(MAX_ZOOM_LEVEL, zoomLevel + e.deltaY*0.001)); }, {passive:true});
 renderer.domElement.addEventListener("mousedown", () => { if(gameState==='PLAY') { renderer.domElement.requestPointerLock(); initAudio(); } });
@@ -2211,6 +2277,8 @@ function animate() {
 
             // 衝突：プレイヤー
             if (!player.dead && oc.group.position.distanceTo(player.group.position) < ONCOMING_COLLISION_RADIUS) {
+                // Mark that the player experienced a head-on collision
+                playerHadHeadOn = true;
                 const dir = new THREE.Vector3().subVectors(player.group.position, oc.group.position).normalize();
                 if (oc.isTanker) {
                     player.hp = 0;
@@ -2243,7 +2311,7 @@ function animate() {
                         showMsg("HEAD-ON CRASH!!", 1200);
                         headOnCrashCount++;
                         spawnDebris(crashPos, crashCol, 0.9, 18);
-                        playSFX('crash.mp3');
+                        playSFX('bcrash.mp3');
                         try { scene.remove(e.group); } catch (ex) {}
                         try { disposeObject3D(e.group); } catch (ex) {}
                         enemies.splice(ei, 1);
@@ -2778,7 +2846,9 @@ function animate() {
             }
         }
     });
-    const cp = new THREE.Vector3(0, 1.25, 0.25), tp = new THREE.Vector3(0, 4.5, 12), dp = new THREE.Vector3(0, 70, 150);
+    /* コクピット視点を少し上げて前方の見通しを確保する（y を少し増やし、前方オフセットも少し増加） */
+    /* コクピットをもう少しだけ上げる（ユーザ要望） */
+    const cp = new THREE.Vector3(0, 1.75, 0.6), tp = new THREE.Vector3(0, 4.5, 12), dp = new THREE.Vector3(0, 70, 150);
     let co = (zoomLevel <= 1.0) ? new THREE.Vector3().lerpVectors(cp, tp, zoomLevel) : new THREE.Vector3().lerpVectors(tp, dp, Math.min(1.0, (zoomLevel - 1.0)/(MAX_ZOOM_LEVEL - 1.0)));
     const bq = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, isReplaying ? 0 : player.yaw, 0));
     const mq = new THREE.Quaternion().setFromEuler(new THREE.Euler(lookPitch, lookYaw, 0, 'YXZ'));
@@ -2799,9 +2869,13 @@ function animate() {
         mirrorFrameMesh.quaternion.copy(camera.quaternion);
         mirrorCamera.position.copy(player.group.position).add(new THREE.Vector3(0, 2.6, 0).applyQuaternion(player.group.quaternion));
         mirrorCamera.quaternion.setFromEuler(new THREE.Euler(0, (isReplaying ? 0 : player.yaw) + Math.PI, 0));
+        // Hide the mirror frame while rendering into the mirror render target
+        const _prevMirrorFrameVis = mirrorFrameMesh.visible;
+        mirrorFrameMesh.visible = false;
         renderer.setRenderTarget(mirrorRenderTarget);
         renderer.render(scene, mirrorCamera);
         renderer.setRenderTarget(null);
+        mirrorFrameMesh.visible = _prevMirrorFrameVis;
     } else {
         mirrorMesh.visible = false;
         mirrorFrameMesh.visible = false;
@@ -2809,9 +2883,13 @@ function animate() {
         if (hudMirrorEnabled) {
             mirrorCamera.position.copy(player.group.position).add(new THREE.Vector3(0, 2.6, 0).applyQuaternion(player.group.quaternion));
             mirrorCamera.quaternion.setFromEuler(new THREE.Euler(0, (isReplaying ? 0 : player.yaw) + Math.PI, 0));
+            // Hide the mirror frame while rendering into the mirror render target (HUD mode)
+            const _prevMirrorFrameVis2 = mirrorFrameMesh.visible;
+            mirrorFrameMesh.visible = false;
             renderer.setRenderTarget(mirrorRenderTarget);
             renderer.render(scene, mirrorCamera);
             renderer.setRenderTarget(null);
+            mirrorFrameMesh.visible = _prevMirrorFrameVis2;
         }
     }
     if(audioCtx && !player.dead && gameState === 'PLAY') { pGain.gain.setTargetAtTime(0.3, now, 0.05); pOsc.frequency.setTargetAtTime(70 + Math.abs(player.speed) * 60, now, 0.05); } else if(pGain) pGain.gain.setTargetAtTime(0, now, 0.05);
