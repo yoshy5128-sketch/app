@@ -489,6 +489,14 @@ carSlots.forEach(slot => {
     }
 });
 
+// Ensure the editable slot key also exists so the CUSTOM editor opens the same car
+carSlots.forEach(slot => {
+    const editKey = 'carConfig_' + slot;
+    if (!localStorage.getItem(editKey) && localStorage.getItem('carConfigDefault_' + slot)) {
+        localStorage.setItem(editKey, localStorage.getItem('carConfigDefault_' + slot));
+    }
+});
+
 function resetCarConfigs() {
     if (confirm('すべてのカスタムカー設定をリセットしますか？')) {
         carSlots.forEach(slot => {
