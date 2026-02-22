@@ -1,21 +1,23 @@
 const PLAYER_INITIAL_POSITION = new THREE.Vector3(0, 2.0, -20);
 let gameSettings = {
-    playerHP: 3,
-    aiHP: 3,
-    projectileSpeedMultiplier: 1.5,
+    playerHP: 20,
+    aiHP: 20,
+    projectileSpeedMultiplier: 2.0,
     mgCount: 1,
     rrCount: 1,
     srCount: 1,
     sgCount: 1,
+    defaultWeapon: 'pistol',
     medikitCount: 0,
-    fieldState: 'reset',
     mapType: 'default',
     aiCount: 2,
-    autoAim: false,
+    autoAim: true,
     nightModeEnabled: false,
     nightModeLightIntensity: 3.0,
+    timeLapseMode: false,
     customMapName: 'Default Custom Map',
     gameMode: 'battle',
+    killCamMode: 'playerOnly',
     gameDuration: 180, // 3分間 (180秒)
     buttonPositions: {
         fire: { right: '20px', bottom: '120px' },
@@ -26,6 +28,230 @@ let gameSettings = {
 };
 let originalSettings = {};
 let isPaused = false;
+
+// Character customization settings
+let characterCustomization = {
+    player: {
+        hairStyle: 'default',
+        hairColor: '#D2691E',
+        skinColor: '#ffd1b0',
+        clothingColor: '#ff3333',
+        pantsColor: '#111111',
+        shoesColor: '#8B4513'
+    },
+    enemy1: {
+        hairStyle: 'default',
+        hairColor: '#D2691E',
+        skinColor: '#ffd1b0',
+        clothingColor: '#3333ff',
+        pantsColor: '#111111',
+        shoesColor: '#8B4513'
+    },
+    enemy2: {
+        hairStyle: 'default',
+        hairColor: '#D2691E',
+        skinColor: '#ffd1b0',
+        clothingColor: '#00ff00',
+        pantsColor: '#111111',
+        shoesColor: '#8B4513'
+    },
+    enemy3: {
+        hairStyle: 'default',
+        hairColor: '#D2691E',
+        skinColor: '#ffd1b0',
+        clothingColor: '#ff8800',
+        pantsColor: '#111111',
+        shoesColor: '#8B4513'
+    }
+};
+
+// Time Lapse Mode variables
+let timeLapseInterval = null;
+let timeLapseStartTime = null;
+let isTimeLapseMode = false;
+let currentTransitionProgress = 0; // 0 = fully day, 1 = fully night
+let targetTransitionProgress = 0;
+const TIME_LAPSE_CYCLE_TIME = 60000; // 1 minute in milliseconds
+const TRANSITION_DURATION = 5000; // 5 seconds for smooth transition
+
+// Time Lapse Mode functions
+function startTimeLapseMode() {
+    if (timeLapseInterval) return; // Already running
+    
+    isTimeLapseMode = true;
+    timeLapseStartTime = Date.now();
+    currentTransitionProgress = 0; // Start with day mode
+    targetTransitionProgress = 0;
+    
+    // Start cycle - check every second for smooth transitions
+    timeLapseInterval = setInterval(() => {
+        updateTimeLapseCycle();
+    }, 1000); // Check every second
+    
+    // Initial state - start with day mode
+    applyNightMode(false);
+    
+    // Update UI
+    const nightModeCheckbox = document.getElementById('night-mode');
+    if (nightModeCheckbox) {
+        nightModeCheckbox.checked = false;
+    }
+    
+    console.log('Time Lapse Mode started - beginning with day mode');
+}
+
+function stopTimeLapseMode() {
+    if (timeLapseInterval) {
+        clearInterval(timeLapseInterval);
+        timeLapseInterval = null;
+    }
+    isTimeLapseMode = false;
+    timeLapseStartTime = null;
+    
+    console.log('Time Lapse Mode stopped');
+}
+
+function updateTimeLapseCycle() {
+    const currentTime = Date.now();
+    const elapsedTime = currentTime - timeLapseStartTime;
+    const cycleTime = parseInt(TIME_LAPSE_CYCLE_TIME);
+    const cyclePosition = (elapsedTime % cycleTime) / cycleTime;
+    
+    // Calculate target transition progress based on cycle position
+    // 0-0.33: day mode (1 -> 0) - 20 seconds
+    // 0.33-1.0: night mode (0 -> 1) - 40 seconds
+    let newTargetProgress;
+    if (cyclePosition < 0.33) {
+        // First third: day mode (1 -> 0)
+        newTargetProgress = 1 - (cyclePosition * 3); // 1 to 0 over 20 seconds
+    } else {
+        // Last two-thirds: night mode (0 -> 1)
+        newTargetProgress = (cyclePosition - 0.33) * 1.5; // 0 to 1 over 40 seconds
+    }
+    
+    targetTransitionProgress = newTargetProgress;
+    
+    console.log(`Time Lapse Debug: cyclePosition=${cyclePosition.toFixed(3)}, targetProgress=${targetTransitionProgress.toFixed(3)}`);
+    
+    // Apply smooth transition
+    applySmoothNightMode();
+}
+
+function applySmoothNightMode() {
+    // Use target progress directly instead of smooth transition
+    // This prevents the "gakuri" sudden darkness
+    const nightIntensity = targetTransitionProgress;
+    const dayIntensity = 1 - targetTransitionProgress;
+    
+    // Day settings
+    const dayAmbientIntensity = 0.5;
+    const dayDirectionalIntensity = 0.8;
+    const dayClearColor = new THREE.Color(0x87CEEB); // Sky blue
+    
+    // Night settings - same as regular night mode
+    const nightAmbientIntensity = 0.05; // Same as regular night mode
+    const nightDirectionalIntensity = 0.05; // Same as regular night mode
+    const nightClearColor = new THREE.Color(0x111122); // Same as regular night mode
+    
+    // Interpolate between day and night
+    const currentAmbientIntensity = dayAmbientIntensity * dayIntensity + nightAmbientIntensity * nightIntensity;
+    const currentDirectionalIntensity = dayDirectionalIntensity * dayIntensity + nightDirectionalIntensity * nightIntensity;
+    const currentClearColor = dayClearColor.clone().lerp(nightClearColor, nightIntensity);
+    
+    // Apply interpolated values
+    if (ambientLight) {
+        ambientLight.intensity = currentAmbientIntensity;
+        console.log(`Time Lapse: ambientLight intensity set to ${currentAmbientIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+    }
+    if (directionalLight) {
+        directionalLight.intensity = currentDirectionalIntensity;
+        console.log(`Time Lapse: directionalLight intensity set to ${currentDirectionalIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+    }
+    if (renderer) {
+        renderer.setClearColor(currentClearColor);
+        console.log(`Time Lapse: renderer clear color set to #${currentClearColor.getHexString()} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+    }
+    
+    // Handle street lights - match regular night mode behavior
+    if (streetLights && streetLights.length > 0) {
+        streetLights.forEach(light => {
+            const pointLight = light.children.find(child => child.isPointLight);
+            if (pointLight) {
+                // Use direct intensity like regular night mode, not smooth transition
+                pointLight.intensity = nightIntensity * gameSettings.nightModeLightIntensity;
+            }
+        });
+    }
+    
+    // Update UI checkbox (snap to nearest state)
+    const shouldBeNightMode = nightIntensity > 0.5;
+    gameSettings.nightModeEnabled = shouldBeNightMode;
+    const nightModeCheckbox = document.getElementById('night-mode');
+    if (nightModeCheckbox && nightModeCheckbox.checked !== shouldBeNightMode) {
+        nightModeCheckbox.checked = shouldBeNightMode;
+    }
+}
+
+function applyNightMode(isNight) {
+    console.log('applyNightMode called with:', isNight);
+    
+    if (isNight) {
+        // Apply night mode
+        console.log('Applying night mode');
+        if (ambientLight) {
+            ambientLight.intensity = 0.05;
+            console.log('ambientLight intensity set to 0.05');
+        }
+        if (directionalLight) {
+            directionalLight.intensity = 0.05;
+            console.log('directionalLight intensity set to 0.05');
+        }
+        if (renderer) {
+            renderer.setClearColor(0x111122);
+            console.log('renderer clear color set to night');
+        }
+        if (streetLights && streetLights.length > 0) {
+            streetLights.forEach(light => {
+                const pointLight = light.children.find(child => child.isPointLight);
+                if (pointLight) pointLight.intensity = gameSettings.nightModeLightIntensity;
+            });
+            console.log('street lights turned on');
+        }
+    } else {
+        // Apply day mode
+        console.log('Applying day mode');
+        if (ambientLight) {
+            ambientLight.intensity = 0.5;
+            console.log('ambientLight intensity set to 0.5');
+        }
+        if (directionalLight) {
+            directionalLight.intensity = 0.8;
+            console.log('directionalLight intensity set to 0.8');
+        }
+        if (renderer) {
+            renderer.setClearColor(0x87CEEB);
+            console.log('renderer clear color set to day');
+        }
+        if (streetLights && streetLights.length > 0) {
+            streetLights.forEach(light => {
+                const pointLight = light.children.find(child => child.isPointLight);
+                if (pointLight) pointLight.intensity = 0;
+            });
+            console.log('street lights turned off');
+        }
+    }
+}
+
+// Night mode variables
+let isNightMode = false;
+
+// Character editor variables
+let characterEditorScene = null;
+let characterEditorCamera = null;
+let characterEditorRenderer = null;
+let previewCharacter = null;
+let currentPreviewCharacter = 'player';
+let characterEditorAnimationId = null;
 
 
 
@@ -80,11 +306,11 @@ let isPaused = false;
         const srCountSelect = document.getElementById('sr-count');
         const sgCountSelect = document.getElementById('sg-count');
         const aiCountRadios = document.querySelectorAll('input[name="ai-count"]');
-        const fieldStateRadios = document.querySelectorAll('input[name="field-state"]');
         const mapTypeRadios = document.querySelectorAll('input[name="map-type"]');
         const autoAimRadios = document.querySelectorAll('input[name="auto-aim"]');
         const nightModeRadios = document.querySelectorAll('input[name="night-mode"]');
         const gameModeRadios = document.querySelectorAll('input[name="game-mode"]');
+        const killCamModeRadios = document.querySelectorAll('input[name="killcam-mode"]');
         if (gameModeRadios.length > 0) { // gameModeRadiosが存在することを確認
 
             // ゲームモードラジオボタンの親要素を特定し、その後にプレイ時間設定を追加
@@ -138,6 +364,26 @@ let isPaused = false;
         if (rrCountSelect) rrCountSelect.addEventListener('change', () => { gameSettings.rrCount = parseInt(rrCountSelect.value, 10); saveSettings(); });
         if (srCountSelect) srCountSelect.addEventListener('change', () => { gameSettings.srCount = parseInt(srCountSelect.value, 10); saveSettings(); });
         if (sgCountSelect) sgCountSelect.addEventListener('change', () => { gameSettings.sgCount = parseInt(sgCountSelect.value, 10); saveSettings(); });
+        const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
+        if (defaultWeaponChecks.length > 0) {
+            defaultWeaponChecks.forEach(check => {
+                check.checked = (gameSettings.defaultWeapon === check.value);
+                check.addEventListener('change', () => {
+                    if (check.checked) {
+                        defaultWeaponChecks.forEach(other => {
+                            if (other !== check) other.checked = false;
+                        });
+                        gameSettings.defaultWeapon = check.value;
+                    } else {
+                        const anyChecked = Array.from(defaultWeaponChecks).some(c => c.checked);
+                        gameSettings.defaultWeapon = anyChecked
+                            ? Array.from(defaultWeaponChecks).find(c => c.checked).value
+                            : WEAPON_PISTOL;
+                    }
+                    saveSettings();
+                });
+            });
+        }
         const medikitCountSelect = document.getElementById('medikit-count');
         if (medikitCountSelect) medikitCountSelect.addEventListener('change', () => {
             gameSettings.medikitCount = parseInt(medikitCountSelect.value, 10);
@@ -147,14 +393,6 @@ let isPaused = false;
             radio.addEventListener('change', () => {
                 if (radio.checked) {
                     gameSettings.aiCount = parseInt(radio.value, 10);
-                    saveSettings();
-                }
-            });
-        });
-        fieldStateRadios.forEach(radio => {
-            radio.addEventListener('change', () => {
-                if (radio.checked) {
-                    gameSettings.fieldState = radio.value;
                     saveSettings();
                 }
             });
@@ -191,6 +429,14 @@ let isPaused = false;
                 }
             });
         });
+        killCamModeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.killCamMode = radio.value;
+                    saveSettings();
+                }
+            });
+        });
         const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
         const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
         if (nightModeIntensitySlider) {
@@ -207,6 +453,12 @@ let isPaused = false;
             customMapSelector.addEventListener('change', () => {
                 const selectedMapName = customMapSelector.value;
                 gameSettings.customMapName = selectedMapName;
+                if (selectedMapName) {
+                    gameSettings.mapType = 'custom';
+                    document.querySelectorAll('input[name="map-type"]').forEach(radio => {
+                        radio.checked = (radio.value === 'custom');
+                    });
+                }
                 saveSettings();
                 // マップ選択時に保存された設定を自動読み込み
                 if (selectedMapName && selectedMapName !== '') {
@@ -415,6 +667,7 @@ let ammoMG = 0;
 let ammoRR = 0;
 let ammoSR = 0;
 let ammoSG = 0;
+let playerMGReloadUntil = 0;
 const MAX_AMMO_MG = 50;
 const MAX_AMMO_RR = 3;
 const MAX_AMMO_SR = 5;
@@ -430,6 +683,89 @@ const SHOTGUN_RANGE = 15;
 const SHOTGUN_PELLET_DAMAGE = 2;
 const WEAPON_SG_SOUND = 'sgun.mp3';
 const AI_WEAPON_SG_SOUND = 'aisgun.mp3';
+const ENABLE_EXPERIMENTAL_AI_FLOW = false;
+// Enable rooftop logic so AI can find ladders, climb to rooftops and engage players there.
+const ENABLE_AI_ROOFTOP_LOGIC = true;
+
+function isInfiniteDefaultWeaponActive(weaponType) {
+    return false;
+}
+
+function applyPlayerDefaultWeaponLoadout() {
+    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    currentWeapon = selected;
+    ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
+    ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
+    ammoSR = selected === WEAPON_SR ? MAX_AMMO_SR : 0;
+    ammoSG = selected === WEAPON_SG ? MAX_AMMO_SG : 0;
+}
+
+function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
+    if (!ai) return false;
+    return false;
+}
+
+function applyAIDefaultWeaponLoadout(ai) {
+    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    ai.currentWeapon = selected;
+    ai.ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
+    ai.ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
+    ai.ammoSR = selected === WEAPON_SR ? MAX_AMMO_SR : 0;
+    ai.ammoSG = selected === WEAPON_SG ? MAX_AMMO_SG : 0;
+}
+
+function getPlayerFallbackWeapon() {
+    return gameSettings.defaultWeapon && gameSettings.defaultWeapon !== WEAPON_PISTOL
+        ? gameSettings.defaultWeapon
+        : WEAPON_PISTOL;
+}
+
+function switchPlayerToFallbackWeapon() {
+    const fallback = getPlayerFallbackWeapon();
+    currentWeapon = fallback;
+    if (fallback === WEAPON_MG && ammoMG <= 0) ammoMG = MAX_AMMO_MG;
+    if (fallback === WEAPON_RR && ammoRR <= 0) ammoRR = MAX_AMMO_RR;
+    if (fallback === WEAPON_SR && ammoSR <= 0) ammoSR = MAX_AMMO_SR;
+    if (fallback === WEAPON_SG && ammoSG <= 0) ammoSG = MAX_AMMO_SG;
+}
+
+function switchAIToFallbackWeapon(ai) {
+    if (!ai) return;
+    const fallback = gameSettings.defaultWeapon && gameSettings.defaultWeapon !== WEAPON_PISTOL
+        ? gameSettings.defaultWeapon
+        : WEAPON_PISTOL;
+    ai.currentWeapon = fallback;
+    if (fallback === WEAPON_MG && ai.ammoMG <= 0) ai.ammoMG = MAX_AMMO_MG;
+    if (fallback === WEAPON_RR && ai.ammoRR <= 0) ai.ammoRR = MAX_AMMO_RR;
+    if (fallback === WEAPON_SR && ai.ammoSR <= 0) ai.ammoSR = MAX_AMMO_SR;
+    if (fallback === WEAPON_SG && ai.ammoSG <= 0) ai.ammoSG = MAX_AMMO_SG;
+}
+
+function showReloadingText() {
+    let el = document.getElementById('reloading-text');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'reloading-text';
+        document.body.appendChild(el);
+    }
+    el.textContent = 'Reloading';
+    el.style.position = 'fixed';
+    el.style.top = '45%';
+    el.style.left = '50%';
+    el.style.transform = 'translate(-50%, -50%)';
+    el.style.color = 'red';
+    el.style.fontSize = '24px';
+    el.style.fontWeight = 'bold';
+    el.style.zIndex = '1000';
+    el.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
+    el.style.display = 'block';
+}
+
+function hideReloadingText() {
+    const el = document.getElementById('reloading-text');
+    if (el) el.style.display = 'none';
+}
+
 let lastFireTime = -FIRE_RATE_PISTOL;
 let isMouseButtonDown = false;
 let isScoping = false;
@@ -443,9 +779,146 @@ let lastClimbedTower = null;
 let isFollowingPlayerMode = false; // AI追従モードフラグ
 let playerBreadcrumbs = [];
 let timeSinceLastBreadcrumb = 0;
-const AUTO_AIM_RANGE = 50;
+const AUTO_AIM_RANGE = 160;
 const AUTO_AIM_ANGLE = Math.PI / 8;
-const AUTO_AIM_STRENGTH = 0.3;
+const AUTO_AIM_STRENGTH = 0.4; // Increased from 0.3 for easier aiming
+const AUTO_AIM_SCOPE_ACQUIRE_RADIUS_NDC = 0.55; // 中心付近に入れば積極的に取得 (increased from 0.40)
+const AUTO_AIM_SCOPE_KEEP_RADIUS_NDC = 0.75;    // ロック後は広めに維持して追随 (increased from 0.62)
+let sniperAutoAimLockedAI = null;
+let sniperAutoAimSmoothedPoint = null;
+
+function getPlayerAutoAimCandidateForAI(ai, maxScreenRadius) {
+    if (!ai || ai.hp <= 0) return null;
+    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    if (isTeamModeOrTeamArcade && ai.team === 'player') return null;
+
+    const origin = new THREE.Vector3();
+    camera.getWorldPosition(origin);
+    let best = null;
+    let bestScore = Infinity;
+    const aimPoints = [getAIUpperTorsoPos(ai), getAILowerTorsoPos(ai), getAIHeadPos(ai)];
+    for (const p of aimPoints) {
+        if (!checkLineOfSight(origin, p, obstacles)) continue;
+        const toTarget = new THREE.Vector3().subVectors(p, origin);
+        const dist = toTarget.length();
+        if (dist > AUTO_AIM_RANGE || dist < 0.001) continue;
+
+        const ndc = p.clone().project(camera);
+        if (ndc.z <= 0 || ndc.z >= 1) continue;
+        const screenR = Math.sqrt(ndc.x * ndc.x + ndc.y * ndc.y);
+        if (screenR > maxScreenRadius) continue;
+
+        const score = screenR * 1.0 + dist * 0.002;
+        if (score < bestScore) {
+            bestScore = score;
+            best = { ai, point: p.clone(), score };
+        }
+    }
+    return best;
+}
+
+function getPlayerAutoAimTargetPoint() {
+    // 1) ロック中はその敵だけ追従（別の敵へ飛ばない）
+    if (sniperAutoAimLockedAI) {
+        const locked = getPlayerAutoAimCandidateForAI(sniperAutoAimLockedAI, AUTO_AIM_SCOPE_KEEP_RADIUS_NDC);
+        if (locked) return locked.point;
+        sniperAutoAimLockedAI = null;
+        return null; // このフレームは再取得しない（急な飛び防止）
+    }
+
+    // 2) 未ロック時は中央付近に入った敵だけ取得
+    let best = null;
+    let bestScore = Infinity;
+    for (const ai of ais) {
+        const cand = getPlayerAutoAimCandidateForAI(ai, AUTO_AIM_SCOPE_ACQUIRE_RADIUS_NDC);
+        if (!cand) continue;
+        if (cand.score < bestScore) {
+            bestScore = cand.score;
+            best = cand;
+        }
+    }
+    if (best) {
+        sniperAutoAimLockedAI = best.ai;
+        return best.point;
+    }
+    return null;
+}
+
+function projectPointToScopeNDC(point, yaw, pitch) {
+    const oldYaw = player.rotation.y;
+    const oldPitch = camera.rotation.x;
+    player.rotation.y = yaw;
+    camera.rotation.x = THREE.MathUtils.clamp(pitch, -Math.PI / 2 + 0.1, Math.PI / 2 - 0.1);
+    player.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    const ndc = point.clone().project(camera);
+    player.rotation.y = oldYaw;
+    camera.rotation.x = oldPitch;
+    player.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
+    return ndc;
+}
+
+function updateSniperScopeAutoAim(delta) {
+    if (!isScoping || currentWeapon !== WEAPON_SR) {
+        sniperAutoAimLockedAI = null;
+        sniperAutoAimSmoothedPoint = null;
+        return;
+    }
+    const targetPoint = getPlayerAutoAimTargetPoint();
+    if (!targetPoint) {
+        sniperAutoAimSmoothedPoint = null;
+        return;
+    }
+
+    if (!sniperAutoAimSmoothedPoint) sniperAutoAimSmoothedPoint = targetPoint.clone();
+    const followAlpha = 1.0 - Math.exp(-14.0 * delta); // 追随を強化
+    sniperAutoAimSmoothedPoint.lerp(targetPoint, followAlpha);
+
+    const ndcNow = sniperAutoAimSmoothedPoint.clone().project(camera);
+    if (ndcNow.z <= 0 || ndcNow.z >= 1) {
+        sniperAutoAimLockedAI = null;
+        sniperAutoAimSmoothedPoint = null;
+        return;
+    }
+    const currentRadius = Math.hypot(ndcNow.x, ndcNow.y);
+    if (currentRadius > AUTO_AIM_SCOPE_KEEP_RADIUS_NDC) {
+        // スコープ外へ引っ張らない
+        sniperAutoAimLockedAI = null;
+        sniperAutoAimSmoothedPoint = null;
+        return;
+    }
+
+    // 画面誤差ベースで吸い付ける（敵を中心へ寄せる）
+    const yawGain = 8.5 * AUTO_AIM_STRENGTH;
+    const pitchGain = 7.0 * AUTO_AIM_STRENGTH;
+    const yawStep = THREE.MathUtils.clamp(Math.abs(ndcNow.x) * yawGain * delta, 0, 1.8 * delta);
+    const pitchStep = THREE.MathUtils.clamp(Math.abs(ndcNow.y) * pitchGain * delta, 0, 1.45 * delta);
+
+    if (yawStep > 0.00001) {
+        const yaw = player.rotation.y;
+        const pitch = camera.rotation.x;
+        const plus = projectPointToScopeNDC(sniperAutoAimSmoothedPoint, yaw + yawStep, pitch);
+        const minus = projectPointToScopeNDC(sniperAutoAimSmoothedPoint, yaw - yawStep, pitch);
+        if (Math.abs(plus.x) < Math.abs(ndcNow.x) || Math.abs(minus.x) < Math.abs(ndcNow.x)) {
+            player.rotation.y = (Math.abs(plus.x) <= Math.abs(minus.x)) ? yaw + yawStep : yaw - yawStep;
+        }
+    }
+
+    if (pitchStep > 0.00001) {
+        const yaw = player.rotation.y;
+        const pitch = camera.rotation.x;
+        const now = projectPointToScopeNDC(sniperAutoAimSmoothedPoint, yaw, pitch);
+        const plus = projectPointToScopeNDC(sniperAutoAimSmoothedPoint, yaw, pitch + pitchStep);
+        const minus = projectPointToScopeNDC(sniperAutoAimSmoothedPoint, yaw, pitch - pitchStep);
+        if (Math.abs(plus.y) < Math.abs(now.y) || Math.abs(minus.y) < Math.abs(now.y)) {
+            camera.rotation.x = (Math.abs(plus.y) <= Math.abs(minus.y)) ? pitch + pitchStep : pitch - pitchStep;
+        }
+    }
+}
+
+// Add camera rotation limits
+camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x, -Math.PI / 2 + 0.1, Math.PI / 2 - 0.1);
 let font;
 const fontLoader = new THREE.FontLoader();
 fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function (loadedFont) {
@@ -458,6 +931,11 @@ fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.
 });
 
 function saveSettings() {
+    gameSettings.autoAim = document.querySelector('input[name="auto-aim"]:checked').value;
+    gameSettings.killCamMode = document.querySelector('input[name="killcam-mode"]:checked').value;
+    gameSettings.nightModeEnabled = document.getElementById('night-mode').checked;
+    gameSettings.nightModeIntensity = document.getElementById('night-mode-intensity').value;
+    gameSettings.timeLapseMode = document.getElementById('time-lapse-mode').checked;
     localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
 }
 
@@ -469,12 +947,19 @@ function loadSettings() {
         if (parsedSavedSettings.gameMode === undefined) {
             parsedSavedSettings.gameMode = 'battle';
         }
+        if (parsedSavedSettings.killCamMode === undefined) {
+            parsedSavedSettings.killCamMode = 'playerOnly';
+        }
         if (parsedSavedSettings.nightModeLightIntensity === undefined) {
             parsedSavedSettings.nightModeLightIntensity = 2.0;
         }
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 0;
         }
+        if (parsedSavedSettings.defaultWeapon === undefined) {
+            parsedSavedSettings.defaultWeapon = 'pistol';
+        }
+        Object.assign(gameSettings, parsedSavedSettings);
         // Add default for buttonPositions if it doesn't exist
         if (parsedSavedSettings.buttonPositions === undefined) {
             parsedSavedSettings.buttonPositions = {
@@ -486,8 +971,16 @@ function loadSettings() {
             parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
         }
 
+        Object.assign(gameSettings, parsedSavedSettings);
+        // Add default for buttonPositions if it doesn't exist
         document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
             radio.checked = (radio.value === gameSettings.gameMode);
+        });
+        document.querySelectorAll('input[name="killcam-mode"]').forEach(radio => {
+            radio.checked = (radio.value === gameSettings.killCamMode);
+        });
+        document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
+            check.checked = (gameSettings.defaultWeapon === check.value);
         });
         const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
         const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
@@ -496,6 +989,26 @@ function loadSettings() {
         }
         if (nightModeIntensityValueSpan) {
             nightModeIntensityValueSpan.textContent = gameSettings.nightModeLightIntensity;
+        }
+        
+        // Time Lapse Mode
+        const timeLapseCheckbox = document.getElementById('time-lapse-mode');
+        if (timeLapseCheckbox) {
+            timeLapseCheckbox.checked = gameSettings.timeLapseMode || false;
+            
+            // Start Time Lapse mode if it was enabled
+            if (gameSettings.timeLapseMode) {
+                setTimeout(() => {
+                    startTimeLapseMode();
+                }, 1000); // Delay to ensure everything is loaded
+            }
+        }
+        
+        // Night Mode checkbox initialization
+        const nightModeCheckbox = document.getElementById('night-mode');
+        if (nightModeCheckbox) {
+            nightModeCheckbox.checked = gameSettings.nightModeEnabled || false;
+            applyNightMode(gameSettings.nightModeEnabled);
         }
 
         // Apply button positions
@@ -592,11 +1105,17 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.gameMode === undefined) {
             parsedSavedSettings.gameMode = 'battle';
         }
+        if (parsedSavedSettings.killCamMode === undefined) {
+            parsedSavedSettings.killCamMode = 'playerOnly';
+        }
         if (parsedSavedSettings.nightModeLightIntensity === undefined) {
             parsedSavedSettings.nightModeLightIntensity = 0.8;
         }
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 0;
+        }
+        if (parsedSavedSettings.defaultWeapon === undefined) {
+            parsedSavedSettings.defaultWeapon = 'pistol';
         }
                 if (parsedSavedSettings.buttonPositions === undefined) {
                     parsedSavedSettings.buttonPositions = {
@@ -629,12 +1148,12 @@ function loadMapSettings(mapName) {
                 document.getElementById('rr-count').value = gameSettings.rrCount;
                 document.getElementById('sr-count').value = gameSettings.srCount;
                 if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
+                document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
+                    check.checked = (gameSettings.defaultWeapon === check.value);
+                });
                 if (document.getElementById('medikit-count')) document.getElementById('medikit-count').value = gameSettings.medikitCount;
                 document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
                     radio.checked = (radio.value === String(gameSettings.aiCount));
-                });
-                document.querySelectorAll('input[name="field-state"]').forEach(radio => {
-                    radio.checked = (radio.value === gameSettings.fieldState);
                 });
                 document.querySelectorAll('input[name="map-type"]').forEach(radio => {
                     radio.checked = (radio.value === gameSettings.mapType);
@@ -647,6 +1166,9 @@ function loadMapSettings(mapName) {
                 });
                 document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
                     radio.checked = (radio.value === gameSettings.gameMode);
+                });
+                document.querySelectorAll('input[name="killcam-mode"]').forEach(radio => {
+                    radio.checked = (radio.value === gameSettings.killCamMode);
                 });
                 const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
                 const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
@@ -1102,7 +1624,6 @@ function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5, i
 }
 
 function createWeaponPickup(text, position, weaponType) {
-    console.log(`createWeaponPickup called for ${weaponType} at initial position: (${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`);
     const boxWidth = 1;
     const boxHeight = 0.8;
     const boxDepth = 2;
@@ -1112,7 +1633,6 @@ function createWeaponPickup(text, position, weaponType) {
         const material = new THREE.MeshLambertMaterial({ color: 0x006400 });
         const box = new THREE.Mesh(geometry, material);
         box.position.copy(position);
-        console.log(`createWeaponPickup (no font): Actual mesh position after adjustments: (${box.position.x.toFixed(2)}, ${box.position.y.toFixed(2)}, ${box.position.z.toFixed(2)})`);
         box.userData = { type: 'weaponPickup', weaponType: weaponType };
         scene.add(box);
         weaponPickups.push(box);
@@ -1144,7 +1664,6 @@ function createWeaponPickup(text, position, weaponType) {
     pickupGroup.add(textMeshRight);
     pickupGroup.position.copy(position);
 
-    console.log(`createWeaponPickup (with font): Actual group position after adjustments: (${pickupGroup.position.x.toFixed(2)}, ${pickupGroup.position.y.toFixed(2)}, ${pickupGroup.position.z.toFixed(2)})`);
     pickupGroup.userData = { type: 'weaponPickup', weaponType: weaponType };
     scene.add(pickupGroup);
     weaponPickups.push(pickupGroup);
@@ -1190,7 +1709,6 @@ const MEDIKIT_HEIGHT = 0.8;
 const MEDIKIT_DEPTH = 1;
 
 function createMedikitPickup(position) {
-    console.log(`createMedikitPickup called at initial position: (${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`);
     const medikitGroup = new THREE.Group();
     const boxGeometry = new THREE.BoxGeometry(MEDIKIT_WIDTH, MEDIKIT_HEIGHT, MEDIKIT_DEPTH);
     const boxMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -1219,7 +1737,6 @@ function createMedikitPickup(position) {
     medikitGroup.add(crossGroup2);
     medikitGroup.position.copy(position);
 
-    console.log(`createMedikitPickup: Actual group position after adjustments: (${medikitGroup.position.x.toFixed(2)}, ${medikitGroup.position.y.toFixed(2)}, ${medikitGroup.position.z.toFixed(2)})`);
     medikitGroup.userData = { type: 'medikitPickup' };
     scene.add(medikitGroup);
     weaponPickups.push(medikitGroup);
@@ -1468,8 +1985,12 @@ function resetObstacles() {
     if (gameSettings.mapType === 'random') {
         obstaclesToCreate = generateObstaclePositions(NUM_RANDOM_OBSTACLES);
     } else if (gameSettings.mapType === 'custom') {
-        const allCustomMaps = JSON.parse(localStorage.getItem('allCustomMaps') || '{}');
-        const selectedMapData = allCustomMaps[gameSettings.customMapName];
+        const resolved = resolveCustomMapSelection();
+        const selectedMapData = resolved.mapData;
+        if (resolved.mapName && resolved.mapName !== gameSettings.customMapName) {
+            gameSettings.customMapName = resolved.mapName;
+            saveSettings();
+        }
         if (selectedMapData) {
             try {
                 if (selectedMapData && selectedMapData.obstacles) {
@@ -1504,8 +2025,14 @@ const AI_INITIAL_POSITIONS = [
 resetObstacles();
 let playerModel;
 let isPlayerDeathPlaying = false;
-playerModel = createCharacterModel(0x0000ff); // Player's color
+playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
+resetCharacterPose(playerModel); // Reset to default pose
+// Show gun for gameplay
+if (playerModel.userData.parts && playerModel.userData.parts.gun) {
+    playerModel.userData.parts.gun.visible = true;
+}
 player.add(playerModel);
+playerModel.position.set(0, -playerTargetHeight, 0);
 playerModel.visible = false;
 const AI_SPEED = 15.0;
 const HIDE_DURATION = 3.0;
@@ -1538,51 +2065,182 @@ function cleanupAI(aiObject) {
 
 const ais = [];
 
-function createCharacterModel(color) {
-    const material = new THREE.MeshLambertMaterial({ color: color });
+function createCharacterModel(color, customization = null) {
+    // Use customization if provided, otherwise use defaults
+    const custom = customization || {
+        hairStyle: 'default',
+        hairColor: '#D2691E',
+        skinColor: '#ffd1b0',
+        clothingColor: color,
+        pantsColor: '#111111',
+        shoesColor: '#8B4513'
+    };
+    
+    const clothingMaterial = new THREE.MeshLambertMaterial({ color: custom.clothingColor });
+    const skinMaterial = new THREE.MeshLambertMaterial({ color: custom.skinColor });
+    const pantsMaterial = new THREE.MeshLambertMaterial({ color: custom.pantsColor });
     const gunMaterial = new THREE.MeshLambertMaterial({ color: 0x111111 });
+    const shoeMaterial = new THREE.MeshLambertMaterial({ color: custom.shoesColor });
+    const hairMaterial = new THREE.MeshLambertMaterial({ color: custom.hairColor });
 
-    // Proportions to keep the same total height, with model's feet at y=0
-    const torsoHeight = BODY_HEIGHT * 0.5;
-    const legSegmentHeight = BODY_HEIGHT * 0.25;
+    // Use rag.html proportions, scaled to current game height (visual only; collisions unchanged)
+    const targetHeight = BODY_HEIGHT + HEAD_RADIUS * 2;
+    const ragTotalHeight = 2.5; // 0.6 + 0.6 + 0.9 + 0.4
+    const s = targetHeight / ragTotalHeight;
+    const torsoHeight = 0.9 * s;
+    const headSize = 0.4 * s;
+    const legSegmentHeight = 0.6 * s;
     const torsoY = (legSegmentHeight * 2) + (torsoHeight / 2);
-    const headY = (legSegmentHeight * 2) + torsoHeight + HEAD_RADIUS;
+    const headY = (legSegmentHeight * 2) + torsoHeight + (headSize / 2);
 
     // Body and Head
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, torsoHeight, 1.0), material);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6 * s, torsoHeight, 0.3 * s), clothingMaterial);
     body.position.y = torsoY;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(HEAD_RADIUS, 16, 16), material);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize, headSize), skinMaterial);
     head.position.y = headY;
+    
+    // Add eyes (horizontal lines) to all characters
+    const eyeLineGeom = new THREE.BoxGeometry(headSize * 0.6, headSize * 0.02, headSize * 0.02);
+    const eyeLineMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    
+    // Left eye line
+    const leftEyeLine = new THREE.Mesh(eyeLineGeom, eyeLineMaterial);
+    leftEyeLine.position.set(-headSize * 0.15, headY + headSize * 0.2, headSize * 0.5); // Move forward to be visible
+    
+    // Right eye line  
+    const rightEyeLine = new THREE.Mesh(eyeLineGeom, eyeLineMaterial);
+    rightEyeLine.position.set(headSize * 0.15, headY + headSize * 0.2, headSize * 0.5); // Move forward to be visible
+
+    // Hair - Different styles based on customization
+    let hairParts = [];
+    
+    switch (custom.hairStyle) {
+        case 'short':
+            const shortHairGeom = new THREE.BoxGeometry(headSize * 1.1, headSize * 0.3, headSize * 1.1);
+            const shortHair = new THREE.Mesh(shortHairGeom, hairMaterial);
+            shortHair.position.set(0, headY + headSize * 0.4, 0);
+            
+            // Add back hair to cover half of the back head
+            const shortBackHairGeom = new THREE.BoxGeometry(headSize * 1.0, headSize * 0.4, headSize * 0.5);
+            const shortBackHair = new THREE.Mesh(shortBackHairGeom, hairMaterial);
+            shortBackHair.position.set(0, headY + headSize * 0.2, -headSize * 0.25);
+            
+            hairParts.push(shortHair, shortBackHair);
+            break;
+            
+        case 'long':
+            // Afro style - spherical hair from back-top, leaving more face exposed
+            const afroRadius = headSize * 0.8;
+            const afroGeom = new THREE.SphereGeometry(afroRadius, 16, 12);
+            const afro = new THREE.Mesh(afroGeom, hairMaterial);
+            afro.position.set(0, headY + headSize * 0.6, -headSize * 0.4); // Move slightly forward
+            afro.scale.set(1.4, 1.2, 1.3); // Wider and taller to expose more face
+            
+            hairParts.push(afro);
+            break;
+            
+        case 'spiky':
+            // Mohawk style - connected hair from top back to neck (raised and vertical)
+            const mohawkGeom = new THREE.BoxGeometry(headSize * 0.33, headSize * 0.7, headSize * 1.2); // Taller and more vertical
+            const mohawk = new THREE.Mesh(mohawkGeom, hairMaterial);
+            mohawk.position.set(0, headY + headSize * 0.6, -headSize * 0.15); // Raised position
+            
+            hairParts.push(mohawk);
+            break;
+            
+        case 'bald':
+            // Cap style - cap covering top 1/3 of head with extended visor
+            const capMainGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.3, headSize * 1.0); // Main cap body
+            const capMain = new THREE.Mesh(capMainGeom, hairMaterial); // Use hair material for cap color
+            capMain.position.set(0, headY + headSize * 0.5, 0);
+            
+            const capVisorGeom = new THREE.BoxGeometry(headSize * 1.6, headSize * 0.05, headSize * 0.6); // Extended visor/brim
+            const capVisor = new THREE.Mesh(capVisorGeom, hairMaterial);
+            capVisor.position.set(0, headY + headSize * 0.35, headSize * 0.45); // Extended front visor
+            
+            hairParts.push(capMain, capVisor);
+            break;
+            
+        case 'default':
+        default:
+            const hairBackGeom = new THREE.BoxGeometry(headSize * 1.15, headSize * 0.85, headSize * 0.75); // Thinner back hair
+            const hairBack = new THREE.Mesh(hairBackGeom, hairMaterial);
+            hairBack.position.set(0, headY, -headSize * 0.45);
+            
+            const hairTopGeom = new THREE.BoxGeometry(headSize * 1.05, headSize * 0.35, headSize * 1.15); // Thinner top hair
+            const hairTop = new THREE.Mesh(hairTopGeom, hairMaterial);
+            hairTop.position.set(0, headY + headSize * 0.45, -headSize * 0.1);
+            
+            const hairBangsGeom = new THREE.BoxGeometry(headSize * 0.8, headSize * 0.05, headSize * 0.3);
+            const hairBangs = new THREE.Mesh(hairBangsGeom, hairMaterial);
+            hairBangs.position.set(0, headY + headSize * 0.15, headSize * 0.35);
+            
+            // Cut the back hair to align with top hair
+            const backHairCutGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.9, headSize * 0.3);
+            const backHairCut = new THREE.Mesh(backHairCutGeom, new THREE.MeshBasicMaterial({ color: 0x000000 }));
+            backHairCut.position.set(0, headY + headSize * 0.4, -headSize * 0.45);
+            
+            hairParts.push(hairBack, hairTop, hairBangs);
+            break;
+    }
 
     // Arms and Gun
     const aimGroup = new THREE.Group();
     const gunLength = 2.0;
-    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, gunLength), gunMaterial);
+    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, gunLength), gunMaterial);
     gun.position.z = gunLength / 2;
-    aimGroup.position.y = (legSegmentHeight * 2) + torsoHeight * 0.7;
-    aimGroup.add(gun);
-    const armGeomShort = new THREE.BoxGeometry(0.25, 0.25, 0.8);
-    const armGeomLong = new THREE.BoxGeometry(0.25, 0.25, 1.2);
-    const leftArm = new THREE.Mesh(armGeomShort, material);
-    leftArm.position.set(-0.3, 0, 0.2);
-    leftArm.rotation.y = Math.PI / 6;
-    const rightArm = new THREE.Mesh(armGeomLong, material);
-    rightArm.position.set(0.3, 0, 0.6);
-    rightArm.rotation.y = -Math.PI / 6;
+    gun.visible = true; // Show gun for gameplay (will be hidden only in preview reset)
+    aimGroup.position.y = (legSegmentHeight * 2) + torsoHeight * 0.7; // Restore original arm position
+    // Arms (upper + forearm)
+    const upperArmLen = 0.5 * s;
+    const foreArmLen = 0.5 * s;
+    const upperArmGeom = new THREE.BoxGeometry(0.2 * s, 0.2 * s, upperArmLen);
+    const foreArmGeom = new THREE.BoxGeometry(0.18 * s, 0.18 * s, foreArmLen);
+    const leftArm = new THREE.Mesh(upperArmGeom, clothingMaterial);
+    leftArm.position.set(-0.45 * s, 0, upperArmLen / 2);
+    const rightArm = new THREE.Mesh(upperArmGeom, clothingMaterial);
+    rightArm.position.set(0.45 * s, 0, upperArmLen / 2);
+    const leftElbow = new THREE.Object3D();
+    leftElbow.position.set(0, 0, upperArmLen / 2);
+    leftArm.add(leftElbow);
+    const rightElbow = new THREE.Object3D();
+    rightElbow.position.set(0, 0, upperArmLen / 2);
+    rightArm.add(rightElbow);
+    const leftForearm = new THREE.Mesh(foreArmGeom, clothingMaterial);
+    leftForearm.position.set(0, 0, foreArmLen / 2);
+    leftElbow.add(leftForearm);
+    const rightForearm = new THREE.Mesh(foreArmGeom, clothingMaterial);
+    rightForearm.position.set(0, 0, foreArmLen / 2);
+    rightElbow.add(rightForearm);
+    const handSize = 0.16 * s;
+    const leftHand = new THREE.Object3D();
+    leftHand.position.set(0, 0, foreArmLen / 2);
+    const leftHandMesh = new THREE.Mesh(new THREE.BoxGeometry(handSize, handSize, handSize), skinMaterial);
+    leftHand.add(leftHandMesh);
+    leftForearm.add(leftHand);
+    const rightHand = new THREE.Object3D();
+    rightHand.position.set(0, 0, foreArmLen / 2);
+    const rightHandMesh = leftHandMesh.clone();
+    rightHand.add(rightHandMesh);
+    rightForearm.add(rightHand);
+    const gunGrip = new THREE.Object3D();
+    gunGrip.position.set(0, 0, 0);
+    gunGrip.add(gun);
+    aimGroup.add(gunGrip);
     aimGroup.add(leftArm, rightArm);
 
     // Legs (Thigh + Shin)
-    const legWidth = 0.3;
+    const legWidth = 0.25 * s;
     const thighGeom = new THREE.BoxGeometry(legWidth, legSegmentHeight, legWidth);
-    const shinGeom = new THREE.BoxGeometry(legWidth, legSegmentHeight, legWidth);
+    const shinGeom = new THREE.BoxGeometry(legWidth * 0.88, legSegmentHeight * 0.85, legWidth * 0.88);
     const leftHip = new THREE.Object3D();
-    leftHip.position.set(-0.4, legSegmentHeight * 2, 0);
+    leftHip.position.set(-0.2 * s, legSegmentHeight * 2 - 0.12 * s, 0);
     const rightHip = new THREE.Object3D();
-    rightHip.position.set(0.4, legSegmentHeight * 2, 0);
-    const leftThigh = new THREE.Mesh(thighGeom, material);
+    rightHip.position.set(0.2 * s, legSegmentHeight * 2 - 0.12 * s, 0);
+    const leftThigh = new THREE.Mesh(thighGeom, pantsMaterial);
     leftThigh.position.y = -legSegmentHeight / 2;
     leftHip.add(leftThigh);
-    const rightThigh = new THREE.Mesh(thighGeom, material);
+    const rightThigh = new THREE.Mesh(thighGeom, pantsMaterial);
     rightThigh.position.y = -legSegmentHeight / 2;
     rightHip.add(rightThigh);
     const leftKnee = new THREE.Object3D();
@@ -1591,32 +2249,395 @@ function createCharacterModel(color) {
     const rightKnee = new THREE.Object3D();
     rightKnee.position.y = -legSegmentHeight;
     rightHip.add(rightKnee);
-    const leftShin = new THREE.Mesh(shinGeom, material);
+    const leftShin = new THREE.Mesh(shinGeom, pantsMaterial);
     leftShin.position.y = -legSegmentHeight / 2;
     leftKnee.add(leftShin);
-    const rightShin = new THREE.Mesh(shinGeom, material);
+    const rightShin = new THREE.Mesh(shinGeom, pantsMaterial);
     rightShin.position.y = -legSegmentHeight / 2;
     rightKnee.add(rightShin);
 
+    // Waist/Hips (integrated with torso)
+    const waistLength = 0.15 * s;
+    const waistGeom = new THREE.BoxGeometry(0.65 * s, waistLength, 0.35 * s);
+    const waist = new THREE.Mesh(waistGeom, pantsMaterial);
+    waist.position.y = torsoY - torsoHeight / 2 - waistLength / 2;
+
+    // Feet (Shoes)
+    const footLength = 0.3 * s;
+    const footWidth = 0.35 * s;
+    const footHeight = 0.12 * s;
+    const footGeom = new THREE.BoxGeometry(footWidth, footHeight, footLength);
+    
+    const leftFoot = new THREE.Mesh(footGeom, shoeMaterial);
+    leftFoot.position.set(0, -legSegmentHeight * 0.85 + footHeight / 2 - 0.06 * s, footLength / 10);
+    leftKnee.add(leftFoot);
+    
+    const rightFoot = new THREE.Mesh(footGeom, shoeMaterial);
+    rightFoot.position.set(0, -legSegmentHeight * 0.85 + footHeight / 2 - 0.06 * s, footLength / 10);
+    rightKnee.add(rightFoot);
+
     const characterModel = new THREE.Group();
-    characterModel.add(body, head, aimGroup, leftHip, rightHip);
+    const allParts = [body, head, leftEyeLine, rightEyeLine, aimGroup, leftHip, rightHip, waist, ...hairParts];
+    characterModel.add(...allParts);
+    
+    // Store hair parts for potential later updates
+    characterModel.userData.hairParts = hairParts;
     characterModel.userData.parts = {
         body: body,
         head: head,
         aimGroup: aimGroup,
+        gun: gun,
+        gunGrip: gunGrip,
+        leftArm: leftArm,
+        rightArm: rightArm,
+        leftElbow: leftElbow,
+        rightElbow: rightElbow,
+        leftForearm: leftForearm,
+        rightForearm: rightForearm,
+        leftHand: leftHand,
+        rightHand: rightHand,
         leftHip: leftHip,
         rightHip: rightHip,
         leftKnee: leftKnee,
-        rightKnee: rightKnee
+        rightKnee: rightKnee,
+        leftFoot: leftFoot,
+        rightFoot: rightFoot,
+        waist: waist,
+        hairParts: hairParts,
+        baseTorsoY: torsoY,
+        baseHeadY: headY,
+        baseAimY: aimGroup.position.y,
+        baseLeftArmPos: leftArm.position.clone(),
+        baseRightArmPos: rightArm.position.clone(),
+        baseLeftArmRot: leftArm.rotation.clone(),
+        baseRightArmRot: rightArm.rotation.clone(),
+        baseLeftElbowRot: leftElbow.rotation.clone(),
+        baseRightElbowRot: rightElbow.rotation.clone()
     };
+    characterModel.userData.footOffset = legSegmentHeight * 0.5;
     return characterModel;
 }
 
-function createAI(color) {
-    const aiObject = createCharacterModel(color);
+function applyGunStyle(gunMesh, weaponType) {
+    if (!gunMesh) return;
+    // Remove old attachments (magazine/scope etc.)
+    while (gunMesh.children.length > 0) {
+        const child = gunMesh.children[0];
+        gunMesh.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+    }
+
+    let length = 1.2;
+    let thickness = 0.12;
+    let color = 0x111111;
+    let shape = 'box';
+    switch (weaponType) {
+        case WEAPON_PISTOL: length = 0.6; thickness = 0.08; color = 0x222222; break;
+        case WEAPON_MG: length = 1.1; thickness = 0.10; color = 0x111111; break;
+        case WEAPON_RR: length = 2.6; thickness = 0.22; color = 0x6b4b1f; shape = 'cylinder'; break;
+        case WEAPON_SR: length = 1.65; thickness = 0.09; color = 0xcccccc; break;
+        case WEAPON_SG: length = 1.2; thickness = 0.12; color = 0x444444; break;
+    }
+    gunMesh.geometry.dispose();
+    if (shape === 'cylinder') {
+        const g = new THREE.CylinderGeometry(thickness / 2, thickness / 2, length, 16);
+        g.rotateX(Math.PI / 2); // align cylinder axis to Z
+        gunMesh.geometry = g;
+    } else {
+        gunMesh.geometry = new THREE.BoxGeometry(thickness, thickness, length);
+    }
+    gunMesh.material.color.setHex(color);
+    
+    // Add shiny effect for black weapons using MeshStandardMaterial
+    if (color === 0x222222 || color === 0x111111) {
+        gunMesh.material = new THREE.MeshStandardMaterial({ 
+            color: color,
+            metalness: 0.8,
+            roughness: 0.1
+        });
+    } else {
+        gunMesh.material = new THREE.MeshStandardMaterial({ 
+            color: color,
+            metalness: 0.3,
+            roughness: 0.5
+        });
+    }
+    gunMesh.userData.gunLength = length;
+    gunMesh.position.z = length / 2;
+
+    if (weaponType === WEAPON_MG) {
+        // Add a simple box magazine under the gun
+        const mag = new THREE.Mesh(
+            new THREE.BoxGeometry(thickness * 0.8, thickness * 2.2, thickness * 1.1),
+            new THREE.MeshLambertMaterial({ color: 0x222222 })
+        );
+        mag.position.set(0, -thickness * 1.5, length * 0.05);
+        gunMesh.add(mag);
+    } else if (weaponType === WEAPON_SR) {
+        // Add a cylindrical scope on top, near left supporting hand area
+        const scope = new THREE.Mesh(
+            new THREE.CylinderGeometry(thickness * 0.35, thickness * 0.35, thickness * 2.6, 12),
+            new THREE.MeshLambertMaterial({ color: 0xaaaaaa })
+        );
+        scope.rotation.x = Math.PI / 2; // along Z
+        scope.position.set(0, thickness * 0.9, length * 0.18);
+        gunMesh.add(scope);
+    }
+}
+
+function clampAngle(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function normalizeAngle(angle) {
+    let a = angle;
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+}
+
+function applyAimConstraints(parts, ownerYaw, targetWorldPos) {
+    if (!parts || !parts.aimGroup) return;
+    const ownerPos = new THREE.Vector3();
+    parts.aimGroup.getWorldPosition(ownerPos);
+    const dir = new THREE.Vector3().subVectors(targetWorldPos, ownerPos);
+    const flat = new THREE.Vector3(dir.x, 0, dir.z);
+    const desiredYaw = Math.atan2(flat.x, flat.z);
+    const desiredPitch = Math.atan2(dir.y, flat.length());
+    const relYaw = normalizeAngle(desiredYaw - ownerYaw);
+    const clampedRelYaw = clampAngle(relYaw, -Math.PI / 3, Math.PI / 3); // +/- 60 deg
+    // In this rig, +X pitch rotates the muzzle downward, so invert the sign.
+    // Downward allowance is wider to prevent aiming above target.
+    const clampedPitch = clampAngle(-desiredPitch, -0.6, 1.2);
+    parts.aimGroup.rotation.y = clampedRelYaw;
+    parts.aimGroup.rotation.x = clampedPitch;
+}
+
+function clampArmJoints(parts) {
+    if (!parts) return;
+    if (parts.leftArm) {
+        parts.leftArm.rotation.x = clampAngle(parts.leftArm.rotation.x, -0.6, 0.2);
+        parts.leftArm.rotation.y = clampAngle(parts.leftArm.rotation.y, -0.7, 0.7);
+    }
+    if (parts.rightArm) {
+        parts.rightArm.rotation.x = clampAngle(parts.rightArm.rotation.x, -0.8, 0.2);
+        parts.rightArm.rotation.y = clampAngle(parts.rightArm.rotation.y, -0.7, 0.7);
+    }
+    if (parts.leftElbow) {
+        parts.leftElbow.rotation.x = clampAngle(parts.leftElbow.rotation.x, -0.8, 0.1);
+    }
+    if (parts.rightElbow) {
+        parts.rightElbow.rotation.x = clampAngle(parts.rightElbow.rotation.x, 0, 1.0);
+        parts.rightElbow.rotation.z = clampAngle(parts.rightElbow.rotation.z || 0, -1.0, 1.0);
+    }
+}
+
+function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
+    if (!parts) return;
+    if (isCrouching) {
+        const hipBend = Math.PI / 4.2;
+        const kneeBend = Math.PI / 2.6;
+        // Bend legs toward the forward-hand direction (human-like crouch)
+        parts.leftHip.rotation.x = -hipBend;
+        parts.rightHip.rotation.x = -hipBend;
+        parts.leftKnee.rotation.x = kneeBend;
+        parts.rightKnee.rotation.x = kneeBend;
+        parts.body.rotation.x = -0.22;
+        parts.head.position.y = parts.baseHeadY - 0.2;
+    } else if (isMoving) {
+        const walkSpeed = 10;
+        const hipAmplitude = Math.PI / 4;
+        const kneeAmplitude = Math.PI / 3;
+        const swing = Math.sin(timeElapsed * walkSpeed) * hipAmplitude;
+        parts.leftHip.rotation.x = swing;
+        parts.rightHip.rotation.x = -swing;
+        parts.leftKnee.rotation.x = Math.max(0, (Math.cos(timeElapsed * walkSpeed) + 1) / 2 * kneeAmplitude);
+        parts.rightKnee.rotation.x = Math.max(0, (Math.cos(timeElapsed * walkSpeed + Math.PI) + 1) / 2 * kneeAmplitude);
+        parts.body.rotation.x = -0.15;
+        parts.head.position.y = parts.baseHeadY + Math.sin(timeElapsed * walkSpeed) * 0.05;
+    } else {
+        parts.leftHip.rotation.x = 0;
+        parts.rightHip.rotation.x = 0;
+        parts.leftKnee.rotation.x = 0;
+        parts.rightKnee.rotation.x = 0;
+        parts.body.rotation.x = 0;
+        parts.head.position.y = parts.baseHeadY;
+    }
+}
+
+function getGunMuzzleInfo(parts) {
+    if (!parts || !parts.gun || !parts.gun.geometry || !parts.gun.geometry.parameters) return null;
+    const gun = parts.gun;
+    const gunLength = gun.userData && gun.userData.gunLength ? gun.userData.gunLength : (gun.geometry.parameters.depth || gun.geometry.parameters.height || 0.5);
+    const localMuzzle = new THREE.Vector3(0, 0, gunLength / 2);
+    const worldMuzzle = gun.localToWorld(localMuzzle.clone());
+    const gunQuat = new THREE.Quaternion();
+    gun.getWorldQuaternion(gunQuat);
+    const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(gunQuat).normalize();
+    return { position: worldMuzzle, direction: dir };
+}
+
+function alignGunGripToHands(parts, alpha = 1.0) {
+    if (!parts || !parts.leftHand || !parts.rightHand || !parts.gunGrip || !parts.aimGroup) return;
+    const leftWorld = new THREE.Vector3();
+    const rightWorld = new THREE.Vector3();
+    parts.leftHand.getWorldPosition(leftWorld);
+    parts.rightHand.getWorldPosition(rightWorld);
+    const mid = leftWorld.add(rightWorld).multiplyScalar(0.5);
+    const localMid = parts.aimGroup.worldToLocal(mid);
+    if (alpha >= 1.0) {
+        parts.gunGrip.position.copy(localMid);
+    } else {
+        parts.gunGrip.position.lerp(localMid, alpha);
+    }
+}
+
+function getPlayerNeckPos() {
+    const b = getPlayerCombatBounds();
+    const p = player.position.clone();
+    p.y = b.topY - b.height * 0.22;
+    return p;
+}
+
+function getPlayerBodyPos() {
+    const b = getPlayerCombatBounds();
+    const p = player.position.clone();
+    p.y = b.topY - b.height * 0.62;
+    return p;
+}
+
+function getPlayerFootPos() {
+    const b = getPlayerCombatBounds();
+    const p = player.position.clone();
+    p.y = b.bottomY + 0.1;
+    return p;
+}
+
+function getPlayerUpperTorsoPos() {
+    const b = getPlayerCombatBounds();
+    const p = player.position.clone();
+    p.y = b.topY - b.height * 0.45;
+    return p;
+}
+
+function getPlayerHeadPos() {
+    const b = getPlayerCombatBounds();
+    const p = player.position.clone();
+    // Slightly below top of hitbox to avoid overshooting above the head.
+    p.y = b.topY - b.height * 0.16;
+    return p;
+}
+
+function getPlayerCombatBounds() {
+    // Use the actual gameplay body range (top = player.position.y, bottom = top - playerTargetHeight)
+    // and add a tiny margin to reduce tunneling near edges.
+    const topY = player.position.y + 0.06;
+    let bottomY = player.position.y - playerTargetHeight - 0.06;
+    if (bottomY < -FLOOR_HEIGHT) bottomY = -FLOOR_HEIGHT;
+    const height = topY - bottomY;
+    return { topY, bottomY, height };
+}
+
+function getAIUpperTorsoPos(targetAI) {
+    const p = targetAI.position.clone();
+    const h = targetAI.isCrouching ? BODY_HEIGHT * 0.45 : BODY_HEIGHT * 0.58;
+    p.y += h;
+    return p;
+}
+
+function getAIHeadPos(targetAI) {
+    return targetAI.children[1].getWorldPosition(new THREE.Vector3());
+}
+
+function getAILowerTorsoPos(targetAI) {
+    const p = targetAI.position.clone();
+    const h = targetAI.isCrouching ? BODY_HEIGHT * 0.3 : BODY_HEIGHT * 0.42;
+    p.y += h;
+    return p;
+}
+
+function applyWeaponPose(parts, weaponType) {
+    if (!parts || !parts.leftArm || !parts.rightArm || !parts.gun || !parts.aimGroup) return;
+    // Reset to defaults
+    parts.aimGroup.position.y = parts.baseAimY;
+    parts.leftArm.position.copy(parts.baseLeftArmPos || new THREE.Vector3(-0.28, 0, 0.2));
+    parts.rightArm.position.copy(parts.baseRightArmPos || new THREE.Vector3(0.28, 0, 0.7));
+    if (parts.baseLeftArmRot) parts.leftArm.rotation.copy(parts.baseLeftArmRot);
+    else parts.leftArm.rotation.set(0, Math.PI / 6, 0);
+    if (parts.baseRightArmRot) parts.rightArm.rotation.copy(parts.baseRightArmRot);
+    else parts.rightArm.rotation.set(0, -Math.PI / 6, 0);
+    if (parts.leftElbow) {
+        if (parts.baseLeftElbowRot) parts.leftElbow.rotation.copy(parts.baseLeftElbowRot);
+        else parts.leftElbow.rotation.set(0, 0, 0);
+    }
+    if (parts.rightElbow) {
+        if (parts.baseRightElbowRot) parts.rightElbow.rotation.copy(parts.baseRightElbowRot);
+        else parts.rightElbow.rotation.set(0, 0, 0);
+    }
+    parts.gun.position.y = 0;
+    parts.gun.position.z = parts.gun.geometry.parameters.depth / 2;
+    if (parts.gunGrip) {
+        parts.gunGrip.position.set(0, 0, 0);
+    }
+
+    if (weaponType === WEAPON_PISTOL) {
+        // JSON slot: pistol
+        parts.aimGroup.position.y = parts.baseAimY;
+        parts.leftArm.position.set(-0.45, 0.3132, 0.0);
+        parts.rightArm.position.set(0.45, 0.3132, 0.0);
+        // Bring both hands more tightly together for pistol grip
+        parts.leftArm.rotation.set(-0.06, 0.44, 0.0021478930549691387);
+        parts.rightArm.rotation.set(-0.05, -0.44, -0.003943059002281813);
+        if (parts.leftElbow) parts.leftElbow.rotation.set(0.06, 0.0020761553815649442, 0.05233736454354215);
+        if (parts.rightElbow) parts.rightElbow.rotation.set(-0.02, 0.0, -0.017453292519943295);
+        // Keep pistol close to joined hands (grip centered).
+        parts.gun.position.set(0.0, 0.18, 0.36);
+        parts.gun.rotation.set(0.0, 0.0, 0.0);
+    } else if (weaponType === WEAPON_SR) {
+        // JSON slot: sniper
+        parts.aimGroup.position.y = parts.baseAimY;
+        parts.leftArm.position.set(-0.45, 0.3132, 0.0);
+        parts.rightArm.position.set(0.45, 0.3132, 0.0);
+        parts.leftArm.rotation.set(0.6618416930961246, -0.3597994143825173, 2.0595783476597678);
+        parts.rightArm.rotation.set(0.24274440027514796, -0.5401874416309049, 0.024265044376310912);
+        if (parts.leftElbow) parts.leftElbow.rotation.set(1.753517159651292, 0.2856199806570641, -0.4952400535591467);
+        if (parts.rightElbow) parts.rightElbow.rotation.set(-0.23748038772965996, -0.09328549730483378, 0.6873193048891241);
+        // Pull sniper back toward shoulder/cheek.
+        parts.gun.position.set(-0.12, 0.22, 0.44);
+        parts.gun.rotation.set(0.0, 0.0, 0.0);
+    } else if (weaponType === WEAPON_RR) {
+        // JSON slot: rocket
+        parts.aimGroup.position.y = parts.baseAimY;
+        parts.leftArm.position.set(-0.45, 0.3132, 0.0);
+        parts.rightArm.position.set(0.45, 0.3132, 0.0);
+        parts.leftArm.rotation.set(0.23506191003562008, -1.2406321520450616, 0.07328647962446797);
+        parts.rightArm.rotation.set(0.27004295572984904, -0.27777150302432024, -0.23935315585356648);
+        if (parts.leftElbow) parts.leftElbow.rotation.set(-2.951909014214923, 0.9012344301742208, 2.6785501380109666);
+        if (parts.rightElbow) parts.rightElbow.rotation.set(-0.0887078442944804, -0.8044137392457578, 2.695042877288731);
+        // Rocket sits around shoulder, not floating in front.
+        parts.gun.position.set(-0.22, 0.24, 0.34);
+        parts.gun.rotation.set(0.0, 0.0, 0.0);
+    } else if (weaponType === WEAPON_SG || weaponType === WEAPON_MG) {
+        // JSON slot: rifle (used for MG/SG)
+        parts.aimGroup.position.y = parts.baseAimY;
+        parts.leftArm.position.set(-0.45, 0.22, 0.0);
+        parts.rightArm.position.set(0.45, 0.3132, 0.0);
+        parts.leftArm.rotation.set(1.0661433898131165, -0.6857123545620026, 0.9750821801277433);
+        parts.rightArm.rotation.set(0.3611548453545697, -0.521485165467918, -0.09787351043009526);
+        if (parts.leftElbow) parts.leftElbow.rotation.set(-2.9325187133696122, 0.9525931111876489, 3.0153732832397564);
+        if (parts.rightElbow) parts.rightElbow.rotation.set(-0.30553800194860886, -0.2667850827551789, 1.604154961353316);
+        // Rifle/MG/SG grip near center between hands.
+        parts.gun.position.set(-0.16, 0.18, 0.44);
+        parts.gun.rotation.set(0.0, 0.0, 0.06981317007977318);
+    }
+}
+
+function createAI(color, customization = null) {
+    const aiObject = createCharacterModel(color, customization);
 
     // AI-specific properties
-    aiObject.position.y = -FLOOR_HEIGHT;
+    aiObject.position.y = -FLOOR_HEIGHT + 0.2; // Raise character more to prevent shoes sinking
     aiObject.lastHiddenTime = 0;
     aiObject.lastAttackTime = 0;
     aiObject.currentAttackTime = 0;
@@ -1636,6 +2657,28 @@ function createAI(color) {
     aiObject.flankAggression = Math.random();
     aiObject.lastFlankTime = 0;
     aiObject.lastPosition = new THREE.Vector3(); // <= これを追加
+    aiObject.lastUnderFireTime = -999;
+    aiObject.lastSeenEnemyTime = -999;
+    aiObject.lastKnownEnemyPos = null;
+    aiObject.lastKnownThreatPos = null;
+    aiObject.isElevating = false;
+    aiObject.userData.rooftopIntent = false;
+    aiObject.userData.onRooftop = false;
+    aiObject.userData.rooftopSensor = null;
+    aiObject.userData.rooftopObstacle = null;
+    aiObject.userData.rooftopLadderPos = null;
+    aiObject.userData.rooftopTargetY = -FLOOR_HEIGHT;
+    aiObject.userData.elevatingDirection = 0;
+    aiObject.userData.nextRooftopDecisionAt = 0;
+    aiObject.userData.rooftopDecisionMade = false;
+    aiObject.userData.rooftopStateSince = 0;
+    aiObject.userData.rooftopPhase = 'none';
+    aiObject.userData.stallStartTime = 0;
+    aiObject.userData.searchPulseAt = 0;
+    aiObject.userData.nextPerceptionTime = 0;
+    aiObject.userData.cachedVisibleOpponentInfo = null;
+    aiObject.userData.cachedIsAISeen = false;
+    aiObject.userData.groundIdleSince = 0;
 
 
 
@@ -1662,6 +2705,74 @@ function isVisibleToPlayer(ai) {
     return true;
 }
 
+function getOpponentTargetsForAI(ai) {
+    const targets = [];
+    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    if (isTeamModeOrTeamArcade) {
+        if (ai.team === 'player') {
+            for (const other of ais) {
+                if (other !== ai && other.team === 'enemy' && other.hp > 0) targets.push(other);
+            }
+        } else if (ai.team === 'enemy') {
+            if (playerHP > 0) targets.push(player);
+            for (const other of ais) {
+                if (other !== ai && other.team === 'player' && other.hp > 0) targets.push(other);
+            }
+        }
+        return targets;
+    }
+    if (gameSettings.gameMode === 'ffa') {
+        if (playerHP > 0) targets.push(player);
+        for (const other of ais) {
+            if (other !== ai && other.hp > 0) targets.push(other);
+        }
+        return targets;
+    }
+    // 非チームモード(battle等)ではプレイヤーだけでなく近くのAIも標的候補に含める
+    if (playerHP > 0) targets.push(player);
+    for (const other of ais) {
+        if (other !== ai && other.hp > 0) targets.push(other);
+    }
+    return targets;
+}
+
+function getClosestOpponentPosition(ai) {
+    const opponents = getOpponentTargetsForAI(ai);
+    let bestPos = null;
+    let bestDist = Infinity;
+    for (const t of opponents) {
+        const tPos = t === player ? player.position : t.position;
+        const d = ai.position.distanceTo(tPos);
+        if (d < bestDist) {
+            bestDist = d;
+            bestPos = tPos.clone();
+        }
+    }
+    return bestPos;
+}
+
+function canAISeeAnyOpponent(ai) {
+    const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
+    const opponents = getOpponentTargetsForAI(ai);
+    for (const t of opponents) {
+        if (t === player) {
+            const pHead = getPlayerHeadPos();
+            const pUpper = getPlayerUpperTorsoPos();
+            const pBody = getPlayerBodyPos();
+            if (checkLineOfSight(aiHeadPos, pHead, obstacles) || checkLineOfSight(aiHeadPos, pUpper, obstacles) || checkLineOfSight(aiHeadPos, pBody, obstacles)) {
+                return true;
+            }
+        } else {
+            const h = getAIUpperTorsoPos(t);
+            const b = getAILowerTorsoPos(t);
+            if (checkLineOfSight(aiHeadPos, h, obstacles) || checkLineOfSight(aiHeadPos, b, obstacles)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 function checkLineOfSight(startPosition, endPosition, objectsToAvoid) {
     const direction = new THREE.Vector3().subVectors(endPosition, startPosition).normalize();
     const distance = startPosition.distanceTo(endPosition);
@@ -1669,6 +2780,22 @@ function checkLineOfSight(startPosition, endPosition, objectsToAvoid) {
     raycaster.far = distance;
     const intersects = raycaster.intersectObjects(objectsToAvoid, true);
     return intersects.length === 0;
+}
+
+function resolveCustomMapSelection() {
+    const allCustomMaps = JSON.parse(localStorage.getItem('allCustomMaps') || '{}');
+    const names = Object.keys(allCustomMaps);
+    if (names.length === 0) return { allCustomMaps, mapName: null, mapData: null };
+
+    let mapName = gameSettings.customMapName;
+    const selector = document.getElementById('custom-map-selector');
+    if ((!mapName || !allCustomMaps[mapName]) && selector && selector.value && allCustomMaps[selector.value]) {
+        mapName = selector.value;
+    }
+    if (!mapName || !allCustomMaps[mapName]) {
+        mapName = names[0];
+    }
+    return { allCustomMaps, mapName, mapData: allCustomMaps[mapName] || null };
 }
 
 function findNearestLadder(ai, playerPosition) {
@@ -1693,6 +2820,106 @@ function findNearestLadder(ai, playerPosition) {
     return nearestLadder;
 }
 
+function getAIRooftopClimbChance(ai) {
+    // Specified probabilities when holding a non-shotgun weapon:
+    // Sniper: 50%, Machinegun: 20%, RocketLauncher: 20%, Pistol: 10%
+    // Shotgun and other weapons: 0%
+    if (!ai || !ai.currentWeapon) return 0.0;
+    switch (ai.currentWeapon) {
+        case WEAPON_SR: return 0.5;
+        case WEAPON_MG: return 0.2;
+        case WEAPON_RR: return 0.2;
+        case WEAPON_PISTOL: return 0.1;
+        case WEAPON_SG: return 0.0;
+        default: return 0.0;
+    }
+}
+
+function isAIWeaponOutOfAmmo(ai) {
+    if (!ai) return false;
+    switch (ai.currentWeapon) {
+        case WEAPON_MG: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MG) && ai.ammoMG <= 0;
+        case WEAPON_RR: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR) && ai.ammoRR <= 0;
+        case WEAPON_SR: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR) && ai.ammoSR <= 0;
+        case WEAPON_SG: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG) && ai.ammoSG <= 0;
+        default: return false;
+    }
+}
+
+function isEnemyRooftopSlotBusy(requesterAI) {
+    for (const other of ais) {
+        if (!other || other === requesterAI || other.hp <= 0) continue;
+        if (other.team !== 'enemy') continue;
+        if (
+            other.userData?.rooftopIntent ||
+            other.userData?.onRooftop ||
+            other.state === 'MOVING_TO_LADDER' ||
+            other.state === 'CLIMBING' ||
+            other.state === 'ROOFTOP_COMBAT' ||
+            other.state === 'DESCENDING'
+        ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function chooseLadderForAI(ai) {
+    if (!ladderSwitches || ladderSwitches.length === 0) return null;
+    const targetPos = getClosestOpponentPosition(ai) || player.position.clone();
+    let best = null;
+    let bestScore = Infinity;
+    for (const sensor of ladderSwitches) {
+        const ladderPos = sensor.userData?.ladderPos;
+        const obstacle = sensor.userData?.obstacle;
+        if (!ladderPos || !obstacle) continue;
+        const dAI = ai.position.distanceTo(ladderPos);
+        const dEnemy = targetPos.distanceTo(obstacle.position);
+        const score = dAI * 0.65 + dEnemy * 0.35;
+        if (score < bestScore) {
+            bestScore = score;
+            best = sensor;
+        }
+    }
+    return best;
+}
+
+function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate) {
+    if (!ai || ai.hp <= 0 || !ai.userData) return false;
+    if (ladderSwitches.length === 0) return false;
+    if (isFollowLockedTeammate) return false;
+    if (ai.userData.onRooftop || ai.userData.rooftopIntent || ai.isElevating) return false;
+    if ((ai.userData.rooftopPhase || 'none') !== 'none') return false;
+    if ((ai.userData.nextRooftopDecisionAt || 0) > timeElapsed) return false;
+    ai.userData.nextRooftopDecisionAt = timeElapsed + 0.7 + Math.random() * 0.9;
+
+    const chance = getAIRooftopClimbChance(ai);
+    if (chance <= 0 || Math.random() >= chance) return false;
+
+    if (ai.team === 'enemy' && isEnemyRooftopSlotBusy(ai)) return false;
+
+    const sensor = chooseLadderForAI(ai);
+    if (!sensor) return false;
+    const ladderPos = sensor.userData?.ladderPos;
+    const obstacle = sensor.userData?.obstacle;
+    if (!ladderPos || !obstacle) return false;
+
+    ai.userData.rooftopIntent = true;
+    ai.userData.rooftopSensor = sensor;
+    ai.userData.rooftopObstacle = obstacle;
+    // Move to the sensor area (outside wall), then snap to ladder line when climbing starts.
+    ai.userData.rooftopLadderPos = sensor.position.clone();
+    ai.userData.rooftopTargetY = obstacle.position.y + obstacle.geometry.parameters.height / 2;
+    ai.userData.rooftopDecisionMade = false;
+    ai.userData.nextRooftopDecisionAt = timeElapsed + 4.0;
+    ai.userData.rooftopPhase = 'to_ladder';
+    ai.userData.rooftopStateSince = timeElapsed;
+    ai.state = 'MOVING';
+    ai.targetPosition.copy(ai.userData.rooftopLadderPos);
+    ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
+    return true;
+}
+
 function isBehindObstacle(ai) {
     const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
     const playerPos = player.position.clone();
@@ -1714,7 +2941,7 @@ function isBehindObstacle(ai) {
 }
 
 function findEvasionSpot(ai) {
-    const playerPos = player.position.clone();
+    const playerPos = getClosestOpponentPosition(ai) || player.position.clone();
     let bestObstacle = null;
     if (ai.currentObstacle) {
         bestObstacle = ai.currentObstacle.parent;
@@ -1740,6 +2967,72 @@ function findEvasionSpot(ai) {
         return true;
     }
     return false;
+}
+
+function getVisibleOpponentInfo(ai) {
+    const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
+    const opponents = getOpponentTargetsForAI(ai);
+    let best = null;
+    for (const t of opponents) {
+        const dist = ai.position.distanceTo(t === player ? player.position : t.position);
+        if (t === player) {
+            const pHead = getPlayerHeadPos();
+            const pUpper = getPlayerUpperTorsoPos();
+            const pBody = getPlayerBodyPos();
+            let targetPos = null;
+            if (checkLineOfSight(aiHeadPos, pHead, obstacles)) targetPos = pHead;
+            else if (checkLineOfSight(aiHeadPos, pUpper, obstacles)) targetPos = pUpper;
+            else if (checkLineOfSight(aiHeadPos, pBody, obstacles)) targetPos = pBody;
+            if (targetPos && (!best || dist < best.distance)) best = { target: t, targetPos, distance: dist };
+        } else {
+            const tUpper = getAIUpperTorsoPos(t);
+            const tLower = getAILowerTorsoPos(t);
+            let targetPos = null;
+            if (checkLineOfSight(aiHeadPos, tUpper, obstacles)) targetPos = tUpper;
+            else if (checkLineOfSight(aiHeadPos, tLower, obstacles)) targetPos = tLower;
+            if (targetPos && (!best || dist < best.distance)) best = { target: t, targetPos, distance: dist };
+        }
+    }
+    return best;
+}
+
+function findSmartCoverPosition(ai, threatPos) {
+    if (!threatPos) return null;
+    let best = null;
+    let bestScore = Infinity;
+    const aiPos = ai.position.clone();
+    for (const obs of obstacles) {
+        if (!obs.geometry || !obs.geometry.parameters || obs.userData.isRooftop) continue;
+        const box = new THREE.Box3().setFromObject(obs);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const radius = Math.max(size.x, size.z) * 0.6 + 1.0;
+        const away = center.clone().sub(threatPos).setY(0);
+        if (away.lengthSq() < 1e-6) continue;
+        away.normalize();
+        const candidate = center.clone().add(away.multiplyScalar(radius));
+        candidate.y = getGroundSurfaceY(candidate);
+        const d = candidate.distanceTo(aiPos);
+        if (d > 22) continue;
+
+        const candidateEye = candidate.clone().add(new THREE.Vector3(0, 1.2, 0));
+        const threatEye = threatPos.clone().add(new THREE.Vector3(0, 1.2, 0));
+        const blocked = !checkLineOfSight(threatEye, candidateEye, obstacles);
+        if (!blocked) continue;
+
+        const oldPos = ai.position.clone();
+        ai.position.copy(candidate);
+        const collides = checkCollision(ai, obstacles, obs);
+        ai.position.copy(oldPos);
+        if (collides) continue;
+
+        const score = d + center.distanceTo(aiPos) * 0.35;
+        if (score < bestScore) {
+            bestScore = score;
+            best = candidate;
+        }
+    }
+    return best;
 }
 
 function findNewHidingSpot(ai) {
@@ -1803,35 +3096,79 @@ function findObstacleAvoidanceSpot(ai, currentMoveDirection, originalTargetPosit
     const currentAIPos = ai.position.clone();
     const perpendicularDirectionLeft = new THREE.Vector3(-currentMoveDirection.z, 0, currentMoveDirection.x).normalize();
     const perpendicularDirectionRight = new THREE.Vector3(currentMoveDirection.z, 0, -currentMoveDirection.x).normalize();
-    const evasionDirection = Math.random() > 0.5 ? perpendicularDirectionLeft : perpendicularDirectionRight;
-    const evasionTarget = currentAIPos.clone().add(evasionDirection.multiplyScalar(AVOIDANCE_RAY_DISTANCE * 2));
-    // evasionTarget.lerp(originalTargetPosition, 0.3); // この行を削除またはコメントアウト
-    evasionTarget.y = 0;
+    const now = clock.getElapsedTime();
+    const preferredSide = (ai.userData && ai.userData.lastAvoidSide) ? -ai.userData.lastAvoidSide : (Math.random() > 0.5 ? 1 : -1);
+    const sides = preferredSide > 0
+        ? [perpendicularDirectionLeft, perpendicularDirectionRight]
+        : [perpendicularDirectionRight, perpendicularDirectionLeft];
+    const sideSigns = preferredSide > 0 ? [1, -1] : [-1, 1];
+    const sideDistance = AVOIDANCE_RAY_DISTANCE * 2.2;
+    const forwardDistance = AVOIDANCE_RAY_DISTANCE * 1.4;
+    const aiHeadPos = currentAIPos.clone().add(new THREE.Vector3(0, 1.0, 0));
+    let bestCandidate = null;
+    let bestScore = Infinity;
+
+    for (let i = 0; i < sides.length; i++) {
+        const sideDir = sides[i];
+        const candidate = currentAIPos.clone()
+            .add(sideDir.clone().multiplyScalar(sideDistance))
+            .add(currentMoveDirection.clone().multiplyScalar(forwardDistance));
+        candidate.y = 0;
+
+        const candidateHeadPos = candidate.clone().add(new THREE.Vector3(0, 1.0, 0));
+        if (!checkLineOfSight(aiHeadPos, candidateHeadPos, obstacles)) continue;
+
+        const score = candidate.distanceTo(originalTargetPosition);
+        if (score < bestScore) {
+            bestScore = score;
+            bestCandidate = { pos: candidate, side: sideSigns[i] };
+        }
+    }
+
+    if (!bestCandidate) {
+        const fallbackSide = sides[0];
+        bestCandidate = {
+            pos: currentAIPos.clone().add(fallbackSide.multiplyScalar(sideDistance)),
+            side: sideSigns[0]
+        };
+        bestCandidate.pos.y = 0;
+    }
+
     ai.avoiding = true;
-    ai.targetPosition.copy(evasionTarget);
+    ai.targetPosition.copy(bestCandidate.pos);
+    ai.userData.lastAvoidSide = bestCandidate.side;
+    ai.userData.avoidUntil = now + 0.45;
 }
 
 function findAndTargetWeapon(ai) {
-    // 味方AIはより積極的に武器を拾いに行く
-    const isTeammate = gameSettings.gameMode === 'team' && ai.team === 'player';
-    const needsUpgrade = isTeammate 
-        ? (ai.currentWeapon === WEAPON_PISTOL || (ai.currentWeapon === WEAPON_MG && ai.ammoMG < 30) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 3) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 3))
-        : (ai.currentWeapon === WEAPON_PISTOL || (ai.currentWeapon === WEAPON_MG && ai.ammoMG < 10) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 1) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 1));
-    if (!needsUpgrade || weaponPickups.length === 0 || ai.targetWeaponPickup) {
+    // 全AIが武器をより積極的に拾う
+    const isTeammate = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player';
+    const isFollowTeammate = isTeammate && isFollowingPlayerMode && ai.userData && ai.userData.followActive !== false;
+    const lowAmmo = isTeammate
+        ? ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 30) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 3) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 3) || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 4))
+        : ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 12) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 2) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 2) || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 2));
+    const aggressivePickup = ai.currentWeapon === WEAPON_PISTOL || lowAmmo || Math.random() < 0.25;
+    const needsUpgrade = weaponPickups.length > 0 && (isFollowTeammate || aggressivePickup);
+    if (!needsUpgrade || ai.targetWeaponPickup) {
         return false;
     }
-    let bestPickup = null;
-    let minDistance = Infinity;
+    let bestVisiblePickup = null;
+    let minVisibleDistance = Infinity;
+    let bestAnyPickup = null;
+    let minAnyDistance = Infinity;
+    const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
     for (const pickup of weaponPickups) {
-        const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
-        if (checkLineOfSight(aiHeadPos, pickup.position, obstacles)) {
-            const distance = ai.position.distanceTo(pickup.position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                bestPickup = pickup;
-            }
+        const distance = ai.position.distanceTo(pickup.position);
+        if (distance < minAnyDistance) {
+            minAnyDistance = distance;
+            bestAnyPickup = pickup;
+        }
+        if (checkLineOfSight(aiHeadPos, pickup.position, obstacles) && distance < minVisibleDistance) {
+            minVisibleDistance = distance;
+            bestVisiblePickup = pickup;
         }
     }
+    const bestPickup = bestVisiblePickup || bestAnyPickup;
     if (bestPickup) {
         ai.targetWeaponPickup = bestPickup;
         ai.targetPosition.copy(bestPickup.position);
@@ -1844,8 +3181,12 @@ function findAndTargetWeapon(ai) {
 const projectiles = [];
 const debris = [];
 const projectileSpeed = 50;
+const MAX_PROJECTILES = 180;
 
 function createProjectile(startPos, direction, color, size = 0.1, isRocket = false, source = 'unknown', speed = projectileSpeed, isSniper = false, weaponType = null, shooter = null) {
+    if (projectiles.length >= MAX_PROJECTILES) {
+        return;
+    }
     const finalSpeed = speed * (gameSettings.projectileSpeedMultiplier || 1.0);
     let bulletGeometry;
     const bulletLength = size * 5;
@@ -1997,10 +3338,51 @@ function createRocketTrail(position) {
     }).start();
 }
 
+function getPlayerSafeFireData(direction) {
+    const dir = direction.clone().normalize();
+    const eyePos = new THREE.Vector3();
+    camera.getWorldPosition(eyePos);
+
+    raycaster.set(eyePos, dir);
+    raycaster.far = 1.2;
+    const wallHits = raycaster.intersectObjects(obstacles, true);
+
+    const minClearance = 0.18;
+    if (wallHits.length > 0 && wallHits[0].distance < minClearance) {
+        const impact = wallHits[0].point.clone();
+        return {
+            blocked: true,
+            startPosition: eyePos.clone().add(dir.clone().multiplyScalar(0.02)),
+            muzzlePosition: impact.clone(),
+            impactPoint: impact
+        };
+    }
+
+    const maxForwardOffset = 0.55;
+    const safeForwardOffset = wallHits.length > 0
+        ? Math.max(0.08, Math.min(maxForwardOffset, wallHits[0].distance - 0.08))
+        : maxForwardOffset;
+
+    const startPosition = eyePos.clone().add(dir.clone().multiplyScalar(safeForwardOffset));
+    const muzzlePosition = startPosition.clone().add(dir.clone().multiplyScalar(0.18));
+    return { blocked: false, startPosition, muzzlePosition, impactPoint: null };
+}
+
+function getAISafeFireData(startPos, direction) {
+    const dir = direction.clone().normalize();
+    raycaster.set(startPos, dir);
+    raycaster.far = 0.35;
+    const wallHits = raycaster.intersectObjects(obstacles, true);
+    if (wallHits.length > 0) {
+        return { blocked: true, impactPoint: wallHits[0].point.clone() };
+    }
+    return { blocked: false, impactPoint: null };
+}
+
 function handleFirePress() {
     if (!isGameRunning || playerHP <= 0) return;
     if (currentWeapon === WEAPON_SR) {
-        if (ammoSR > 0 && !isScoping) {
+        if ((ammoSR > 0 || isInfiniteDefaultWeaponActive(WEAPON_SR)) && !isScoping) {
             const timeSinceLastFire = clock.getElapsedTime() - lastFireTime;
             if (timeSinceLastFire > FIRE_RATE_SR) {
                 isScoping = true;
@@ -2024,6 +3406,8 @@ function handleFirePress() {
 function cancelScope() {
 
     isScoping = false;
+    sniperAutoAimLockedAI = null;
+    sniperAutoAimSmoothedPoint = null;
     scopeOverlay.style.display = 'none';
     cancelScopeButton.style.display = 'none';
     document.getElementById('crosshair').style.display = 'block';
@@ -2036,19 +3420,21 @@ function handleFireRelease() {
     if (isScoping) {
         document.getElementById('night-vision-overlay').style.display = 'none';
         const timeSinceLastFire = clock.getElapsedTime() - lastFireTime;
-        if (ammoSR > 0 && timeSinceLastFire > FIRE_RATE_SR) {
+        if ((ammoSR > 0 || isInfiniteDefaultWeaponActive(WEAPON_SR)) && timeSinceLastFire > FIRE_RATE_SR) {
             if (srGunSound) srGunSound.cloneNode(true).play();
-            const startPosition = new THREE.Vector3();
-            player.getWorldPosition(startPosition);
             let direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
-            const playerMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0));
-            createMuzzleFlash(playerMuzzlePosition, 120, 2.7, 120, 0xffff00);
-            createProjectile(startPosition, direction, 0xffff00, 0.1, false, 'player', projectileSpeed * 2, true);
+            const safeFire = getPlayerSafeFireData(direction);
+            createMuzzleFlash(safeFire.muzzlePosition, 120, 2.7, 120, 0xffff00);
+            if (safeFire.blocked) {
+                createSmokeEffect(safeFire.impactPoint || safeFire.muzzlePosition);
+            } else {
+                createProjectile(safeFire.startPosition, direction, 0xffff00, 0.1, false, 'player', projectileSpeed * 2, true);
+            }
             lastFireTime = clock.getElapsedTime();
-            if (--ammoSR === 0) {
+            if (!isInfiniteDefaultWeaponActive(WEAPON_SR) && --ammoSR === 0) {
                 setTimeout(() => {
-                    currentWeapon = WEAPON_PISTOL;
+                    switchPlayerToFallbackWeapon();
                     cancelScope();
                 }, 100);
             }
@@ -2064,48 +3450,48 @@ function handleFireRelease() {
 
 function shoot() {
     if (!isGameRunning || playerHP <= 0) return;
+    const now = clock.getElapsedTime();
+    if (playerMGReloadUntil > 0 && now >= playerMGReloadUntil) {
+        playerMGReloadUntil = 0;
+        ammoMG = MAX_AMMO_MG;
+        hideReloadingText();
+    }
     let canFire = false;
     let projectileColor = 0xffff00;
     let projectileSize = 0.1;
     let fireRate = FIRE_RATE_PISTOL;
     switch (currentWeapon) {
         case WEAPON_PISTOL: canFire = true; fireRate = FIRE_RATE_PISTOL; break;
-        case WEAPON_MG: if (ammoMG > 0) { canFire = true; projectileColor = 0xffff00; fireRate = FIRE_RATE_MG; } break;
-        case WEAPON_RR: if (ammoRR > 0) { canFire = true; projectileColor = 0xff8c00; projectileSize = 0.5; fireRate = FIRE_RATE_RR; } break;
-        case WEAPON_SG: if (ammoSG > 0) { canFire = true; projectileColor = 0xffa500; projectileSize = 0.05; fireRate = FIRE_RATE_SG; } break;
+        case WEAPON_MG:
+            if (gameSettings.defaultWeapon === WEAPON_MG && now < playerMGReloadUntil) {
+                canFire = false;
+                break;
+            }
+            if (ammoMG > 0 || isInfiniteDefaultWeaponActive(WEAPON_MG)) {
+                canFire = true;
+                projectileColor = 0xffff00;
+                fireRate = FIRE_RATE_MG;
+            }
+            break;
+        case WEAPON_RR: if (ammoRR > 0 || isInfiniteDefaultWeaponActive(WEAPON_RR)) { canFire = true; projectileColor = 0xff8c00; projectileSize = 0.5; fireRate = FIRE_RATE_RR; } break;
+        case WEAPON_SG: if (ammoSG > 0 || isInfiniteDefaultWeaponActive(WEAPON_SG)) { canFire = true; projectileColor = 0xffa500; projectileSize = 0.05; fireRate = FIRE_RATE_SG; } break;
     }
-    const timeSinceLastFire = clock.getElapsedTime() - lastFireTime;
+    const timeSinceLastFire = now - lastFireTime;
     if (canFire && timeSinceLastFire > fireRate) {
         let soundToPlay = playerGunSound;
         if (currentWeapon === WEAPON_MG) soundToPlay = mgGunSound;
         else if (currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
         else if (currentWeapon === WEAPON_SG) soundToPlay = playerSgSound;
         if (soundToPlay) soundToPlay.cloneNode(true).play();
-        const startPosition = new THREE.Vector3();
-        player.getWorldPosition(startPosition);
         let baseDirection = new THREE.Vector3();
         camera.getWorldDirection(baseDirection);
-        const playerMuzzlePosition = startPosition.clone().add(baseDirection.clone().multiplyScalar(1.0));
-        createMuzzleFlash(playerMuzzlePosition, 100, 2.2, 100, 0xffff00);
-        if (gameSettings.autoAim) {
-            let bestTarget = null;
-            let minAngle = AUTO_AIM_ANGLE;
-            for (const currentAi of ais) {
-                const aiPosition = currentAi.children[1].getWorldPosition(new THREE.Vector3());
-                if (startPosition.distanceTo(aiPosition) < AUTO_AIM_RANGE) {
-                    const directionToAI = new THREE.Vector3().subVectors(aiPosition, startPosition).normalize();
-                    const angle = baseDirection.angleTo(directionToAI);
-                    if (angle < minAngle) {
-                        minAngle = angle;
-                        bestTarget = directionToAI;
-                    }
-                }
-            }
-            if (bestTarget) {
-                baseDirection.lerp(bestTarget, AUTO_AIM_STRENGTH).normalize();
-            }
-        }
-        if (currentWeapon === WEAPON_SG) {
+        const safeFire = getPlayerSafeFireData(baseDirection);
+        createMuzzleFlash(safeFire.muzzlePosition, 100, 2.2, 100, 0xffff00);
+        // Legacy global auto-aim removed.
+        // Auto-aim now works only for scoped sniper by moving the scope in animate().
+        if (safeFire.blocked) {
+            createSmokeEffect(safeFire.impactPoint || safeFire.muzzlePosition);
+        } else if (currentWeapon === WEAPON_SG) {
             const upVector = new THREE.Vector3(0, 1, 0);
             const rightVector = new THREE.Vector3().crossVectors(baseDirection, upVector).normalize();
             const spreadStep = SHOTGUN_SPREAD_ANGLE / SHOTGUN_PELLET_COUNT;
@@ -2116,25 +3502,44 @@ function shoot() {
                 const randomAngleY = (Math.random() - 0.5) * SHOTGUN_SPREAD_ANGLE;
                 spreadDirection.applyAxisAngle(upVector, angleOffset + randomAngleX);
                 spreadDirection.applyAxisAngle(rightVector, randomAngleY);
-                createProjectile(startPosition, spreadDirection, projectileColor, projectileSize, false, 'player', projectileSpeed, false, WEAPON_SG);
+                createProjectile(safeFire.startPosition, spreadDirection, projectileColor, projectileSize, false, 'player', projectileSpeed, false, WEAPON_SG);
             }
         } else {
-            createProjectile(startPosition, baseDirection, projectileColor, projectileSize, currentWeapon === WEAPON_RR, 'player');
+            createProjectile(safeFire.startPosition, baseDirection, projectileColor, projectileSize, currentWeapon === WEAPON_RR, 'player');
         }
-        lastFireTime = clock.getElapsedTime();
+        lastFireTime = now;
         if (currentWeapon === WEAPON_MG) {
-            if (--ammoMG === 0) currentWeapon = WEAPON_PISTOL;
+            if (!isInfiniteDefaultWeaponActive(WEAPON_MG) && --ammoMG === 0) {
+                if (gameSettings.defaultWeapon === WEAPON_MG) {
+                    ammoMG = 0;
+                    playerMGReloadUntil = now + 2.0;
+                    showReloadingText();
+                } else {
+                    switchPlayerToFallbackWeapon();
+                }
+            }
         } else if (currentWeapon === WEAPON_RR) {
-            if (--ammoRR === 0) currentWeapon = WEAPON_PISTOL;
+            if (!isInfiniteDefaultWeaponActive(WEAPON_RR) && --ammoRR === 0) switchPlayerToFallbackWeapon();
         } else if (currentWeapon === WEAPON_SG) {
-            if (--ammoSG === 0) currentWeapon = WEAPON_PISTOL;
+            if (!isInfiniteDefaultWeaponActive(WEAPON_SG) && --ammoSG === 0) switchPlayerToFallbackWeapon();
         }
     }
 }
 
 function aiShoot(ai, timeElapsed) {
-    if (!isGameRunning || playerHP <= 0) return;
-    const startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0));
+    if (!isGameRunning) return;
+    if (ai && ai.userData && ai.userData.mgReloadUntil && timeElapsed >= ai.userData.mgReloadUntil) {
+        ai.userData.mgReloadUntil = 0;
+        ai.ammoMG = MAX_AMMO_MG;
+    }
+    let startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0));
+    const aimOrigin = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.65 : BODY_HEIGHT * 0.9, 0));
+    const muzzleInfo = (ai.userData && ai.userData.parts) ? getGunMuzzleInfo(ai.userData.parts) : null;
+    let muzzleDirection = muzzleInfo ? muzzleInfo.direction.clone().normalize() : null;
+    let targetIsPlayer = false;
+    if (muzzleInfo) {
+        startPosition = muzzleInfo.position.clone();
+    }
     
     let targetPosition = null;
     let distanceToTarget = 0;
@@ -2155,8 +3560,8 @@ function aiShoot(ai, timeElapsed) {
             }
         }
         if (closestEnemyAI) {
-            const enemyHeadPos = closestEnemyAI.children[1].getWorldPosition(new THREE.Vector3());
-            const enemyBodyPos = closestEnemyAI.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0));
+            const enemyHeadPos = getAIUpperTorsoPos(closestEnemyAI);
+            const enemyBodyPos = getAILowerTorsoPos(closestEnemyAI);
             if (checkLineOfSight(startPosition, enemyHeadPos, obstacles)) {
                 targetPosition = enemyHeadPos;
             } else if (checkLineOfSight(startPosition, enemyBodyPos, obstacles)) {
@@ -2165,17 +3570,19 @@ function aiShoot(ai, timeElapsed) {
             distanceToTarget = closestDistance;
         }
     } else if (isTeamModeOrTeamArcade && ai.team === 'enemy') {
-        // チームモードの敵AIはプレイヤーと味方AIをバランスよく狙う
+        // 敵AIはプレイヤーと味方AIを状況で選ぶ（味方AI寄り）
         const targets = [];
         
         // プレイヤーをターゲット候補に追加
-        const playerHeadPos = player.position.clone();
-        const playerBodyPos = player.position.clone();
-        playerBodyPos.y = player.position.y - (playerTargetHeight / 2);
+        const playerHeadPos = getPlayerHeadPos();
+        const playerUpperPos = getPlayerUpperTorsoPos();
+        const playerBodyPos = getPlayerBodyPos();
         if (playerHP > 0) {
-            if (checkLineOfSight(startPosition, playerHeadPos, obstacles)) {
+            if (checkLineOfSight(aimOrigin, playerHeadPos, obstacles)) {
                 targets.push({ position: playerHeadPos, distance: ai.position.distanceTo(player.position), type: 'player' });
-            } else if (checkLineOfSight(startPosition, playerBodyPos, obstacles)) {
+            } else if (checkLineOfSight(aimOrigin, playerUpperPos, obstacles)) {
+                targets.push({ position: playerUpperPos, distance: ai.position.distanceTo(player.position), type: 'player' });
+            } else if (checkLineOfSight(aimOrigin, playerBodyPos, obstacles)) {
                 targets.push({ position: playerBodyPos, distance: ai.position.distanceTo(player.position), type: 'player' });
             }
         }
@@ -2183,8 +3590,8 @@ function aiShoot(ai, timeElapsed) {
         // 味方AIをターゲット候補に追加
         for (const teammateAI of ais) {
             if (teammateAI === ai || teammateAI.team !== 'player' || teammateAI.hp <= 0) continue;
-            const teammateHeadPos = teammateAI.children[1].getWorldPosition(new THREE.Vector3());
-            const teammateBodyPos = teammateAI.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0));
+            const teammateHeadPos = getAIUpperTorsoPos(teammateAI);
+            const teammateBodyPos = getAILowerTorsoPos(teammateAI);
             const distance = ai.position.distanceTo(teammateAI.position);
             if (checkLineOfSight(startPosition, teammateHeadPos, obstacles)) {
                 targets.push({ position: teammateHeadPos, distance: distance, type: 'teammate' });
@@ -2193,33 +3600,40 @@ function aiShoot(ai, timeElapsed) {
             }
         }
         
-        // 最も近いターゲットを選択（プレイヤーと味方AIをバランスよく）
+        // ターゲット選択:
+        // - 味方AIが見えているなら高確率でそちらを優先
+        // - いなければ最寄りターゲット
         if (targets.length > 0) {
-            // 距離の近い順にソート
             targets.sort((a, b) => a.distance - b.distance);
-            // 50%の確率で最も近いターゲット、50%の確率でランダムに選択
-            const selectedTarget = Math.random() < 0.5 ? targets[0] : targets[Math.floor(Math.random() * targets.length)];
+            const teammateTargets = targets.filter(t => t.type === 'teammate');
+            let selectedTarget = targets[0];
+            if (teammateTargets.length > 0 && Math.random() < 0.75) {
+                selectedTarget = teammateTargets[0];
+            }
             targetPosition = selectedTarget.position;
             distanceToTarget = selectedTarget.distance;
+            targetIsPlayer = selectedTarget.type === 'player';
         }
     } else if (gameSettings.gameMode === 'ffa') {
         const potentialTargets = [];
         // プレイヤーをターゲット候補に追加
         if (playerHP > 0) {
-            const playerHeadPos = player.position.clone();
-            const playerBodyPos = player.position.clone();
-            playerBodyPos.y = player.position.y - (playerTargetHeight / 2);
-            if (checkLineOfSight(startPosition, playerHeadPos, obstacles)) {
+            const playerHeadPos = getPlayerHeadPos();
+            const playerUpperPos = getPlayerUpperTorsoPos();
+            const playerBodyPos = getPlayerBodyPos();
+            if (checkLineOfSight(aimOrigin, playerHeadPos, obstacles)) {
                 potentialTargets.push({ target: player, position: playerHeadPos, distance: ai.position.distanceTo(player.position) });
-            } else if (checkLineOfSight(startPosition, playerBodyPos, obstacles)) {
+            } else if (checkLineOfSight(aimOrigin, playerUpperPos, obstacles)) {
+                potentialTargets.push({ target: player, position: playerUpperPos, distance: ai.position.distanceTo(player.position) });
+            } else if (checkLineOfSight(aimOrigin, playerBodyPos, obstacles)) {
                 potentialTargets.push({ target: player, position: playerBodyPos, distance: ai.position.distanceTo(player.position) });
             }
         }
         // 他のAIをターゲット候補に追加
         for (const otherAI of ais) {
             if (otherAI === ai || otherAI.hp <= 0) continue;
-            const otherAIHeadPos = otherAI.children[1].getWorldPosition(new THREE.Vector3());
-            const otherAIBodyPos = otherAI.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0));
+            const otherAIHeadPos = getAIUpperTorsoPos(otherAI);
+            const otherAIBodyPos = getAILowerTorsoPos(otherAI);
             if (checkLineOfSight(startPosition, otherAIHeadPos, obstacles)) {
                 potentialTargets.push({ target: otherAI, position: otherAIHeadPos, distance: ai.position.distanceTo(otherAI.position) });
             } else if (checkLineOfSight(startPosition, otherAIBodyPos, obstacles)) {
@@ -2233,33 +3647,53 @@ function aiShoot(ai, timeElapsed) {
             const closestTarget = potentialTargets[0];
             targetPosition = closestTarget.position;
             distanceToTarget = closestTarget.distance;
+            targetIsPlayer = closestTarget.target === player;
         }
     } else {
         // 通常モードまたは敵AIはプレイヤーを狙う
-        const playerHeadPos = player.position.clone();
-        const playerBodyPos = player.position.clone();
-        playerBodyPos.y = player.position.y - (playerTargetHeight / 2);
-        if (checkLineOfSight(startPosition, playerHeadPos, obstacles)) {
+        const playerHeadPos = getPlayerHeadPos();
+        const playerUpperPos = getPlayerUpperTorsoPos();
+        const playerBodyPos = getPlayerBodyPos();
+        if (checkLineOfSight(aimOrigin, playerHeadPos, obstacles)) {
             targetPosition = playerHeadPos;
-        } else if (checkLineOfSight(startPosition, playerBodyPos, obstacles)) {
+        } else if (checkLineOfSight(aimOrigin, playerUpperPos, obstacles)) {
+            targetPosition = playerUpperPos;
+        } else if (checkLineOfSight(aimOrigin, playerBodyPos, obstacles)) {
             targetPosition = playerBodyPos;
         }
         distanceToTarget = ai.position.distanceTo(player.position);
+        targetIsPlayer = true;
     }
     
-    if (targetPosition === null) {
-        // ターゲットへの直接的な視線が通らない場合でも、
-        // プレイヤーが高所にいる場合は、その位置を目標に設定して威嚇射撃を試みる
-        const playerPos = player.position.clone();
-        const playerIsHigher = playerPos.y > ai.position.y + 3.0; // プレイヤーがAIより高い位置にいるか
-        if (playerIsHigher && !isVisibleToPlayer(ai)) {
-             targetPosition = playerPos;
-        } else {
-             return; // それ以外の場合は射撃しない
+    if (targetPosition === null) return;
+    // Strict rule: do not fire if obstacle blocks muzzle -> target.
+    if (!checkLineOfSight(startPosition, targetPosition, obstacles)) {
+        return;
+    }
+    // Re-aim right before firing so muzzle direction matches the intended target.
+    let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
+    if (ai.userData && ai.userData.parts) {
+        ai.rotation.y = desiredYaw;
+        applyAimConstraints(ai.userData.parts, ai.rotation.y, targetPosition);
+        const freshMuzzleInfo = getGunMuzzleInfo(ai.userData.parts);
+        if (freshMuzzleInfo) {
+            startPosition = freshMuzzleInfo.position.clone();
+            muzzleDirection = freshMuzzleInfo.direction.clone().normalize();
         }
     }
-    const direction = new THREE.Vector3().subVectors(targetPosition, startPosition);
+    // Recheck LOS after final pose/muzzle update (prevents wall-through on AI-vs-AI).
+    if (!checkLineOfSight(startPosition, targetPosition, obstacles)) {
+        return;
+    }
+
+    const toTarget = new THREE.Vector3().subVectors(targetPosition, startPosition).normalize();
+    let direction = toTarget.clone();
     const distanceToPlayer = distanceToTarget;
+    // 物理整合性優先: 銃口方向とターゲット方向が極端にズレる場合のみ発砲しない
+    if (muzzleDirection) {
+        const muzzleToTargetAngle = muzzleDirection.angleTo(toTarget);
+        if (muzzleToTargetAngle > THREE.MathUtils.degToRad(45)) return;
+    }
     direction.normalize();
     let canAIShoot = false;
     let aiProjectileColor = 0xffff00;
@@ -2268,13 +3702,32 @@ function aiShoot(ai, timeElapsed) {
     let aiProjectileSpeed = projectileSpeed;
     switch (ai.currentWeapon) {
         case WEAPON_PISTOL: canAIShoot = true; aiFireRate = FIRING_RATE * (4.0 - ai.aggression * 3.0); break;
-        case WEAPON_MG: if (ai.ammoMG > 0) { canAIShoot = true; aiFireRate = FIRING_RATE * (0.5 + (1.0 - ai.aggression) * 0.5); } break;
-        case WEAPON_RR: if (ai.ammoRR > 0) { canAIShoot = true; aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0); aiProjectileSize = 0.5; aiProjectileColor = 0xff8c00; } break;
-        case WEAPON_SR: if (ai.ammoSR > 0) { canAIShoot = true; aiFireRate = FIRE_RATE_SR * (1.0 + (1.0 - ai.aggression) * 0.5); aiProjectileColor = 0xffff00; aiProjectileSpeed = projectileSpeed * 2; } break;
-        case WEAPON_SG: if (ai.ammoSG > 0) { canAIShoot = true; aiFireRate = FIRE_RATE_SG; aiProjectileColor = 0xffa500; aiProjectileSize = 0.05; if (distanceToPlayer < SHOTGUN_RANGE * 1.5) { aiFireRate /= (1 + ai.aggression); } } break;
+        case WEAPON_MG:
+            if (ai.userData && ai.userData.mgReloadUntil && timeElapsed < ai.userData.mgReloadUntil) {
+                canAIShoot = false;
+                break;
+            }
+            if (ai.ammoMG > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MG)) {
+                canAIShoot = true;
+                aiFireRate = FIRING_RATE * (0.5 + (1.0 - (ai.aggression || 0.5)) * 0.5);
+            }
+            break;
+        case WEAPON_RR: if (ai.ammoRR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR)) { canAIShoot = true; aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0); aiProjectileSize = 0.5; aiProjectileColor = 0xff8c00; } break;
+        case WEAPON_SR: if (ai.ammoSR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR)) { canAIShoot = true; aiFireRate = FIRE_RATE_SR * (1.0 + (1.0 - ai.aggression) * 0.5); aiProjectileColor = 0xffff00; aiProjectileSpeed = projectileSpeed * 2; } break;
+        case WEAPON_SG: if (ai.ammoSG > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG)) { canAIShoot = true; aiFireRate = FIRE_RATE_SG; aiProjectileColor = 0xffa500; aiProjectileSize = 0.05; if (distanceToPlayer < SHOTGUN_RANGE * 1.5) { aiFireRate /= (1 + ai.aggression); } } break;
+    }
+    if (isTeamModeOrTeamArcade && ai.team === 'player' && ai.currentWeapon !== WEAPON_MG) {
+        // 味方AIはやや高頻度で攻撃（ただしMGは敵と同じレートにするため除外）
+        aiFireRate *= 0.7;
     }
     if (timeElapsed - ai.lastAttackTime < aiFireRate) return;
     if (canAIShoot) {
+        const safeAIShot = getAISafeFireData(startPosition, direction);
+        if (safeAIShot.blocked) {
+            createSmokeEffect(safeAIShot.impactPoint || startPosition);
+            ai.lastAttackTime = timeElapsed;
+            return;
+        }
         let soundToPlay;
         if (ai.currentWeapon === WEAPON_MG) soundToPlay = aimgGunSound;
         else if (ai.currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
@@ -2314,13 +3767,17 @@ function aiShoot(ai, timeElapsed) {
         }
         ai.lastAttackTime = timeElapsed;
         if (ai.currentWeapon === WEAPON_MG) {
-            if (--ai.ammoMG === 0) ai.currentWeapon = WEAPON_PISTOL;
+            if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MG) && --ai.ammoMG === 0) {
+                ai.ammoMG = 0;
+                if (ai.userData) ai.userData.mgReloadUntil = timeElapsed + 2.0;
+                switchAIToFallbackWeapon(ai);
+            }
         } else if (ai.currentWeapon === WEAPON_RR) {
-            if (--ai.ammoRR === 0) ai.currentWeapon = WEAPON_PISTOL;
+            if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR) && --ai.ammoRR === 0) switchAIToFallbackWeapon(ai);
         } else if (ai.currentWeapon === WEAPON_SR) {
-            if (--ai.ammoSR === 0) ai.currentWeapon = WEAPON_PISTOL;
+            if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR) && --ai.ammoSR === 0) switchAIToFallbackWeapon(ai);
         } else if (ai.currentWeapon === WEAPON_SG) {
-            if (--ai.ammoSG === 0) ai.currentWeapon = WEAPON_PISTOL;
+            if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG) && --ai.ammoSG === 0) switchAIToFallbackWeapon(ai);
         }
     }
 }
@@ -2343,8 +3800,8 @@ function aiCheckPickup(ai) {
             if (ai.targetWeaponPickup === pickup) {
                 ai.targetWeaponPickup = null;
                 // 味方AIで追従モードONの場合、ai.stateを変更しない
-                if (!(gameSettings.gameMode === 'team' && ai.team === 'player' && isFollowingPlayerMode)) {
-                    if (gameSettings.gameMode === 'team' && ai.team === 'player') {
+                if (!((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player' && isFollowingPlayerMode)) {
+                    if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player') {
                         ai.state = 'ATTACKING';
                         ai.currentAttackTime = clock.getElapsedTime();
                         ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
@@ -2389,32 +3846,133 @@ if (document.getElementById('joystick-move')) {
     });
 }
 const keySet = new Set();
+
+function getNearestLivingEnemyPosition(originPosition) {
+    let closestEnemy = null;
+    let closestDistance = Infinity;
+    for (const ai of ais) {
+        if (!ai || ai.hp <= 0 || ai.team !== 'enemy') continue;
+        const d = originPosition.distanceTo(ai.position);
+        if (d < closestDistance) {
+            closestDistance = d;
+            closestEnemy = ai;
+        }
+    }
+    return closestEnemy ? closestEnemy.position.clone() : null;
+}
+
+function getFollowSlotPosition(ai) {
+    const teammates = ais.filter(member => member && member.team === 'player');
+    const slotIndex = Math.max(0, teammates.indexOf(ai));
+    const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
+    playerForward.y = 0;
+    if (playerForward.lengthSq() < 0.0001) playerForward.set(0, 0, -1);
+    else playerForward.normalize();
+    const right = new THREE.Vector3().crossVectors(playerForward, new THREE.Vector3(0, 1, 0)).normalize();
+    const ring = Math.floor(slotIndex / 2);
+    const side = slotIndex % 2 === 0 ? -1 : 1;
+    const backDistance = 7.0 + ring * 1.1;
+    const sideDistance = 2.4 + ring * 0.5;
+    const slotPos = player.position.clone()
+        .add(playerForward.clone().multiplyScalar(-backDistance))
+        .add(right.clone().multiplyScalar(side * sideDistance));
+    slotPos.y = getGroundSurfaceY(slotPos);
+    return slotPos;
+}
+
+function getNearbyTeammateSpawnPosition(ai) {
+    const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
+    playerForward.y = 0;
+    if (playerForward.lengthSq() < 0.0001) playerForward.set(0, 0, -1);
+    else playerForward.normalize();
+    const right = new THREE.Vector3().crossVectors(playerForward, new THREE.Vector3(0, 1, 0)).normalize();
+    const baseCandidates = [
+        player.position.clone().add(playerForward.clone().multiplyScalar(-3.5)).add(right.clone().multiplyScalar(-2.0)),
+        player.position.clone().add(playerForward.clone().multiplyScalar(-3.5)).add(right.clone().multiplyScalar(2.0)),
+        player.position.clone().add(playerForward.clone().multiplyScalar(-4.5)).add(right.clone().multiplyScalar(-2.6)),
+        player.position.clone().add(playerForward.clone().multiplyScalar(-4.5)).add(right.clone().multiplyScalar(2.6))
+    ];
+
+    const originalPos = ai.position.clone();
+    for (const candidate of baseCandidates) {
+        candidate.y = -FLOOR_HEIGHT;
+        ai.position.copy(candidate);
+        if (!checkCollision(ai, obstacles)) {
+            ai.position.copy(originalPos);
+            return candidate;
+        }
+    }
+    ai.position.copy(originalPos);
+    return getFollowSlotPosition(ai);
+}
+
+function warpTeammatesInFrontForFollow() {
+    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    if (!isTeamModeOrTeamArcade) return;
+    const teammates = ais.filter(ai => ai && ai.team === 'player');
+    if (teammates.length === 0) return;
+
+    const reviveHPSetting = gameSettings.aiHP === 'Infinity' ? Infinity : Math.max(1, parseInt(gameSettings.aiHP, 10) || 3);
+
+    teammates.forEach((ai) => {
+        const targetPos = getFollowSlotPosition(ai);
+        if (ai.hp <= 0) {
+            ai.hp = reviveHPSetting;
+            ai.visible = true;
+        }
+        ai.position.copy(targetPos);
+        ai.targetPosition.copy(targetPos);
+        ai.userData.followActive = true;
+        ai.state = 'FOLLOWING';
+        ai.avoiding = false;
+        ai.rotation.y = player.rotation.y;
+    });
+}
+
+function setFollowingPlayerMode(enabled) {
+    isFollowingPlayerMode = enabled;
+    console.log(`AI Following Mode: ${isFollowingPlayerMode ? 'ON' : 'OFF'}`);
+    if (followStatusDisplay) {
+        if (isFollowingPlayerMode) {
+            followStatusDisplay.style.display = 'block';
+            followStatusDisplay.classList.add('blinking');
+        } else {
+            followStatusDisplay.style.display = 'none';
+            followStatusDisplay.classList.remove('blinking');
+        }
+    }
+    if (followButton && ('ontouchstart' in window)) {
+        if (isFollowingPlayerMode) {
+            followButton.classList.add('blinking');
+            followButton.textContent = 'FOLLOWING';
+        } else {
+            followButton.classList.remove('blinking');
+            followButton.textContent = 'FOLLOW';
+        }
+    }
+    if (isFollowingPlayerMode) {
+        for (const ai of ais) {
+            if (ai && ai.team === 'player') ai.userData.followActive = true;
+        }
+        warpTeammatesInFrontForFollow();
+    } else {
+        for (const ai of ais) {
+            if (ai && ai.team === 'player') ai.userData.followActive = false;
+        }
+    }
+}
+
+function toggleFollowingPlayerMode() {
+    setFollowingPlayerMode(!isFollowingPlayerMode);
+}
+
 document.addEventListener('keydown', (event) => {
     if (!isGameRunning) return;
     keySet.add(event.code);
     if (event.code === 'KeyC') {
         isCrouchingToggle = !isCrouchingToggle;
     } else if (event.code === 'KeyF') { // Fキーで追従モードをトグル
-        isFollowingPlayerMode = !isFollowingPlayerMode;
-        console.log(`AI Following Mode: ${isFollowingPlayerMode ? 'ON' : 'OFF'}`);
-        if (followStatusDisplay) {
-            if (isFollowingPlayerMode) {
-                followStatusDisplay.style.display = 'block';
-                followStatusDisplay.classList.add('blinking');
-            } else {
-                followStatusDisplay.style.display = 'none';
-                followStatusDisplay.classList.remove('blinking');
-            }
-        }
-        if (followButton && ('ontouchstart' in window)) { // スマホ版ボタンも連動
-            if (isFollowingPlayerMode) {
-                followButton.classList.add('blinking');
-                followButton.textContent = 'FOLLOWING';
-            } else {
-                followButton.classList.remove('blinking');
-                followButton.textContent = 'FOLLOW';
-            }
-        }
+        toggleFollowingPlayerMode();
     }
 });
 document.addEventListener('keyup', (event) => { if (!isGameRunning) return; keySet.delete(event.code); });
@@ -2530,31 +4088,13 @@ const followButtonElement = document.getElementById('follow-button');
 if (followButtonElement) {
     followButtonElement.addEventListener('touchstart', (event) => {
         if (!isGameRunning) return;
-        isFollowingPlayerMode = !isFollowingPlayerMode;
-        console.log(`AI Following Mode: ${isFollowingPlayerMode ? 'ON' : 'OFF'}`);
-        if (followStatusDisplay) {
-            if (isFollowingPlayerMode) {
-                followStatusDisplay.style.display = 'block';
-                followStatusDisplay.classList.add('blinking');
-            } else {
-                followStatusDisplay.style.display = 'none';
-                followStatusDisplay.classList.remove('blinking');
-            }
-        }
-        if (followButton && ('ontouchstart' in window)) { // スマホ版ボタンも連動
-            if (isFollowingPlayerMode) {
-                followButton.classList.add('blinking');
-                followButton.textContent = 'FOLLOWING';
-            } else {
-                followButton.classList.remove('blinking');
-                followButton.textContent = 'FOLLOW';
-            }
-        }
+        toggleFollowingPlayerMode();
         event.preventDefault();
     }, { passive: false });
 }
 
 function initializeAudio() {
+    // Preload and cache all audio elements
     const allAudio = document.querySelectorAll('audio');
     allAudio.forEach(audio => {
         const originalVolume = audio.volume;
@@ -2678,12 +4218,16 @@ function startGame() {
     } catch (e) {
         console.warn('Error trying to lock orientation:', e);
     }
-    if (gameSettings.fieldState === 'reset') {
-            if (typeof resetObstacles === 'function') resetObstacles();
-            // 強制的に表示設定 (デバッグ目的)
-            if (playerHPDisplay) playerHPDisplay.style.display = 'block';
-            if (playerWeaponDisplay) playerWeaponDisplay.style.display = 'block';
-        }}
+    if (typeof resetObstacles === 'function') resetObstacles();
+    // 強制的に表示設定 (デバッグ目的)
+    if (playerHPDisplay) playerHPDisplay.style.display = 'block';
+    if (playerWeaponDisplay) playerWeaponDisplay.style.display = 'block';
+    
+    // Start Time Lapse mode if enabled
+    if (gameSettings.timeLapseMode) {
+        startTimeLapseMode();
+    }
+}
 
 function resetWeaponPickups(aiList = []) {
     for (let i = weaponPickups.length - 1; i >= 0; i--) {
@@ -2706,9 +4250,7 @@ function shuffle(array) {
 function restartGame() {
     console.log('restartGame() called');
     playerBreadcrumbs = []; // Reset the breadcrumb trail
-    if (gameSettings.fieldState === 'reset') {
-        resetObstacles();
-    }
+    resetObstacles();
     gameOverScreen.style.display = 'none';
     winScreen.style.display = 'none';
     if (gameSettings.gameMode === 'arcade') {
@@ -2743,8 +4285,12 @@ function restartGame() {
         }
         shuffle(availableSpawnPoints);
     } else if (gameSettings.mapType === 'custom') {
-        const allCustomMaps = JSON.parse(localStorage.getItem('allCustomMaps') || '{}');
-        const selectedMapData = allCustomMaps[gameSettings.customMapName];
+        const resolved = resolveCustomMapSelection();
+        const selectedMapData = resolved.mapData;
+        if (resolved.mapName && resolved.mapName !== gameSettings.customMapName) {
+            gameSettings.customMapName = resolved.mapName;
+            saveSettings();
+        }
         if (selectedMapData) {
             console.log("Custom map selected. selectedMapData:", selectedMapData); // 追加
             try {
@@ -2810,19 +4356,10 @@ function restartGame() {
     player.rotation.y = Math.atan2(direction.x, direction.z) + Math.PI;
 
     window.justRestarted = true;
-    console.log("--- GEMINI DEBUG ---");
-    console.log("Timestamp:", new Date().toISOString());
     const playerDir = new THREE.Vector3();
     player.getWorldDirection(playerDir);
-    console.log("Player Position:", JSON.stringify(player.position));
-    console.log("Player Direction Vector:", JSON.stringify(playerDir));
-    console.log("--------------------");
     camera.rotation.x = 0;
-    currentWeapon = WEAPON_PISTOL;
-    ammoMG = 0;
-    ammoRR = 0;
-    ammoSR = 0;
-    ammoSG = 0;
+    applyPlayerDefaultWeaponLoadout();
     let finalAICount = gameSettings.aiCount;
     const isTeamMode = gameSettings.gameMode === 'team';
     const isTeamArcadeMode = gameSettings.gameMode === 'teamArcade';
@@ -2836,8 +4373,8 @@ function restartGame() {
     ais.length = 0;
     const aiColors = [0x00ff00, 0x00ffff, 0x0FFa500];
     const teamColors = {
-        player: 0x4169E1, // 味方AIは青系
-        enemy: [0x00ff00, 0xff4444] // 敵AIは緑と赤
+        player: 0x00ffff, // 味方AIはシアン
+        enemy: [0x00ff00, 0xffff00] // 敵AIは緑と黄
     };
     for (let i = 0; i < finalAICount; i++) {
         let aiColor;
@@ -2854,11 +4391,28 @@ function restartGame() {
         } else { // Battle, Arcade, FFA
             aiColor = aiColors[i] || 0xff00ff;
         }
-        const ai = createAI(aiColor);
+        // Determine AI customization based on index
+        let aiCustomization = null;
+        if (i === 0) {
+            aiCustomization = characterCustomization.enemy1;
+        } else if (i === 1) {
+            aiCustomization = characterCustomization.enemy2;
+        } else if (i === 2) {
+            aiCustomization = characterCustomization.enemy3;
+        }
+        
+        const ai = createAI(aiColor, aiCustomization);
+        resetCharacterPose(ai); // Reset to default pose
+        // Show gun for gameplay
+        if (ai.userData.parts && ai.userData.parts.gun) {
+            ai.userData.parts.gun.visible = true;
+        }
         ai.team = aiTeam; // チームプロパティを設定 (null for non-team modes)
         ai.kills = 0; // キル数を初期化
         let aiSpawnPos;
-        if (availableSpawnPoints.length > 0) {
+        if ((isTeamMode || isTeamArcadeMode) && aiTeam === 'player') {
+            aiSpawnPos = getNearbyTeammateSpawnPosition(ai);
+        } else if (availableSpawnPoints.length > 0) {
             aiSpawnPos = availableSpawnPoints.pop();
         } else {
             const aiSpawn = customSpawnPoints ? customSpawnPoints.find(p => p.name === `AI ${i + 1}`) : null;
@@ -2867,6 +4421,8 @@ function restartGame() {
         }
         ai.position.copy(new THREE.Vector3(aiSpawnPos.x, -FLOOR_HEIGHT, aiSpawnPos.z));
         ai.lookAt(new THREE.Vector3(0, ai.position.y, 0));
+        // Initialize lastPosition to current position to avoid immediate 'stuck' watchdog triggers
+        if (ai.lastPosition) ai.lastPosition.copy(ai.position);
         if (finalAICount === 3 && !isTeamMode) {
             if (i === 0) { ai.aggression = 0.7; ai.flankAggression = 0.1; }
             else if (i === 1) { ai.aggression = 0.4; ai.flankAggression = 0.8; ai.flankPreference = 'left'; }
@@ -2878,6 +4434,20 @@ function restartGame() {
         scene.add(ai);
         ais.push(ai);
     }
+    // 初期向きを「最寄りの敵対対象」に合わせる（開始直後に逆向きで走るのを防ぐ）
+    for (const ai of ais) {
+        // 初期の探索を積極化するため、近接ターゲットを取得して即座に向かわせる
+        const initTarget = getClosestOpponentPosition(ai);
+        if (initTarget) {
+            ai.targetPosition.copy(initTarget);
+            ai.rotation.y = Math.atan2(initTarget.x - ai.position.x, initTarget.z - ai.position.z);
+        } else {
+            // ターゲットが取れない場合のみアリーナ中央を向く
+            ai.rotation.y = Math.atan2(0 - ai.position.x, 0 - ai.position.z);
+        }
+        // 開始直後から索敵・攻撃判断をさせる
+        ai.userData.nextPerceptionTime = 0;
+    }
     const aiHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
     const aiHPText = gameSettings.aiHP === 'Infinity' ? '∞' : aiHP;
     const ai1HPDisplay = document.getElementById('ai-hp-display');
@@ -2886,19 +4456,50 @@ function restartGame() {
     ais.forEach((ai, index) => {
         ai.hp = aiHP;
         // 味方AIは積極的に攻撃するため、初期状態をATTACKINGにする
-        if (isTeamMode && ai.team === 'player') {
+        if ((isTeamMode || isTeamArcadeMode) && ai.team === 'player') {
             ai.state = 'ATTACKING';
             ai.currentAttackTime = 0;
             ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
             ai.aggression = 0.9; // 味方AIは高攻撃性
             ai.flankAggression = 0.8;
+            // 味方AIは開始時から近い敵を追いかける
+            const closestEnemy = getClosestOpponentPosition(ai);
+            if (closestEnemy) ai.targetPosition.copy(closestEnemy);
+            ai.userData.nextPerceptionTime = 0;
+        } else if ((isTeamMode || isTeamArcadeMode) && ai.team === 'enemy') {
+            ai.state = 'ATTACKING';
+            ai.currentAttackTime = 0;
+            ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+            ai.aggression = 0.75;
+            ai.flankAggression = 0.5;
+            // 敵AIも近くのターゲットへすぐ移動する
+            const closestEnemy = getClosestOpponentPosition(ai);
+            if (closestEnemy) ai.targetPosition.copy(closestEnemy);
+            ai.userData.nextPerceptionTime = 0;
         } else {
-            ai.state = 'HIDING';
+            // 非チームモードでも開始直後から戦闘意思を持たせる
+            ai.state = 'ATTACKING';
+            ai.currentAttackTime = 0;
+            ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+
+            const closest = getClosestOpponentPosition(ai);
+            if (closest) {
+                ai.targetPosition.copy(closest);
+            } else {
+                // 念のため: ターゲットが取れない場合は移動へ
+                ai.state = 'MOVING';
+                const angle = Math.random() * Math.PI * 2;
+                const r = ARENA_PLAY_AREA_RADIUS * 0.6 * Math.random();
+                ai.targetPosition.set(Math.cos(angle) * r, -FLOOR_HEIGHT, Math.sin(angle) * r);
+            }
+
+            ai.userData.searchPulseAt = clock.getElapsedTime() + 0.1;
+            ai.userData.nextPerceptionTime = 0;
+            ai.aggression = Math.max(0.3, ai.aggression || Math.random());
         }
-        ai.currentWeapon = WEAPON_PISTOL;
-        ai.ammoMG = 0; ai.ammoRR = 0; ai.ammoSR = 0;
+        applyAIDefaultWeaponLoadout(ai);
         ai.targetWeaponPickup = null;
-        ai.lastHiddenTime = 0; ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false;
+        ai.lastHiddenTime = 0; ai.lastAttackTime = -999; ai.currentAttackTime = 0; ai.avoiding = false;
         if (isTeamMode) {
             if (index === 0) { // 味方AI
                 if (ai1HPDisplay) ai1HPDisplay.textContent = `Teammate HP: ${aiHPText}`;
@@ -2977,9 +4578,7 @@ function restartGame() {
         }
     }
     debris.length = 0;
-    if (gameSettings.fieldState === 'reset') {
-        resetObstacles();
-    }
+    resetObstacles();
     // resetWeaponPickups(); // Moved to after AI creation
     if (gameSettings.gameMode === 'arcade' && gameSettings.medikitCount > 0) {
         for (let i = 0; i < gameSettings.medikitCount; i++) {
@@ -2988,6 +4587,8 @@ function restartGame() {
     }
     clock.start();
     lastFireTime = -1;
+    playerMGReloadUntil = 0;
+    hideReloadingText();
     keySet.clear();
     joystickMoveVector.set(0, 0);
     isMouseButtonDown = false;
@@ -3001,8 +4602,9 @@ function restartGame() {
     if (playerModel && playerModel.parent) {
         player.remove(playerModel);
     }
-    playerModel = createCharacterModel(0x0000ff); // Player's color
+    playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
     player.add(playerModel);
+    playerModel.position.set(0, -playerTargetHeight, 0);
     if (playerModel) { // 念のためnullチェック
         playerModel.visible = false; // プレイヤーモデルは非表示に保つ
     }
@@ -3015,52 +4617,139 @@ function startAIDeathSequence(impactVelocity, ai) {
     aiFallDownCinematicSequence(impactVelocity, ai);
 }
 
+function getPlayerRespawnHostilePositions() {
+    const hostiles = [];
+    const isTeamModeOrArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    if (isTeamModeOrArcade) {
+        for (const ai of ais) {
+            if (ai && ai.hp > 0 && ai.team === 'enemy') hostiles.push(ai.position.clone());
+        }
+        return hostiles;
+    }
+    for (const ai of ais) {
+        if (ai && ai.hp > 0) hostiles.push(ai.position.clone());
+    }
+    return hostiles;
+}
+
+function findSaferRespawnPosition(entity, hostilePositions, objectBodyHeight, minDistanceFromAIs = 0, excludedAI = null) {
+    const R = ARENA_PLAY_AREA_RADIUS - 5;
+    const NUM_CANDIDATES = 90;
+    const oldPos = entity.position.clone();
+    const oldRot = entity.rotation.clone();
+
+    let bestPos = null;
+    let bestScore = -Infinity;
+
+    for (let i = 0; i < NUM_CANDIDATES; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * R;
+        const candidate = new THREE.Vector3(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+        candidate.y = getGroundY(candidate, objectBodyHeight);
+
+        entity.position.copy(candidate);
+        if (checkCollision(entity, obstacles)) continue;
+
+        if (minDistanceFromAIs > 0) {
+            let tooClose = false;
+            for (const otherAI of ais) {
+                if (!otherAI || otherAI === excludedAI || otherAI.hp <= 0) continue;
+                if (candidate.distanceTo(otherAI.position) < minDistanceFromAIs) {
+                    tooClose = true;
+                    break;
+                }
+            }
+            if (tooClose) continue;
+        }
+
+        let nearestHostileDist = 1000;
+        if (hostilePositions && hostilePositions.length > 0) {
+            nearestHostileDist = Infinity;
+            for (const hp of hostilePositions) {
+                const d = candidate.distanceTo(hp);
+                if (d < nearestHostileDist) nearestHostileDist = d;
+            }
+        }
+
+        if (nearestHostileDist > bestScore) {
+            bestScore = nearestHostileDist;
+            bestPos = candidate.clone();
+        }
+    }
+
+    entity.position.copy(oldPos);
+    entity.rotation.copy(oldRot);
+    return bestPos;
+}
+
 
 function respawnAI(ai) {
     const aiHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
     ai.hp = aiHP;
-    let farthestPosition = null;
-    let maxDistance = -Infinity;
-    const NUM_RESPAWN_CANDIDATES = 50;
-    const MIN_DISTANCE_BETWEEN_AIS = 10;
-    for (let i = 0; i < NUM_RESPAWN_CANDIDATES; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const radius = Math.random() * (ARENA_RADIUS - ARENA_EDGE_THICKNESS - 5);
-        const x = Math.cos(angle) * radius;
-        const z = Math.sin(angle) * radius;
-        const candidatePos = new THREE.Vector3(x, -FLOOR_HEIGHT, z);
-        let tooCloseToOtherAI = false;
-        for (const otherAI of ais) {
-            if (otherAI !== ai && candidatePos.distanceTo(otherAI.position) < MIN_DISTANCE_BETWEEN_AIS) {
-                tooCloseToOtherAI = true;
-                break;
-            }
-        }
-        if (tooCloseToOtherAI) continue;
-        const originalPos = ai.position.clone();
-        ai.position.copy(candidatePos);
-        if (checkCollision(ai, obstacles)) {
-            ai.position.copy(originalPos);
-            continue;
-        }
-        ai.position.copy(originalPos);
-        const distanceToPlayer = candidatePos.distanceTo(player.position);
-        if (distanceToPlayer > maxDistance) {
-            maxDistance = distanceToPlayer;
-            farthestPosition = candidatePos;
-        }
+    const isTeammate = ai.team === 'player';
+    const isTeamModeOrArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+
+    if (isFollowingPlayerMode && isTeamModeOrArcade && isTeammate) {
+        const followPos = getFollowSlotPosition(ai);
+        ai.position.copy(followPos);
+        ai.rotation.set(0, player.rotation.y, 0);
+        ai.state = 'FOLLOWING';
+        ai.userData.followActive = true;
+        applyAIDefaultWeaponLoadout(ai);
+        ai.targetWeaponPickup = null;
+        ai.lastHiddenTime = clock.getElapsedTime();
+        ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false; ai.isCrouching = false;
+        ai.isElevating = false;
+        if (ai.userData) ai.userData.mgReloadUntil = 0;
+        ai.userData.rooftopIntent = false;
+        ai.userData.onRooftop = false;
+        ai.userData.rooftopSensor = null;
+        ai.userData.rooftopObstacle = null;
+        ai.userData.rooftopLadderPos = null;
+        ai.userData.rooftopTargetY = -FLOOR_HEIGHT;
+        ai.userData.elevatingDirection = 0;
+        ai.userData.rooftopDecisionMade = false;
+        ai.userData.rooftopPhase = 'none';
+        ai.userData.nextRooftopDecisionAt = clock.getElapsedTime() + 1.0;
+        ai.userData.stallStartTime = 0;
+        ai.userData.searchPulseAt = clock.getElapsedTime() + 1.0;
+        ai.userData.nextPerceptionTime = 0;
+        ai.userData.cachedVisibleOpponentInfo = null;
+        ai.userData.cachedIsAISeen = false;
+        ai.userData.groundIdleSince = 0;
+        ai.visible = true;
+        scene.add(ai);
+        return;
     }
-    if (!farthestPosition) {
-        farthestPosition = new THREE.Vector3(0, -FLOOR_HEIGHT, 0);
-    }
+
+    const hostilePositions = getOpponentTargetsForAI(ai).map(t => (t === player ? player.position.clone() : t.position.clone()));
+    let farthestPosition = findSaferRespawnPosition(ai, hostilePositions, BODY_HEIGHT * 2, 10, ai);
+    if (!farthestPosition) farthestPosition = new THREE.Vector3(0, getGroundY(new THREE.Vector3(0, 0, 0), BODY_HEIGHT * 2), 0);
     ai.position.copy(farthestPosition);
     ai.rotation.set(0, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 0);
     ai.state = 'HIDING';
-    ai.currentWeapon = WEAPON_PISTOL;
-    ai.ammoMG = 0; ai.ammoRR = 0; ai.ammoSR = 0; ai.ammoSG = 0;
+    applyAIDefaultWeaponLoadout(ai);
     ai.targetWeaponPickup = null;
     ai.lastHiddenTime = clock.getElapsedTime();
     ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false; ai.isCrouching = false;
+    ai.isElevating = false;
+    if (ai.userData) ai.userData.mgReloadUntil = 0;
+    ai.userData.rooftopIntent = false;
+    ai.userData.onRooftop = false;
+    ai.userData.rooftopSensor = null;
+    ai.userData.rooftopObstacle = null;
+    ai.userData.rooftopLadderPos = null;
+    ai.userData.rooftopTargetY = -FLOOR_HEIGHT;
+    ai.userData.elevatingDirection = 0;
+    ai.userData.rooftopDecisionMade = false;
+    ai.userData.rooftopPhase = 'none';
+    ai.userData.nextRooftopDecisionAt = clock.getElapsedTime() + 1.0;
+    ai.userData.stallStartTime = 0;
+    ai.userData.searchPulseAt = clock.getElapsedTime() + 1.0;
+    ai.userData.nextPerceptionTime = 0;
+    ai.userData.cachedVisibleOpponentInfo = null;
+    ai.userData.cachedIsAISeen = false;
+    ai.userData.groundIdleSince = 0;
     scene.add(ai);
 }
 
@@ -3070,6 +4759,14 @@ function respawnPlayer() {
         playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
     }
 
+    // 梯子昇降中に死亡した場合のゴースト状態を完全にリセット
+    isElevating = false;
+    elevatingTargetY = 0;
+    elevatingTargetObstacle = null;
+    isIgnoringTowerCollision = false;
+    ignoreTowerTimer = 0;
+    lastClimbedTower = null;
+
     // プレイヤーの入力状態を完全にリセット
     keySet.clear();
     joystickMoveVector.set(0, 0);
@@ -3077,57 +4774,23 @@ function respawnPlayer() {
     isScoping = false; // スコープ状態もリセット
     cancelScope(); // もしスコープ中だったら解除
 
-    let playerSpawnPos = new THREE.Vector3();
-    let foundSafeSpawn = false;
-    const MAX_RESPAWN_ATTEMPTS = 20; // 試行回数を増やす
-    const R = ARENA_PLAY_AREA_RADIUS - 5;
-    
-    for (let attempts = 0; attempts < MAX_RESPAWN_ATTEMPTS; attempts++) {
-        // ランダムなリスポーン地点を生成
-        const angle = Math.random() * Math.PI * 2;
-        const radius = Math.random() * R;
-        playerSpawnPos.set(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
-
-        const originalPlayerPosition = player.position.clone(); // 現在のプレイヤー位置を保存
-        const originalPlayerRotation = player.rotation.clone(); // 現在のプレイヤー回転を保存
-        
-        player.position.copy(playerSpawnPos); // 候補位置に一時的に移動させて衝突チェック
-        // 衝突チェックのために一旦モデルも移動
-        playerModel.position.set(0, playerTargetHeight, 0); // playerModelはplayerの子として移動するので、相対位置を設定
-
-        // 候補位置での地面のY座標を検出
-        const groundYAtSpawn = getGroundY(player.position, playerTargetHeight * 2); // playerTargetHeightはplayerの高さなので、playerBodyHeightを考慮
-        player.position.y = groundYAtSpawn; // 地面に合わせる
-
-        // 障害物との衝突チェック
-        if (!checkCollision(player, obstacles)) {
-            foundSafeSpawn = true;
-            break;
-        } else {
-            // 衝突する場合は、プレイヤー位置を元に戻し、別のスポーン地点を試す
-            player.position.copy(originalPlayerPosition);
-            player.rotation.copy(originalPlayerRotation);
-            playerModel.position.set(0, playerTargetHeight, 0); // モデルの位置も戻す
-        }
-    }
-
-    if (!foundSafeSpawn) {
+    const hostilePositions = getPlayerRespawnHostilePositions();
+    const safePos = findSaferRespawnPosition(player, hostilePositions, playerTargetHeight * 2, 10, null);
+    if (safePos) {
+        player.position.copy(safePos);
+    } else {
         console.error("Could not find a safe spawn point after multiple attempts. Spawning at default (0, 0, 0).");
-        playerSpawnPos.set(0, 0, 0); // 緊急時のデフォルト
+        const playerSpawnPos = new THREE.Vector3(0, 0, 0);
         player.position.copy(playerSpawnPos);
         const groundYAtDefaultSpawn = getGroundY(player.position, playerTargetHeight * 2);
-        player.position.y = groundYAtDefaultSpawn;
+        player.position.y = groundYAtDefaultSpawn + 0.2; // Raise player more to prevent shoes sinking
     }
     
     // プレイヤーの位置と向きを設定
     // player.position.copy(playerSpawnPos); // ループ内で既に設定済み
     player.rotation.y = Math.atan2(0 - player.position.x, 0 - player.position.z) + Math.PI; // 中心を向く
     camera.rotation.x = 0; // カメラの縦回転をリセット
-    currentWeapon = WEAPON_PISTOL;
-    ammoMG = 0;
-    ammoRR = 0;
-    ammoSR = 0;
-    ammoSG = 0;
+    applyPlayerDefaultWeaponLoadout();
 
     // playerModelの表示状態を確実に更新
     if (playerModel) {
@@ -3136,7 +4799,7 @@ function respawnPlayer() {
         }
         // playerModel.visible = true; // 常に表示
         playerModel.visible = false; // <-- ここに明示的に追加
-        playerModel.position.set(0, playerTargetHeight, 0); // playerModelはplayerの子なので相対位置を設定
+        playerModel.position.set(0, -playerTargetHeight, 0); // playerModelはplayerの子なので相対位置を設定
     }
 }
 
@@ -3154,18 +4817,15 @@ function startPlayerDeathSequence(projectile) {
     isGameRunning = false; // 一時的にゲームを停止
     document.exitPointerLock();
 
-    isFollowingPlayerMode = false;
-    if (followStatusDisplay) {
-        followStatusDisplay.style.display = 'none';
-        followStatusDisplay.classList.remove('blinking');
-    }
-    if (followButton && ('ontouchstart' in window)) { // ここを isMobileDevice に変更
-        followButton.classList.remove('blinking');
-        followButton.textContent = 'FOLLOW';
-    }
+    // 梯子昇降中の死亡でリスポーン後に浮くのを防ぐ
+    isElevating = false;
+    elevatingTargetY = 0;
+    elevatingTargetObstacle = null;
 
-    // プレイヤーをシーンから削除
-    if (player) player.traverse((object) => { object.visible = false; }); 
+    // プレイヤー死亡キルカメラ用にプレイヤーモデルを表示
+    if (playerModel) {
+        playerModel.visible = true;
+    }
 
     // UIを非表示
     const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button'];
@@ -3174,23 +4834,51 @@ function startPlayerDeathSequence(projectile) {
         if (el) el.style.display = 'none';
     });
 
-    // 死亡時の地面Y座標を計算し、プレイヤーモデルをそこに固定
-    const playerFeetYAtDeath = player.position.y - playerTargetHeight; // プレイヤーの足元のY座標
-    const groundYAtDeath = getGroundY(player.position, playerTargetHeight); // その時点の地面のY座標 (オブジェクトの中心Y座標として)
-    playerModel.position.y = groundYAtDeath; // プレイヤーモデルのY座標を地面に固定
+    // プレイヤーモデルは足元基準で配置
+    playerModel.position.set(0, -playerTargetHeight, 0);
+    // AIと同じ姿勢ロジックで、死亡時も棒立ちを避ける
+    if (playerModel.userData && playerModel.userData.parts) {
+        const parts = playerModel.userData.parts;
+        applyGunStyle(parts.gun, currentWeapon);
+        applyWeaponPose(parts, currentWeapon);
+        // Match live AI pose coordinates as-is (arms + gun), then lock gun between hands.
+        alignGunGripToHands(parts, 1.0);
+        // Death pose: keep natural human-like leg bend (avoid reverse-knee crouch).
+        parts.leftHip.rotation.x = 0.20;
+        parts.rightHip.rotation.x = 0.20;
+        parts.leftKnee.rotation.x = 0.35;
+        parts.rightKnee.rotation.x = 0.35;
+        parts.body.rotation.x = 0.06;
+    }
 
     // 倒れるアニメーション
     const fallDuration = 1.0;
     const fallRotationAxisAngle = Math.PI / 2;
+    const impactDir = (projectile && projectile.velocity)
+        ? projectile.velocity.clone().setY(0).normalize()
+        : new THREE.Vector3(0, 0, 1);
+    // 被弾方向へ体の正面を向ける（背中を撃った相手へ向けない）
+    const shooterDir = impactDir.clone().multiplyScalar(-1);
+    if (shooterDir.lengthSq() > 1e-6) {
+        const shooterYaw = Math.atan2(shooterDir.x, shooterDir.z);
+        playerModel.rotation.y = normalizeAngle(shooterYaw - player.rotation.y);
+    }
     const finalRotation = playerModel.rotation.clone();
-    finalRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
+    // 弾が正面から来たら後ろへ仰向け、背後から来たら前へ倒れる
+    const modelWorldQuat = new THREE.Quaternion();
+    playerModel.getWorldQuaternion(modelWorldQuat);
+    const modelForward = new THREE.Vector3(0, 0, 1).applyQuaternion(modelWorldQuat).setY(0).normalize();
+    const hitFromFront = modelForward.dot(impactDir) < 0;
+    const fallSign = hitFromFront ? -1 : 1;
+    finalRotation.x += fallSign * fallRotationAxisAngle;
     new TWEEN.Tween(playerModel.rotation).to({ x: finalRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
 
-    // カメラをプレイヤーの少し後ろ、少し上に移動させ、倒れたプレイヤーモデルを映す
-    const cameraOffset = new THREE.Vector3(0, 5, -8); // プレイヤーの後ろ上方からの視点
-    cameraOffset.applyQuaternion(player.quaternion); // プレイヤーの向きに合わせてオフセットを適用
-    camera.position.copy(player.position).add(cameraOffset);
-    camera.lookAt(player.position.clone().add(new THREE.Vector3(0, 1, 0))); // プレイヤーの中心やや上を見る
+    // プレイヤー死亡キルカメラ: 遮蔽物を避けて必ずプレイヤーが映る角度を選ぶ
+    const playerLookAt = player.position.clone().add(new THREE.Vector3(0, -playerTargetHeight + 1.1, 0));
+    const preferredDir = projectile && projectile.velocity ? projectile.velocity.clone() : null;
+    const playerDeathCamPos = findClearKillCameraPosition(player.position.clone(), playerLookAt, obstacles, preferredDir);
+    camera.position.copy(playerDeathCamPos);
+    camera.lookAt(playerLookAt);
 
     const redFlashOverlay = document.getElementById('red-flash-overlay');
     if (redFlashOverlay) {
@@ -3234,7 +4922,7 @@ function startPlayerDeathSequence(projectile) {
             // プレイヤーモデルの回転をリセット
             playerModel.rotation.set(0, 0, 0); 
             // playerModelがplayerの子として正しく配置されるようにリセット
-            playerModel.position.set(0, playerTargetHeight, 0); 
+            playerModel.position.set(0, -playerTargetHeight, 0); 
     
             // カメラをリセット (通常のプレイヤー視点に戻す)
             camera.position.set(0, 0, 0); // 相対位置としてリセット
@@ -3242,6 +4930,12 @@ function startPlayerDeathSequence(projectile) {
             
             if (gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
                 respawnPlayer(); // プレイヤーをリスポーン地点に移動
+                if (isFollowingPlayerMode) {
+                    for (const ai of ais) {
+                        if (ai && ai.team === 'player') ai.userData.followActive = true;
+                    }
+                    warpTeammatesInFrontForFollow();
+                }
                 isGameRunning = true; // ゲームを再開
                 if (player) player.traverse((object) => { object.visible = true; }); // プレイヤーをシーンに再追加
                 // UIを再表示
@@ -3336,7 +5030,30 @@ function createWindows(obstacleMesh, buildingWidth, buildingHeight, buildingDept
     }
 }
 
-function aiFallDownCinematicSequence(impactVelocity, ai) {
+function shouldPlayAIDeathKillCam(ai, killerSource) {
+    const mode = gameSettings.killCamMode || 'playerOnly';
+    if (mode === 'all') return true;
+    if (mode === 'playerOnly') {
+        return killerSource === 'player' && ai && ai.team === 'enemy';
+    }
+    return true;
+}
+
+function finalizeAIDeathWithoutKillCam(ai) {
+    if (!ai) return;
+    ai.targetWeaponPickup = null;
+    if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+        respawnAI(ai);
+    } else {
+        ai.visible = false;
+    }
+}
+
+function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown') {
+    if (!shouldPlayAIDeathKillCam(ai, killerSource)) {
+        finalizeAIDeathWithoutKillCam(ai);
+        return;
+    }
     if (isAIDeathPlaying) return;
     isAIDeathPlaying = true;
     ai.targetWeaponPickup = null; // Clear target weapon pickup when AI dies
@@ -3350,9 +5067,10 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
     if (cross) cross.style.display = 'none';
     createRedSmokeEffect(ai.position);
     const aiDeathLocation = ai.position.clone();
-    const targetCameraPosition = findClearCameraPosition(aiDeathLocation, obstacles);
+    const aiLookAt = aiDeathLocation.clone().add(new THREE.Vector3(0, 1.2, 0));
+    const targetCameraPosition = findClearKillCameraPosition(aiDeathLocation, aiLookAt, obstacles, impactVelocity);
     cinematicCamera.position.copy(targetCameraPosition);
-    cinematicCamera.lookAt(aiDeathLocation.clone().add(new THREE.Vector3(0, 1, 0)));
+    cinematicCamera.lookAt(aiLookAt);
     cinematicCamera.fov = 75;
     cinematicCamera.aspect = window.innerWidth / window.innerHeight;
     cinematicCamera.updateProjectionMatrix();
@@ -3367,11 +5085,8 @@ function aiFallDownCinematicSequence(impactVelocity, ai) {
     setTimeout(() => {
         isAIDeathPlaying = false;
         cinematicTargetAI = null;
-            if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
-                respawnAI(ai);
-            } else { // battleモードまたは通常のteamモード
-                ai.visible = false;
-            }        if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
+        finalizeAIDeathWithoutKillCam(ai);
+        if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
             if (joy) joy.style.display = 'block';
             if (fire) fire.style.display = 'block';
             if (cross) cross.style.display = 'block';
@@ -3500,6 +5215,43 @@ function findClearCameraPosition(targetPosition, obstaclesArray, projectile) {
     return bestCandidate || targetPosition.clone().add(new THREE.Vector3(0, 15, 0));
 }
 
+function findClearKillCameraPosition(targetPosition, lookAtTarget, obstaclesArray, preferredDirection = null) {
+    const candidates = [];
+    const up = new THREE.Vector3(0, 1, 0);
+    if (preferredDirection && preferredDirection.lengthSq() > 1e-6) {
+        const dir = preferredDirection.clone().normalize();
+        candidates.push(targetPosition.clone().add(dir.clone().multiplyScalar(-10)).add(new THREE.Vector3(0, 4.5, 0)));
+        candidates.push(targetPosition.clone().add(dir.clone().multiplyScalar(-8)).add(new THREE.Vector3(0, 6.0, 0)));
+    }
+
+    for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const r = i % 2 === 0 ? 8.5 : 11.5;
+        const h = i % 3 === 0 ? 3.8 : (i % 3 === 1 ? 5.5 : 7.0);
+        candidates.push(targetPosition.clone().add(new THREE.Vector3(Math.cos(a) * r, h, Math.sin(a) * r)));
+    }
+    candidates.push(targetPosition.clone().add(new THREE.Vector3(0, 9.5, 0.5)));
+
+    let bestCandidate = null;
+    let bestScore = -Infinity;
+    for (const candidate of candidates) {
+        const toLook = new THREE.Vector3().subVectors(lookAtTarget, candidate);
+        const distToLook = toLook.length();
+        if (distToLook < 0.01) continue;
+        raycaster.set(candidate, toLook.normalize());
+        const hits = raycaster.intersectObjects(obstaclesArray, true);
+        const clear = hits.length === 0 || hits[0].distance > distToLook - 0.15;
+        if (clear) return candidate;
+
+        const score = hits.length > 0 ? hits[0].distance : 0;
+        if (score > bestScore) {
+            bestScore = score;
+            bestCandidate = candidate;
+        }
+    }
+    return bestCandidate || targetPosition.clone().add(new THREE.Vector3(0, 12, 0.5));
+}
+
 // 指定された位置の真下にある最適な地面のY座標を返すヘルパー関数
 function getGroundY(position, objectBodyHeight) {
     let currentGroundY = -FLOOR_HEIGHT; // デフォルトはステージの最下部
@@ -3535,6 +5287,28 @@ function getGroundY(position, objectBodyHeight) {
         }
     }
     return currentGroundY + objectBodyHeight / 2; // オブジェクトの中心Y座標としての着地位置
+}
+
+// Feet-based ground Y (for rigs whose origin is at the feet, e.g. AI/character groups)
+function getGroundSurfaceY(position) {
+    let currentGroundY = -FLOOR_HEIGHT;
+    const horizontalBox = new THREE.Box2(
+        new THREE.Vector2(position.x - 0.25, position.z - 0.25),
+        new THREE.Vector2(position.x + 0.25, position.z + 0.25)
+    );
+    for (const obs of obstacles) {
+        if (obs.userData.isWall) continue;
+        const obstacleBox = new THREE.Box3().setFromObject(obs);
+        const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
+        const obstacleHorizontalBox = new THREE.Box2(
+            new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z),
+            new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z)
+        );
+        if (horizontalBox.intersectsBox(obstacleHorizontalBox)) {
+            if (topOfObstacle > currentGroundY) currentGroundY = topOfObstacle;
+        }
+    }
+    return currentGroundY;
 }
 
 // プレイヤーが障害物にめり込んでいる場合に、外側に押し出す関数
@@ -3703,11 +5477,6 @@ function animate() {
 
     if (window.justRestarted) {
         window.justRestarted = false;
-        console.log("--- ANIMATE START DEBUG ---");
-        const playerDir = new THREE.Vector3();
-        player.getWorldDirection(playerDir);
-        console.log("Player Direction at Animate Start:", JSON.stringify(playerDir));
-        console.log("---------------------------");
     }
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
@@ -3733,11 +5502,20 @@ function animate() {
     }
     const timeElapsed = clock.getElapsedTime();
     const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+
+    // Player MG reload completion (needs to run even when not firing)
+    if (playerMGReloadUntil > 0 && timeElapsed >= playerMGReloadUntil) {
+        playerMGReloadUntil = 0;
+        ammoMG = MAX_AMMO_MG;
+        hideReloadingText();
+    }
     
     // Crouching state change adjustment
     const oldPlayerTargetHeight = playerTargetHeight;
-    // しゃがんだ時に手すり(高さ1.0)より低くなるように、目標の高さを0.9に変更
-    playerTargetHeight = isCrouchingToggle ? 0.9 : 2.0; 
+    // プレイヤー当たり判定/拾得判定が崩れない高さに固定
+    const playerStandingHeight = 2.0;
+    const playerCrouchHeight = 0.9;
+    playerTargetHeight = isCrouchingToggle ? playerCrouchHeight : playerStandingHeight;
     // しゃがむ/立つときに高さを即座に反映させる
     if (playerTargetHeight < oldPlayerTargetHeight) { // Crouching down
         player.position.y -= oldPlayerTargetHeight - playerTargetHeight;
@@ -3806,6 +5584,14 @@ function animate() {
         return;
     }
 
+    if (isPlayerDeathPlaying) {
+        const playerLookAt = player.position.clone().add(new THREE.Vector3(0, -playerTargetHeight + 1.0, 0));
+        camera.lookAt(playerLookAt);
+        TWEEN.update();
+        renderer.render(scene, camera);
+        return;
+    }
+
     if (!isGameRunning) {
         renderer.render(scene, camera);
         return;
@@ -3817,13 +5603,13 @@ function animate() {
     }
     if (playerWeaponDisplay) { // グローバル変数を使用し、nullチェック
         let weaponName = currentWeapon;
-        let ammoCount = '∞';
+        let ammoCount = 0;
         switch (currentWeapon) {
             case WEAPON_MG: weaponName = 'Machinegun'; ammoCount = ammoMG; break;
             case WEAPON_RR: weaponName = 'Rocket'; ammoCount = ammoRR; break;
             case WEAPON_SR: weaponName = 'Sniper'; ammoCount = ammoSR; break;
             case WEAPON_SG: weaponName = 'Shotgun'; ammoCount = ammoSG; break;
-            case WEAPON_PISTOL: weaponName = 'Pistol'; break;
+            case WEAPON_PISTOL: weaponName = 'Pistol'; ammoCount = '∞'; break;
         }
         playerWeaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`; // playerWeaponDisplayを使用
     }
@@ -3832,6 +5618,7 @@ function animate() {
     }
     if (isScoping) {
         document.getElementById('crosshair').style.display = 'none';
+        updateSniperScopeAutoAim(delta);
     } else {
         if (scopeOverlay.style.display === 'none') {
             document.getElementById('crosshair').style.display = 'block';
@@ -3843,7 +5630,6 @@ function animate() {
     if (keySet.has('KeyA')) keyboardMoveVector.x -= 1;
     if (keySet.has('KeyD')) keyboardMoveVector.x += 1;
     let finalMoveVector = joystickMoveVector.length() > 0 ? joystickMoveVector.clone() : keyboardMoveVector.clone();
-    console.log(`[ANIMATE] finalMoveVector.y: ${finalMoveVector.y}`);
 
     if (finalMoveVector.length() > 0) finalMoveVector.normalize();
     // リスポーン直後の移動を強制的に停止させる
@@ -3855,13 +5641,10 @@ function animate() {
     }
     const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
     const rightMove = finalMoveVector.x * currentMoveSpeed * delta;
-    console.log(`[ANIMATE] forwardMove: ${forwardMove}`);
 
     const moveDirection = new THREE.Vector3(rightMove, 0, -forwardMove);
-    console.log(`[ANIMATE] moveDirection.z (before rotate): ${moveDirection.z}`);
 
     moveDirection.applyQuaternion(player.quaternion);
-    console.log(`[ANIMATE] moveDirection.z (after rotate): ${moveDirection.z}, player.rotation.y: ${player.rotation.y}`);
 
     if (isElevating) {
         const elevateSpeed = 5.0;
@@ -4049,6 +5832,49 @@ function animate() {
             ai.visible = false; // Just in case
             return;
         }
+
+        // AI MG reload completion
+        if (ai.userData && ai.userData.mgReloadUntil && timeElapsed >= ai.userData.mgReloadUntil) {
+            ai.userData.mgReloadUntil = 0;
+            ai.ammoMG = MAX_AMMO_MG;
+        }
+
+        if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.hp > 0) {
+            // Start-of-match combat enforcement: keep all AIs (ally + enemies) in combat immediately.
+            if (timeElapsed < 2.5 && (ai.state === 'HIDING' || ai.state === 'FOLLOWING')) {
+                ai.state = 'ATTACKING';
+                ai.currentAttackTime = timeElapsed;
+                ai.lastAttackTime = -999;
+                if (ai.userData) {
+                    ai.userData.nextPerceptionTime = 0;
+                    ai.userData.cachedVisibleOpponentInfo = null;
+                    ai.userData.cachedIsAISeen = false;
+                }
+            }
+            // Also correct initial facing so AIs don't start looking outward.
+            if (timeElapsed < 1.2) {
+                const initTarget = getClosestOpponentPosition(ai);
+                if (initTarget) {
+                    ai.targetPosition.copy(initTarget);
+                    ai.rotation.y = Math.atan2(initTarget.x - ai.position.x, initTarget.z - ai.position.z);
+                }
+            }
+        }
+
+        if (ai.state === 'MOVING_TO_LADDER' || ai.state === 'CLIMBING' || ai.state === 'ROOFTOP_COMBAT' || ai.state === 'DESCENDING') {
+            ai.state = 'MOVING';
+        }
+        if (!ENABLE_AI_ROOFTOP_LOGIC && (ai.userData.rooftopPhase || 'none') !== 'none') {
+            ai.state = 'ATTACKING';
+            ai.isElevating = false;
+            ai.userData.rooftopIntent = false;
+            ai.userData.onRooftop = false;
+            ai.userData.rooftopSensor = null;
+            ai.userData.rooftopObstacle = null;
+            ai.userData.rooftopLadderPos = null;
+            ai.userData.rooftopDecisionMade = false;
+            ai.userData.rooftopPhase = 'none';
+        }
         const currentAISpeed = ai.isCrouching ? AI_SPEED / 2 : AI_SPEED;
         const separation_vec = new THREE.Vector3(0, 0, 0);
 
@@ -4056,68 +5882,90 @@ function animate() {
         const isTeammateInTeamModeOrArcade = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player';
 
         // FOLLOWING_PLAYER ロジック
-        if (isTeammateInTeamModeOrArcade && isFollowingPlayerMode) {
-            ai.state = 'FOLLOWING'; // Ensure state is set
-
+        if (isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false) {
             const playerPos = player.position.clone();
-            const distanceToPlayer = ai.position.distanceTo(playerPos);
-            const FOLLOW_RADIUS = 8.0;
+            const avoidLockActive = ai.avoiding && ai.userData && ai.userData.avoidUntil && timeElapsed < ai.userData.avoidUntil;
+            if (ai.avoiding && ai.position.distanceTo(ai.targetPosition) < 0.7) {
+                ai.avoiding = false;
+                if (ai.userData) ai.userData.avoidUntil = 0;
+            }
 
             // --- Aiming and Shooting Logic ---
-            let hasVisibleEnemy = false;
             let targetToLookAt = player.position.clone(); // Default to looking at player
+            let foundVisibleEnemy = false;
             
             for (const enemyAI of ais) {
                 if (enemyAI.team !== 'enemy' || enemyAI.hp <= 0) continue;
                 
                 const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
                 const enemyHeadPos = enemyAI.children[1].getWorldPosition(new THREE.Vector3());
+                const enemyTorsoPos = getAIUpperTorsoPos(enemyAI);
 
-                if (checkLineOfSight(aiHeadPos, enemyHeadPos, obstacles)) {
-                    hasVisibleEnemy = true;
+                if (checkLineOfSight(aiHeadPos, enemyHeadPos, obstacles) || checkLineOfSight(aiHeadPos, enemyTorsoPos, obstacles)) {
+                    foundVisibleEnemy = true;
                     targetToLookAt = enemyAI.position.clone();
-                    aiShoot(ai, timeElapsed);
-                    break; // Found an enemy, shoot and stop searching
+                    break;
                 }
             }
-            
-            // --- Set AI Rotation ---
-            const targetAngle = Math.atan2(targetToLookAt.x - ai.position.x, targetToLookAt.z - ai.position.z);
-            ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, targetAngle, 5 * delta);
 
-            // --- Movement Logic ---
-            if (distanceToPlayer > FOLLOW_RADIUS) {
-                const playerPos = player.position.clone();
-                const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
-
-                // Check if there is a direct line of sight to the player
-                if (checkLineOfSight(aiHeadPos, playerPos, obstacles)) {
-                    ai.targetPosition.copy(playerPos);
+            if (foundVisibleEnemy) {
+                ai.userData.followCombatUntil = timeElapsed + 2.2;
+                ai.state = 'ATTACKING';
+                if (!ai.currentAttackTime) ai.currentAttackTime = timeElapsed;
+                aiShoot(ai, timeElapsed);
+            } else if (!avoidLockActive) {
+                const combatUntil = (ai.userData && ai.userData.followCombatUntil) ? ai.userData.followCombatUntil : 0;
+                if (combatUntil > timeElapsed) {
+                    ai.state = 'ATTACKING';
                 } else {
-                    // Path is blocked, find a breadcrumb to follow by checking from newest to oldest
+                    ai.state = 'FOLLOWING';
+                }
+                if (ai.targetWeaponPickup && !ai.targetWeaponPickup.parent) {
+                    ai.targetWeaponPickup = null;
+                }
+                if (!foundVisibleEnemy && combatUntil <= timeElapsed && !ai.targetWeaponPickup && findAndTargetWeapon(ai)) {
+                    ai.state = 'MOVING';
+                }
+                if (ai.state === 'MOVING') {
+                    targetToLookAt.copy(ai.targetPosition);
+                } else {
+                // 常にプレイヤー後方のスロットを追う（見失い対策はパンくず）
+                const desiredBehindPos = getFollowSlotPosition(ai);
+                // プレイヤーに近すぎると重なって見えなくなるため最低距離を維持
+                const minFollowDistance = 4.0;
+                const vecFromPlayer = desiredBehindPos.clone().sub(playerPos);
+                if (vecFromPlayer.lengthSq() > 1e-6 && ai.position.distanceTo(playerPos) < minFollowDistance) {
+                    vecFromPlayer.normalize();
+                    desiredBehindPos.copy(playerPos).add(vecFromPlayer.multiplyScalar(minFollowDistance + 1.8));
+                    desiredBehindPos.y = -FLOOR_HEIGHT;
+                }
+                const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
+                const desiredHeadPos = desiredBehindPos.clone().add(new THREE.Vector3(0, 1.0, 0));
+
+                if (checkLineOfSight(aiHeadPos, desiredHeadPos, obstacles)) {
+                    ai.targetPosition.lerp(desiredBehindPos, 0.35);
+                } else {
                     let foundCrumb = false;
                     for (let i = playerBreadcrumbs.length - 1; i >= 0; i--) {
                         const crumb = playerBreadcrumbs[i];
-                        if (checkLineOfSight(aiHeadPos, crumb, obstacles)) {
+                        const crumbDistToPlayer = crumb.distanceTo(playerPos);
+                        if (crumbDistToPlayer >= 4.2 && checkLineOfSight(aiHeadPos, crumb, obstacles)) {
                             ai.targetPosition.copy(crumb);
                             foundCrumb = true;
-                            break; // Target the newest visible crumb
+                            break;
                         }
                     }
-
                     if (!foundCrumb) {
-                        // Can't see any part of the trail, try to go to the very last known position
-                        if (playerBreadcrumbs.length > 0) {
-                            ai.targetPosition.copy(playerBreadcrumbs[playerBreadcrumbs.length - 1]);
-                        } else {
-                            ai.targetPosition.copy(playerPos); // Fallback
-                        }
+                        ai.targetPosition.copy(desiredBehindPos);
                     }
                 }
-            } else {
-                // AI is close enough, stop moving
-                ai.targetPosition.copy(ai.position); 
+                targetToLookAt.copy(playerPos);
+                }
             }
+
+            // follow中は基本プレイヤー向き（敵視認時は上で切替）
+            const targetAngle = Math.atan2(targetToLookAt.x - ai.position.x, targetToLookAt.z - ai.position.z);
+            ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, targetAngle, 5 * delta);
             
         } else if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && ai.state === 'FOLLOWING') {
             // AIチームメイトだが追従モードがOFFになり、かつ現在の状態がFOLLOWINGの場合、HIDINGに戻す
@@ -4136,28 +5984,224 @@ function animate() {
         });
         separation_vec.multiplyScalar(delta * AI_SEPARATION_FORCE);
         aiCheckPickup(ai);
-        const isAISeen = isVisibleToPlayer(ai); // プレイヤーからAIが見えるかどうかの判定
+        let visibleOpponentInfo = ai.userData.cachedVisibleOpponentInfo;
+        let isAISeen = !!ai.userData.cachedIsAISeen;
+            if (timeElapsed >= (ai.userData.nextPerceptionTime || 0)) {
+            // Reduce frequency of LOS checks to lower CPU by spacing updates (~180-240ms)
+            visibleOpponentInfo = getVisibleOpponentInfo(ai);
+            isAISeen = !!visibleOpponentInfo;
+            ai.userData.cachedVisibleOpponentInfo = visibleOpponentInfo;
+            ai.userData.cachedIsAISeen = isAISeen;
+            ai.userData.nextPerceptionTime = timeElapsed + 0.18 + Math.random() * 0.06;
+        }
+        if (visibleOpponentInfo) {
+            ai.lastSeenEnemyTime = timeElapsed;
+            ai.lastKnownEnemyPos = visibleOpponentInfo.targetPos.clone();
+        }
 
+        // Make teammates more proactive: if a teammate is idle (HIDING or FOLLOWING when not following),
+        // pulse them to search/move toward the nearest opponent or patrol point.
+        if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && (ai.state === 'HIDING' || ai.state === 'FOLLOWING') && timeElapsed >= (ai.userData.searchPulseAt || 0)) {
+            const close = getClosestOpponentPosition(ai);
+            if (close) {
+                ai.state = 'MOVING';
+                ai.targetPosition.copy(close);
+            } else {
+                // No nearby opponent: pick a short patrol near player
+                const ang = Math.random() * Math.PI * 2;
+                const r = 6 + Math.random() * 6;
+                const patrol = player.position.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0, Math.sin(ang) * r));
+                patrol.y = getGroundSurfaceY(patrol);
+                ai.state = 'MOVING';
+                ai.targetPosition.copy(patrol);
+            }
+            ai.userData.searchPulseAt = timeElapsed + 0.6; // pulse every 0.6s
+        }
 
-        // 新しいフラグ: AIチームメイトが敵AIを視認しているか
-        let isEnemyAISeenByTeammate = false;
-        if (isTeammateInTeamModeOrArcade) {
-            for (const enemyAI of ais) {
-                if (enemyAI.team === 'enemy' && enemyAI.hp > 0) {
-                    // AIから敵AIへの視線が通るかチェック
-                    const aiHeadPos = ai.children[1].getWorldPosition(new THREE.Vector3());
-                    const enemyHeadPos = enemyAI.children[1].getWorldPosition(new THREE.Vector3());
-                    if (checkLineOfSight(aiHeadPos, enemyHeadPos, obstacles)) {
-                        isEnemyAISeenByTeammate = true;
-                        break;
+        // Fallback: if a teammate remains HIDING/FOLLOWING (not following player) for too long,
+        // force them to move to a nearby opponent or patrol point to avoid staying idle.
+        if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && (ai.state === 'HIDING' || ai.state === 'FOLLOWING')) {
+            const stuckDuration = timeElapsed - (ai.lastHiddenTime || 0);
+            if (stuckDuration > 2.5) {
+                const close = getClosestOpponentPosition(ai);
+                if (close) {
+                    ai.state = 'MOVING';
+                    ai.targetPosition.copy(close);
+                } else {
+                    const ang = Math.random() * Math.PI * 2;
+                    const r = 6 + Math.random() * 6;
+                    const patrol = player.position.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0, Math.sin(ang) * r));
+                    patrol.y = getGroundSurfaceY(patrol);
+                    ai.state = 'MOVING';
+                    ai.targetPosition.copy(patrol);
+                }
+                ai.userData.searchPulseAt = timeElapsed + 0.9;
+                ai.lastHiddenTime = timeElapsed - 0.1; // reset a little to avoid immediate re-trigger
+            }
+        }
+
+        const underFireRecently = (timeElapsed - (ai.lastUnderFireTime || -999)) < 1.1;
+        const isFollowLockedTeammate = isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false;
+
+        if (ENABLE_EXPERIMENTAL_AI_FLOW) {
+            // Proactive search: prevents "standing still until shot".
+            if (!isFollowLockedTeammate && !isAISeen && !ai.isElevating) {
+                const lockedRooftopState = ai.state === 'MOVING_TO_LADDER' || ai.state === 'CLIMBING' || ai.state === 'ROOFTOP_COMBAT' || ai.state === 'DESCENDING';
+                if (!lockedRooftopState && timeElapsed >= (ai.userData.searchPulseAt || 0)) {
+                    const huntPosBase = ai.lastKnownEnemyPos || getClosestOpponentPosition(ai);
+                    if (huntPosBase) {
+                        const huntPos = huntPosBase.clone();
+                        huntPos.x += (Math.random() - 0.5) * 2.5;
+                        huntPos.z += (Math.random() - 0.5) * 2.5;
+                        huntPos.y = getGroundSurfaceY(huntPos);
+                        ai.state = 'MOVING';
+                        ai.targetPosition.copy(huntPos);
+                    } else {
+                        ai.state = 'ATTACKING';
+                        ai.currentAttackTime = timeElapsed;
+                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
                     }
+                    ai.userData.searchPulseAt = timeElapsed + 1.1 + Math.random() * 0.8;
+                }
+            } else if (isAISeen) {
+                ai.userData.searchPulseAt = timeElapsed + 1.4;
+            }
+        }
+
+        // Rooftop behavior decision (weapon-based probability; both enemy and teammate AI)
+        if (ENABLE_AI_ROOFTOP_LOGIC) {
+            tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate);
+        }
+
+        if (ENABLE_AI_ROOFTOP_LOGIC && ai.userData.rooftopPhase === 'to_ladder') {
+            if (!ai.userData.rooftopLadderPos || !ai.userData.rooftopObstacle) {
+                ai.userData.rooftopIntent = false;
+                ai.userData.rooftopPhase = 'none';
+            } else {
+                ai.state = 'MOVING';
+                ai.targetPosition.copy(ai.userData.rooftopLadderPos);
+                ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
+                if (ai.position.distanceTo(ai.targetPosition) < 1.0) {
+                    const ladderSnap = ai.userData.rooftopSensor?.userData?.ladderPos || ai.userData.rooftopLadderPos;
+                    ai.position.x = ladderSnap.x;
+                    ai.position.z = ladderSnap.z;
+                    ai.isElevating = true;
+                    ai.userData.elevatingDirection = 1;
+                    ai.userData.rooftopTargetY = ai.userData.rooftopObstacle.position.y + ai.userData.rooftopObstacle.geometry.parameters.height / 2;
+                    ai.userData.rooftopPhase = 'climbing';
+                    ai.userData.rooftopStateSince = timeElapsed;
                 }
             }
+        }
+
+        if (ENABLE_AI_ROOFTOP_LOGIC && ai.userData.rooftopPhase === 'on_roof') {
+            ai.userData.onRooftop = true;
+            ai.state = 'ATTACKING';
+            aiShoot(ai, timeElapsed);
+            if (ai.userData.rooftopObstacle) {
+                const c = ai.userData.rooftopObstacle.position;
+                const halfW = (ai.userData.rooftopObstacle.geometry.parameters.width || 6) * 0.32;
+                const halfD = (ai.userData.rooftopObstacle.geometry.parameters.depth || 6) * 0.32;
+                ai.targetPosition.set(
+                    c.x + (Math.random() - 0.5) * halfW,
+                    ai.position.y,
+                    c.z + (Math.random() - 0.5) * halfD
+                );
+            }
+            // If AI runs out of ammo while on rooftop, force a descent.
+            if (isAIWeaponOutOfAmmo(ai) && !ai.userData.rooftopDecisionMade) {
+                ai.userData.rooftopDecisionMade = true;
+                ai.userData.rooftopPhase = 'to_ground';
+                ai.userData.rooftopStateSince = timeElapsed;
+            }
+        }
+
+        if (ENABLE_AI_ROOFTOP_LOGIC && ai.userData.rooftopPhase === 'to_ground') {
+            if (!ai.userData.rooftopLadderPos) {
+                ai.userData.rooftopPhase = 'none';
+                ai.userData.rooftopIntent = false;
+                ai.userData.onRooftop = false;
+            } else {
+                ai.state = 'MOVING';
+                ai.targetPosition.copy(ai.userData.rooftopLadderPos);
+                ai.targetPosition.y = ai.position.y;
+                const flatDist = new THREE.Vector3(ai.position.x - ai.targetPosition.x, 0, ai.position.z - ai.targetPosition.z).length();
+                if (flatDist < 0.9) {
+                    ai.isElevating = true;
+                    ai.userData.elevatingDirection = -1;
+                    ai.userData.rooftopTargetY = -FLOOR_HEIGHT;
+                    ai.userData.rooftopPhase = 'descending';
+                    ai.userData.rooftopStateSince = timeElapsed;
+                }
+            }
+        }
+
+        // AI vertical climb/descend animation via ladder
+        if (ENABLE_AI_ROOFTOP_LOGIC && ai.isElevating) {
+            const vDir = ai.userData.elevatingDirection || 1;
+            const climbSpeed = 3.6;
+            ai.position.y += vDir * climbSpeed * delta;
+            ai.targetPosition.copy(ai.position);
+            const targetY = ai.userData.rooftopTargetY ?? -FLOOR_HEIGHT;
+            if ((vDir > 0 && ai.position.y >= targetY) || (vDir < 0 && ai.position.y <= targetY)) {
+                ai.position.y = targetY;
+                ai.isElevating = false;
+                ai.userData.elevatingDirection = 0;
+                if (vDir > 0) {
+                    ai.userData.onRooftop = true;
+                    ai.userData.rooftopIntent = true;
+                    ai.userData.rooftopPhase = 'on_roof';
+                    ai.userData.rooftopStateSince = timeElapsed;
+                    ai.userData.rooftopDecisionMade = false;
+                    if (ai.userData.rooftopObstacle) {
+                        const center = ai.userData.rooftopObstacle.position.clone();
+                        const dir = new THREE.Vector3().subVectors(center, ai.position);
+                        dir.y = 0;
+                        if (dir.lengthSq() > 1e-6) {
+                            dir.normalize();
+                            ai.position.add(dir.multiplyScalar(1.2));
+                        }
+                    }
+                } else {
+                    ai.userData.onRooftop = false;
+                    ai.userData.rooftopIntent = false;
+                    ai.userData.rooftopSensor = null;
+                    ai.userData.rooftopObstacle = null;
+                    ai.userData.rooftopLadderPos = null;
+                    ai.userData.rooftopDecisionMade = false;
+                    ai.userData.rooftopPhase = 'none';
+                    ai.userData.rooftopStateSince = timeElapsed;
+                }
+            }
+        }
+
+        if (!isFollowLockedTeammate && ai.state !== 'CLIMBING' && ai.state !== 'EVADING' && ai.state !== 'AVOIDING' && ai.state !== 'MOVING_TO_LADDER' && ai.state !== 'ROOFTOP_COMBAT' && ai.state !== 'DESCENDING') {
+            if (underFireRecently && !isAISeen) {
+                const threatPos = ai.lastKnownThreatPos || ai.lastKnownEnemyPos || getClosestOpponentPosition(ai);
+                const coverPos = findSmartCoverPosition(ai, threatPos);
+                if (coverPos) {
+                    ai.state = 'EVADING';
+                    ai.targetPosition.copy(coverPos);
+                }
+            } else if (!isAISeen && ai.state === 'ATTACKING') {
+                if ((timeElapsed - (ai.lastSeenEnemyTime || -999)) < 2.0 && ai.lastKnownEnemyPos) {
+                    ai.state = 'MOVING';
+                    ai.targetPosition.copy(ai.lastKnownEnemyPos);
+                } else {
+                    ai.state = 'HIDING';
+                    ai.lastHiddenTime = timeElapsed;
+                }
+            }
+        }
+        if (isAISeen && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING' && ai.state !== 'EVADING' && ai.state !== 'AVOIDING' && ai.state !== 'MOVING_TO_LADDER' && ai.state !== 'ROOFTOP_COMBAT' && ai.state !== 'DESCENDING') {
+            ai.state = 'ATTACKING';
+            ai.currentAttackTime = timeElapsed;
+            ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
         }
         const distanceToTarget = ai.position.distanceTo(ai.targetPosition);
         const isArrived = distanceToTarget < ARRIVAL_THRESHOLD;
         const isMoving = !isArrived;
-        if (ai.state !== 'CLIMBING' && !ai.isElevating) {
+        if (ai.state !== 'CLIMBING' && ai.state !== 'DESCENDING' && !ai.isElevating) {
             if (ai.state === 'HIDING') {
                 ai.isCrouching = true;
             } else if (ai.state === 'FOLLOWING') { // FOLLOWING状態ではしゃがまない
@@ -4166,31 +6210,15 @@ function animate() {
                 ai.isCrouching = false;
             }
             ai.scale.y = ai.isCrouching ? 0.7 : 1.0;
-            ai.position.y = -FLOOR_HEIGHT - (ai.isCrouching ? (BODY_HEIGHT + HEAD_RADIUS * 2) * 0.15 : 0);
+            ai.position.y = getGroundSurfaceY(ai.position);
         }
         if (ai.state === 'ATTACKING' || isMoving) {
             let targetAngle;
-            if (isTeamModeOrTeamArcade && ai.team === 'player') { // isTeamModeOrTeamArcadeを使用
-                // 味方AIは最も近い敵AIの方向を向く
-                let closestEnemyAI = null;
-                let closestDistance = Infinity;
-                for (const enemyAI of ais) {
-                    if (enemyAI === ai || enemyAI.team !== 'enemy' || enemyAI.hp <= 0) continue;
-                    const distance = ai.position.distanceTo(enemyAI.position);
-                    if (distance < closestDistance) {
-                        closestDistance = distance;
-                        closestEnemyAI = enemyAI;
-                    }
-                }
-                if (closestEnemyAI) {
-                    targetAngle = Math.atan2(closestEnemyAI.position.x - ai.position.x, closestEnemyAI.position.z - ai.position.z);
-                } else {
-                    // 敵AIがいない場合はプレイヤーを向く（フォールバック）
-                    targetAngle = Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z);
-                }
+            const closestOpponentPos = getClosestOpponentPosition(ai);
+            if (closestOpponentPos) {
+                targetAngle = Math.atan2(closestOpponentPos.x - ai.position.x, closestOpponentPos.z - ai.position.z);
             } else {
-                // 敵AI（team/teamArcadeモード）または通常のAI（battle/arcadeモード）はプレイヤーを向く
-                targetAngle = Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z);
+                targetAngle = ai.rotation.y;
             }
             ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, targetAngle, 5 * delta);
         }
@@ -4248,7 +6276,9 @@ function animate() {
                             ai.currentAttackTime = timeElapsed;
                             ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
                         } else { // プレイヤーが見えない場合
-                            const effectiveHideDuration = HIDE_DURATION * (1.0 + (1.0 - ai.aggression) * 1.5);
+                            let effectiveHideDuration = HIDE_DURATION * (1.0 + (1.0 - ai.aggression) * 1.5);
+                            // Teammates should hide far less; make them aggressive.
+                            if (isTeammateInTeamModeOrArcade) effectiveHideDuration *= 0.35;
                             if ((timeElapsed - ai.lastHiddenTime) >= effectiveHideDuration) {
                                 if (!findNewHidingSpot(ai)) { // 新しい隠れ場所を探すのに失敗した場合
                                     ai.state = 'ATTACKING'; // 強制的に攻撃状態に遷移
@@ -4263,12 +6293,19 @@ function animate() {
                 }
                 break;
             case 'FOLLOWING': // 新しい追従状態
-                ai.avoiding = false;
                 // 常にプレイヤーへの追従移動ロジックを実行する
                 const oldAIPosition_follow = ai.position.clone();
-                let moveDirection_follow = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
+                const toFollowTarget = new THREE.Vector3().subVectors(ai.targetPosition, ai.position);
+                const followDistance = toFollowTarget.length();
+                if (followDistance < 0.35) {
+                    break;
+                }
+                let moveDirection_follow = toFollowTarget.multiplyScalar(1 / followDistance);
                 const moveVectorDelta_follow = moveDirection_follow.clone().multiplyScalar(currentAISpeed * delta);
                 moveVectorDelta_follow.add(separation_vec); // AI間の分離力も考慮
+                if (moveVectorDelta_follow.lengthSq() < 1e-8) {
+                    break;
+                }
                 moveDirection_follow = moveVectorDelta_follow.normalize(); // Normalize after adding separation_vec
 
                 raycaster.set(oldAIPosition_follow.clone().add(new THREE.Vector3(0, 1.0, 0)), moveDirection_follow);
@@ -4290,15 +6327,122 @@ function animate() {
                 }
                 break; // FOLLOWING状態の処理終了
 
+            case 'MOVING_TO_LADDER':
+                ai.avoiding = false;
+                if ((timeElapsed - (ai.userData.rooftopStateSince || timeElapsed)) > 7.0) {
+                    ai.userData.rooftopIntent = false;
+                    ai.userData.onRooftop = false;
+                    ai.userData.rooftopSensor = null;
+                    ai.userData.rooftopObstacle = null;
+                    ai.userData.rooftopLadderPos = null;
+                    ai.userData.rooftopDecisionMade = false;
+                    ai.state = 'ATTACKING';
+                    ai.currentAttackTime = timeElapsed;
+                    break;
+                }
+                if (!ai.userData.rooftopLadderPos || !ai.userData.rooftopObstacle) {
+                    ai.userData.rooftopIntent = false;
+                    ai.state = 'ATTACKING';
+                    break;
+                }
+                ai.targetPosition.copy(ai.userData.rooftopLadderPos);
+                ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
+                if (ai.position.distanceTo(ai.targetPosition) < 1.05) {
+                    const ladderSnap = ai.userData.rooftopSensor?.userData?.ladderPos || ai.userData.rooftopLadderPos;
+                    ai.position.x = ladderSnap.x;
+                    ai.position.z = ladderSnap.z;
+                    ai.isElevating = true;
+                    ai.userData.elevatingDirection = 1;
+                    ai.userData.rooftopTargetY = ai.userData.rooftopObstacle.position.y + ai.userData.rooftopObstacle.geometry.parameters.height / 2;
+                    ai.state = 'CLIMBING';
+                    ai.userData.rooftopStateSince = timeElapsed;
+                }
+                break;
+
+            case 'CLIMBING':
+                ai.avoiding = false;
+                if ((timeElapsed - (ai.userData.rooftopStateSince || timeElapsed)) > 5.5) {
+                    ai.isElevating = false;
+                    ai.userData.elevatingDirection = 0;
+                    ai.userData.rooftopIntent = false;
+                    ai.state = 'ATTACKING';
+                    ai.currentAttackTime = timeElapsed;
+                }
+                // Vertical movement is handled by ai.isElevating block above.
+                break;
+
+            case 'ROOFTOP_COMBAT':
+                ai.avoiding = false;
+                ai.userData.onRooftop = true;
+                aiShoot(ai, timeElapsed);
+                ai.isCrouching = Math.random() < 0.35;
+                if (ai.userData.rooftopObstacle) {
+                    const c = ai.userData.rooftopObstacle.position;
+                    const halfW = (ai.userData.rooftopObstacle.geometry.parameters.width || 6) * 0.35;
+                    const halfD = (ai.userData.rooftopObstacle.geometry.parameters.depth || 6) * 0.35;
+                    ai.targetPosition.set(
+                        c.x + (Math.random() - 0.5) * halfW,
+                        ai.position.y,
+                        c.z + (Math.random() - 0.5) * halfD
+                    );
+                    const move = ai.targetPosition.clone().sub(ai.position);
+                    move.y = 0;
+                    if (move.lengthSq() > 0.01) {
+                        move.normalize().multiplyScalar(currentAISpeed * 0.35 * delta);
+                        ai.position.add(move);
+                    }
+                }
+                // If rooftop weapon is out of ammo, immediately start descending.
+                if (isAIWeaponOutOfAmmo(ai) && !ai.userData.rooftopDecisionMade) {
+                    ai.userData.rooftopDecisionMade = true;
+                    ai.state = 'DESCENDING';
+                    ai.userData.rooftopStateSince = timeElapsed;
+                }
+                break;
+
+            case 'DESCENDING':
+                ai.avoiding = false;
+                ai.isCrouching = false;
+                if ((timeElapsed - (ai.userData.rooftopStateSince || timeElapsed)) > 7.0) {
+                    ai.isElevating = false;
+                    ai.userData.elevatingDirection = 0;
+                    ai.userData.onRooftop = false;
+                    ai.userData.rooftopIntent = false;
+                    ai.state = 'ATTACKING';
+                    ai.currentAttackTime = timeElapsed;
+                    break;
+                }
+                if (!ai.userData.rooftopLadderPos || !ai.userData.rooftopObstacle) {
+                    ai.userData.rooftopIntent = false;
+                    ai.userData.onRooftop = false;
+                    ai.state = 'ATTACKING';
+                    break;
+                }
+                ai.targetPosition.copy(ai.userData.rooftopLadderPos);
+                ai.targetPosition.y = ai.position.y;
+                if (ai.position.distanceTo(new THREE.Vector3(ai.targetPosition.x, ai.position.y, ai.targetPosition.z)) < 0.9) {
+                    ai.position.x = ai.userData.rooftopLadderPos.x;
+                    ai.position.z = ai.userData.rooftopLadderPos.z;
+                    ai.isElevating = true;
+                    ai.userData.elevatingDirection = -1;
+                    ai.userData.rooftopTargetY = -FLOOR_HEIGHT;
+                    ai.userData.rooftopStateSince = timeElapsed;
+                }
+                break;
+
             case 'MOVING':
                 ai.avoiding = false;
                 if (isTeammateInTeamModeOrArcade) {
                     // 味方AIは武器を拾った後、すぐに攻撃状態に移行
                     if (isArrived) {
                         ai.targetWeaponPickup = null;
-                        ai.state = 'ATTACKING';
-                        ai.currentAttackTime = timeElapsed;
-                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                        if (isFollowingPlayerMode && ai.userData.followActive !== false) {
+                            ai.state = 'FOLLOWING';
+                        } else {
+                            ai.state = 'ATTACKING';
+                            ai.currentAttackTime = timeElapsed;
+                            ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                        }
                     }
                 } else {
                                                     if (isAISeen) {
@@ -4307,12 +6451,12 @@ function animate() {
                                                         ai.currentAttackTime = timeElapsed;
                                                         ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
                                                     } else if (isArrived) {
-                                                        // 目的地に到着したがプレイヤーが見えない場合、隠れ場所を探し続けるループに陥り
-                                                        // NaNが発生してフリーズする問題があった。
-                                                        // ここで強制的にATTACKING状態にすることで、ループを断ち切り、フリーズを回避する。
-                                                        ai.state = 'ATTACKING';
-                                                        ai.currentAttackTime = timeElapsed;
-                                                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                                                        if (ai.lastKnownEnemyPos && (timeElapsed - (ai.lastSeenEnemyTime || -999)) < 2.0) {
+                                                            ai.targetPosition.copy(ai.lastKnownEnemyPos);
+                                                        } else if (!findNewHidingSpot(ai)) {
+                                                            ai.state = 'HIDING';
+                                                            ai.lastHiddenTime = timeElapsed;
+                                                        }
                                                     }                }
                 break;
             case 'FLANKING':
@@ -4335,9 +6479,32 @@ function animate() {
                 break;
             case 'ATTACKING':
                 ai.avoiding = false;
+                if (isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false) {
+                    const combatUntil = (ai.userData && ai.userData.followCombatUntil) ? ai.userData.followCombatUntil : 0;
+                    if (combatUntil <= timeElapsed) {
+                        ai.state = 'FOLLOWING';
+                        break;
+                    }
+                }
+                if (isTeammateInTeamModeOrArcade && ai.position.distanceTo(player.position) > 16) {
+                    ai.state = 'MOVING';
+                    ai.targetPosition.copy(player.position);
+                    break;
+                }
                 const oldAIPosition_attack = ai.position.clone();
-                const directionToPlayer = new THREE.Vector3().subVectors(player.position, ai.position).normalize();
-                const strafeVector = new THREE.Vector3(directionToPlayer.z, 0, -directionToPlayer.x);
+                let attackTargetPos = getClosestOpponentPosition(ai);
+                if (!attackTargetPos) {
+                    if (isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false) {
+                        ai.state = 'FOLLOWING';
+                        break;
+                    }
+                    attackTargetPos = player.position.clone();
+                }
+                const directionToTarget = new THREE.Vector3().subVectors(attackTargetPos, ai.position);
+                directionToTarget.y = 0;
+                if (directionToTarget.lengthSq() < 1e-6) break;
+                directionToTarget.normalize();
+                const strafeVector = new THREE.Vector3(directionToTarget.z, 0, -directionToTarget.x);
                 const strafeSpeed = currentAISpeed * 0.5;
                 const moveVectorDelta_attack = strafeVector.multiplyScalar(ai.strafeDirection * strafeSpeed * delta);
                 moveVectorDelta_attack.add(separation_vec);
@@ -4347,6 +6514,34 @@ function animate() {
                     ai.strafeDirection *= -1;
                 }
                 aiShoot(ai, timeElapsed);
+                if (ENABLE_EXPERIMENTAL_AI_FLOW) {
+                    // If AI keeps seeing an opponent but doesn't fire, force tactical reposition.
+                    const attackStall = isAISeen && (timeElapsed - ai.lastAttackTime) > 1.2;
+                    if (attackStall) {
+                        if (Math.random() < 0.65 && findFlankingSpot(ai, timeElapsed)) {
+                            break;
+                        }
+                        const threatPos = (visibleOpponentInfo && visibleOpponentInfo.targetPos)
+                            ? visibleOpponentInfo.targetPos
+                            : (ai.lastKnownEnemyPos || getClosestOpponentPosition(ai));
+                        const coverPos = threatPos ? findSmartCoverPosition(ai, threatPos) : null;
+                        if (coverPos) {
+                            ai.state = 'MOVING';
+                            ai.targetPosition.copy(coverPos);
+                            ai.userData.searchPulseAt = timeElapsed + 0.8;
+                            break;
+                        }
+                        ai.strafeDirection *= -1;
+                        const nudge = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5);
+                        if (nudge.lengthSq() > 1e-6) {
+                            nudge.normalize().multiplyScalar(2.0);
+                            ai.state = 'MOVING';
+                            ai.targetPosition.copy(ai.position.clone().add(nudge));
+                            ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
+                            break;
+                        }
+                    }
+                }
                 if ((timeElapsed - ai.currentAttackTime) >= ATTACK_DURATION) {
                     if (isAISeen && Math.random() < ai.flankAggression && (timeElapsed - ai.lastFlankTime) > FLANK_COOLDOWN) {
                         if (findFlankingSpot(ai, timeElapsed)) {
@@ -4359,7 +6554,86 @@ function animate() {
                 }
                 break;
         }
-        if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING') {
+
+        if (ENABLE_AI_ROOFTOP_LOGIC) {
+            // Ground anti-idle: prevent standing still on the ground when rooftop logic is enabled.
+            const groundRooftopStates = ['MOVING_TO_LADDER', 'CLIMBING', 'ROOFTOP_COMBAT', 'DESCENDING'];
+            const isInRooftopFlow = groundRooftopStates.includes(ai.state) || ai.isElevating || ai.userData.onRooftop;
+            const movedNow = ai.position.distanceTo(ai.lastPosition) > 0.02;
+            const canGroundIdleCheck = !isInRooftopFlow && ai.state !== 'FOLLOWING';
+            if (canGroundIdleCheck && !movedNow) {
+                if (!ai.userData.groundIdleSince) ai.userData.groundIdleSince = timeElapsed;
+                const noFireTooLong = (timeElapsed - (ai.lastAttackTime || 0)) > 1.6;
+                if ((timeElapsed - ai.userData.groundIdleSince) > 1.5 && noFireTooLong) {
+                    const chase = ai.lastKnownEnemyPos || getClosestOpponentPosition(ai) || player.position.clone();
+                    const vec = new THREE.Vector3().subVectors(chase, ai.position);
+                    vec.y = 0;
+                    if (vec.lengthSq() < 1e-6) vec.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+                    vec.normalize();
+                    const side = new THREE.Vector3(vec.z, 0, -vec.x).multiplyScalar((Math.random() > 0.5 ? 1 : -1) * 2.0);
+                    const moveTo = ai.position.clone().add(vec.multiplyScalar(2.6)).add(side);
+                    moveTo.y = getGroundSurfaceY(moveTo);
+                    ai.state = 'MOVING';
+                    ai.targetPosition.copy(moveTo);
+                    ai.userData.groundIdleSince = 0;
+                }
+            } else {
+                ai.userData.groundIdleSince = 0;
+            }
+        }
+
+        if (ENABLE_EXPERIMENTAL_AI_FLOW) {
+            // Hard watchdog: any prolonged freeze (seen or unseen) must break into motion.
+            const movedSinceLastFrame = ai.position.distanceTo(ai.lastPosition) > 0.03;
+            const protectedStates = ['CLIMBING', 'DESCENDING', 'FOLLOWING'];
+            const canWatchdog = !protectedStates.includes(ai.state) && !ai.isElevating;
+            if (canWatchdog && !movedSinceLastFrame) {
+                if (!ai.userData.stallStartTime) ai.userData.stallStartTime = timeElapsed;
+                const stallLimit = isAISeen ? 1.0 : 1.8;
+                if ((timeElapsed - ai.userData.stallStartTime) > stallLimit) {
+                    if (ai.state === 'MOVING_TO_LADDER' || ai.state === 'ROOFTOP_COMBAT') {
+                        ai.userData.rooftopIntent = false;
+                        ai.userData.onRooftop = false;
+                        ai.userData.rooftopSensor = null;
+                        ai.userData.rooftopObstacle = null;
+                        ai.userData.rooftopLadderPos = null;
+                        ai.userData.rooftopDecisionMade = false;
+                    }
+                    const anchor = (visibleOpponentInfo && visibleOpponentInfo.targetPos)
+                        ? visibleOpponentInfo.targetPos
+                        : (ai.lastKnownEnemyPos || getClosestOpponentPosition(ai) || player.position.clone());
+                    const dir = new THREE.Vector3().subVectors(anchor, ai.position);
+                    dir.y = 0;
+                    if (dir.lengthSq() < 1e-6) dir.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+                    dir.normalize();
+                    const side = new THREE.Vector3(dir.z, 0, -dir.x).multiplyScalar((Math.random() > 0.5 ? 1 : -1) * 2.8);
+                    const stepTarget = ai.position.clone().add(dir.multiplyScalar(3.0)).add(side);
+                    stepTarget.y = getGroundSurfaceY(stepTarget);
+                    ai.state = 'MOVING';
+                    ai.targetPosition.copy(stepTarget);
+                    ai.currentAttackTime = timeElapsed;
+                    ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                    ai.userData.searchPulseAt = timeElapsed + 0.7;
+                    ai.userData.nextRooftopDecisionAt = timeElapsed + 1.2;
+                    ai.userData.stallStartTime = 0;
+                }
+            } else {
+                ai.userData.stallStartTime = 0;
+            }
+        }
+
+        // Anti-stall: if AI keeps hiding without LOS, advance toward nearest opponent's last known area.
+        if (ai.state === 'HIDING' && !isAISeen) {
+            const isFollowLockedTeammate = isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false;
+            if (!isFollowLockedTeammate && (timeElapsed - ai.lastHiddenTime) > 1.2) {
+                const huntPos = ai.lastKnownEnemyPos || getClosestOpponentPosition(ai);
+                if (huntPos) {
+                    ai.state = 'MOVING';
+                    ai.targetPosition.copy(huntPos);
+                }
+            }
+        }
+        if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING' && ai.state !== 'FOLLOWING' && ai.state !== 'ROOFTOP_COMBAT') {
             const oldAIPosition = ai.position.clone();
             let moveDirection = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
             const moveVectorDelta = moveDirection.clone().multiplyScalar(currentAISpeed * delta);
@@ -4378,6 +6652,23 @@ function animate() {
                 }
             }
         }
+        // FOLLOW中の味方は必ずプレイヤーに重ならないように強制分離する
+        if (isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false) {
+            const toAI = new THREE.Vector3().subVectors(ai.position, player.position);
+            toAI.y = 0;
+            const minSeparation = 4.2;
+            if (toAI.lengthSq() < minSeparation * minSeparation) {
+                if (toAI.lengthSq() < 1e-6) {
+                    const pf = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
+                    pf.y = 0;
+                    toAI.copy(pf.lengthSq() > 1e-6 ? pf.normalize().negate() : new THREE.Vector3(0, 0, 1));
+                } else {
+                    toAI.normalize();
+                }
+                ai.position.copy(player.position.clone().add(toAI.multiplyScalar(minSeparation)));
+                ai.position.y = -FLOOR_HEIGHT;
+            }
+        }
         const aiDistFromCenter = Math.sqrt(ai.position.x * ai.position.x + ai.position.z * ai.position.z);
         if (aiDistFromCenter > ARENA_PLAY_AREA_RADIUS) {
             const ratio = ARENA_PLAY_AREA_RADIUS / aiDistFromCenter;
@@ -4388,6 +6679,9 @@ function animate() {
         // Animate AI limbs
         if (ai.userData.parts) {
             const parts = ai.userData.parts;
+
+            applyGunStyle(parts.gun, ai.currentWeapon);
+            applyWeaponPose(parts, ai.currentWeapon);
 
             // Aiming: Make the aimGroup look at the target
             let targetHeadPos = new THREE.Vector3();
@@ -4404,50 +6698,35 @@ function animate() {
                     }
                 }
                 if (closestEnemyAI) {
-                    closestEnemyAI.children[1].getWorldPosition(targetHeadPos);
+                    targetHeadPos.copy(getAIUpperTorsoPos(closestEnemyAI));
                 } else {
                     // 敵AIがいない場合はプレイヤーを向く
-                    player.getWorldPosition(targetHeadPos);
-                    targetHeadPos.y += playerTargetHeight;
+                    const aimOrigin = ai.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0));
+                    const pHead = getPlayerHeadPos();
+                    const pUpper = getPlayerUpperTorsoPos();
+                    const pBody = getPlayerBodyPos();
+                    if (checkLineOfSight(aimOrigin, pHead, obstacles)) targetHeadPos.copy(pHead);
+                    else if (checkLineOfSight(aimOrigin, pUpper, obstacles)) targetHeadPos.copy(pUpper);
+                    else targetHeadPos.copy(pBody);
                 }
             } else {
                 // 通常モードまたは敵AIはプレイヤーを向く
-                player.getWorldPosition(targetHeadPos);
-                targetHeadPos.y += playerTargetHeight;
+                const aimOrigin = ai.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0));
+                const pHead = getPlayerHeadPos();
+                const pUpper = getPlayerUpperTorsoPos();
+                const pBody = getPlayerBodyPos();
+                if (checkLineOfSight(aimOrigin, pHead, obstacles)) targetHeadPos.copy(pHead);
+                else if (checkLineOfSight(aimOrigin, pUpper, obstacles)) targetHeadPos.copy(pUpper);
+                else targetHeadPos.copy(pBody);
             }
-            parts.aimGroup.lookAt(targetHeadPos);
+            applyAimConstraints(parts, ai.rotation.y, targetHeadPos);
 
-                            // Leg Animation
-                            const actuallyMoving = ai.position.distanceTo(ai.lastPosition) > 0.001; // 実際に動いているかを判定
-            if (ai.isCrouching) {
-                // Crouch pose
-                const crouchAngle = Math.PI / 2.5;
-                parts.leftHip.rotation.x = crouchAngle;
-                parts.rightHip.rotation.x = crouchAngle;
-                parts.leftKnee.rotation.x = -crouchAngle;
-                parts.rightKnee.rotation.x = -crouchAngle;
-            } else if (actuallyMoving) { // isMoving の代わりに actuallyMoving を使用
-                // Walking animation
-                const walkSpeed = 10;
-                const hipAmplitude = Math.PI / 4;
-                const kneeAmplitude = Math.PI / 3;
+            // Keep gun aligned to the midpoint between hands
+            alignGunGripToHands(parts, 0.8);
 
-                const swing = Math.sin(timeElapsed * walkSpeed) * hipAmplitude;
-                
-                parts.leftHip.rotation.x = swing;
-                parts.rightHip.rotation.x = -swing;
-                
-                // Bend the knee based on the hip's swing
-                parts.leftKnee.rotation.x = Math.max(0, (Math.cos(timeElapsed * walkSpeed) + 1) / 2 * kneeAmplitude);
-                parts.rightKnee.rotation.x = Math.max(0, (Math.cos(timeElapsed * walkSpeed + Math.PI) + 1) / 2 * kneeAmplitude);
-
-            } else {
-                // Idle pose (straight legs)
-                parts.leftHip.rotation.x = 0;
-                parts.rightHip.rotation.x = 0;
-                parts.leftKnee.rotation.x = 0;
-                parts.rightKnee.rotation.x = 0;
-            }
+            // Leg Animation
+            const actuallyMoving = ai.position.distanceTo(ai.lastPosition) > 0.001; // 実際に動いているかを判定
+            applyCrouchPose(parts, ai.isCrouching, timeElapsed, actuallyMoving);
         }
         // AIの現在の位置を保存して次フレームで比較できるようにする
         ai.lastPosition.copy(ai.position);
@@ -4455,6 +6734,10 @@ function animate() {
     });
     for (let i = projectiles.length - 1; i >= 0; i--) {
         const p = projectiles[i];
+        const prevProjectilePos = p.mesh.position.clone();
+        let hitSomething = false;
+        let hitObject = null;
+        let hitType = '';
         if (p.life !== Infinity) {
             p.life -= delta;
             if (p.life <= 0) {
@@ -4463,39 +6746,30 @@ function animate() {
                 continue;
             }
         }
-        if (p.isSniper) {
-            const moveVector = p.velocity.clone().multiplyScalar(delta);
-            const moveDistance = moveVector.length();
-            if (moveDistance > 0) {
-                raycaster.set(p.mesh.position, moveVector.normalize());
-                raycaster.far = moveDistance;
-                const intersects = raycaster.intersectObjects(obstacles, true);
-                if (intersects.length > 0) {
-                    createSmokeEffect(intersects[0].point);
-                    scene.remove(p.mesh);
-                    projectiles.splice(i, 1);
-                    continue;
-                }
+        const moveVector = p.velocity.clone().multiplyScalar(delta);
+        const moveDistance = moveVector.length();
+        if (moveDistance > 0) {
+            const moveDir = moveVector.clone().normalize();
+            raycaster.set(prevProjectilePos, moveDir);
+            raycaster.far = moveDistance;
+            const intersects = raycaster.intersectObjects(obstacles, true);
+            if (intersects.length > 0) {
+                hitSomething = true;
+                hitObject = intersects[0].object;
+                hitType = 'obstacle';
+                p.mesh.position.copy(intersects[0].point);
+            } else {
+                p.mesh.position.copy(prevProjectilePos).add(moveVector);
             }
         }
-        p.mesh.position.add(p.velocity.clone().multiplyScalar(delta));
         if (p.isRocket) {
             createRocketTrail(p.mesh.position.clone());
         }
-        let hitSomething = false;
-        let hitObject = null;
-        let hitType = '';
         const bulletSphere = new THREE.Sphere(p.mesh.position, p.isRocket ? 0.5 : 0.1);
-        for (let j = obstacles.length - 1; j >= 0; j--) {
-            const obstacle = obstacles[j];
-            if (new THREE.Box3().setFromObject(obstacle).intersectsSphere(bulletSphere)) {
-                hitSomething = true;
-                hitObject = obstacle;
-                hitType = 'obstacle';
-                break;
-            }
-        }
-        if (!hitSomething && new THREE.Box3().setFromObject(floor).intersectsSphere(bulletSphere)) {
+        // Obstacle hit is already handled by the segment raycast above.
+        // Avoid doing another full obstacle scan per projectile per frame.
+        // For AI bullets, defer floor hit test until after player hit test.
+        if (!hitSomething && p.source !== 'ai' && new THREE.Box3().setFromObject(floor).intersectsSphere(bulletSphere)) {
             hitSomething = true;
             hitObject = floor;
             hitType = 'floor';
@@ -4520,6 +6794,9 @@ function animate() {
                     if (ai.hp !== Infinity) {
                         ai.hp -= damageAmount;
                         createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+                        ai.lastUnderFireTime = timeElapsed;
+                        if (p.shooter) ai.lastKnownThreatPos = p.shooter.position.clone();
+                        else ai.lastKnownThreatPos = prevProjectilePos.clone();
                     }
 
                     if (ai.hp <= 0) {
@@ -4531,7 +6808,7 @@ function animate() {
                         if (gameSettings.gameMode === 'ffa' || gameSettings.gameMode === 'arcade') {
                             playerKills++;
                         }
-                        aiFallDownCinematicSequence(p.velocity, ai);
+                        aiFallDownCinematicSequence(p.velocity, ai, 'player');
                     } else {
                         findEvasionSpot(ai);
                     }
@@ -4564,6 +6841,9 @@ function animate() {
                         if (ai.hp !== Infinity) {
                             ai.hp -= damageAmount;
                             createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+                            ai.lastUnderFireTime = timeElapsed;
+                            if (p.shooter) ai.lastKnownThreatPos = p.shooter.position.clone();
+                            else ai.lastKnownThreatPos = prevProjectilePos.clone();
                         }
                         if (ai.hp <= 0) {
                             if (p.shooter && p.shooter.kills !== undefined) {
@@ -4575,7 +6855,7 @@ function animate() {
                                 if (shooterTeam === 'enemy' && ai.team === 'player') enemyTeamKills++;
                             }
 
-                            aiFallDownCinematicSequence(p.velocity, ai);
+                            aiFallDownCinematicSequence(p.velocity, ai, 'ai');
                         } else {
                             findEvasionSpot(ai);
                         }
@@ -4592,11 +6872,42 @@ function animate() {
             if (!hitSomething && (gameSettings.gameMode !== 'team' || shooterTeam === 'enemy')) {
                 const playerPos = player.position;
                 const playerBoundingBox = new THREE.Box3();
-                const playerBottomY = playerPos.y - playerTargetHeight;
-                const playerTopY = playerPos.y;
-                playerBoundingBox.min.set(playerPos.x - 0.5, playerBottomY, playerPos.z - 0.5);
-                playerBoundingBox.max.set(playerPos.x + 0.5, playerTopY, playerPos.z + 0.5);
-                if (playerBoundingBox.intersectsSphere(bulletSphere)) {
+                const bounds = getPlayerCombatBounds();
+                const playerTopY = bounds.topY;
+                const playerBottomY = bounds.bottomY;
+                playerBoundingBox.min.set(playerPos.x - 0.7, playerBottomY, playerPos.z - 0.7);
+                playerBoundingBox.max.set(playerPos.x + 0.7, playerTopY, playerPos.z + 0.7);
+                let hitPlayer = playerBoundingBox.intersectsSphere(bulletSphere);
+                if (!hitPlayer) {
+                    const segDir = new THREE.Vector3().subVectors(p.mesh.position, prevProjectilePos);
+                    const segLen = segDir.length();
+                    if (segLen > 1e-6) {
+                        segDir.normalize();
+                        const segRay = new THREE.Ray(prevProjectilePos.clone(), segDir);
+                        const hitPoint = segRay.intersectBox(playerBoundingBox, new THREE.Vector3());
+                        if (hitPoint) {
+                            hitPlayer = prevProjectilePos.distanceTo(hitPoint) <= segLen;
+                        }
+                    }
+                }
+                if (!hitPlayer) {
+                    // Fallback: capsule-like center sphere check to avoid crouch edge misses.
+                    const centerY = (playerTopY + playerBottomY) * 0.5;
+                    const center = new THREE.Vector3(playerPos.x, centerY, playerPos.z);
+                    const seg = new THREE.Vector3().subVectors(p.mesh.position, prevProjectilePos);
+                    const segLen = seg.length();
+                    if (segLen > 1e-6) {
+                        const segDir = seg.clone().normalize();
+                        const toCenter = new THREE.Vector3().subVectors(center, prevProjectilePos);
+                        const t = THREE.MathUtils.clamp(toCenter.dot(segDir), 0, segLen);
+                        const closest = prevProjectilePos.clone().add(segDir.multiplyScalar(t));
+                        const r = isCrouchingToggle ? 0.75 : 0.8;
+                        if (closest.distanceToSquared(center) <= r * r) {
+                            hitPlayer = true;
+                        }
+                    }
+                }
+                if (hitPlayer) {
                     hitSomething = true;
                     hitObject = player;
                     hitType = 'player';
@@ -4648,6 +6959,12 @@ function animate() {
                 }
             }
         }
+        // Deferred floor test for AI bullets (after player/AI hit checks).
+        if (!hitSomething && p.source === 'ai' && new THREE.Box3().setFromObject(floor).intersectsSphere(bulletSphere)) {
+            hitSomething = true;
+            hitObject = floor;
+            hitType = 'floor';
+        }
         if (hitSomething) {
             if (p.isRocket) {
                 if (explosionSound) explosionSound.cloneNode(true).play();
@@ -4669,7 +6986,7 @@ function animate() {
                                     createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
                                 }
                                 if (ai.hp <= 0) {
-                                    aiFallDownCinematicSequence(new THREE.Vector3().subVectors(ai.position, explosionPos), ai);
+                                    aiFallDownCinematicSequence(new THREE.Vector3().subVectors(ai.position, explosionPos), ai, 'player');
                                     ais.splice(j, 1);
                                 }
                             }
@@ -4715,7 +7032,8 @@ function animate() {
             }
             continue;
         }
-        if (p.mesh.position.length() > 200 && p.weaponType !== WEAPON_SG) {
+        const projArenaR = Math.sqrt(p.mesh.position.x * p.mesh.position.x + p.mesh.position.z * p.mesh.position.z);
+        if (projArenaR > ARENA_PLAY_AREA_RADIUS) {
             scene.remove(p.mesh);
             projectiles.splice(i, 1);
         }
@@ -4816,6 +7134,12 @@ function animate() {
         camera.position.y = (Math.random() - 0.5) * SHAKE_INTENSITY * shakeFactor;
     } else camera.position.set(0, 0, 0);
     TWEEN.update();
+    
+    // Apply smooth time lapse transitions in the animation loop
+    if (isTimeLapseMode) {
+        applySmoothNightMode();
+    }
+    
     renderer.render(scene, camera);
 }
 const startBtn = document.getElementById('start-game-btn');
@@ -4827,10 +7151,24 @@ if (startBtn) {
         gameSettings.rrCount = parseInt(document.getElementById('rr-count').value, 10);
         gameSettings.srCount = parseInt(document.getElementById('sr-count').value, 10);
         gameSettings.sgCount = parseInt(document.getElementById('sg-count').value, 10);
-        gameSettings.fieldState = document.querySelector('input[name="field-state"]:checked').value;
         gameSettings.mapType = document.querySelector('input[name="map-type"]:checked').value;
+        const customMapSelectorOnStart = document.getElementById('custom-map-selector');
+        if (customMapSelectorOnStart && customMapSelectorOnStart.value) {
+            gameSettings.customMapName = customMapSelectorOnStart.value;
+        }
+        if (gameSettings.customMapName) {
+            // If a custom map is selected, prioritize it on start (mobile friendly).
+            gameSettings.mapType = 'custom';
+            document.querySelectorAll('input[name="map-type"]').forEach(radio => {
+                radio.checked = (radio.value === 'custom');
+            });
+        }
         gameSettings.aiCount = parseInt(document.querySelector('input[name="ai-count"]:checked').value, 10);
-        gameSettings.gameDuration = parseInt(document.querySelector('input[name="game-duration"]:checked').value, 10);
+        const durationRadio = document.querySelector('input[name="game-duration"]:checked');
+        if (durationRadio) {
+            gameSettings.gameDuration = parseInt(durationRadio.value, 10);
+        }
+        saveSettings();
         initializeAudio();
         startGame();
         restartGame();
@@ -5010,5 +7348,451 @@ const resumeGameBtn = document.getElementById('resume-game-btn');
 if (resumeGameBtn) {
     resumeGameBtn.addEventListener('click', resumeGame);
 }
+
+// Character Editor Functions
+function initCharacterEditor() {
+    // Ensure editor is closed on initialization
+    const editorScreen = document.getElementById('character-editor-screen');
+    if (editorScreen) {
+        editorScreen.style.display = 'none';
+    }
+    
+    const openButton = document.getElementById('open-character-editor');
+    const closeButton = document.getElementById('close-character-editor');
+    const saveButton = document.getElementById('save-character-settings');
+    
+    if (openButton) {
+        openButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            openCharacterEditor();
+        });
+    }
+    
+    if (closeButton) {
+        closeButton.addEventListener('click', e => { e.preventDefault(); closeCharacterEditor(); });
+    }
+    
+    if (saveButton) {
+        saveButton.addEventListener('click', e => { e.preventDefault(); saveCharacterSettings(); });
+    }
+    
+    // Export JSON button
+    const exportButton = document.getElementById('export-character-json');
+    if (exportButton) {
+        exportButton.addEventListener('click', e => { e.preventDefault(); exportCharacterDataToJSON(); });
+    }
+    
+    // Import JSON button
+    const importButton = document.getElementById('import-character-json');
+    const fileInput = document.getElementById('json-file-input');
+    
+    if (importButton && fileInput) {
+        importButton.addEventListener('click', e => { 
+            e.preventDefault(); 
+            fileInput.click(); 
+        });
+        
+        fileInput.addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (file) {
+                importCharacterDataFromJSON(file);
+            }
+            // Reset file input
+            fileInput.value = '';
+        });
+    }
+    
+    // Preview buttons
+    const previewButtons = [
+        { id: 'preview-player', character: 'player' },
+        { id: 'preview-enemy1', character: 'enemy1' },
+        { id: 'preview-enemy2', character: 'enemy2' },
+        { id: 'preview-enemy3', character: 'enemy3' }
+    ];
+    
+    previewButtons.forEach(btn => {
+        const element = document.getElementById(btn.id);
+        if (element) {
+            element.addEventListener('click', () => {
+                currentPreviewCharacter = btn.character;
+                updatePreviewCharacter();
+            });
+        }
+    });
+    
+    // Add event listeners for all customization controls
+    setupCustomizationListeners();
+}
+
+function setupCustomizationListeners() {
+    const characters = ['player', 'enemy1', 'enemy2', 'enemy3'];
+    const properties = ['hair-style', 'hair-color', 'skin-color', 'clothing-color', 'pants-color', 'shoes-color'];
+    
+    characters.forEach(char => {
+        properties.forEach(prop => {
+            const element = document.getElementById(`${char}-${prop}`);
+            if (element) {
+                element.addEventListener('change', () => {
+                    updateCharacterCustomization(char, prop, element.value);
+                    if (currentPreviewCharacter === char) {
+                        updatePreviewCharacter();
+                    }
+                });
+            }
+        });
+    });
+}
+
+function updateCharacterCustomization(character, property, value) {
+    if (!characterCustomization[character]) return;
+    
+    // Convert property names to match the data structure
+    const propertyMap = {
+        'hair-style': 'hairStyle',
+        'hair-color': 'hairColor',
+        'skin-color': 'skinColor',
+        'clothing-color': 'clothingColor',
+        'pants-color': 'pantsColor',
+        'shoes-color': 'shoesColor'
+    };
+    
+    const propKey = propertyMap[property];
+    if (propKey && characterCustomization[character][propKey] !== undefined) {
+        characterCustomization[character][propKey] = value;
+    }
+}
+
+function openCharacterEditor() {
+    const editorScreen = document.getElementById('character-editor-screen');
+    if (editorScreen) {
+        editorScreen.style.display = 'block';
+        initCharacterPreview();
+        loadCharacterSettingsToUI();
+        updatePreviewCharacter();
+    }
+}
+
+function closeCharacterEditor() {
+    const editorScreen = document.getElementById('character-editor-screen');
+    if (editorScreen) {
+        editorScreen.style.display = 'none';
+        cleanupCharacterPreview();
+    }
+}
+
+function initCharacterPreview() {
+    const container = document.getElementById('character-preview-container');
+    if (!container) return;
+    
+    // Create scene
+    characterEditorScene = new THREE.Scene();
+    characterEditorScene.background = new THREE.Color(0x111111);
+    
+    // Create camera
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    characterEditorCamera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+    characterEditorCamera.position.set(0, 2, 5);
+    characterEditorCamera.lookAt(0, 2, 0);
+    
+    // Create renderer
+    characterEditorRenderer = new THREE.WebGLRenderer({ antialias: true });
+    characterEditorRenderer.setSize(width, height);
+    characterEditorRenderer.shadowMap.enabled = true;
+    characterEditorRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    // Clear container and add renderer
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+    container.appendChild(characterEditorRenderer.domElement);
+    
+    // Add lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    characterEditorScene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 5);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    characterEditorScene.add(directionalLight);
+    
+    // Add ground
+    const groundGeometry = new THREE.PlaneGeometry(10, 10);
+    const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    ground.receiveShadow = true;
+    characterEditorScene.add(ground);
+    
+    // Start animation loop
+    animateCharacterPreview();
+}
+
+function animateCharacterPreview() {
+    characterEditorAnimationId = requestAnimationFrame(animateCharacterPreview);
+    
+    if (previewCharacter) {
+        previewCharacter.rotation.y += 0.01;
+    }
+    
+    characterEditorRenderer.render(characterEditorScene, characterEditorCamera);
+}
+
+function cleanupCharacterPreview() {
+    if (characterEditorAnimationId) {
+        cancelAnimationFrame(characterEditorAnimationId);
+        characterEditorAnimationId = null;
+    }
+    
+    if (previewCharacter) {
+        characterEditorScene.remove(previewCharacter);
+        previewCharacter = null;
+    }
+    
+    if (characterEditorRenderer) {
+        characterEditorRenderer.dispose();
+        characterEditorRenderer = null;
+    }
+    
+    characterEditorScene = null;
+    characterEditorCamera = null;
+}
+
+function updatePreviewCharacter() {
+    if (!characterEditorScene) return;
+    
+    // Remove existing preview character
+    if (previewCharacter) {
+        characterEditorScene.remove(previewCharacter);
+        previewCharacter.traverse(child => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+    }
+    
+    // Create new preview character with current customization
+    const customization = characterCustomization[currentPreviewCharacter];
+    previewCharacter = createCharacterModel(0xffffff, customization);
+    
+    // Reset pose to default standing position
+    resetCharacterPose(previewCharacter);
+    
+    previewCharacter.position.set(0, 0, 0);
+    previewCharacter.castShadow = true;
+    previewCharacter.receiveShadow = true;
+    
+    characterEditorScene.add(previewCharacter);
+}
+
+function resetCharacterPose(character) {
+    if (!character || !character.userData.parts) return;
+    
+    const parts = character.userData.parts;
+    
+    // Reset all body parts to default positions
+    if (parts.body) {
+        parts.body.rotation.set(0, 0, 0);
+    }
+    if (parts.head) {
+        parts.head.rotation.set(0, 0, 0);
+    }
+    if (parts.aimGroup) {
+        parts.aimGroup.rotation.set(0, 0, 0);
+    }
+    if (parts.leftArm) {
+        parts.leftArm.rotation.set(0, 0, 0);
+    }
+    if (parts.rightArm) {
+        parts.rightArm.rotation.set(0, 0, 0);
+    }
+    if (parts.leftElbow) {
+        parts.leftElbow.rotation.set(0, 0, 0);
+    }
+    if (parts.rightElbow) {
+        parts.rightElbow.rotation.set(0, 0, 0);
+    }
+    if (parts.leftHip) {
+        parts.leftHip.rotation.set(0, 0, 0);
+    }
+    if (parts.rightHip) {
+        parts.rightHip.rotation.set(0, 0, 0);
+    }
+    if (parts.leftKnee) {
+        parts.leftKnee.rotation.set(0, 0, 0);
+    }
+    if (parts.rightKnee) {
+        parts.rightKnee.rotation.set(0, 0, 0);
+    }
+    // Hide gun only for preview characters
+    if (parts.gun) {
+        parts.gun.visible = false;
+    }
+}
+
+function loadCharacterSettingsToUI() {
+    const characters = ['player', 'enemy1', 'enemy2', 'enemy3'];
+    const properties = ['hair-style', 'hair-color', 'skin-color', 'clothing-color', 'pants-color', 'shoes-color'];
+    
+    characters.forEach(char => {
+        const custom = characterCustomization[char];
+        if (!custom) return;
+        
+        properties.forEach(prop => {
+            const element = document.getElementById(`${char}-${prop}`);
+            if (element) {
+                const propertyMap = {
+                    'hair-style': 'hairStyle',
+                    'hair-color': 'hairColor',
+                    'skin-color': 'skinColor',
+                    'clothing-color': 'clothingColor',
+                    'pants-color': 'pantsColor',
+                    'shoes-color': 'shoesColor'
+                };
+                
+                const propKey = propertyMap[prop];
+                if (propKey && custom[propKey] !== undefined) {
+                    element.value = custom[propKey];
+                }
+            }
+        });
+    });
+}
+
+function saveCharacterSettings() {
+    // Save to localStorage
+    localStorage.setItem('characterCustomization', JSON.stringify(characterCustomization));
+    
+    // Show feedback
+    const saveButton = document.getElementById('save-character-settings');
+    if (saveButton) {
+        const originalText = saveButton.textContent;
+        saveButton.textContent = 'Saved!';
+        saveButton.style.backgroundColor = '#4CAF50';
+        
+        setTimeout(() => {
+            saveButton.textContent = originalText;
+            saveButton.style.backgroundColor = '#4CAF50';
+        }, 1500);
+    }
+}
+
+function loadCharacterSettings() {
+    const saved = localStorage.getItem('characterCustomization');
+    if (saved) {
+        try {
+            characterCustomization = JSON.parse(saved);
+        } catch (e) {
+            console.error('Failed to load character customization:', e);
+        }
+    }
+}
+
+// Export character data to JSON
+function exportCharacterDataToJSON() {
+    const characterData = {
+        timestamp: new Date().toISOString(),
+        version: "1.0",
+        characters: {
+            player: characterCustomization.player,
+            enemy1: characterCustomization.enemy1,
+            enemy2: characterCustomization.enemy2,
+            enemy3: characterCustomization.enemy3
+        }
+    };
+    
+    const jsonString = JSON.stringify(characterData, null, 2);
+    
+    // Create and download JSON file
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `character_data_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    console.log('Character data exported to JSON:', characterData);
+}
+
+// Import character data from JSON
+function importCharacterDataFromJSON(file) {
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const characterData = JSON.parse(e.target.result);
+            
+            // Validate JSON structure
+            if (!characterData.characters || !characterData.characters.player) {
+                throw new Error('Invalid character data format');
+            }
+            
+            // Update character customization
+            characterCustomization.player = characterData.characters.player || characterCustomization.player;
+            characterCustomization.enemy1 = characterData.characters.enemy1 || characterCustomization.enemy1;
+            characterCustomization.enemy2 = characterData.characters.enemy2 || characterCustomization.enemy2;
+            characterCustomization.enemy3 = characterData.characters.enemy3 || characterCustomization.enemy3;
+            
+            // Update UI with loaded data
+            loadCharacterSettingsToUI();
+            
+            // Save to localStorage
+            saveCharacterSettings();
+            
+            // Update preview if currently showing
+            if (previewCharacter) {
+                updatePreviewCharacter();
+            }
+            
+            console.log('Character data imported successfully:', characterData);
+            alert('Character data imported successfully!');
+            
+        } catch (error) {
+            console.error('Error importing character data:', error);
+            alert('Error importing character data: ' + error.message);
+        }
+    };
+    
+    reader.readAsText(file);
+}
+
+// Initialize character editor when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    // Load settings first
+    loadCharacterSettings();
+    
+    // Time Lapse Mode event listener
+    const timeLapseCheckbox = document.getElementById('time-lapse-mode');
+    if (timeLapseCheckbox) {
+        timeLapseCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                startTimeLapseMode();
+            } else {
+                stopTimeLapseMode();
+            }
+        });
+    }
+    
+    // Night Mode event listener
+    const nightModeCheckbox = document.getElementById('night-mode');
+    if (nightModeCheckbox) {
+        nightModeCheckbox.addEventListener('change', function() {
+            gameSettings.nightModeEnabled = this.checked;
+            applyNightMode(this.checked);
+            saveSettings();
+            console.log('Manual night mode toggle:', this.checked);
+        });
+    }
+    
+    // Initialize editor after a small delay to ensure all elements are ready
+    setTimeout(() => {
+        initCharacterEditor();
+    }, 100);
+});
 
 animate();
