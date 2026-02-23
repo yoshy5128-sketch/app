@@ -4,12 +4,10 @@ const urlsToCache = [
   '/index.html',
   '/cs.html',
   '/manifest.json',
-  '/libs/three.min.js',
-  '/libs/OrbitControls.js',
-  '/libs/lil-gui.umd.min.js',
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
+  'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js',
+  'https://cdn.jsdelivr.net/npm/lil-gui@0.17.0/dist/lil-gui.umd.min.js',
   '/icon.png',
-  '/icon-192.png',
-  '/icon-512.png',
   '/top.png',
   '/crash.mp3',
   '/bcrash.mp3',
@@ -64,19 +62,15 @@ self.addEventListener('activate', event => {
 
 // フェッチイベント
 self.addEventListener('fetch', event => {
-  console.log('Service Worker: フェッチリクエスト', event.request.url);
-  
   event.respondWith(
     caches.match(event.request)
       .then(response => {
         // キャッシュにあればそれを返す
         if (response) {
-          console.log('Service Worker: キャッシュから返信', event.request.url);
           return response;
         }
         
         // キャッシュになければネットワークから取得
-        console.log('Service Worker: ネットワークから取得', event.request.url);
         return fetch(event.request)
           .then(response => {
             // レスポンスが有効かチェック
@@ -111,16 +105,3 @@ self.addEventListener('message', event => {
     self.skipWaiting();
   }
 });
-
-// バックグラウンド同期（オプション）
-self.addEventListener('sync', event => {
-  if (event.tag === 'background-sync') {
-    event.waitUntil(doBackgroundSync());
-  }
-});
-
-function doBackgroundSync() {
-  // バックグラウンドで必要な処理を実行
-  console.log('Service Worker: バックグラウンド同期実行');
-  return Promise.resolve();
-}
