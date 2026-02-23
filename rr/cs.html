@@ -4,14 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ultimate Car Designer - Game Ready Edition</title>
-    
-    <!-- PWA対応 -->
-    <meta name="theme-color" content="#ff4400">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ROADRAGE">
-    <link rel="apple-touch-icon" href="icon.png">
-    <link rel="manifest" href="manifest.json">
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
         #output-area {
@@ -94,21 +86,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.17.0/dist/lil-gui.umd.min.js"></script>
-
-<script>
-// PWA Service Worker登録
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(registration => {
-        console.log('Service Worker登録成功:', registration);
-      })
-      .catch(error => {
-        console.log('Service Worker登録失敗:', error);
-      });
-  });
-}
-</script>
 
 <script>
     const IS_MOBILE = window.matchMedia("(pointer: coarse)").matches;

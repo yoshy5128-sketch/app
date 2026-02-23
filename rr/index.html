@@ -4,14 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>ROADRAGE</title>
-
-<!-- PWA対応 -->
-<meta name="theme-color" content="#ff4400">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="ROADRAGE">
-<link rel="apple-touch-icon" href="icon.png">
-<link rel="manifest" href="manifest.json">
 <style>
     html, body { width: 100%; height: 100%; }
     body { margin: 0; overflow: hidden; background: #000; touch-action: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -461,84 +453,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
-// PWA Service Worker登録とインストール機能
-let deferredPrompt;
-let installButton;
-
-// Service Worker登録
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then(registration => {
-        console.log('Service Worker登録成功:', registration);
-      })
-      .catch(error => {
-        console.log('Service Worker登録失敗:', error);
-      });
-  });
-}
-
-// PWAインストールプロンプト
-window.addEventListener('beforeinstallprompt', (e) => {
-  console.log('beforeinstallpromptイベント発火');
-  e.preventDefault();
-  deferredPrompt = e;
-  
-  // インストールボタンを作成
-  if (!installButton) {
-    installButton = document.createElement('div');
-    installButton.id = 'install-button';
-    installButton.innerHTML = '📱 アプリをインストール';
-    installButton.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-      color: white;
-      padding: 15px 25px;
-      border-radius: 50px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 4px 15px rgba(238, 90, 36, 0.4);
-      z-index: 10000;
-      transition: all 0.3s ease;
-      font-family: sans-serif;
-      user-select: none;
-    `;
-    
-    installButton.addEventListener('mouseenter', () => {
-      installButton.style.transform = 'translateY(-2px)';
-      installButton.style.boxShadow = '0 6px 20px rgba(238, 90, 36, 0.5)';
-    });
-    
-    installButton.addEventListener('mouseleave', () => {
-      installButton.style.transform = 'translateY(0)';
-      installButton.style.boxShadow = '0 4px 15px rgba(238, 90, 36, 0.4)';
-    });
-    
-    installButton.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`ユーザーの選択: ${outcome}`);
-        deferredPrompt = null;
-        installButton.style.display = 'none';
-      }
-    });
-    
-    document.body.appendChild(installButton);
-  }
-});
-
-// アプリがインストールされたかを検知
-window.addEventListener('appinstalled', () => {
-  console.log('PWAがインストールされました');
-  if (installButton) {
-    installButton.style.display = 'none';
-  }
-});
-
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 const stageChoice = document.getElementById('stage-choice');
 for(let i=1; i<=30; i++){ const opt = document.createElement('option'); opt.value = i; opt.innerText = "STAGE " + i; stageChoice.appendChild(opt); }
