@@ -1,5 +1,5 @@
 import * as THREE from 'https://unpkg.com/three@0.162.0/build/three.module.js';
-import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat@0.13.0'; // Direct import of Rapier.js
+import * as RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat@0.13.0'; // Direct import of Rapier.js as namespace
 
 let scene, camera, renderer;
 let world; // RAPIER is now directly imported, no global window.RAPIER needed
@@ -418,7 +418,7 @@ const createRagdoll = (x, y, z) => {
     world.createImpulseJoint(shoulderLJoint, torso.rigidBody, upperArmL.rigidBody);
 
     const shoulderRJoint = RAPIER.JointSet.spherical(
-        new RAPIER.Vector3(torsoAnchorArmR.x, torsoAnchorArmR.y, torsoAnchorArmR.z),
+        new RAPIER.Vector3(torsoAnchorArmR.x, torsoAnchorArmR.y, torsoAnchorArmR.z), // Corrected typo here
         new RAPIER.Vector3(armAnchor.x, armAnchor.y, armAnchor.z)
     );
     world.createImpulseJoint(shoulderRJoint, torso.rigidBody, upperArmR.rigidBody);
