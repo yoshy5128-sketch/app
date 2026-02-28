@@ -1,8 +1,9 @@
 import * as THREE from 'https://unpkg.com/three@0.162.0/build/three.module.js';
-import * as RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat@0.13.0'; // Direct import of Rapier.js as namespace
+import RapierModule from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat@0.13.0'; // Direct import of Rapier.js default export
 
 let scene, camera, renderer;
-let world; // RAPIER is now directly imported, no global window.RAPIER needed
+let world; 
+let RAPIER; // Declare RAPIER here to hold the initialized Rapier object
 
 const cars = [];
 const CAR_WIDTH = 2;
@@ -46,7 +47,7 @@ let isPinching = false;
 
 const init = async () => {
     // Initialize Rapier.js
-    await RAPIER.init(); // Now directly import and initialize
+    RAPIER = await RapierModule.init(); // Initialize and store the returned object
     world = new RAPIER.World({ x: 0.0, y: -9.81, z: 0.0 });
 
 
@@ -418,7 +419,7 @@ const createRagdoll = (x, y, z) => {
     world.createImpulseJoint(shoulderLJoint, torso.rigidBody, upperArmL.rigidBody);
 
     const shoulderRJoint = RAPIER.JointSet.spherical(
-        new RAPIER.Vector3(torsoAnchorArmR.x, torsoAnchorArmR.y, torsoAnchorArmR.z), // Corrected typo here
+        new RAPIER.Vector3(torsoAnchorArmR.x, torsoAnchorArmR.y, torsoAnchorArmR.z),
         new RAPIER.Vector3(armAnchor.x, armAnchor.y, armAnchor.z)
     );
     world.createImpulseJoint(shoulderRJoint, torso.rigidBody, upperArmR.rigidBody);
