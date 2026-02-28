@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ragdoll Road Cross</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+    </div>
+
+    <div id="mobile-controls" style="display: none;"> <!-- Initially hidden for PC -->
+        <button id="move-left" class="control-button">←</button>
+        <button id="move-right" class="control-button">→</button>
+    </div>
+
+    <!-- Three.js Library -->
+    <script async src="https://unpkg.com/three@0.162.0/build/three.min.js"></script>
+    <!-- Rapier.js Physics Engine - REMOVED SCRIPT TAG, WILL BE IMPORTED IN main.js -->
+
+    <!-- Main game logic -->
+    <script type="module" src="main.js"></script>
+</body>
+</html>

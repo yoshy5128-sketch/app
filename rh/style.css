@@ -1,0 +1,58 @@
+body {
+    margin: 0;
+    overflow: hidden; /* Hide scrollbars */
+    background-color: #222;
+}
+
+#game-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+canvas {
+    display: block;
+}
+
+/* Mobile Controls Styling */
+#mobile-controls {
+    position: absolute;
+    bottom: 20px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    box-sizing: border-box;
+    z-index: 100; /* Ensure buttons are above canvas */
+}
+
+.control-button {
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: 2px solid white;
+    border-radius: 10px;
+    font-size: 2em;
+    padding: 15px 30px;
+    touch-action: manipulation; /* Prevent default browser behaviors */
+    -webkit-tap-highlight-color: rgba(0,0,0,0); /* Remove tap highlight on iOS */
+}
+
+.control-button:active {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Hide mobile controls on larger screens (PC) */
+@media (min-width: 768px) {
+    #mobile-controls {
+        display: none !important;
+    }
+}
+
+/* Show mobile controls on smaller screens (Mobile) */
+@media (max-width: 767px) {
+    #mobile-controls {
+        display: flex !important;
+    }
+}
