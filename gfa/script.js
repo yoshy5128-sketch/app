@@ -71,7 +71,7 @@ let timeLapseStartTime = null;
 let isTimeLapseMode = false;
 let currentTransitionProgress = 0; // 0 = fully day, 1 = fully night
 let targetTransitionProgress = 0;
-const TIME_LAPSE_CYCLE_TIME = 60000; // 1 minute in milliseconds
+const TIME_LAPSE_CYCLE_TIME = 60000; // 60 seconds in milliseconds (夜の長さを2倍にした)
 const TRANSITION_DURATION = 5000; // 5 seconds for smooth transition
 
 // Time Lapse Mode functions
@@ -268,6 +268,7 @@ let characterEditorAnimationId = null;
         aimgGunSound = document.getElementById('aimgGunSound');
         aiGunSound = document.getElementById('aiGunSound');
         explosionSound = document.getElementById('explosionSound');
+        relAudio = document.getElementById('rel-audio');
         startScreen = document.getElementById('start-screen');
         gameOverScreen = document.getElementById('game-over-screen');
         aiSrGunSound = document.getElementById('aiSrGunSound');
@@ -769,17 +770,26 @@ function showReloadingText() {
         el.id = 'reloading-text';
         document.body.appendChild(el);
     }
-    el.textContent = 'Reloading';
     el.style.position = 'fixed';
-    el.style.top = '45%';
+    el.style.top = '50%';
     el.style.left = '50%';
     el.style.transform = 'translate(-50%, -50%)';
-    el.style.color = 'red';
+    el.style.color = '#FFD700';
     el.style.fontSize = '24px';
     el.style.fontWeight = 'bold';
-    el.style.zIndex = '1000';
     el.style.textShadow = '2px 2px 4px rgba(0,0,0,0.8)';
     el.style.display = 'block';
+    el.style.zIndex = '1000';
+    el.textContent = 'RELOADING'; // テキスト内容を追加
+    
+    // 0.5秒遅らせてリロード音を鳴らす
+    setTimeout(() => {
+        if (relAudio) {
+            relAudio.cloneNode(true).play().catch(e => {
+                console.log('Reload sound play failed:', e);
+            });
+        }
+    }, 500);
 }
 
 function hideReloadingText() {
@@ -788,10 +798,10 @@ function hideReloadingText() {
 }
 
 function playReloadSound() {
-    const reloadAudio = document.getElementById('rel-audio');
-    if (reloadAudio) {
-        reloadAudio.currentTime = 0;
-        reloadAudio.play().catch(e => console.log('Reload sound play failed:', e));
+    if (relAudio) {
+        relAudio.cloneNode(true).play().catch(e => {
+            console.log('Reload sound play failed:', e);
+        });
     }
 }
 
@@ -1329,6 +1339,7 @@ let aimgGunSound;
 let aiGunSound;
 let explosionSound;
 let startScreen;
+let relAudio;
 let gameOverScreen;
 let aiSrGunSound;
 let playerSgSound;
@@ -2557,12 +2568,12 @@ function createCharacterModel(color, customization = null) {
         case 'short':
             const shortHairGeom = new THREE.BoxGeometry(headSize * 1.1, headSize * 0.3, headSize * 1.1);
             const shortHair = new THREE.Mesh(shortHairGeom, hairMaterial);
-            shortHair.position.set(0, headY + headSize * 0.4, 0);
+            shortHair.position.set(0, headSize * 0.4, 0); // 頭を基準とした相対位置
             
             // Add back hair to cover half of the back head
             const shortBackHairGeom = new THREE.BoxGeometry(headSize * 1.0, headSize * 0.4, headSize * 0.5);
             const shortBackHair = new THREE.Mesh(shortBackHairGeom, hairMaterial);
-            shortBackHair.position.set(0, headY + headSize * 0.2, -headSize * 0.25);
+            shortBackHair.position.set(0, headSize * 0.2, -headSize * 0.25); // 頭を基準とした相対位置
             
             hairParts.push(shortHair, shortBackHair);
             break;
@@ -2572,7 +2583,7 @@ function createCharacterModel(color, customization = null) {
             const afroRadius = headSize * 0.8;
             const afroGeom = new THREE.SphereGeometry(afroRadius, 16, 12);
             const afro = new THREE.Mesh(afroGeom, hairMaterial);
-            afro.position.set(0, headY + headSize * 0.6, -headSize * 0.4); // Move slightly forward
+            afro.position.set(0, headSize * 0.6, -headSize * 0.4); // 頭を基準とした相対位置
             afro.scale.set(1.4, 1.2, 1.3); // Wider and taller to expose more face
             
             hairParts.push(afro);
@@ -2582,7 +2593,7 @@ function createCharacterModel(color, customization = null) {
             // Mohawk style - connected hair from top back to neck (raised and vertical)
             const mohawkGeom = new THREE.BoxGeometry(headSize * 0.33, headSize * 0.7, headSize * 1.2); // Taller and more vertical
             const mohawk = new THREE.Mesh(mohawkGeom, hairMaterial);
-            mohawk.position.set(0, headY + headSize * 0.6, -headSize * 0.15); // Raised position
+            mohawk.position.set(0, headSize * 0.6, -headSize * 0.15); // 頭を基準とした相対位置
             
             hairParts.push(mohawk);
             break;
@@ -2591,11 +2602,11 @@ function createCharacterModel(color, customization = null) {
             // Cap style - cap covering top 1/3 of head with extended visor
             const capMainGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.3, headSize * 1.0); // Main cap body
             const capMain = new THREE.Mesh(capMainGeom, hairMaterial); // Use hair material for cap color
-            capMain.position.set(0, headY + headSize * 0.5, 0);
+            capMain.position.set(0, headSize * 0.5, 0); // 頭を基準とした相対位置
             
             const capVisorGeom = new THREE.BoxGeometry(headSize * 1.6, headSize * 0.05, headSize * 0.6); // Extended visor/brim
             const capVisor = new THREE.Mesh(capVisorGeom, hairMaterial);
-            capVisor.position.set(0, headY + headSize * 0.35, headSize * 0.45); // Extended front visor
+            capVisor.position.set(0, headSize * 0.35, headSize * 0.45); // 頭を基準とした相対位置
             
             hairParts.push(capMain, capVisor);
             break;
@@ -2604,20 +2615,20 @@ function createCharacterModel(color, customization = null) {
         default:
             const hairBackGeom = new THREE.BoxGeometry(headSize * 1.15, headSize * 0.85, headSize * 0.75); // Thinner back hair
             const hairBack = new THREE.Mesh(hairBackGeom, hairMaterial);
-            hairBack.position.set(0, headY, -headSize * 0.45);
+            hairBack.position.set(0, 0, -headSize * 0.45); // 頭を基準とした相対位置
             
             const hairTopGeom = new THREE.BoxGeometry(headSize * 1.05, headSize * 0.35, headSize * 1.15); // Thinner top hair
             const hairTop = new THREE.Mesh(hairTopGeom, hairMaterial);
-            hairTop.position.set(0, headY + headSize * 0.45, -headSize * 0.1);
+            hairTop.position.set(0, headSize * 0.45, -headSize * 0.1); // 頭を基準とした相対位置
             
             const hairBangsGeom = new THREE.BoxGeometry(headSize * 0.8, headSize * 0.05, headSize * 0.3);
             const hairBangs = new THREE.Mesh(hairBangsGeom, hairMaterial);
-            hairBangs.position.set(0, headY + headSize * 0.15, headSize * 0.35);
+            hairBangs.position.set(0, headSize * 0.15, headSize * 0.35); // 頭を基準とした相対位置
             
             // Cut the back hair to align with top hair
             const backHairCutGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.9, headSize * 0.3);
             const backHairCut = new THREE.Mesh(backHairCutGeom, new THREE.MeshBasicMaterial({ color: 0x000000 }));
-            backHairCut.position.set(0, headY + headSize * 0.4, -headSize * 0.45);
+            backHairCut.position.set(0, headSize * 0.4, -headSize * 0.45);
             
             hairParts.push(hairBack, hairTop, hairBangs);
             break;
@@ -2715,8 +2726,13 @@ function createCharacterModel(color, customization = null) {
     rightFoot.position.set(0, -legSegmentHeight * 0.85 + footHeight / 2 - 0.06 * s, footLength / 10);
     rightKnee.add(rightFoot);
 
+    // Add hair parts to head (not to character model directly)
+    hairParts.forEach(hairPart => {
+        head.add(hairPart);
+    });
+
     const characterModel = new THREE.Group();
-    const allParts = [body, head, leftEyeLine, rightEyeLine, aimGroup, leftHip, rightHip, waist, ...hairParts];
+    const allParts = [body, head, leftEyeLine, rightEyeLine, aimGroup, leftHip, rightHip, waist];
     characterModel.add(...allParts);
     
     // Store hair parts for potential later updates
@@ -2898,7 +2914,8 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
         parts.rightKnee.rotation.x += Math.max(0, (Math.cos(timeElapsed * walkSpeed + Math.PI) + 1) / 2 * kneeAmplitude);
         
         // Head movement while crouch walking
-        parts.head.position.y += Math.sin(timeElapsed * walkSpeed) * 0.02;
+        const headBobOffset = Math.sin(timeElapsed * walkSpeed) * 0.02;
+        parts.head.position.y += headBobOffset;
     } else if (isCrouching) {
         const hipBend = Math.PI / 4.2;
         const kneeBend = Math.PI / 2.6;
@@ -2919,7 +2936,8 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
         parts.leftKnee.rotation.x = Math.max(0, (Math.cos(timeElapsed * walkSpeed) + 1) / 2 * kneeAmplitude);
         parts.rightKnee.rotation.x = Math.max(0, (Math.cos(timeElapsed * walkSpeed + Math.PI) + 1) / 2 * kneeAmplitude);
         parts.body.rotation.x = -0.15;
-        parts.head.position.y = parts.baseHeadY + Math.sin(timeElapsed * walkSpeed) * 0.05;
+        const headBobOffset = Math.sin(timeElapsed * walkSpeed) * 0.05;
+        parts.head.position.y = parts.baseHeadY + headBobOffset;
     } else {
         parts.leftHip.rotation.x = 0;
         parts.rightHip.rotation.x = 0;
@@ -3980,9 +3998,7 @@ function handleFirePress() {
         }
     } else {
         isMouseButtonDown = true;
-        if (currentWeapon !== WEAPON_MG) {
-            shoot();
-        }
+        shoot(); // MGも含めて全武器でshoot()を呼ぶ
     }
 }
 
@@ -4093,14 +4109,10 @@ function shoot() {
         lastFireTime = now;
         if (currentWeapon === WEAPON_MG) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_MG) && --ammoMG === 0) {
-                if (gameSettings.defaultWeapon === WEAPON_MG) {
-                    ammoMG = 0;
-                    playerMGReloadUntil = now + 2.0;
-                    showReloadingText();
-                    playReloadSound();
-                } else {
-                    switchPlayerToFallbackWeapon();
-                }
+                // MGがデフォルト武器か拾った武器かに関わらずリロード
+                ammoMG = 0;
+                playerMGReloadUntil = now + 2.0;
+                showReloadingText();
             }
         } else if (currentWeapon === WEAPON_RR) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_RR) && --ammoRR === 0) switchPlayerToFallbackWeapon();
@@ -4354,7 +4366,6 @@ function aiShoot(ai, timeElapsed) {
             if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MG) && --ai.ammoMG === 0) {
                 ai.ammoMG = 0;
                 if (ai.userData) ai.userData.mgReloadUntil = timeElapsed + 2.0;
-                playReloadSound();
                 switchAIToFallbackWeapon(ai);
             }
         } else if (ai.currentWeapon === WEAPON_RR) {
@@ -6830,18 +6841,30 @@ function animate() {
                 ai.isElevating = false;
                 ai.userData.elevatingDirection = 0;
                 if (vDir > 0) {
-                    ai.userData.onRooftop = true;
-                    ai.userData.rooftopIntent = true;
-                    ai.userData.rooftopPhase = 'on_roof';
-                    ai.userData.rooftopStateSince = timeElapsed;
-                    ai.userData.rooftopDecisionMade = false;
-                    if (ai.userData.rooftopObstacle) {
-                        const center = ai.userData.rooftopObstacle.position.clone();
-                        const dir = new THREE.Vector3().subVectors(center, ai.position);
-                        dir.y = 0;
-                        if (dir.lengthSq() > 1e-6) {
-                            dir.normalize();
-                            ai.position.add(dir.multiplyScalar(1.2));
+                    // 上昇完了時の安全チェック
+                    if (targetY < 2 || !ai.userData.rooftopObstacle) {
+                        // ルーフトップに到達できなかった場合、地上に戻す
+                        ai.position.y = 0;
+                        ai.targetPosition.y = 0;
+                        ai.userData.rooftopIntent = false;
+                        ai.userData.onRooftop = false;
+                        ai.userData.rooftopPhase = 'none';
+                        ai.state = 'ATTACKING';
+                        ai.currentAttackTime = timeElapsed;
+                    } else {
+                        ai.userData.onRooftop = true;
+                        ai.userData.rooftopIntent = true;
+                        ai.userData.rooftopPhase = 'on_roof';
+                        ai.userData.rooftopStateSince = timeElapsed;
+                        ai.userData.rooftopDecisionMade = false;
+                        if (ai.userData.rooftopObstacle) {
+                            const center = ai.userData.rooftopObstacle.position.clone();
+                            const dir = new THREE.Vector3().subVectors(center, ai.position);
+                            dir.y = 0;
+                            if (dir.lengthSq() > 1e-6) {
+                                dir.normalize();
+                                ai.position.add(dir.multiplyScalar(1.2));
+                            }
                         }
                     }
                 } else {
@@ -7090,6 +7113,12 @@ function animate() {
                     ai.userData.rooftopDecisionMade = false;
                     ai.state = 'ATTACKING';
                     ai.currentAttackTime = timeElapsed;
+                    
+                    // 梯子移動タイムアウト時に地上に安全に戻す
+                    if (ai.position.y > 2) {
+                        ai.position.y = 0; // 地上に戻す
+                        ai.targetPosition.y = 0;
+                    }
                     break;
                 }
                 if (!ai.userData.rooftopLadderPos || !ai.userData.rooftopObstacle) {
@@ -7122,6 +7151,12 @@ function animate() {
                     ai.userData.rooftopIntent = false;
                     ai.state = 'ATTACKING';
                     ai.currentAttackTime = timeElapsed;
+                    
+                    // 梯子登り失敗時に地上に安全に戻す
+                    if (ai.position.y > 2) {
+                        ai.position.y = 0; // 地上に戻す
+                        ai.targetPosition.y = 0;
+                    }
                 }
                 // Vertical movement is handled by ai.isElevating block above.
                 break;
