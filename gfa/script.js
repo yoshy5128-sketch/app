@@ -303,6 +303,12 @@ let characterEditorAnimationId = null;
         loadSettings();
         updateCustomMapSelector();
         
+        // 強制的にデフォルトマップを設定
+        gameSettings.mapType = 'default';
+        document.querySelectorAll('input[name="map-type"]').forEach(radio => {
+            radio.checked = (radio.value === 'default');
+        });
+        
         // ユーザーの選択を尊重（強制設定を無効化）
         // gameSettings.mapType = 'default';
         // gameSettings.customMapName = '';
@@ -779,6 +785,14 @@ function showReloadingText() {
 function hideReloadingText() {
     const el = document.getElementById('reloading-text');
     if (el) el.style.display = 'none';
+}
+
+function playReloadSound() {
+    const reloadAudio = document.getElementById('rel-audio');
+    if (reloadAudio) {
+        reloadAudio.currentTime = 0;
+        reloadAudio.play().catch(e => console.log('Reload sound play failed:', e));
+    }
 }
 
 let lastFireTime = -FIRE_RATE_PISTOL;
@@ -1797,7 +1811,7 @@ function createAndAttachLadder(obstacle, ladderFace = -1) {
     const sensorAreaWidth = 3;
     const sensorAreaHeight = 3;
     const sensorGeometry = new THREE.BoxGeometry(sensorAreaWidth, sensorAreaHeight, sensorAreaDepth);
-    const sensorMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.5 }); // More visible
+    const sensorMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.0 }); // 完全に透明
     const sensorArea = new THREE.Mesh(sensorGeometry, sensorMaterial);
     sensorArea.name = 'ladderSensorArea';
     const offsetFromLadderWall = sensorAreaDepth / 2 - 0.5;
@@ -1839,15 +1853,6 @@ function addRooftopFeatures(obstacle, ladderFace) {
     }
     
     const rooftopY = obstacle.position.y + (buildingHeight / 2);
-    const rooftopFloorGeometry = new THREE.BoxGeometry(buildingWidth, 0.1, buildingDepth);
-    const rooftopFloorMaterial = new THREE.MeshLambertMaterial({ color: 0x666666, transparent: true, opacity: 0.3 });
-    const rooftopFloor = new THREE.Mesh(rooftopFloorGeometry, rooftopFloorMaterial);
-    rooftopFloor.position.set(obstacle.position.x, rooftopY, obstacle.position.z);
-    rooftopFloor.userData.parentBuilding = obstacle;
-    rooftopFloor.userData.isRooftop = true;
-    scene.add(rooftopFloor);
-    obstacles.push(rooftopFloor);
-    obstacle.userData.rooftopParts.push(rooftopFloor);
     
     // Initialize textures if not done yet
     initializeTextures();
@@ -3350,6 +3355,11 @@ function resolveCustomMapSelection() {
     const names = Object.keys(allCustomMaps);
     if (names.length === 0) return { allCustomMaps, mapName: null, mapData: null };
 
+    // mapTypeが'custom'でない場合はnullを返す
+    if (gameSettings.mapType !== 'custom') {
+        return { allCustomMaps, mapName: null, mapData: null };
+    }
+
     let mapName = gameSettings.customMapName;
     const selector = document.getElementById('custom-map-selector');
     if ((!mapName || !allCustomMaps[mapName]) && selector && selector.value && allCustomMaps[selector.value]) {
@@ -4087,6 +4097,7 @@ function shoot() {
                     ammoMG = 0;
                     playerMGReloadUntil = now + 2.0;
                     showReloadingText();
+                    playReloadSound();
                 } else {
                     switchPlayerToFallbackWeapon();
                 }
@@ -4343,6 +4354,7 @@ function aiShoot(ai, timeElapsed) {
             if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MG) && --ai.ammoMG === 0) {
                 ai.ammoMG = 0;
                 if (ai.userData) ai.userData.mgReloadUntil = timeElapsed + 2.0;
+                playReloadSound();
                 switchAIToFallbackWeapon(ai);
             }
         } else if (ai.currentWeapon === WEAPON_RR) {
@@ -7930,10 +7942,10 @@ if (startBtn) {
             gameSettings.customMapName = customMapSelectorOnStart.value;
         }
         if (gameSettings.customMapName) {
-            // If a custom map is selected, prioritize it on start (mobile friendly).
-            gameSettings.mapType = 'custom';
+            // デフォルトマップを優先する
+            gameSettings.mapType = 'default';
             document.querySelectorAll('input[name="map-type"]').forEach(radio => {
-                radio.checked = (radio.value === 'custom');
+                radio.checked = (radio.value === 'default');
             });
         }
         gameSettings.aiCount = parseInt(document.querySelector('input[name="ai-count"]:checked').value, 10);
