@@ -186,8 +186,10 @@
                     <p style="font-size: 0.8em; color: #88c;">**Grid Snap:** $\pm$ **3.0** units</p>
                     <button id="reset-button">New Map</button>
                     <div style="display: flex; justify-content: space-around; margin: 5px 0;">
-                        <button id="add-obstacle-button" style="width: 48%; margin: 0;">Add Obstacle</button>
-                        <button id="add-light-button" style="width: 48%; margin: 0;">Add Light</button>
+                        <button id="add-obstacle-button" style="width: 24%; margin: 0;">Add Obstacle</button>
+                        <button id="add-light-button" style="width: 24%; margin: 0;">Add Light</button>
+                        <button id="add-tower-button" style="width: 24%; margin: 0; background-color: #ff6b35;">Add Tower</button>
+                        <button id="add-house-button" style="width: 24%; margin: 0; background-color: #9b59b6;">Add House</button>
                     </div>
 
                     <div id="properties-editor">
@@ -202,11 +204,30 @@
                         <button id="apply-props-button">Apply Properties</button>
                     </div>
 
+                    <div id="house-properties-editor" style="display: none;">
+                        <h4>House Properties</h4>
+                        <label>Width (X): <input type="number" id="house-width" step="0.5" value="8"></label>
+                        <label>Height (Y): <input type="number" id="house-height" step="0.5" value="5"></label>
+                        <label>Depth (Z): <input type="number" id="house-depth" step="0.5" value="8"></label>
+                        <label>HP: <input type="number" id="house-hp" step="1" min="1" value="8"></label>
+                        <label style="margin-bottom: 10px;">Color: <input type="color" id="house-color" value="#ff6666"></label>
+                        <button id="apply-house-props-button">Apply House Properties</button>
+                    </div>
+
                     <div id="light-properties-editor">
                         <h4>Light Properties</h4>
                         <label>Intensity: <input type="number" id="light-intensity" step="0.1" min="0"></label>
                         <label>Color: <input type="color" id="light-color"></label>
                         <button id="apply-light-props-button" style="background-color: #f1c40f; color: #2c3e50;">Apply Light Properties</button>
+                    </div>
+
+                    <div id="tower-properties-editor" style="display: none;">
+                        <h4>Tower Properties</h4>
+                        <label>Width (X): <input type="number" id="tower-width" step="0.5" value="6"></label>
+                        <label>Depth (Z): <input type="number" id="tower-depth" step="0.5" value="6"></label>
+                        <label>Height (Y): <input type="number" id="tower-height" step="0.5" value="12"></label>
+                        <label style="margin-bottom: 10px;">Color: <input type="color" id="tower-color" value="#ff6b35"></label>
+                        <button id="apply-tower-props-button" style="background-color: #ff6b35; color: white;">Apply Tower Properties</button>
                     </div>
 
                     <div id="spawn-editor">
@@ -328,6 +349,206 @@
         let panStart = new THREE.Vector2();
         let initialFrustumSize = FRUSTUM_SIZE;
         let addingMode = 'obstacle'; // 追加: オブジェクト追加モードを管理
+        
+        // --- HOUSE CREATION FUNCTION ---
+        function createHouse(x, z, isNew = true) {
+            const snappedX = snapToGrid(x);
+            const snappedZ = snapToGrid(z);
+
+            if (isNew) {
+                const posVec = new THREE.Vector2(snappedX, snappedZ);
+                if (posVec.length() > ARENA_RADIUS) {
+                    showNotification('Cannot place house outside the arena.', true);
+                    return null;
+                }
+            }
+
+            // 建物の設定 - UIから現在の設定を読み込む
+            const config = {
+                width: parseFloat(document.getElementById('house-width').value) || 8,
+                height: parseFloat(document.getElementById('house-height').value) || 5,
+                depth: parseFloat(document.getElementById('house-depth').value) || 8,
+                color: parseInt(document.getElementById('house-color').value.replace('#', '0x')),
+                thickness: 0.2
+            };
+
+            const house = new THREE.Group();
+            house.position.set(snappedX, 0, snappedZ);
+
+            const material = new THREE.MeshLambertMaterial({ 
+                color: config.color, 
+                side: THREE.DoubleSide 
+            });
+
+            // 穴あき壁を生成する共通関数
+            function createWallMesh(width, height, thickness, material, holes = []) {
+                const shape = new THREE.Shape();
+                shape.moveTo(-width / 2, 0);
+                shape.lineTo(width / 2, 0);
+                shape.lineTo(width / 2, height);
+                shape.lineTo(-width / 2, height);
+                shape.lineTo(-width / 2, 0);
+
+                holes.forEach(h => {
+                    const holePath = new THREE.Path();
+                    holePath.moveTo(h.x - h.w / 2, h.y);
+                    holePath.lineTo(h.x + h.w / 2, h.y);
+                    holePath.lineTo(h.x + h.w / 2, h.y + h.h);
+                    holePath.lineTo(h.x - h.w / 2, h.y + h.h);
+                    holePath.lineTo(h.x - h.w / 2, h.y);
+                    shape.holes.push(holePath);
+                });
+
+                const geometry = new THREE.ExtrudeGeometry(shape, {
+                    depth: thickness,
+                    bevelEnabled: false
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                return mesh;
+            }
+
+            // 1. 床
+            const floor = new THREE.Mesh(
+                new THREE.BoxGeometry(config.width, config.thickness, config.depth),
+                material
+            );
+            floor.position.y = config.thickness / 2;
+            house.add(floor);
+
+            // 2. 正面壁 (ドアあり)
+            const frontWall = createWallMesh(config.width, config.height, config.thickness, material, [
+                { x: 0, y: 0, w: 2, h: 3 } // Door
+            ]);
+            frontWall.position.set(0, config.thickness, config.depth / 2 - config.thickness);
+            house.add(frontWall);
+
+            // 3. 背面壁 (窓2つ)
+            const backWall = createWallMesh(config.width, config.height, config.thickness, material, [
+                { x: -config.width/4, y: 2, w: 1.5, h: 1.5 },
+                { x: config.width/4, y: 2, w: 1.5, h: 1.5 }
+            ]);
+            backWall.position.set(0, config.thickness, -config.depth / 2);
+            house.add(backWall);
+
+            // 4. 左壁 (窓1つ)
+            const leftWall = createWallMesh(config.depth, config.height, config.thickness, material, [
+                { x: 0, y: 2, w: 2, h: 1.5 }
+            ]);
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.set(-config.width / 2, config.thickness, 0);
+            house.add(leftWall);
+
+            // 5. 右壁 (窓1つ)
+            const rightWall = createWallMesh(config.depth, config.height, config.thickness, material, [
+                { x: 0, y: 2, w: 2, h: 1.5 }
+            ]);
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.position.set(config.width / 2, config.thickness, 0);
+            house.add(rightWall);
+
+            // 6. 屋根
+            const roof = new THREE.Mesh(
+                new THREE.BoxGeometry(config.width + 0.4, config.thickness, config.depth + 0.4),
+                material
+            );
+            roof.position.y = config.height + config.thickness;
+            house.add(roof);
+
+            // userDataを設定
+            house.userData = { 
+                type: 'house',
+                width: config.width,
+                height: config.height,
+                depth: config.depth,
+                color: config.color,
+                hp: 8 // 建物なので丈夫に
+            };
+            
+            scene.add(house);
+            obstacles.push(house);
+            
+            return house;
+        }
+        function createTower(x, z, isNew = true) {
+            const snappedX = snapToGrid(x);
+            const snappedZ = snapToGrid(z);
+
+            if (isNew) {
+                const posVec = new THREE.Vector2(snappedX, snappedZ);
+                if (posVec.length() > ARENA_RADIUS) {
+                    showNotification('Cannot place tower outside the arena.', true);
+                    return null;
+                }
+            }
+
+            // ゲーム本体と同じ塔作成ロジック - UIから現在の設定を読み込む
+            const TOWER_WIDTH = parseFloat(document.getElementById('tower-width').value) || 6;
+            const TOWER_DEPTH = parseFloat(document.getElementById('tower-depth').value) || 6;
+            const TOWER_HEIGHT = parseFloat(document.getElementById('tower-height').value) || 12;
+            const towerYPos = (TOWER_HEIGHT / 2);
+            const towerGeometry = new THREE.BoxGeometry(TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH);
+            
+            const towerMaterial = new THREE.MeshLambertMaterial({ 
+                color: parseInt(document.getElementById('tower-color').value.replace('#', '0x')) || 0x4A4A4A
+            });
+            
+            const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+            tower.position.set(snappedX, towerYPos, snappedZ);
+            tower.userData = { 
+                type: 'tower',
+                isTower: true,
+                width: TOWER_WIDTH,
+                height: TOWER_HEIGHT,
+                depth: TOWER_DEPTH,
+                color: parseInt(document.getElementById('tower-color').value.replace('#', '0x')) || 0x4A4A4A,
+                hp: 6 // ゲーム本体と同じHP
+            };
+            
+            scene.add(tower);
+            obstacles.push(tower);
+            
+            // 梯子を作成（ゲーム本体のロジックを簡略化）
+            const ladderGroup = new THREE.Group();
+            const LADDER_WIDTH = 1.5;
+            const RUNG_SPACING = 0.5;
+            const RUNG_THICKNESS = 0.1;
+            
+            const ladderMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            const rungMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
+            
+            // 梯子の側面
+            const sideGeometry = new THREE.BoxGeometry(RUNG_THICKNESS * 2, TOWER_HEIGHT, RUNG_THICKNESS * 2);
+            const leftSide = new THREE.Mesh(sideGeometry, ladderMaterial);
+            const rightSide = new THREE.Mesh(sideGeometry, ladderMaterial);
+            leftSide.position.set(-LADDER_WIDTH / 2, 0, TOWER_DEPTH / 2 + 0.1);
+            rightSide.position.set(LADDER_WIDTH / 2, 0, TOWER_DEPTH / 2 + 0.1);
+            ladderGroup.add(leftSide);
+            ladderGroup.add(rightSide);
+            
+            // 梯子の踏み板
+            const numRungs = Math.floor(TOWER_HEIGHT / RUNG_SPACING);
+            for (let i = 0; i < numRungs; i++) {
+                const rungGeometry = new THREE.BoxGeometry(LADDER_WIDTH, RUNG_THICKNESS, RUNG_THICKNESS);
+                const rung = new THREE.Mesh(rungGeometry, rungMaterial);
+                rung.position.y = -TOWER_HEIGHT / 2 + RUNG_SPACING * (i + 0.5);
+                rung.position.z = TOWER_DEPTH / 2 + 0.1;
+                ladderGroup.add(rung);
+            }
+            
+            tower.add(ladderGroup);
+            
+            // 屋上の特徴を追加
+            const rooftopY = TOWER_HEIGHT / 2;
+            
+            const rooftopFeature = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 1, 2),
+                new THREE.MeshLambertMaterial({ color: 0xff0000 })
+            );
+            rooftopFeature.position.set(0, rooftopY + 0.5, 0);
+            tower.add(rooftopFeature);
+            
+            return tower;
+        }
 
         // 最近使用した色の管理
         const MAX_RECENT_COLORS = 8; 
@@ -465,12 +686,40 @@
             addingMode = mode;
             const obstacleBtn = document.getElementById('add-obstacle-button');
             const lightBtn = document.getElementById('add-light-button');
+            const towerBtn = document.getElementById('add-tower-button');
+            const houseBtn = document.getElementById('add-house-button');
+            
+            // プロパティエディタの表示制御
+            const propEditor = document.getElementById('properties-editor');
+            const housePropEditor = document.getElementById('house-properties-editor');
+            const lightPropEditor = document.getElementById('light-properties-editor');
+            const towerPropEditor = document.getElementById('tower-properties-editor');
+            
+            // すべてのプロパティエディタを非表示
+            propEditor.style.display = 'none';
+            housePropEditor.style.display = 'none';
+            lightPropEditor.style.display = 'none';
+            towerPropEditor.style.display = 'none';
+            
+            // すべてのボタンを非アクティブ色にリセット
+            obstacleBtn.style.backgroundColor = '#7f8c8d';
+            lightBtn.style.backgroundColor = '#7f8c8d';
+            towerBtn.style.backgroundColor = '#7f8c8d';
+            houseBtn.style.backgroundColor = '#7f8c8d';
+            
+            // アクティブなモードのボタン色とプロパティエディタを変更
             if (mode === 'obstacle') {
-                obstacleBtn.style.backgroundColor = '#3498db'; // アクティブカラー
-                lightBtn.style.backgroundColor = '#7f8c8d';   // 非アクティブカラー (暗めの色)
-            } else { // light
-                obstacleBtn.style.backgroundColor = '#7f8c8d';   // 非アクティブカラー
-                lightBtn.style.backgroundColor = '#f1c40f';   // アクティブカラー (黄色)
+                obstacleBtn.style.backgroundColor = '#3498db';
+                propEditor.style.display = 'block';
+            } else if (mode === 'light') {
+                lightBtn.style.backgroundColor = '#f1c40f';
+                lightPropEditor.style.display = 'block';
+            } else if (mode === 'tower') {
+                towerBtn.style.backgroundColor = '#ff6b35';
+                towerPropEditor.style.display = 'block';
+            } else if (mode === 'house') {
+                houseBtn.style.backgroundColor = '#9b59b6';
+                housePropEditor.style.display = 'block';
             }
         }
 
@@ -668,11 +917,37 @@
             }
 
             const mapData = {
-                obstacles: obstacles.map(o => ({
-                    x: o.position.x, z: o.position.z,
-                    width: o.geometry.parameters.width, height: o.geometry.parameters.height, depth: o.geometry.parameters.depth,
-                    color: o.userData.color, hp: o.userData.hp
-                })),
+                obstacles: obstacles.map(o => {
+                    if (o.userData.type === 'tower') {
+                        // 塔の場合は特別なデータ形式で保存
+                        return {
+                            x: o.position.x, z: o.position.z,
+                            type: 'tower',
+                            width: o.userData.width,
+                            height: o.userData.height,
+                            depth: o.userData.depth,
+                            hp: o.userData.hp
+                        };
+                    } else if (o.userData.type === 'house') {
+                        // 家の場合は特別なデータ形式で保存
+                        return {
+                            x: o.position.x, z: o.position.z,
+                            type: 'house',
+                            width: o.userData.width,
+                            height: o.userData.height,
+                            depth: o.userData.depth,
+                            color: o.userData.color,
+                            hp: o.userData.hp
+                        };
+                    } else {
+                        // 通常の障害物
+                        return {
+                            x: o.position.x, z: o.position.z,
+                            width: o.geometry.parameters.width, height: o.geometry.parameters.height, depth: o.geometry.parameters.depth,
+                            color: o.userData.color, hp: o.userData.hp
+                        };
+                    }
+                }),
                 lights: lights.map(l => ({ // 追加: 電灯データを保存
                     x: l.position.x, z: l.position.z,
                     color: l.userData.color, intensity: l.userData.intensity
@@ -700,7 +975,18 @@
             resetMap(false);
             const mapData = allCustomMaps[mapName];
             try {
-                if (mapData.obstacles) mapData.obstacles.forEach(d => createObstacle(d.x, d.z, d.width, d.height, d.depth, d.color, d.hp, false));
+                if (mapData.obstacles) mapData.obstacles.forEach(d => {
+                    if (d.type === 'tower') {
+                        // 塔の場合は塔作成関数を呼び出す
+                        createTower(d.x, d.z, false);
+                    } else if (d.type === 'house') {
+                        // 家の場合は家作成関数を呼び出す
+                        createHouse(d.x, d.z, false);
+                    } else {
+                        // 通常の障害物
+                        createObstacle(d.x, d.z, d.width, d.height, d.depth, d.color, d.hp, false);
+                    }
+                });
                 if (mapData.lights) mapData.lights.forEach(d => createLight(d.x, d.z, d.color, d.intensity, false)); // 追加: 電灯データを読み込み
                 if (mapData.spawnPoints) SPAWN_POINTS_DATA = mapData.spawnPoints.map(d => ({...d, x: snapToGrid(d.x), z: snapToGrid(d.z)}));
                 if (mapData.persistentSize) PERSISTENT_OBSTACLE_SIZE = mapData.persistentSize;
@@ -896,22 +1182,53 @@
             } else if (addingMode === 'light') {
                 createLight(snappedX, snappedZ);
                 showNotification('Light added!');
+            } else if (addingMode === 'tower') {
+                createTower(snappedX, snappedZ);
+                showNotification('Tower with ladder added!');
+            } else if (addingMode === 'house') {
+                createHouse(snappedX, snappedZ);
+                showNotification('House with interior added!');
             }
         }
         
         // 追加: オブジェクト削除ロジックの一元化
         function deleteObject(object) {
             if (!object) return;
-            const type = object.userData.type;
+            
+            // Groupオブジェクトの場合は再帰的に親を探す
+            let targetObject = object;
+            while (targetObject.parent && targetObject.parent.type === 'Group') {
+                targetObject = targetObject.parent;
+            }
+            
+            // userData.typeがない場合はさらに親を探す
+            if (!targetObject.userData.type && targetObject.parent) {
+                targetObject = targetObject.parent;
+            }
+            
+            const type = targetObject.userData.type;
             if (type === 'obstacle') {
-                scene.remove(object);
-                obstacles = obstacles.filter(o => o !== object);
+                scene.remove(targetObject);
+                obstacles = obstacles.filter(o => o !== targetObject);
                 showNotification('Obstacle deleted!');
             } else if (type === 'light') {
-                scene.remove(object.userData.light); // 実際のPointLightも削除
-                scene.remove(object); // 表現用メッシュも削除
-                lights = lights.filter(l => l !== object);
+                scene.remove(targetObject.userData.light); // 実際のPointLightも削除
+                scene.remove(targetObject); // 表現用メッシュも削除
+                lights = lights.filter(l => l !== targetObject);
                 showNotification('Light deleted!');
+            } else if (type === 'house') {
+                scene.remove(targetObject);
+                obstacles = obstacles.filter(o => o !== targetObject);
+                showNotification('House deleted!');
+            } else if (type === 'tower') {
+                scene.remove(targetObject);
+                obstacles = obstacles.filter(o => o !== targetObject);
+                showNotification('Tower deleted!');
+            } else {
+                // デバッグ情報
+                console.log('Unknown object type:', targetObject.userData);
+                console.log('Object:', targetObject);
+                showNotification('Cannot delete this object type', true);
             }
             setSelected(null); // 選択解除
         }
@@ -936,7 +1253,7 @@
                     }
                 }
             } else if (event.button === 2) { // 右クリック (削除とパン)
-                const intersects = raycaster.intersectObjects([...obstacles, ...lights]); // lightsを追加
+                const intersects = raycaster.intersectObjects([...obstacles, ...lights], true); // recursive=trueを追加
                 if (intersects.length > 0) {
                     deleteObject(intersects[0].object); // ロジックを一元化
                 } else {
@@ -977,7 +1294,7 @@
 
                 touchDownTimer = setTimeout(() => {
                     touchMode = 'long-press';
-                    const intersects = raycaster.intersectObjects([...obstacles, ...lights]);
+                    const intersects = raycaster.intersectObjects([...obstacles, ...lights], true); // recursive=trueを追加
                     if (intersects.length > 0) {
                         deleteObject(intersects[0].object);
                     }
@@ -1153,6 +1470,8 @@
             document.getElementById('prop-color').addEventListener('input', onColorChange);
             document.getElementById('add-obstacle-button').addEventListener('click', () => setAddingMode('obstacle')); // 追加
             document.getElementById('add-light-button').addEventListener('click', () => setAddingMode('light')); // 追加
+            document.getElementById('add-tower-button').addEventListener('click', () => setAddingMode('tower')); // 追加
+            document.getElementById('add-house-button').addEventListener('click', () => setAddingMode('house')); // 追加
             document.getElementById('export-file-button').addEventListener('click', exportMapToFile);
             document.getElementById('import-file-button').addEventListener('click', () => document.getElementById('import-file-input').click());
             document.getElementById('import-file-input').addEventListener('change', importMapFromFile);

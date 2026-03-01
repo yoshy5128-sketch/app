@@ -144,9 +144,9 @@ function applySmoothNightMode() {
     const dayIntensity = 1 - targetTransitionProgress;
     
     // Day settings
-    const dayAmbientIntensity = 0.5;
-    const dayDirectionalIntensity = 0.8;
-    const dayClearColor = new THREE.Color(0x87CEEB); // Sky blue
+    const dayAmbientIntensity = 0.7; // 増加 (0.5 → 0.7)
+    const dayDirectionalIntensity = 1.0; // 増加 (0.8 → 1.0)
+    const dayClearColor = new THREE.Color(0xADD8E6); // Light blue (brighter)
     
     // Night settings - same as regular night mode
     const nightAmbientIntensity = 0.05; // Same as regular night mode
@@ -257,6 +257,9 @@ let characterEditorAnimationId = null;
 
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
+        // Initialize textures first
+        initializeTextures();
+        
         // ここにDOM要素への割り当てを移動
         playerGunSound = document.getElementById('playerGunSound');
         mgGunSound = document.getElementById('mgGunSound');
@@ -299,6 +302,12 @@ let characterEditorAnimationId = null;
         
         loadSettings();
         updateCustomMapSelector();
+        
+        // ユーザーの選択を尊重（強制設定を無効化）
+        // gameSettings.mapType = 'default';
+        // gameSettings.customMapName = '';
+        // saveSettings();
+        
         const playerHpSelect = document.getElementById('player-hp');
         const aiHpSelect = document.getElementById('ai-hp');
         const mgCountSelect = document.getElementById('mg-count');
@@ -405,6 +414,11 @@ let characterEditorAnimationId = null;
                 }
             });
         });
+        
+        // Set initial radio button values and update custom map selector
+        mapTypeRadios.forEach(radio => {
+            radio.checked = (radio.value === gameSettings.mapType);
+        });
         autoAimRadios.forEach(radio => {
             radio.addEventListener('change', () => {
                 if (radio.checked) {
@@ -453,12 +467,6 @@ let characterEditorAnimationId = null;
             customMapSelector.addEventListener('change', () => {
                 const selectedMapName = customMapSelector.value;
                 gameSettings.customMapName = selectedMapName;
-                if (selectedMapName) {
-                    gameSettings.mapType = 'custom';
-                    document.querySelectorAll('input[name="map-type"]').forEach(radio => {
-                        radio.checked = (radio.value === 'custom');
-                    });
-                }
                 saveSettings();
                 // マップ選択時に保存された設定を自動読み込み
                 if (selectedMapName && selectedMapName !== '') {
@@ -613,15 +621,22 @@ function updateCustomMapSelector() {
             option.textContent = mapName;
             customMapSelector.appendChild(option);
         });
-        const selectedMapName = gameSettings.customMapName || mapNames[0];
-        customMapSelector.value = selectedMapName;
+        customMapSelector.value = ''; // 最初は空白にする
         if (document.getElementById('load-selected-custom-map-btn')) {
             document.getElementById('load-selected-custom-map-btn').disabled = false;
         }
-        // 選択されているマップの設定を自動的に読み込む
-        if (selectedMapName && selectedMapName !== '') {
-            loadMapSettings(selectedMapName);
-        }
+        // 自動読み込みを無効化 - ユーザーが明示的に選択した場合のみ読み込む
+    }
+}
+
+// Texture variables (declare before initialization)
+let brickTexture, concreteTexture;
+
+// Initialize textures early for better performance
+function initializeTextures() {
+    if (!brickTexture) {
+        brickTexture = createBrickTexture();
+        concreteTexture = createConcreteTexture();
     }
 }
 
@@ -1782,7 +1797,7 @@ function createAndAttachLadder(obstacle, ladderFace = -1) {
     const sensorAreaWidth = 3;
     const sensorAreaHeight = 3;
     const sensorGeometry = new THREE.BoxGeometry(sensorAreaWidth, sensorAreaHeight, sensorAreaDepth);
-    const sensorMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.3 });
+    const sensorMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.5 }); // More visible
     const sensorArea = new THREE.Mesh(sensorGeometry, sensorMaterial);
     sensorArea.name = 'ladderSensorArea';
     const offsetFromLadderWall = sensorAreaDepth / 2 - 0.5;
@@ -1797,7 +1812,7 @@ function createAndAttachLadder(obstacle, ladderFace = -1) {
     sensorArea.position.y = (sensorAreaHeight / 2) - FLOOR_HEIGHT;
     sensorArea.userData.obstacle = obstacle;
     sensorArea.userData.ladderPos = ladderWorldPosition;
-    sensorArea.visible = false;
+    sensorArea.visible = true; // Make visible for debugging
     scene.add(sensorArea);
     ladderSwitches.push(sensorArea);
     return face;
@@ -1807,12 +1822,25 @@ function addRooftopFeatures(obstacle, ladderFace) {
     if (!obstacle.userData.rooftopParts) {
         obstacle.userData.rooftopParts = [];
     }
-    const buildingWidth = obstacle.geometry.parameters.width;
-    const buildingHeight = obstacle.geometry.parameters.height;
-    const buildingDepth = obstacle.geometry.parameters.depth;
+    
+    // ジオメトリの安全な取得
+    let buildingWidth, buildingHeight, buildingDepth;
+    
+    if (obstacle.geometry && obstacle.geometry.parameters) {
+        // BoxGeometryの場合
+        buildingWidth = obstacle.geometry.parameters.width || 6;
+        buildingHeight = obstacle.geometry.parameters.height || 4;
+        buildingDepth = obstacle.geometry.parameters.depth || 6;
+    } else {
+        // デフォルト値
+        buildingWidth = 6;
+        buildingHeight = 4;
+        buildingDepth = 6;
+    }
+    
     const rooftopY = obstacle.position.y + (buildingHeight / 2);
     const rooftopFloorGeometry = new THREE.BoxGeometry(buildingWidth, 0.1, buildingDepth);
-    const rooftopFloorMaterial = new THREE.MeshLambertMaterial({ color: 0x666666, transparent: true, opacity: 0.0 });
+    const rooftopFloorMaterial = new THREE.MeshLambertMaterial({ color: 0x666666, transparent: true, opacity: 0.3 });
     const rooftopFloor = new THREE.Mesh(rooftopFloorGeometry, rooftopFloorMaterial);
     rooftopFloor.position.set(obstacle.position.x, rooftopY, obstacle.position.z);
     rooftopFloor.userData.parentBuilding = obstacle;
@@ -1820,9 +1848,16 @@ function addRooftopFeatures(obstacle, ladderFace) {
     scene.add(rooftopFloor);
     obstacles.push(rooftopFloor);
     obstacle.userData.rooftopParts.push(rooftopFloor);
+    
+    // Initialize textures if not done yet
+    initializeTextures();
+    
     const wallHeight = 1.0;
     const wallThickness = 0.5;
-    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x880000 });
+    const wallMaterial = new THREE.MeshLambertMaterial({ 
+        map: brickTexture,
+        color: 0x880000 
+    });
     const wallDefs = [
         { face: 0, w: buildingWidth, h: wallHeight, d: wallThickness, ox: 0, oz: buildingDepth / 2 - wallThickness / 2 },
         { face: 1, w: buildingWidth, h: wallHeight, d: wallThickness, ox: 0, oz: -(buildingDepth / 2 - wallThickness / 2) },
@@ -1869,10 +1904,257 @@ function addRooftopFeatures(obstacle, ladderFace) {
     }
 }
 
+function createHollowObstacle(x, z, width = 8, height = 5, depth = 8, color = 0xff4444, hp = 1, holeConfigs = [], isNew = true) {
+    console.log('=== HOLLOW OBSTACLE (WORKING VERSION) ===');
+    console.log('Building height:', height);
+    
+    const building = new THREE.Group();
+    building.position.set(x, 0, z);
+    building.userData.hp = hp;
+    building.userData.isHollow = true;
+    building.userData.type = 'hollow_obstacle';
+    building.userData.width = width;
+    building.userData.height = height;
+    building.userData.depth = depth;
+    building.userData.color = color;
+    
+    const material = new THREE.MeshStandardMaterial({ color: color, side: THREE.DoubleSide });
+    const wallThickness = 0.3; // 壁の厚さを増やしてコリジョンを強化
+    
+    // 床 - 地面に配置
+    const floorGeometry = new THREE.BoxGeometry(width, 0.1, depth);
+    const floor = new THREE.Mesh(floorGeometry, material);
+    floor.position.set(0, 0.05, 0); // 床の厚さの半分を地面から上に
+    floor.userData.type = 'floor';
+    floor.userData.isWall = true; // コリジョン用に壁として扱う
+    building.add(floor);
+    obstacles.push(floor); // 障害物リストに追加
+    
+    // 各壁の配置 - 床の上に配置
+    createFrontWallWithDoor(building, width, height, wallThickness, depth/2, material);
+    createBackWallWithWindows(building, width, height, wallThickness, -depth/2, material);
+    // 側壁は回転が必要
+    createSideWallWithWindow(building, depth, height, wallThickness, -width/2, material, Math.PI / 2);
+    createSideWallWithWindow(building, depth, height, wallThickness, width/2, material, Math.PI / 2);
+    
+    // 天井の配置
+    const ceilingGeometry = new THREE.BoxGeometry(width + wallThickness, 0.3, depth + wallThickness);
+    const ceiling = new THREE.Mesh(ceilingGeometry, material);
+    ceiling.position.set(0, height, 0); 
+    ceiling.userData.type = 'ceiling';
+    ceiling.userData.isWall = true; // コリジョン用に壁として扱う
+    building.add(ceiling);
+    obstacles.push(ceiling); // 障害物リストに追加
+    
+    scene.add(building);
+    
+    console.log('=== CREATION COMPLETE ===');
+}
+
+// 基本の壁形状を作成する補助関数
+function createBaseWallShape(w, h) {
+    const shape = new THREE.Shape();
+    shape.moveTo(-w/2, 0);
+    shape.lineTo(w/2, 0);
+    shape.lineTo(w/2, h);
+    shape.lineTo(-w/2, h);
+    shape.lineTo(-w/2, 0);
+    return shape;
+}
+
+function createFrontWallWithDoor(building, width, height, thickness, zPos, material) {
+    // BoxGeometry方式で確実なコリジョン
+    const doorWidth = 2.0;
+    const doorHeight = 3.2; // プレイヤーの高さ3.0m + 余裕
+    
+    console.log('FRONT WALL: door width =', doorWidth, 'door height =', doorHeight);
+    console.log('Building width =', width, 'height =', height);
+    
+    // TOP PIECE - ドアの上
+    const topHeight = height - doorHeight;
+    if (topHeight > 0) {
+        const topGeometry = new THREE.BoxGeometry(width, topHeight, thickness);
+        const topPiece = new THREE.Mesh(topGeometry, material);
+        topPiece.position.set(0, doorHeight + topHeight/2, zPos);
+        topPiece.userData.isWall = true;
+        building.add(topPiece);
+        obstacles.push(topPiece);
+        console.log('Top piece: height =', topHeight, 'y =', doorHeight + topHeight/2);
+    }
+    
+    // LEFT PIECE - ドアの左
+    const leftWidth = (width - doorWidth) / 2;
+    if (leftWidth > 0) {
+        const leftGeometry = new THREE.BoxGeometry(leftWidth, doorHeight, thickness);
+        const leftPiece = new THREE.Mesh(leftGeometry, material);
+        leftPiece.position.set(-width/2 + leftWidth/2, doorHeight/2, zPos);
+        leftPiece.userData.isWall = true;
+        building.add(leftPiece);
+        obstacles.push(leftPiece);
+        console.log('Left piece: width =', leftWidth, 'y =', doorHeight/2);
+    }
+    
+    // RIGHT PIECE - ドアの右
+    if (leftWidth > 0) {
+        const rightGeometry = new THREE.BoxGeometry(leftWidth, doorHeight, thickness);
+        const rightPiece = new THREE.Mesh(rightGeometry, material);
+        rightPiece.position.set(width/2 - leftWidth/2, doorHeight/2, zPos);
+        rightPiece.userData.isWall = true;
+        building.add(rightPiece);
+        obstacles.push(rightPiece);
+        console.log('Right piece: width =', leftWidth, 'y =', doorHeight/2);
+    }
+    
+    console.log('Front wall with door created using BoxGeometry method');
+}
+
+function createBackWallWithWindows(building, width, height, thickness, zPos, material) {
+    // BoxGeometry方式で確実なコリジョン
+    const windowWidth = 1.2;
+    const windowHeight = 1.2;
+    const windowY = 0.3; // プレイヤーの視線レベルにさらに下げる
+    const windowSpacing = 0.5; // 窓の間隔
+    
+    console.log('BACK WALL: window width =', windowWidth, 'height =', windowHeight, 'y =', windowY);
+    
+    // TOP PIECE - 窓の上
+    const topHeight = height - windowY - windowHeight;
+    if (topHeight > 0) {
+        const topGeometry = new THREE.BoxGeometry(width, topHeight, thickness);
+        const topPiece = new THREE.Mesh(topGeometry, material);
+        topPiece.position.set(0, windowY + windowHeight + topHeight/2, zPos);
+        topPiece.userData.isWall = true;
+        building.add(topPiece);
+        obstacles.push(topPiece);
+        console.log('Back top piece: height =', topHeight, 'y =', windowY + windowHeight + topHeight/2);
+    }
+    
+    // BOTTOM PIECE - 窓の下
+    const bottomHeight = windowY;
+    if (bottomHeight > 0) {
+        const bottomGeometry = new THREE.BoxGeometry(width, bottomHeight, thickness);
+        const bottomPiece = new THREE.Mesh(bottomGeometry, material);
+        bottomPiece.position.set(0, bottomHeight/2, zPos);
+        bottomPiece.userData.isWall = true;
+        building.add(bottomPiece);
+        obstacles.push(bottomPiece);
+        console.log('Back bottom piece: height =', bottomHeight, 'y =', bottomHeight/2);
+    }
+    
+    // LEFT PIECE - 左の窓の左
+    const leftWidth = (width - windowWidth*2 - windowSpacing) / 2;
+    if (leftWidth > 0) {
+        const leftGeometry = new THREE.BoxGeometry(leftWidth, windowHeight, thickness);
+        const leftPiece = new THREE.Mesh(leftGeometry, material);
+        leftPiece.position.set(-width/2 + leftWidth/2, windowY + windowHeight/2, zPos);
+        leftPiece.userData.isWall = true;
+        building.add(leftPiece);
+        obstacles.push(leftPiece);
+        console.log('Back left piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
+    }
+    
+    // MIDDLE PIECE - 窓の間
+    const middleGeometry = new THREE.BoxGeometry(windowSpacing, windowHeight, thickness);
+    const middlePiece = new THREE.Mesh(middleGeometry, material);
+    middlePiece.position.set(0, windowY + windowHeight/2, zPos);
+    middlePiece.userData.isWall = true;
+    building.add(middlePiece);
+    obstacles.push(middlePiece);
+    console.log('Back middle piece: width =', windowSpacing, 'y =', windowY + windowHeight/2);
+    
+    // RIGHT PIECE - 右の窓の右
+    if (leftWidth > 0) {
+        const rightGeometry = new THREE.BoxGeometry(leftWidth, windowHeight, thickness);
+        const rightPiece = new THREE.Mesh(rightGeometry, material);
+        rightPiece.position.set(width/2 - leftWidth/2, windowY + windowHeight/2, zPos);
+        rightPiece.userData.isWall = true;
+        building.add(rightPiece);
+        obstacles.push(rightPiece);
+        console.log('Back right piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
+    }
+    
+    console.log('Back wall with windows created using BoxGeometry method');
+}
+
+function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, material, rotationY) {
+    // BoxGeometry方式で確実なコリジョン
+    const windowWidth = 1.2;
+    const windowHeight = 1.2;
+    const windowY = 0.3; // プレイヤーの視線レベルにさらに下げる
+    
+    console.log('SIDE WALL: window width =', windowWidth, 'height =', windowHeight, 'y =', windowY);
+    
+    // TOP PIECE - 窓の上
+    const topHeight = height - windowY - windowHeight;
+    if (topHeight > 0) {
+        const topGeometry = new THREE.BoxGeometry(thickness, topHeight, wallDepth);
+        const topPiece = new THREE.Mesh(topGeometry, material);
+        topPiece.position.set(xPos, windowY + windowHeight + topHeight/2, 0);
+        topPiece.userData.isWall = true;
+        building.add(topPiece);
+        obstacles.push(topPiece);
+        console.log('Side top piece: height =', topHeight, 'y =', windowY + windowHeight + topHeight/2);
+    }
+    
+    // BOTTOM PIECE - 窓の下
+    const bottomHeight = windowY;
+    if (bottomHeight > 0) {
+        const bottomGeometry = new THREE.BoxGeometry(thickness, bottomHeight, wallDepth);
+        const bottomPiece = new THREE.Mesh(bottomGeometry, material);
+        bottomPiece.position.set(xPos, bottomHeight/2, 0);
+        bottomPiece.userData.isWall = true;
+        building.add(bottomPiece);
+        obstacles.push(bottomPiece);
+        console.log('Side bottom piece: height =', bottomHeight, 'y =', bottomHeight/2);
+    }
+    
+    // LEFT PIECE - 窓の左
+    const leftWidth = (wallDepth - windowWidth) / 2;
+    if (leftWidth > 0) {
+        const leftGeometry = new THREE.BoxGeometry(thickness, windowHeight, leftWidth);
+        const leftPiece = new THREE.Mesh(leftGeometry, material);
+        leftPiece.position.set(xPos, windowY + windowHeight/2, -wallDepth/2 + leftWidth/2);
+        leftPiece.userData.isWall = true;
+        building.add(leftPiece);
+        obstacles.push(leftPiece);
+        console.log('Side left piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
+    }
+    
+    // RIGHT PIECE - 窓の右
+    if (leftWidth > 0) {
+        const rightGeometry = new THREE.BoxGeometry(thickness, windowHeight, leftWidth);
+        const rightPiece = new THREE.Mesh(rightGeometry, material);
+        rightPiece.position.set(xPos, windowY + windowHeight/2, wallDepth/2 - leftWidth/2);
+        rightPiece.userData.isWall = true;
+        building.add(rightPiece);
+        obstacles.push(rightPiece);
+        console.log('Side right piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
+    }
+    
+    console.log('Side wall with window created using BoxGeometry method');
+}
+
 function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth = 2, color = 0xff0000, hp = 1) {
+    // Initialize textures if not done yet
+    initializeTextures();
+    
     const boxGeometry = new THREE.BoxGeometry(width, height, depth);
-    const boxMaterial = new THREE.MeshLambertMaterial({ color: color });
-    const box = new THREE.Mesh(boxGeometry, boxMaterial);
+    
+    // Choose texture based on obstacle type or randomly
+    let material;
+    if (Math.random() > 0.5) {
+        material = new THREE.MeshLambertMaterial({ 
+            map: brickTexture,
+            color: color 
+        });
+    } else {
+        material = new THREE.MeshLambertMaterial({ 
+            map: concreteTexture,
+            color: color 
+        });
+    }
+    
+    const box = new THREE.Mesh(boxGeometry, material);
     box.position.set(x, (height / 2) - FLOOR_HEIGHT, z);
     box.userData.hp = hp;
     scene.add(box);
@@ -1881,10 +2163,10 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     if (height > 6) {
         ladderFace = createAndAttachLadder(box);
     }
-    if (height >= 8) {
-        createWindows(box, width, height, depth);
-        addRooftopFeatures(box, ladderFace);
-    }
+    // if (height >= 8) {
+    //     createWindows(box, width, height, depth);
+    //     addRooftopFeatures(box, ladderFace);
+    // }
     const HIDING_DISTANCE = 1.5;
     HIDING_SPOTS.push({ position: new THREE.Vector3(x + HIDING_DISTANCE, 0, z + HIDING_DISTANCE), obstacle: box });
     HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z + HIDING_DISTANCE), obstacle: box });
@@ -1892,13 +2174,155 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z - HIDING_DISTANCE), obstacle: box });
 }
 
+function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, hp = 8) {
+    // Initialize textures if not done yet
+    initializeTextures();
+    
+    const house = new THREE.Group();
+    house.position.set(x, 0, z);
+    
+    // ランダムな入口向きを追加
+    const randomRotation = Math.floor(Math.random() * 4) * (Math.PI / 2); // 0, 90, 180, 270度
+    house.rotation.y = randomRotation;
+
+    const material = new THREE.MeshLambertMaterial({ 
+        color: color, 
+        side: THREE.DoubleSide 
+    });
+
+    const thickness = 0.2;
+
+    // 穴あき壁を生成する共通関数
+    function createWallMesh(w, h, t, mat, holes = []) {
+        const shape = new THREE.Shape();
+        shape.moveTo(-w / 2, 0);
+        shape.lineTo(w / 2, 0);
+        shape.lineTo(w / 2, h);
+        shape.lineTo(-w / 2, h);
+        shape.lineTo(-w / 2, 0);
+
+        holes.forEach(hole => {
+            const holePath = new THREE.Path();
+            holePath.moveTo(hole.x - hole.w / 2, hole.y);
+            holePath.lineTo(hole.x + hole.w / 2, hole.y);
+            holePath.lineTo(hole.x + hole.w / 2, hole.y + hole.h);
+            holePath.lineTo(hole.x - hole.w / 2, hole.y + hole.h);
+            holePath.lineTo(hole.x - hole.w / 2, hole.y);
+            shape.holes.push(holePath);
+        });
+
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+            depth: t,
+            bevelEnabled: false
+        });
+        const mesh = new THREE.Mesh(geometry, mat);
+        return mesh;
+    }
+
+    // 1. 床 - 削除して内部移動を可能に
+    // const floor = new THREE.Mesh(
+    //     new THREE.BoxGeometry(width, thickness, depth),
+    //     material
+    // );
+    // floor.position.y = thickness / 2;
+    // floor.receiveShadow = true;
+    // house.add(floor);
+
+    // 2. 正面壁 - ドア部分を空けて2つの壁パーツに分ける
+    console.log('Creating front wall without door section');
+    
+    // 左側の壁
+    const leftWallWidth = (width - 2) / 2; // ドア幅2mを引いて半分に
+    const frontLeftWall = new THREE.Mesh(
+        new THREE.BoxGeometry(leftWallWidth, height, thickness),
+        material
+    );
+    frontLeftWall.position.set(-width/2 + leftWallWidth/2, height/2, depth / 2 - thickness/2);
+    frontLeftWall.userData.isWall = true;
+    house.add(frontLeftWall);
+    obstacles.push(frontLeftWall);
+    
+    // 右側の壁
+    const rightWallPart = new THREE.Mesh(
+        new THREE.BoxGeometry(leftWallWidth, height, thickness),
+        material
+    );
+    rightWallPart.position.set(width/2 - leftWallWidth/2, height/2, depth / 2 - thickness/2);
+    rightWallPart.userData.isWall = true;
+    house.add(rightWallPart);
+    obstacles.push(rightWallPart);
+    
+    console.log('Door opening created - no wall at center');
+
+    // 3. 背面壁 (窓2つ)
+    const backWall = createWallMesh(width, height, thickness, material, [
+        { x: -width/4, y: 1.5, w: 1.5, h: 1.5 },
+        { x: width/4, y: 1.5, w: 1.5, h: 1.5 }
+    ]);
+    backWall.position.set(0, 0, -depth / 2);
+    backWall.userData.isWall = true; // コリジョン用
+    house.add(backWall);
+    obstacles.push(backWall); // 障害物リストに追加
+
+    // 4. 左壁 (窓1つ)
+    const leftSideWall = createWallMesh(depth, height, thickness, material, [
+        { x: 0, y: 1.5, w: 2, h: 1.5 }
+    ]);
+    leftSideWall.rotation.y = Math.PI / 2;
+    leftSideWall.position.set(-width / 2, 0, 0);
+    leftSideWall.userData.isWall = true; // コリジョン用
+    house.add(leftSideWall);
+    obstacles.push(leftSideWall); // 障害物リストに追加
+
+    // 5. 右壁 (窓1つ)
+    const rightSideWall = createWallMesh(depth, height, thickness, material, [
+        { x: 0, y: 1.5, w: 2, h: 1.5 }
+    ]);
+    rightSideWall.rotation.y = -Math.PI / 2;
+    rightSideWall.position.set(width / 2, 0, 0);
+    rightSideWall.userData.isWall = true; // コリジョン用
+    house.add(rightSideWall);
+    obstacles.push(rightSideWall); // 障害物リストに追加
+
+    // 6. 屋根
+    const roof = new THREE.Mesh(
+        new THREE.BoxGeometry(width + 0.4, thickness, depth + 0.4),
+        material
+    );
+    roof.position.y = height + thickness;
+    roof.castShadow = true;
+    house.add(roof);
+
+    // userDataを設定
+    house.userData = { 
+        type: 'house',
+        width: width,
+        height: height,
+        depth: depth,
+        color: color,
+        hp: hp
+    };
+    
+    scene.add(house);
+    
+    return house;
+}
+
 function createSniperTower(x, z) {
+    // Initialize textures if not done yet
+    initializeTextures();
+    
     const TOWER_WIDTH = 6;
     const TOWER_DEPTH = 6;
     const TOWER_HEIGHT = DEFAULT_OBSTACLE_HEIGHT * 3;
     const towerYPos = (TOWER_HEIGHT / 2) - FLOOR_HEIGHT;
     const towerGeometry = new THREE.BoxGeometry(TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH);
-    const towerMaterial = new THREE.MeshLambertMaterial({ color: 0x4A4A4A });
+    
+    const towerMaterial = new THREE.MeshLambertMaterial({ 
+        map: concreteTexture,
+        color: 0x4A4A4A 
+    });
+    
     const tower = new THREE.Mesh(towerGeometry, towerMaterial);
     tower.position.set(x, towerYPos, z);
     tower.userData.isTower = true;
@@ -1914,7 +2338,7 @@ function createSniperTower(x, z) {
         ladderFace = z > 0 ? 0 : 1;
     }
     ladderFace = createAndAttachLadder(tower, ladderFace);
-    createWindows(tower, TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH);
+    // createWindows(tower, TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH); // Removed windows for performance
     addRooftopFeatures(tower, ladderFace);
 }
 
@@ -2010,7 +2434,17 @@ function resetObstacles() {
         createSniperTower(-35, 35);
     }
     for (const config of obstaclesToCreate) {
-        createObstacle(config.x, config.z, config.width, config.height || undefined, config.depth, config.color || undefined, config.hp || undefined);
+        if (config.type === 'tower') {
+            // カスタムマップの塔データの場合
+            createSniperTower(config.x, config.z);
+        } else if (config.type === 'house') {
+            // カスタムマップの家データの場合
+            createHouse(config.x, config.z, config.width, config.height, config.depth, config.color, config.hp);
+        } else {
+            // 通常の建物の場合
+            console.log('Creating solid obstacle');
+            createObstacle(config.x, config.z, config.width, config.height || DEFAULT_OBSTACLE_HEIGHT, config.depth, config.color || 0xff0000, config.hp || 1);
+        }
     }
 }
 
@@ -2087,9 +2521,9 @@ function createCharacterModel(color, customization = null) {
     const targetHeight = BODY_HEIGHT + HEAD_RADIUS * 2;
     const ragTotalHeight = 2.5; // 0.6 + 0.6 + 0.9 + 0.4
     const s = targetHeight / ragTotalHeight;
-    const torsoHeight = 0.9 * s;
-    const headSize = 0.4 * s;
-    const legSegmentHeight = 0.6 * s;
+    const torsoHeight = 0.7 * s; // 胴体をさらに短くする（0.8→0.7）
+    const headSize = 0.4 * s; // 元のまま
+    const legSegmentHeight = 0.7 * s; // 脚をさらに長くする（0.65→0.7）
     const torsoY = (legSegmentHeight * 2) + (torsoHeight / 2);
     const headY = (legSegmentHeight * 2) + torsoHeight + (headSize / 2);
 
@@ -2264,7 +2698,7 @@ function createCharacterModel(color, customization = null) {
 
     // Feet (Shoes)
     const footLength = 0.3 * s;
-    const footWidth = 0.35 * s;
+    const footWidth = 0.25 * s; // 脚の横幅に合わせる（0.35→0.25）
     const footHeight = 0.12 * s;
     const footGeom = new THREE.BoxGeometry(footWidth, footHeight, footLength);
     
@@ -2435,7 +2869,32 @@ function clampArmJoints(parts) {
 
 function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
     if (!parts) return;
-    if (isCrouching) {
+    if (isCrouching && isMoving) {
+        // Crouch walking animation
+        const hipBend = Math.PI / 4.2;
+        const kneeBend = Math.PI / 2.6;
+        const walkSpeed = 8; // Slower walking while crouched
+        const hipAmplitude = Math.PI / 8; // Reduced amplitude for crouch walking
+        const kneeAmplitude = Math.PI / 6; // Reduced amplitude for crouch walking
+        
+        // Base crouch pose
+        parts.leftHip.rotation.x = -hipBend;
+        parts.rightHip.rotation.x = -hipBend;
+        parts.leftKnee.rotation.x = kneeBend;
+        parts.rightKnee.rotation.x = kneeBend;
+        parts.body.rotation.x = -0.22;
+        parts.head.position.y = parts.baseHeadY - 0.2;
+        
+        // Add walking animation on top of crouch pose
+        const swing = Math.sin(timeElapsed * walkSpeed) * hipAmplitude;
+        parts.leftHip.rotation.x += swing;
+        parts.rightHip.rotation.x -= swing;
+        parts.leftKnee.rotation.x += Math.max(0, (Math.cos(timeElapsed * walkSpeed) + 1) / 2 * kneeAmplitude);
+        parts.rightKnee.rotation.x += Math.max(0, (Math.cos(timeElapsed * walkSpeed + Math.PI) + 1) / 2 * kneeAmplitude);
+        
+        // Head movement while crouch walking
+        parts.head.position.y += Math.sin(timeElapsed * walkSpeed) * 0.02;
+    } else if (isCrouching) {
         const hipBend = Math.PI / 4.2;
         const kneeBend = Math.PI / 2.6;
         // Bend legs toward the forward-hand direction (human-like crouch)
@@ -2537,6 +2996,108 @@ function getPlayerCombatBounds() {
     if (bottomY < -FLOOR_HEIGHT) bottomY = -FLOOR_HEIGHT;
     const height = topY - bottomY;
     return { topY, bottomY, height };
+}
+
+// Reusable temporary vectors for performance optimization
+const tempVector1 = new THREE.Vector3();
+const tempVector2 = new THREE.Vector3();
+const tempVector3 = new THREE.Vector3();
+const tempBox1 = new THREE.Box3();
+
+// Lightweight texture cache and loader
+const textureCache = new Map();
+const textureLoader = new THREE.TextureLoader();
+
+// Create procedural textures for better performance
+function createBrickTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // Base brick color
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Brick pattern
+    ctx.strokeStyle = '#654321';
+    ctx.lineWidth = 2;
+    
+    // Draw bricks
+    for (let y = 0; y < 256; y += 32) {
+        for (let x = 0; x < 256; x += 64) {
+            const offsetX = (y / 32) % 2 === 0 ? 0 : 32;
+            ctx.strokeRect(x + offsetX, y, 64, 32);
+        }
+    }
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(2, 2);
+    return texture;
+}
+
+function createConcreteTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // Base concrete color
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Add noise for texture
+    for (let i = 0; i < 1000; i++) {
+        const x = Math.random() * 256;
+        const y = Math.random() * 256;
+        const brightness = Math.random() * 40 - 20;
+        ctx.fillStyle = `rgba(128, 128, 128, ${Math.random() * 0.3})`;
+        ctx.fillRect(x, y, 2, 2);
+    }
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(4, 4);
+    return texture;
+}
+
+function findNearbyCover(position, obstacles) {
+    const coverSearchRadius = 3.0; // 3m以内の障害物を探索
+    let nearestCover = null;
+    let nearestDistance = coverSearchRadius;
+    
+    // パフォーマンス最適化：まず距離でフィルタリング
+    const positionSquared = position.x * position.x + position.z * position.z;
+    
+    for (let i = 0; i < obstacles.length; i++) {
+        const obstacle = obstacles[i];
+        tempBox1.setFromObject(obstacle);
+        const obstacleCenter = tempBox1.getCenter(tempVector1);
+        
+        // まず簡単な距離チェックで除外
+        const dx = obstacleCenter.x - position.x;
+        const dz = obstacleCenter.z - position.z;
+        const distanceSquared = dx * dx + dz * dz;
+        
+        if (distanceSquared < nearestDistance * nearestDistance) {
+            const distance = Math.sqrt(distanceSquared);
+            
+            // 障害物がプレイヤーからの射線を遮る位置にあるかチェック
+            tempVector2.copy(player.position).sub(position);
+            tempVector3.copy(obstacleCenter).sub(position);
+            
+            // 障害物がプレイヤー方向にあるか
+            if (tempVector3.dot(tempVector2) > 0) {
+                nearestCover = obstacle;
+                nearestDistance = distance;
+            }
+        }
+    }
+    
+    return nearestCover;
 }
 
 function getAIUpperTorsoPos(targetAI) {
@@ -2653,6 +3214,8 @@ function createAI(color, customization = null) {
     aiObject.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
     aiObject.targetPosition = new THREE.Vector3();
     aiObject.isCrouching = false;
+    aiObject.crouchUntilTime = null; // 戦術的しゃがみのタイマー
+    aiObject.lastCoverSearchTime = 0; // カバー探索のクールダウン
     aiObject.aggression = Math.random();
     aiObject.flankAggression = Math.random();
     aiObject.lastFlankTime = 0;
@@ -2909,7 +3472,10 @@ function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate) {
     ai.userData.rooftopObstacle = obstacle;
     // Move to the sensor area (outside wall), then snap to ladder line when climbing starts.
     ai.userData.rooftopLadderPos = sensor.position.clone();
-    ai.userData.rooftopTargetY = obstacle.position.y + obstacle.geometry.parameters.height / 2;
+    // 空洞建物の場合、床のジオメトリーから高さを取得
+    const geometry = obstacle.geometry || (obstacle.children && obstacle.children[0] ? obstacle.children[0].geometry : null);
+    const height = geometry ? geometry.parameters.height : 4;
+    ai.userData.rooftopTargetY = obstacle.position.y + height / 2;
     ai.userData.rooftopDecisionMade = false;
     ai.userData.nextRooftopDecisionAt = timeElapsed + 4.0;
     ai.userData.rooftopPhase = 'to_ladder';
@@ -3002,7 +3568,9 @@ function findSmartCoverPosition(ai, threatPos) {
     let bestScore = Infinity;
     const aiPos = ai.position.clone();
     for (const obs of obstacles) {
-        if (!obs.geometry || !obs.geometry.parameters || obs.userData.isRooftop) continue;
+        // 空洞建物の場合、床のジオメトリーから高さを取得
+        const geometry = obs.geometry || (obs.children && obs.children[0] ? obs.children[0].geometry : null);
+        if (!geometry || !geometry.parameters || obs.userData.isRooftop) continue;
         const box = new THREE.Box3().setFromObject(obs);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
@@ -3261,7 +3829,12 @@ function destroyObstacle(obstacle, explosionPosition) {
     }
     scene.remove(obstacle);
     const NUM_FRAGMENTS_PER_AXIS = 3;
-    const fragmentSize = new THREE.Vector3(obstacle.geometry.parameters.width / NUM_FRAGMENTS_PER_AXIS, obstacle.geometry.parameters.height / NUM_FRAGMENTS_PER_AXIS, obstacle.geometry.parameters.depth / NUM_FRAGMENTS_PER_AXIS);
+    // 空洞建物の場合、床のジオメトリーから寸法を取得
+    const geometry = obstacle.geometry || (obstacle.children && obstacle.children[0] ? obstacle.children[0].geometry : null);
+    const width = geometry ? geometry.parameters.width : 6;
+    const height = geometry ? geometry.parameters.height : 4;
+    const depth = geometry ? geometry.parameters.depth : 6;
+    const fragmentSize = new THREE.Vector3(width / NUM_FRAGMENTS_PER_AXIS, height / NUM_FRAGMENTS_PER_AXIS, depth / NUM_FRAGMENTS_PER_AXIS);
     const fragmentGeometry = new THREE.BoxGeometry(fragmentSize.x, fragmentSize.y, fragmentSize.z);
     const fragmentMaterial = obstacle.material;
     for (let i = 0; i < NUM_FRAGMENTS_PER_AXIS; i++) {
@@ -4420,7 +4993,10 @@ function restartGame() {
             aiSpawnPos = aiSpawn ? new THREE.Vector3(aiSpawn.x, 0, aiSpawn.z) : defaultPos;
         }
         ai.position.copy(new THREE.Vector3(aiSpawnPos.x, -FLOOR_HEIGHT, aiSpawnPos.z));
-        ai.lookAt(new THREE.Vector3(0, ai.position.y, 0));
+        // Make AI face center of stage (like player logic)
+        const lookAtPoint = new THREE.Vector3(0, ai.position.y, 0);
+        const direction = new THREE.Vector3().subVectors(lookAtPoint, ai.position);
+        ai.rotation.y = Math.atan2(direction.x, direction.z);
         // Initialize lastPosition to current position to avoid immediate 'stuck' watchdog triggers
         if (ai.lastPosition) ai.lastPosition.copy(ai.position);
         if (finalAICount === 3 && !isTeamMode) {
@@ -5121,30 +5697,24 @@ function checkCollision(object, obstacles, ignoreObstacle = null) {
     const pos = object.position;
     let currentObjectBox;
     if (object === player) {
-        objectBox.min.set(pos.x - 0.2, pos.y - playerTargetHeight, pos.z - 0.2);
-        objectBox.max.set(pos.x + 0.2, pos.y, pos.z + 0.2);
-
         currentObjectBox = objectBox;
-    } else if (ais.includes(object)) {
-        const aiPos = object.position;
-        const aiBodyHeight = BODY_HEIGHT + (HEAD_RADIUS * 2); 
-        const aiCollisionHeight = object.isCrouching ? aiBodyHeight * 0.7 : aiBodyHeight; 
-        const aiCollisionWidth = 0.5; 
-        const aiCollisionDepth = 0.5; 
-
-        objectBox.min.set(aiPos.x - aiCollisionWidth / 2, aiPos.y, aiPos.z - aiCollisionDepth / 2);
-        objectBox.max.set(aiPos.x + aiCollisionWidth / 2, aiPos.y + aiCollisionHeight, aiPos.z + aiCollisionDepth / 2);
+        currentObjectBox.min.set(pos.x - 0.25, pos.y - playerTargetHeight - 0.1, pos.z - 0.25);
+        currentObjectBox.max.set(pos.x + 0.25, pos.y + 0.1, pos.z + 0.25);
+    } else if (object.userData && object.userData.isAI) {
         currentObjectBox = objectBox;
+        const aiHeight = object.userData.height || BODY_HEIGHT + HEAD_RADIUS * 2;
+        currentObjectBox.min.set(pos.x - 0.2, pos.y - aiHeight, pos.z - 0.2);
+        currentObjectBox.max.set(pos.x + 0.2, pos.y, pos.z + 0.2);
     } else {
-        return false;
+        currentObjectBox = new THREE.Box3().setFromObject(object);
     }
     for (const obstacle of obstacles) {
-        if (obstacle === ignoreObstacle) {
-            continue;
-        }
-        if (obstacle.userData.isRooftop) { // Rooftop floors are not solid barriers
-            continue;
-        }
+        if (obstacle === ignoreObstacle) continue;
+        if (obstacle === object) continue;
+        
+        // 屋上の床は衝突判定から除外
+        if (obstacle.userData.isRooftop) continue;
+        
         // The current 'ignoreObstacle' logic is designed to ignore only the specific object passed.
         // It should NOT ignore objects that are merely children or parts of the ignored object,
         // unless those parts are explicitly handled (like isRooftop floors).
@@ -5158,6 +5728,15 @@ function checkCollision(object, obstacles, ignoreObstacle = null) {
         }
     }
     return false;
+}
+
+// AI専用の衝突判定関数
+function checkAICollisionWithObstacles(ai, newPos, obstacles) {
+    const oldPos = ai.position.clone();
+    ai.position.copy(newPos);
+    const collides = checkCollision(ai, obstacles);
+    ai.position.copy(oldPos);
+    return collides;
 }
 
 function checkPartCollision(part) {
@@ -5268,7 +5847,10 @@ function getGroundY(position, objectBodyHeight) {
         if (obs.userData.isWall) continue;
         
         const obstacleBox = new THREE.Box3().setFromObject(obs);
-        const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
+        // 空洞建物の場合、床のジオメトリーから高さを取得
+        const geometry = obs.geometry || (obs.children && obs.children[0] ? obs.children[0].geometry : null);
+        const height = geometry ? geometry.parameters.height : 4;
+        const topOfObstacle = obs.position.y + height / 2;
         
         // 障害物の水平位置
         const obstacleHorizontalBox = new THREE.Box2(
@@ -5298,8 +5880,26 @@ function getGroundSurfaceY(position) {
     );
     for (const obs of obstacles) {
         if (obs.userData.isWall) continue;
+        
+        // 屋上の床の場合は特別処理
+        if (obs.userData.isRooftop) {
+            const obstacleBox = new THREE.Box3().setFromObject(obs);
+            const obstacleHorizontalBox = new THREE.Box2(
+                new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z),
+                new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z)
+            );
+            if (horizontalBox.intersectsBox(obstacleHorizontalBox)) {
+                const rooftopY = obs.position.y;
+                if (rooftopY > currentGroundY) currentGroundY = rooftopY;
+            }
+            continue;
+        }
+        
         const obstacleBox = new THREE.Box3().setFromObject(obs);
-        const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
+        // 空洞建物の場合、床のジオメトリーから高さを取得
+        const geometry = obs.geometry || (obs.children && obs.children[0] ? obs.children[0].geometry : null);
+        const height = geometry ? geometry.parameters.height : 4;
+        const topOfObstacle = obs.position.y + height / 2;
         const obstacleHorizontalBox = new THREE.Box2(
             new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z),
             new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z)
@@ -5332,6 +5932,14 @@ function resolvePlayerCollision(playerObj, obstaclesArray, pushOutDistance = 0.0
         if (obstacle.userData.isRooftop) continue;
         // 梯子を登っている最中は、そのタワーとは衝突しないようにする
         if (obstacle.userData.isTower && playerObj === player && isIgnoringTowerCollision && obstacle === lastClimbedTower) {
+            continue;
+        }
+        // 屋上にいる場合は、登った塔との衝突を無視
+        if (obstacle.userData.isTower && playerObj === player && player.userData.onRooftop && obstacle === player.userData.lastClimbedTower) {
+            continue;
+        }
+        // 屋上にいる場合は、梯子との衝突も無視
+        if (playerObj === player && player.userData.onRooftop && obstacle.userData.isLadder) {
             continue;
         }
 
@@ -5634,6 +6242,7 @@ function animate() {
     if (finalMoveVector.length() > 0) finalMoveVector.normalize();
     // リスポーン直後の移動を強制的に停止させる
     if (window.justRestarted || isPlayerDeathPlaying || isElevating) {
+        // console.log('Movement blocked - justRestarted:', window.justRestarted, 'isPlayerDeathPlaying:', isPlayerDeathPlaying, 'isElevating:', isElevating);
         finalMoveVector.set(0, 0); // 移動を強制的にキャンセル
         keyboardMoveVector.set(0, 0); // 念のためキーボード移動もリセット
         joystickMoveVector.set(0, 0); // 念のためジョイスティック移動もリセット
@@ -5650,22 +6259,38 @@ function animate() {
         const elevateSpeed = 5.0;
         player.position.y += elevateSpeed * delta;
         if (player.position.y >= elevatingTargetY) {
+            // console.log('Climb completed! Dropping to rooftop...');
             player.position.y = elevatingTargetY;
             isElevating = false;
+            // console.log('isElevating set to false');
             isIgnoringTowerCollision = true;
-            ignoreTowerTimer = 0.5; // Ignore tower collision for 0.5s
+            ignoreTowerTimer = 5.0; // Extended to 5.0s for permanent rooftop safety
             lastClimbedTower = elevatingTargetObstacle;
             isCrouchingToggle = false; // 強制的に立ち状態に
+            
+            // Let player drop naturally to rooftop - no forward push
+            // console.log('Dropping from height to rooftop');
+            
+            // Mark player as being on rooftop for permanent collision ignoring
+            player.userData.onRooftop = true;
+            player.userData.lastClimbedTower = elevatingTargetObstacle;
+            
+            // Enable gravity to drop naturally
+            playerVelocityY = 0; // Reset velocity and let gravity take over
         }    } else {
         let inSensorArea = false;
         const playerBoundingBox = new THREE.Box3().setFromCenterAndSize(player.position.clone().add(new THREE.Vector3(0, playerTargetHeight / 2, 0)), new THREE.Vector3(1, playerTargetHeight, 1));
         for (const sensorArea of ladderSwitches) {
             const sensorBoundingBox = new THREE.Box3().setFromObject(sensorArea);
             if (playerBoundingBox.intersectsBox(sensorBoundingBox)) {
+                // console.log('Ladder detected! Starting climb...');
                 inSensorArea = true; const obs = sensorArea.userData.obstacle;
                 isElevating = true;
                 elevatingTargetObstacle = obs;
-                elevatingTargetY = (obs.position.y + obs.geometry.parameters.height / 2) + 2.0;
+                // 空洞建物の場合、床のジオメトリーから高さを取得
+                const geometry = obs.geometry || (obs.children && obs.children[0] ? obs.children[0].geometry : null);
+                const height = geometry ? geometry.parameters.height : 4;
+                elevatingTargetY = (obs.position.y + height / 2) + 4.0; // Increased from 2.0 to 4.0
                 const ladderPos = sensorArea.userData.ladderPos;
                 if (ladderPos) {
                     player.position.x = ladderPos.x;
@@ -5674,8 +6299,17 @@ function animate() {
                 break;
             }
         }
-        if (!inSensorArea) {
-            if (finalMoveVector.length() > 0) finalMoveVector.normalize();
+        if (!inSensorArea || player.userData.onRooftop) {
+            // console.log('Movement check - inSensorArea:', inSensorArea, 'onRooftop:', player.userData.onRooftop);
+            if (player.userData.onRooftop) {
+                // console.log('On rooftop - allowing movement');
+            }
+            if (finalMoveVector.length() > 0) {
+                // console.log('Input detected - finalMoveVector length:', finalMoveVector.length());
+                finalMoveVector.normalize();
+            } else {
+                // console.log('No input detected');
+            }
             const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
             const rightMove = finalMoveVector.x * currentMoveSpeed * delta;
             const oldPlayerPosition = player.position.clone();
@@ -5687,23 +6321,50 @@ function animate() {
             const moveX = rightVector.x * rightMove + forwardVector.x * -forwardMove;
             const moveZ = rightVector.z * rightMove + forwardVector.z * -forwardMove;
             
+            // console.log('Movement calculated - moveX:', moveX, 'moveZ:', moveZ);
+            
             const ignoreObstacle = isIgnoringTowerCollision ? lastClimbedTower : currentGroundObstacle;
 
             // まず、プレイヤーのXとZの位置を更新
             player.position.x += moveX;
             player.position.z += moveZ;
+            
+            // 屋上にいる場合はY座標を地面高さに更新
+            if (player.userData.onRooftop) {
+                const groundY = getGroundSurfaceY(player.position);
+                if (groundY > -FLOOR_HEIGHT) {
+                    player.position.y = groundY;
+                } else {
+                    // 地面高さが低すぎる場合は屋上状態を解除
+                    player.userData.onRooftop = false;
+                    player.userData.lastClimbedTower = null;
+                }
+            }
 
             // 新しい位置で衝突があるかチェックし、あれば解決を試みる
             if (checkCollision(player, obstacles, ignoreObstacle)) {
+                // console.log('Collision detected, resolving...');
+                // 屋上にいる場合は押し出し距離を増やす
+                const pushDistance = player.userData.onRooftop ? 0.2 : 0.05;
+                // console.log('Using push distance:', pushDistance);
                 // 衝突解決を試みる。resolvePlayerCollisionはplayer.positionを直接変更する
-                const collisionResolved = resolvePlayerCollision(player, obstacles, 0.05); // 押し出し距離は微調整
+                const collisionResolved = resolvePlayerCollision(player, obstacles, pushDistance);
 
                 // もし衝突解決後もまだ衝突している場合は、元の位置に戻す
                 // これはresolvePlayerCollisionが全ての衝突を一度に解決できない場合のフォールバック
                 if (!collisionResolved || checkCollision(player, obstacles, ignoreObstacle)) {
+                    console.log('Collision resolution failed, reverting to old position');
+                    console.log('Old position:', oldPlayerPosition);
+                    console.log('Current position before revert:', player.position);
                     player.position.copy(oldPlayerPosition); 
+                    console.log('Position after revert:', player.position);
+                } else {
+                    console.log('Collision resolved successfully');
                 }
+            } else {
+                console.log('No collision detected');
             }
+            console.log('Final position after movement:', player.position);
             const playerDistFromCenter = Math.sqrt(player.position.x * player.position.x + player.position.z * player.position.z);
             if (playerDistFromCenter > ARENA_PLAY_AREA_RADIUS) {
                 const ratio = ARENA_PLAY_AREA_RADIUS / playerDistFromCenter;
@@ -5723,7 +6384,10 @@ function animate() {
 
             for (const obs of obstacles) {
                 const obstacleBox = new THREE.Box3().setFromObject(obs);
-                const topOfObstacle = obs.position.y + obs.geometry.parameters.height / 2;
+                // 空洞建物の場合、床のジオメトリーから高さを取得
+                const geometry = obs.geometry || (obs.children && obs.children[0] ? obs.children[0].geometry : null);
+                const height = geometry ? geometry.parameters.height : 4;
+                const topOfObstacle = obs.position.y + height / 2;
                 const playerHorizontalBox = new THREE.Box2(new THREE.Vector2(player.position.x - 0.5, player.position.z - 0.5), new THREE.Vector2(player.position.x + 0.5, player.position.z + 0.5));
                 const obstacleHorizontalBox = new THREE.Box2(new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z));
                 if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
@@ -5741,7 +6405,10 @@ function animate() {
             }
             if (onGround) {
                 if (currentGroundObstacle && currentGroundObstacle.userData.isRooftop) {
-                                    const rooftopY = currentGroundObstacle.position.y + currentGroundObstacle.geometry.parameters.height / 2;
+                                    // 空洞建物の場合、床のジオメトリーから高さを取得
+                                    const geometry = currentGroundObstacle.geometry || (currentGroundObstacle.children && currentGroundObstacle.children[0] ? currentGroundObstacle.children[0].geometry : null);
+                                    const height = geometry ? geometry.parameters.height : 4;
+                                    const rooftopY = currentGroundObstacle.position.y + height / 2;
                                     player.position.y = THREE.MathUtils.lerp(player.position.y, rooftopY + playerTargetHeight, 0.2);                } else {
                     const targetY = groundY + playerTargetHeight;
                     player.position.y = THREE.MathUtils.lerp(player.position.y, targetY, 0.2);
@@ -6087,7 +6754,10 @@ function animate() {
                     ai.position.z = ladderSnap.z;
                     ai.isElevating = true;
                     ai.userData.elevatingDirection = 1;
-                    ai.userData.rooftopTargetY = ai.userData.rooftopObstacle.position.y + ai.userData.rooftopObstacle.geometry.parameters.height / 2;
+                    // 空洞建物の場合、床のジオメトリーから高さを取得
+                    const geometry = ai.userData.rooftopObstacle.geometry || (ai.userData.rooftopObstacle.children && ai.userData.rooftopObstacle.children[0] ? ai.userData.rooftopObstacle.children[0].geometry : null);
+                    const height = geometry ? geometry.parameters.height : 4;
+                    ai.userData.rooftopTargetY = ai.userData.rooftopObstacle.position.y + height / 2;
                     ai.userData.rooftopPhase = 'climbing';
                     ai.userData.rooftopStateSince = timeElapsed;
                 }
@@ -6194,9 +6864,43 @@ function animate() {
             }
         }
         if (isAISeen && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING' && ai.state !== 'EVADING' && ai.state !== 'AVOIDING' && ai.state !== 'MOVING_TO_LADDER' && ai.state !== 'ROOFTOP_COMBAT' && ai.state !== 'DESCENDING') {
-            ai.state = 'ATTACKING';
-            ai.currentAttackTime = timeElapsed;
-            ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+            // 被弾直後は隠れることを優先
+            if (ai.crouchUntilTime && timeElapsed < ai.crouchUntilTime) {
+                // クールダウンチェック（0.5秒に1回まで）
+                if (timeElapsed - ai.lastCoverSearchTime > 0.5) {
+                    ai.lastCoverSearchTime = timeElapsed;
+                    const nearbyCover = findNearbyCover(ai.position, obstacles);
+                    if (nearbyCover) {
+                        // 障害物の裏に移動
+                        tempBox1.setFromObject(nearbyCover);
+                        const coverCenter = tempBox1.getCenter(tempVector1);
+                        tempVector2.copy(coverCenter).sub(ai.position);
+                        const coverDistance = tempVector2.length();
+                        
+                        if (coverDistance > 1.0) {
+                            // 障害物に近づく
+                            const moveDirection = tempVector2.normalize();
+                            tempVector3.copy(moveDirection).multiplyScalar(Math.min(coverDistance * 0.8, 2.0));
+                            const targetPos = ai.position.clone().add(tempVector3);
+                            ai.targetPosition.copy(targetPos);
+                            ai.state = 'MOVING_TO_COVER';
+                        } else {
+                            // 障害物に到着したら攻撃準備
+                            ai.state = 'ATTACKING';
+                            ai.currentAttackTime = timeElapsed;
+                            ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                        }
+                    } else {
+                        ai.state = 'ATTACKING';
+                        ai.currentAttackTime = timeElapsed;
+                        ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                    }
+                }
+            } else {
+                ai.state = 'ATTACKING';
+                ai.currentAttackTime = timeElapsed;
+                ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+            }
         }
         const distanceToTarget = ai.position.distanceTo(ai.targetPosition);
         const isArrived = distanceToTarget < ARRIVAL_THRESHOLD;
@@ -6207,7 +6911,15 @@ function animate() {
             } else if (ai.state === 'FOLLOWING') { // FOLLOWING状態ではしゃがまない
                 ai.isCrouching = false;
             } else {
-                ai.isCrouching = false;
+                // 戦術的しゃがみ：時間経過で解除
+                if (ai.crouchUntilTime && timeElapsed > ai.crouchUntilTime) {
+                    ai.isCrouching = false;
+                    ai.crouchUntilTime = null;
+                }
+                // HIDING状態でない場合は基本立つ
+                if (!ai.crouchUntilTime) {
+                    ai.isCrouching = false;
+                }
             }
             ai.scale.y = ai.isCrouching ? 0.7 : 1.0;
             ai.position.y = getGroundSurfaceY(ai.position);
@@ -6223,6 +6935,34 @@ function animate() {
             ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, targetAngle, 5 * delta);
         }
         switch (ai.state) {
+            case 'MOVING_TO_COVER':
+                // 隠れる場所への移動中はしゃがみ続ける
+                ai.isCrouching = true;
+                ai.scale.y = 0.7;
+                
+                // 移動完了チェック
+                if (isArrived) {
+                    ai.state = 'ATTACKING';
+                    ai.currentAttackTime = timeElapsed;
+                    ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
+                } else {
+                    // 通常移動ロジックと同じ
+                    tempVector2.subVectors(ai.targetPosition, ai.position);
+                    const distance = tempVector2.length();
+                    if (distance > 0.01) {
+                        let moveDirection = tempVector2.normalize();
+                        const moveVectorDelta = tempVector3.copy(moveDirection).multiplyScalar(currentAISpeed * delta);
+                        moveVectorDelta.add(separation_vec);
+                        if (moveVectorDelta.lengthSq() < 1e-8) break;
+                        moveDirection = moveVectorDelta.normalize();
+                        const newPos = ai.position.clone().add(moveDirection);
+                        if (!checkAICollisionWithObstacles(ai, newPos, obstacles)) {
+                            ai.position.copy(newPos);
+                            ai.rotation.y = THREE.MathUtils.lerp(ai.rotation.y, Math.atan2(moveDirection.x, moveDirection.z), 5 * delta);
+                        }
+                    }
+                }
+                break;
             case 'HIDING':
                 ai.avoiding = false;
                 // const isTeammate = gameSettings.gameMode === 'team' && ai.team === 'player'; // この行は削除
@@ -6353,7 +7093,10 @@ function animate() {
                     ai.position.z = ladderSnap.z;
                     ai.isElevating = true;
                     ai.userData.elevatingDirection = 1;
-                    ai.userData.rooftopTargetY = ai.userData.rooftopObstacle.position.y + ai.userData.rooftopObstacle.geometry.parameters.height / 2;
+                    // 空洞建物の場合、床のジオメトリーから高さを取得
+                    const geometry = ai.userData.rooftopObstacle.geometry || (ai.userData.rooftopObstacle.children && ai.userData.rooftopObstacle.children[0] ? ai.userData.rooftopObstacle.children[0].geometry : null);
+                    const height = geometry ? geometry.parameters.height : 4;
+                    ai.userData.rooftopTargetY = ai.userData.rooftopObstacle.position.y + height / 2;
                     ai.state = 'CLIMBING';
                     ai.userData.rooftopStateSince = timeElapsed;
                 }
@@ -6796,6 +7539,21 @@ function animate() {
                         createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
                         ai.lastUnderFireTime = timeElapsed;
                         if (p.shooter) ai.lastKnownThreatPos = p.shooter.position.clone();
+                        
+                        // 戦術的しゃがみ：被弾時に障害物近くならしゃがんで隠れる
+                        if (ai.state !== 'CLIMBING' && ai.state !== 'DESCENDING' && !ai.isElevating) {
+                            // クールダウンチェック（0.5秒に1回まで）
+                            if (timeElapsed - ai.lastCoverSearchTime > 0.5) {
+                                ai.lastCoverSearchTime = timeElapsed;
+                                const nearbyCover = findNearbyCover(ai.position, obstacles);
+                                if (nearbyCover) {
+                                    ai.isCrouching = true;
+                                    ai.scale.y = 0.7;
+                                    // しゃがみ状態を2-4秒維持
+                                    ai.crouchUntilTime = timeElapsed + 2 + Math.random() * 2;
+                                }
+                            }
+                        }
                         else ai.lastKnownThreatPos = prevProjectilePos.clone();
                     }
 
@@ -6843,6 +7601,21 @@ function animate() {
                             createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
                             ai.lastUnderFireTime = timeElapsed;
                             if (p.shooter) ai.lastKnownThreatPos = p.shooter.position.clone();
+                            
+                            // 戦術的しゃがみ：被弾時に障害物近くならしゃがんで隠れる
+                            if (ai.state !== 'CLIMBING' && ai.state !== 'DESCENDING' && !ai.isElevating) {
+                                // クールダウンチェック（0.5秒に1回まで）
+                                if (timeElapsed - ai.lastCoverSearchTime > 0.5) {
+                                    ai.lastCoverSearchTime = timeElapsed;
+                                    const nearbyCover = findNearbyCover(ai.position, obstacles);
+                                    if (nearbyCover) {
+                                        ai.isCrouching = true;
+                                        ai.scale.y = 0.7;
+                                        // しゃがみ状態を2-4秒維持
+                                        ai.crouchUntilTime = timeElapsed + 2 + Math.random() * 2;
+                                    }
+                                }
+                            }
                             else ai.lastKnownThreatPos = prevProjectilePos.clone();
                         }
                         if (ai.hp <= 0) {
