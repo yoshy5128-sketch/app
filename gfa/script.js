@@ -302,18 +302,8 @@ let characterEditorAnimationId = null;
         }
         
         loadSettings();
-        updateCustomMapSelector();
+        updateUnifiedMapSelector();
         
-        // 強制的にデフォルトマップを設定
-        gameSettings.mapType = 'default';
-        document.querySelectorAll('input[name="map-type"]').forEach(radio => {
-            radio.checked = (radio.value === 'default');
-        });
-        
-        // ユーザーの選択を尊重（強制設定を無効化）
-        // gameSettings.mapType = 'default';
-        // gameSettings.customMapName = '';
-        // saveSettings();
         
         const playerHpSelect = document.getElementById('player-hp');
         const aiHpSelect = document.getElementById('ai-hp');
@@ -322,7 +312,6 @@ let characterEditorAnimationId = null;
         const srCountSelect = document.getElementById('sr-count');
         const sgCountSelect = document.getElementById('sg-count');
         const aiCountRadios = document.querySelectorAll('input[name="ai-count"]');
-        const mapTypeRadios = document.querySelectorAll('input[name="map-type"]');
         const autoAimRadios = document.querySelectorAll('input[name="auto-aim"]');
         const nightModeRadios = document.querySelectorAll('input[name="night-mode"]');
         const gameModeRadios = document.querySelectorAll('input[name="game-mode"]');
@@ -413,19 +402,6 @@ let characterEditorAnimationId = null;
                 }
             });
         });
-        mapTypeRadios.forEach(radio => {
-            radio.addEventListener('change', () => {
-                if (radio.checked) {
-                    gameSettings.mapType = radio.value;
-                    saveSettings();
-                }
-            });
-        });
-        
-        // Set initial radio button values and update custom map selector
-        mapTypeRadios.forEach(radio => {
-            radio.checked = (radio.value === gameSettings.mapType);
-        });
         autoAimRadios.forEach(radio => {
             radio.addEventListener('change', () => {
                 if (radio.checked) {
@@ -469,41 +445,47 @@ let characterEditorAnimationId = null;
                 saveSettings();
             });
         }
-        const customMapSelector = document.getElementById('custom-map-selector');
-        if (customMapSelector) {
-            customMapSelector.addEventListener('change', () => {
-                const selectedMapName = customMapSelector.value;
-                gameSettings.customMapName = selectedMapName;
-                saveSettings();
-                // マップ選択時に保存された設定を自動読み込み
-                if (selectedMapName && selectedMapName !== '') {
-                    loadMapSettings(selectedMapName);
+        // Initialize unified map selector
+        const unifiedMapSelector = document.getElementById('unified-map-selector');
+        if (unifiedMapSelector) {
+            unifiedMapSelector.addEventListener('change', () => {
+                const selectedValue = unifiedMapSelector.value;
+                
+                if (selectedValue === 'default') {
+                    gameSettings.mapType = 'default';
+                    gameSettings.customMapName = '';
+                } else if (selectedValue === 'random') {
+                    gameSettings.mapType = 'random';
+                    gameSettings.customMapName = '';
+                } else if (selectedValue && selectedValue !== '---') {
+                    // Custom map selected
+                    gameSettings.mapType = 'custom';
+                    gameSettings.customMapName = selectedValue;
+                    // Load saved settings for this custom map
+                    loadMapSettings(selectedValue);
                 }
+                saveSettings();
             });
         }
         const saveMapSettingsBtn = document.getElementById('save-map-settings-btn');
         if (saveMapSettingsBtn) {
             saveMapSettingsBtn.addEventListener('click', () => {
-                const selectedMapName = customMapSelector ? customMapSelector.value : '';
-                saveMapSettings(selectedMapName);
-            });
-        }
-
-        const loadSelectedCustomMapBtn = document.getElementById('load-selected-custom-map-btn');
-        if (loadSelectedCustomMapBtn) {
-            loadSelectedCustomMapBtn.addEventListener('click', () => {
-                gameSettings.mapType = 'custom';
-                const selectedMapName = customMapSelector ? customMapSelector.value : '';
-                // マップ読み込み時に保存された設定を自動適用
-                if (selectedMapName && selectedMapName !== '') {
-                    loadMapSettings(selectedMapName);
+                const unifiedMapSelector = document.getElementById('unified-map-selector');
+                const selectedValue = unifiedMapSelector ? unifiedMapSelector.value : '';
+                let selectedMapName = '';
+                
+                if (selectedValue === 'default' || selectedValue === 'random' || selectedValue === '---') {
+                    // For built-in maps, use a generic name or skip saving
+                    selectedMapName = selectedValue === 'default' ? 'DefaultMap' : 'RandomMap';
+                } else {
+                    selectedMapName = selectedValue;
                 }
-                saveSettings();
-                startGame();
-                restartGame();
+                
+                if (selectedMapName && selectedMapName !== '---') {
+                    saveMapSettings(selectedMapName);
+                }
             });
         }
-
         const resumeGameBtn = document.getElementById('resume-game-btn');
         if (resumeGameBtn) {
             resumeGameBtn.addEventListener('click', resumeGame);
@@ -603,36 +585,80 @@ let characterEditorAnimationId = null;
             document.getElementById('start-screen').style.display = 'flex';
         });
     }
-    });
+    }); // Close first DOMContentLoaded event listener
 })();
 
-function updateCustomMapSelector() {
-    const customMapSelector = document.getElementById('custom-map-selector');
-    if (!customMapSelector) return;
-    customMapSelector.innerHTML = '';
+function updateUnifiedMapSelector() {
+    const unifiedMapSelector = document.getElementById('unified-map-selector');
+    if (!unifiedMapSelector) return;
+    unifiedMapSelector.innerHTML = '';
+    
+    // Add built-in maps at the top
+    const defaultOption = document.createElement('option');
+    defaultOption.value = 'default';
+    defaultOption.textContent = 'DefaultMap';
+    unifiedMapSelector.appendChild(defaultOption);
+    
+    const randomOption = document.createElement('option');
+    randomOption.value = 'random';
+    randomOption.textContent = 'RandomMap';
+    unifiedMapSelector.appendChild(randomOption);
+    
+    // Add separator
+    const separator = document.createElement('option');
+    separator.value = '---';
+    separator.textContent = '--- Custom Maps ---';
+    separator.disabled = true;
+    separator.style.fontWeight = 'bold';
+    separator.style.color = '#666';
+    unifiedMapSelector.appendChild(separator);
+    
+    // Add custom maps
     const allCustomMaps = JSON.parse(localStorage.getItem('allCustomMaps') || '{}');
     const mapNames = Object.keys(allCustomMaps);
+    
     if (mapNames.length === 0) {
-        const option = document.createElement('option');
-        option.value = '';
-        option.textContent = 'No custom maps available';
-        option.disabled = true;
-        customMapSelector.appendChild(option);
-        if (document.getElementById('load-selected-custom-map-btn')) {
-            document.getElementById('load-selected-custom-map-btn').disabled = true;
-        }
+        const noMapsOption = document.createElement('option');
+        noMapsOption.value = '';
+        noMapsOption.textContent = 'No custom maps available';
+        noMapsOption.disabled = true;
+        noMapsOption.style.color = '#999';
+        unifiedMapSelector.appendChild(noMapsOption);
     } else {
         mapNames.forEach(mapName => {
             const option = document.createElement('option');
             option.value = mapName;
             option.textContent = mapName;
-            customMapSelector.appendChild(option);
+            unifiedMapSelector.appendChild(option);
         });
-        customMapSelector.value = ''; // 最初は空白にする
-        if (document.getElementById('load-selected-custom-map-btn')) {
-            document.getElementById('load-selected-custom-map-btn').disabled = false;
-        }
-        // 自動読み込みを無効化 - ユーザーが明示的に選択した場合のみ読み込む
+    }
+    
+    // Set current selection
+    let currentValue = 'default'; // Always default to DefaultMap on first launch
+    
+    // Check if we have saved settings and valid custom map
+    if (gameSettings.mapType === 'custom' && gameSettings.customMapName && allCustomMaps[gameSettings.customMapName]) {
+        currentValue = gameSettings.customMapName;
+    } else if (gameSettings.mapType === 'random') {
+        currentValue = 'random';
+    } else if (gameSettings.mapType === 'default') {
+        currentValue = 'default';
+    } else {
+        // If mapType is not set or invalid, default to 'default'
+        gameSettings.mapType = 'default';
+        gameSettings.customMapName = '';
+        saveSettings();
+    }
+    
+    // Try to set the value
+    unifiedMapSelector.value = currentValue;
+    
+    // If the value wasn't set (e.g., custom map no longer exists), default to 'default'
+    if (unifiedMapSelector.value !== currentValue) {
+        unifiedMapSelector.value = 'default';
+        gameSettings.mapType = 'default';
+        gameSettings.customMapName = '';
+        saveSettings();
     }
 }
 
@@ -1194,9 +1220,8 @@ function loadMapSettings(mapName) {
                 document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
                     radio.checked = (radio.value === String(gameSettings.aiCount));
                 });
-                document.querySelectorAll('input[name="map-type"]').forEach(radio => {
-                    radio.checked = (radio.value === gameSettings.mapType);
-                });
+                // Update unified map selector
+                updateUnifiedMapSelector();
                 document.querySelectorAll('input[name="auto-aim"]').forEach(radio => {
                     radio.checked = (radio.value === String(gameSettings.autoAim));
                 });
@@ -2549,8 +2574,8 @@ function createCharacterModel(color, customization = null) {
     const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize, headSize), skinMaterial);
     head.position.y = headY;
     
-    // Add eyes (horizontal lines) to all characters
-    const eyeLineGeom = new THREE.BoxGeometry(headSize * 0.6, headSize * 0.02, headSize * 0.02);
+    // Add eyes (horizontal lines) to all characters - make them 2x thicker
+    const eyeLineGeom = new THREE.BoxGeometry(headSize * 0.6, headSize * 0.04, headSize * 0.04); // 2x thicker (0.02→0.04)
     const eyeLineMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
     
     // Left eye line
@@ -2560,6 +2585,24 @@ function createCharacterModel(color, customization = null) {
     // Right eye line  
     const rightEyeLine = new THREE.Mesh(eyeLineGeom, eyeLineMaterial);
     rightEyeLine.position.set(headSize * 0.15, headY + headSize * 0.2, headSize * 0.5); // Move forward to be visible
+
+    // Add nose to all characters - positioned below eye lines
+    const noseGeom = new THREE.BoxGeometry(headSize * 0.12, headSize * 0.3, headSize * 0.12); // Much longer (0.08→0.12)
+    const noseMaterial = new THREE.MeshBasicMaterial({ color: custom.skinColor }); // Same color as skin
+    const nose = new THREE.Mesh(noseGeom, noseMaterial);
+    nose.position.set(0, headY + headSize * 0.05, headSize * 0.54); // Below eye lines (0.12→0.05)
+
+    // Add ears to all characters - make them bigger
+    const earGeom = new THREE.BoxGeometry(headSize * 0.1, headSize * 0.25, headSize * 0.05); // Bigger (0.08→0.1, 0.2→0.25, 0.04→0.05)
+    const earMaterial = new THREE.MeshBasicMaterial({ color: custom.skinColor }); // Same color as skin
+    
+    // Left ear
+    const leftEar = new THREE.Mesh(earGeom, earMaterial);
+    leftEar.position.set(-headSize * 0.55, headY, 0); // Side of head
+    
+    // Right ear
+    const rightEar = new THREE.Mesh(earGeom, earMaterial);
+    rightEar.position.set(headSize * 0.55, headY, 0); // Side of head
 
     // Hair - Different styles based on customization
     let hairParts = [];
@@ -2600,13 +2643,13 @@ function createCharacterModel(color, customization = null) {
             
         case 'bald':
             // Cap style - cap covering top 1/3 of head with extended visor
-            const capMainGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.3, headSize * 1.0); // Main cap body
+            const capMainGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.3, headSize * 1.2); // Larger front-back (1.0→1.2)
             const capMain = new THREE.Mesh(capMainGeom, hairMaterial); // Use hair material for cap color
             capMain.position.set(0, headSize * 0.5, 0); // 頭を基準とした相対位置
             
-            const capVisorGeom = new THREE.BoxGeometry(headSize * 1.6, headSize * 0.05, headSize * 0.6); // Extended visor/brim
+            const capVisorGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.05, headSize * 0.8); // Extend visor forward (0.6→0.8)
             const capVisor = new THREE.Mesh(capVisorGeom, hairMaterial);
-            capVisor.position.set(0, headSize * 0.35, headSize * 0.45); // 頭を基準とした相対位置
+            capVisor.position.set(0, headSize * 0.35, headSize * 0.55); // Move visor further forward (0.45→0.55)
             
             hairParts.push(capMain, capVisor);
             break;
@@ -2732,7 +2775,7 @@ function createCharacterModel(color, customization = null) {
     });
 
     const characterModel = new THREE.Group();
-    const allParts = [body, head, leftEyeLine, rightEyeLine, aimGroup, leftHip, rightHip, waist];
+    const allParts = [body, head, leftEyeLine, rightEyeLine, nose, leftEar, rightEar, aimGroup, leftHip, rightHip, waist];
     characterModel.add(...allParts);
     
     // Store hair parts for potential later updates
@@ -3379,7 +3422,7 @@ function resolveCustomMapSelection() {
     }
 
     let mapName = gameSettings.customMapName;
-    const selector = document.getElementById('custom-map-selector');
+    const selector = document.getElementById('unified-map-selector');
     if ((!mapName || !allCustomMaps[mapName]) && selector && selector.value && allCustomMaps[selector.value]) {
         mapName = selector.value;
     }
@@ -6029,6 +6072,9 @@ function showSettingsAndPause() {
     document.getElementById('start-game-btn').style.display = 'none';
     document.getElementById('resume-game-btn').style.display = 'inline-block';
     document.getElementById('restart-pause-btn').style.display = 'inline-block';
+    
+    // Update unified map selector to show current map
+    updateUnifiedMapSelector();
 }
 
 function resumeGame() {
@@ -7971,17 +8017,20 @@ if (startBtn) {
         gameSettings.rrCount = parseInt(document.getElementById('rr-count').value, 10);
         gameSettings.srCount = parseInt(document.getElementById('sr-count').value, 10);
         gameSettings.sgCount = parseInt(document.getElementById('sg-count').value, 10);
-        gameSettings.mapType = document.querySelector('input[name="map-type"]:checked').value;
-        const customMapSelectorOnStart = document.getElementById('custom-map-selector');
-        if (customMapSelectorOnStart && customMapSelectorOnStart.value) {
-            gameSettings.customMapName = customMapSelectorOnStart.value;
-        }
-        if (gameSettings.customMapName) {
-            // デフォルトマップを優先する
-            gameSettings.mapType = 'default';
-            document.querySelectorAll('input[name="map-type"]').forEach(radio => {
-                radio.checked = (radio.value === 'default');
-            });
+        // Get map selection from unified selector
+        const unifiedMapSelectorOnStart = document.getElementById('unified-map-selector');
+        if (unifiedMapSelectorOnStart && unifiedMapSelectorOnStart.value) {
+            const selectedValue = unifiedMapSelectorOnStart.value;
+            if (selectedValue === 'default') {
+                gameSettings.mapType = 'default';
+                gameSettings.customMapName = '';
+            } else if (selectedValue === 'random') {
+                gameSettings.mapType = 'random';
+                gameSettings.customMapName = '';
+            } else if (selectedValue && selectedValue !== '---') {
+                gameSettings.mapType = 'custom';
+                gameSettings.customMapName = selectedValue;
+            }
         }
         gameSettings.aiCount = parseInt(document.querySelector('input[name="ai-count"]:checked').value, 10);
         const durationRadio = document.querySelector('input[name="game-duration"]:checked');
@@ -7999,8 +8048,9 @@ rButtons.forEach(button => button.addEventListener('click', () => {
     initializeAudio();
     restartGame();
     if (!('ontouchstart' in window)) canvas.requestPointerLock();
-}));
-const settingsLinks = document.querySelectorAll('.settings-link');
+})); // End of rButtons.forEach callback
+    
+    const settingsLinks = document.querySelectorAll('.settings-link');
 settingsLinks.forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -8090,7 +8140,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
         if(joystickZone) joystickZone.style.display = 'none';
         if (followButton) followButton.style.display = 'none';
     }
-}); // 閉じ括弧を追加
+}); // End of saveButtonPositionsBtn.addEventListener callback
 
 function makeDraggable(element, isJoystick = false) {
     let isDragging = false;
@@ -8240,6 +8290,29 @@ function initCharacterEditor() {
         }
     });
     
+    // Default buttons
+    const defaultButtons = [
+        { id: 'default-player', character: 'player' },
+        { id: 'default-enemy1', character: 'enemy1' },
+        { id: 'default-enemy2', character: 'enemy2' },
+        { id: 'default-enemy3', character: 'enemy3' }
+    ];
+    
+    defaultButtons.forEach(btn => {
+        const element = document.getElementById(btn.id);
+        if (element) {
+            element.addEventListener('click', () => {
+                resetCharacterToDefault(btn.character);
+            });
+        }
+    });
+    
+    // Add zoom functionality to preview container
+    const previewContainer = document.getElementById('character-preview-container');
+    if (previewContainer) {
+        setupZoomControls(previewContainer);
+    }
+    
     // Add event listeners for all customization controls
     setupCustomizationListeners();
 }
@@ -8261,6 +8334,111 @@ function setupCustomizationListeners() {
             }
         });
     });
+}
+
+// Zoom functionality for character preview
+function setupZoomControls(container) {
+    let zoomLevel = 1;
+    const minZoom = 0.5;
+    const maxZoom = 3;
+    const zoomSpeed = 0.1;
+    
+    // Mouse wheel zoom for PC
+    container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        
+        const delta = e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+        zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel + delta));
+        
+        if (characterEditorCamera) {
+            characterEditorCamera.position.z = 5 / zoomLevel;
+        }
+    });
+    
+    // Touch pinch zoom for mobile
+    let initialDistance = 0;
+    
+    container.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            initialDistance = getTouchDistance(e.touches);
+        }
+    });
+    
+    container.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            
+            const currentDistance = getTouchDistance(e.touches);
+            const scale = currentDistance / initialDistance;
+            
+            zoomLevel = Math.max(minZoom, Math.min(maxZoom, zoomLevel * scale));
+            
+            if (characterEditorCamera) {
+                characterEditorCamera.position.z = 5 / zoomLevel;
+            }
+            
+            initialDistance = currentDistance;
+        }
+    });
+}
+
+function getTouchDistance(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Reset character to default settings
+function resetCharacterToDefault(character) {
+    const defaultSettings = {
+        player: {
+            hairStyle: 'default',
+            hairColor: '#D2691E',
+            skinColor: '#ffd1b0',
+            clothingColor: '#ff3333',
+            pantsColor: '#111111',
+            shoesColor: '#8B4513'
+        },
+        enemy1: {
+            hairStyle: 'default',
+            hairColor: '#D2691E',
+            skinColor: '#ffd1b0',
+            clothingColor: '#3333ff',
+            pantsColor: '#111111',
+            shoesColor: '#8B4513'
+        },
+        enemy2: {
+            hairStyle: 'default',
+            hairColor: '#D2691E',
+            skinColor: '#ffd1b0',
+            clothingColor: '#00ff00',
+            pantsColor: '#111111',
+            shoesColor: '#8B4513'
+        },
+        enemy3: {
+            hairStyle: 'default',
+            hairColor: '#D2691E',
+            skinColor: '#ffd1b0',
+            clothingColor: '#ff8800',
+            pantsColor: '#111111',
+            shoesColor: '#8B4513'
+        }
+    };
+    
+    // Update the character customization
+    if (defaultSettings[character]) {
+        characterCustomization[character] = { ...defaultSettings[character] };
+        
+        // Update UI to reflect the changes
+        loadCharacterSettingsToUI();
+        
+        // Update preview if this character is currently selected
+        if (currentPreviewCharacter === character) {
+            updatePreviewCharacter();
+        }
+        
+        console.log(`${character} reset to default settings`);
+    }
 }
 
 function updateCharacterCustomization(character, property, value) {
@@ -8613,6 +8791,6 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         initCharacterEditor();
     }, 100);
-});
+}); // End of second DOMContentLoaded event listener
 
 animate();

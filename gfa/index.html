@@ -191,26 +191,12 @@
                 <input type="radio" name="ai-count" value="3"> 3 AIs
             </label>
 
-            <h2 style="margin-top: 20px;">Map Type</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="map-type" value="default" checked> Default Map
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="map-type" value="random"> Random Map
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="map-type" value="building"> Building Map
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="map-type" value="custom"> Custom Map (from Editor)
-            </label>
-            <div style="text-align: center; margin-top: 15px;">
+            <h2 style="margin-top: 20px;">Map Selection</h2>
+            <select id="unified-map-selector" style="font-size: 1em; padding: 5px; width: 100%; max-width: 300px; margin-bottom: 10px;"></select>
+            <div style="text-align: center;">
                 <button id="map-editor-button" style="padding: 10px 20px; font-size: 1em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Open Map Editor</button>
             </div>
-            <h2 style="margin-top: 20px;">Load Custom Map</h2>
-            <select id="custom-map-selector" style="font-size: 1em; padding: 5px; width: 100%; max-width: 300px; margin-bottom: 10px;"></select>
-            <div style="text-align: center;">
-
+            <div style="text-align: center; margin-top: 10px;">
                 <button id="save-map-settings-btn" style="padding: 10px 20px; font-size: 1em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Save Setting</button>
             </div>
 
@@ -348,6 +334,12 @@
                         <button id="preview-enemy1" style="margin: 5px; padding: 5px 10px; background-color: #3333ff; color: white; border: none; border-radius: 3px; cursor: pointer;">Enemy 1</button>
                         <button id="preview-enemy2" style="margin: 5px; padding: 5px 10px; background-color: #00ff00; color: white; border: none; border-radius: 3px; cursor: pointer;">Enemy 2</button>
                         <button id="preview-enemy3" style="margin: 5px; padding: 5px 10px; background-color: #ff8800; color: white; border: none; border-radius: 3px; cursor: pointer;">Enemy 3</button>
+                    </div>
+                    <div style="margin-top: 5px; text-align: center;">
+                        <button id="default-player" style="margin: 5px; padding: 3px 8px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Default</button>
+                        <button id="default-enemy1" style="margin: 5px; padding: 3px 8px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Default</button>
+                        <button id="default-enemy2" style="margin: 5px; padding: 3px 8px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Default</button>
+                        <button id="default-enemy3" style="margin: 5px; padding: 3px 8px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Default</button>
                     </div>
                 </div>
                 
