@@ -865,6 +865,8 @@ function playReloadSound() {
     }
 }
 
+let lastFloatingCleanupTime = 0;
+const FLOATING_CLEANUP_INTERVAL = 5.0; // 5秒ごとにクリーンアップ
 let lastFireTime = -FIRE_RATE_PISTOL;
 let isMouseButtonDown = false;
 let isScoping = false;
@@ -1957,11 +1959,13 @@ function addRooftopFeatures(obstacle, ladderFace) {
                 wall2.position.set(obstacle.position.x + def.ox, rooftopY + (def.h / 2), obstacle.position.z + def.oz + offset);
             }
             wall1.userData.isWall = true;
+            wall1.userData.isRooftop = true;
             wall1.userData.parentBuildingRef = obstacle;
             scene.add(wall1);
             obstacles.push(wall1);
             obstacle.userData.rooftopParts.push(wall1);
             wall2.userData.isWall = true;
+            wall2.userData.isRooftop = true;
             wall2.userData.parentBuildingRef = obstacle;
             scene.add(wall2);
             obstacles.push(wall2);
@@ -1971,6 +1975,7 @@ function addRooftopFeatures(obstacle, ladderFace) {
             const wall = new THREE.Mesh(wallGeometry, wallMaterial);
             wall.position.set(obstacle.position.x + def.ox, rooftopY + (def.h / 2), obstacle.position.z + def.oz);
             wall.userData.isWall = true;
+            wall.userData.isRooftop = true;
             wall.userData.parentBuildingRef = obstacle;
             scene.add(wall);
             obstacles.push(wall);
@@ -2250,6 +2255,8 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
 }
 
 function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, hp = 8, rotation = 0) {
+    console.log(`Creating house at (${x}, ${z}) with size ${width}x${height}x${depth}`);
+    
     // Initialize textures if not done yet
     initializeTextures();
     
@@ -2311,22 +2318,26 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     
     // 左側の壁
     const leftWallWidth = (width - 2.5) / 2; // ドア幅2.5mを引いて半分に
+    console.log(`Creating left wall with width ${leftWallWidth}`);
     const frontLeftWall = new THREE.Mesh(
         new THREE.BoxGeometry(leftWallWidth, height, thickness),
         material
     );
     frontLeftWall.position.set(-width/2 + leftWallWidth/2, -height / 2 + height/2, depth / 2 - thickness/2);
     frontLeftWall.userData.isWall = true;
+    frontLeftWall.userData.isHouseWall = true;
     house.add(frontLeftWall);
     obstacles.push(frontLeftWall);
     
     // 右側の壁
+    console.log(`Creating right wall with width ${leftWallWidth}`);
     const rightWallPart = new THREE.Mesh(
         new THREE.BoxGeometry(leftWallWidth, height, thickness),
         material
     );
     rightWallPart.position.set(width/2 - leftWallWidth/2, -height / 2 + height/2, depth / 2 - thickness/2);
     rightWallPart.userData.isWall = true;
+    rightWallPart.userData.isHouseWall = true;
     house.add(rightWallPart);
     obstacles.push(rightWallPart);
     
@@ -2339,6 +2350,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     ]);
     backWall.position.set(0, -height / 2, -depth / 2);
     backWall.userData.isWall = true; // コリジョン用
+    backWall.userData.isHouseWall = true;
     house.add(backWall);
     obstacles.push(backWall); // 障害物リストに追加
 
@@ -2349,6 +2361,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     leftSideWall.rotation.y = Math.PI / 2;
     leftSideWall.position.set(-width / 2, -height / 2, 0);
     leftSideWall.userData.isWall = true; // コリジョン用
+    leftSideWall.userData.isHouseWall = true;
     house.add(leftSideWall);
     obstacles.push(leftSideWall); // 障害物リストに追加
 
@@ -2359,6 +2372,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     rightSideWall.rotation.y = -Math.PI / 2;
     rightSideWall.position.set(width / 2, -height / 2, 0);
     rightSideWall.userData.isWall = true; // コリジョン用
+    rightSideWall.userData.isHouseWall = true;
     house.add(rightSideWall);
     obstacles.push(rightSideWall); // 障害物リストに追加
 
@@ -2369,6 +2383,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     );
     roof.position.y = height / 2;
     roof.castShadow = true;
+    roof.userData.isHouseRoof = true; // 家の屋根であることを識別
     house.add(roof);
 
     // userDataを設定
@@ -2384,6 +2399,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     scene.add(house);
     // obstacles.push(house); // 家全体は障害物にしない
     
+    console.log(`House created successfully with ${obstacles.filter(o => o.userData.isHouseWall).length} walls`);
     return house;
 }
 
@@ -2422,25 +2438,146 @@ function createSniperTower(x, z) {
 }
 
 function generateObstaclePositions(count) {
-    // 基本的な障害物のみを生成 - 中央付近は避ける
     const generatedConfigs = [];
     
-    // いくつかの基本的な障害物を配置
-    const basicObstacles = [
-        { x: 10, z: 10, width: 3, height: 2, depth: 3, color: 0x888888 },
-        { x: -10, z: 10, width: 3, height: 2, depth: 3, color: 0x888888 },
-        { x: 10, z: -10, width: 3, height: 2, depth: 3, color: 0x888888 },
-        { x: -10, z: -10, width: 3, height: 2, depth: 3, color: 0x888888 },
-        { x: 20, z: 0, width: 4, height: 3, depth: 4, color: 0x666666 },
-        { x: -20, z: 0, width: 4, height: 3, depth: 4, color: 0x666666 },
-        { x: 0, z: 20, width: 4, height: 3, depth: 4, color: 0x666666 },
-        { x: 0, z: -20, width: 4, height: 3, depth: 4, color: 0x666666 }
-    ];
+    // アリーナ全体に障害物をランダム配置
+    const maxRadius = ARENA_PLAY_AREA_RADIUS - 5; // エッジから5m内側
     
-    return basicObstacles;
+    // 基本的な障害物を配置
+    for (let i = 0; i < count; i++) {
+        let attempts = 0;
+        let validPosition = false;
+        let x, z;
+        
+        while (!validPosition && attempts < 50) {
+            // 極座標でランダムな位置を生成
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * maxRadius;
+            x = Math.cos(angle) * radius;
+            z = Math.sin(angle) * radius;
+            
+            // 中央エリア（半径10m）は避ける
+            const distFromCenter = Math.sqrt(x * x + z * z);
+            if (distFromCenter < 10) {
+                attempts++;
+                continue;
+            }
+            
+            // 既存の障害物との距離をチェック
+            validPosition = true;
+            for (const existing of generatedConfigs) {
+                const dist = Math.sqrt((x - existing.x) ** 2 + (z - existing.z) ** 2);
+                if (dist < 4) { // 4m以上離す
+                    validPosition = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+        
+        if (validPosition) {
+            const width = 2 + Math.random() * 3; // 2-5m
+            const height = 1.5 + Math.random() * 2; // 1.5-3.5m
+            const depth = 2 + Math.random() * 3; // 2-5m
+            const color = Math.random() > 0.5 ? 0x888888 : 0x666666;
+            
+            generatedConfigs.push({
+                x: x,
+                z: z,
+                width: width,
+                height: height,
+                depth: depth,
+                color: color
+            });
+        }
+    }
+    
+    // 家をランダムに配置（0-5個）
+    const houseCount = Math.floor(Math.random() * 6); // 0-5個
+    for (let i = 0; i < houseCount; i++) {
+        let attempts = 0;
+        let validPosition = false;
+        let x, z;
+        
+        while (!validPosition && attempts < 50) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 15 + Math.random() * (maxRadius - 15); // 15m以降に配置
+            x = Math.cos(angle) * radius;
+            z = Math.sin(angle) * radius;
+            
+            // 既存の障害物との距離をチェック
+            validPosition = true;
+            for (const existing of generatedConfigs) {
+                const dist = Math.sqrt((x - existing.x) ** 2 + (z - existing.z) ** 2);
+                if (dist < 6) { // 家は6m以上離す
+                    validPosition = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+        
+        if (validPosition) {
+            const width = 4 + Math.random() * 3; // 4-7m
+            const height = 3 + Math.random() * 2; // 3-5m
+            const depth = 4 + Math.random() * 3; // 4-7m
+            const color = 0x8B4513; // 茶色
+            
+            generatedConfigs.push({
+                type: 'house',
+                x: x,
+                z: z,
+                width: width,
+                height: height,
+                depth: depth,
+                color: color,
+                hp: 50,
+                rotation: Math.random() * Math.PI * 2
+            });
+        }
+    }
+    
+    // スナイパーの塔をランダムに配置（0-2個）
+    const towerCount = Math.floor(Math.random() * 3); // 0-2個
+    for (let i = 0; i < towerCount; i++) {
+        let attempts = 0;
+        let validPosition = false;
+        let x, z;
+        
+        while (!validPosition && attempts < 50) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 20 + Math.random() * (maxRadius - 20); // 20m以降に配置
+            x = Math.cos(angle) * radius;
+            z = Math.sin(angle) * radius;
+            
+            // 既存の障害物との距離をチェック
+            validPosition = true;
+            for (const existing of generatedConfigs) {
+                const dist = Math.sqrt((x - existing.x) ** 2 + (z - existing.z) ** 2);
+                if (dist < 8) { // 塔は8m以上離す
+                    validPosition = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+        
+        if (validPosition) {
+            generatedConfigs.push({
+                type: 'tower',
+                x: x,
+                z: z
+            });
+        }
+    }
+    
+    return generatedConfigs;
 }
 
 function resetObstacles() {
+    // まず即時クリーンアップを実行
+    immediateRooftopCleanup();
+    
     // Clean up all obstacles including rooftop parts
     for (const obstacle of obstacles) {
         // Clean up rooftop parts first
@@ -3892,6 +4029,159 @@ function createExplosionEffect(position) {
     for (let i = 0; i < 5; i++) {
         createSmokeEffect(position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 10)));
     }
+}
+
+function immediateRooftopCleanup() {
+    console.log('Performing immediate rooftop cleanup...');
+    let removedCount = 0;
+    
+    // シーン内の全オブジェクトをチェック
+    const allObjects = [];
+    scene.traverse((child) => {
+        if (child.isMesh) {
+            allObjects.push(child);
+        }
+    });
+    
+    // 浮遊している屋根パーツを特定
+    for (const obj of allObjects) {
+        let shouldBeRemoved = false;
+        
+        // 屋根パーツの判定
+        if (obj.userData.isRooftop || obj.userData.isWall || obj.userData.parentBuildingRef) {
+            // 家の壁パーツは保護
+            const isHouseWall = (
+                obj.userData.isHouseWall || // 優先的にチェック
+                (obj.userData.isWall && 
+                !obj.userData.isRooftop && 
+                !obj.userData.parentBuildingRef &&
+                obj.parent && obj.parent.userData && obj.parent.userData.type === 'house')
+            );
+            
+            // 家の屋根も保護
+            const isHouseRoof = (
+                obj.userData.isHouseRoof ||
+                (obj.parent && obj.parent.userData && obj.parent.userData.type === 'house')
+            );
+            
+            if (isHouseWall || isHouseRoof) {
+                continue; // 家のパーツはスキップ
+            }
+            
+            let hasValidParent = false;
+            
+            if (obj.userData.parentBuildingRef) {
+                // 親がobstacles配列に存在するかチェック
+                hasValidParent = obstacles.includes(obj.userData.parentBuildingRef);
+            }
+            
+            // 親が存在しない、または配列にない場合は削除対象
+            if (!hasValidParent) {
+                shouldBeRemoved = true;
+            }
+        }
+        
+        // 赤レンガ色の孤立オブジェクトも削除
+        if (!shouldBeRemoved && obj.material && obj.material.color && obj.material.color.getHex() === 0x880000) {
+            if (!obstacles.includes(obj)) {
+                shouldBeRemoved = true;
+            }
+        }
+        
+        if (shouldBeRemoved) {
+            // シーンから削除
+            scene.remove(obj);
+            
+            // obstacles配列から削除
+            const index = obstacles.indexOf(obj);
+            if (index > -1) {
+                obstacles.splice(index, 1);
+            }
+            
+            // メモリ解放
+            if (obj.geometry) obj.geometry.dispose();
+            if (obj.material) obj.material.dispose();
+            
+            removedCount++;
+            console.log('Immediately removed floating rooftop at:', obj.position);
+        }
+    }
+    
+    console.log(`Immediate cleanup removed ${removedCount} floating rooftop parts`);
+    return removedCount;
+}
+
+function cleanupFloatingRooftopParts() {
+    let removedCount = 0;
+    
+    // シーン内のすべての子オブジェクトを直接スキャン
+    const objectsToRemove = [];
+    
+    scene.traverse((child) => {
+        // Meshオブジェクトのみを処理
+        if (child.isMesh) {
+            // 屋根パーツの特徴を持つオブジェクトを検出
+            const isRooftopPart = (
+                child.userData.isRooftop ||
+                child.userData.parentBuildingRef ||
+                (child.material && child.material.color && child.material.color.getHex() === 0x880000) // 赤レンガ色
+            );
+            
+            // 家の壁パーツは保護
+            const isHouseWall = (
+                child.userData.isHouseWall || // 優先的にチェック
+                (child.userData.isWall && 
+                !child.userData.isRooftop && 
+                !child.userData.parentBuildingRef &&
+                child.parent && child.parent.userData && child.parent.userData.type === 'house')
+            );
+            
+            // 家の屋根も保護
+            const isHouseRoof = (
+                child.userData.isHouseRoof ||
+                (child.parent && child.parent.userData && child.parent.userData.type === 'house')
+            );
+            
+            if (isRooftopPart && !isHouseWall && !isHouseRoof) {
+                let parentExists = false;
+                
+                // 親障害物の存在確認
+                if (child.userData.parentBuildingRef) {
+                    parentExists = obstacles.includes(child.userData.parentBuildingRef);
+                }
+                
+                // obstacles配列内かつ親が存在しない場合
+                if (obstacles.includes(child) && !parentExists) {
+                    objectsToRemove.push(child);
+                }
+                // シーンに存在するがobstacles配列にない場合（孤立したオブジェクト）
+                else if (!obstacles.includes(child)) {
+                    objectsToRemove.push(child);
+                }
+            }
+        }
+    });
+    
+    // 見つかったオブジェクトを削除
+    for (const obj of objectsToRemove) {
+        // obstacles配列から削除
+        const obsIndex = obstacles.indexOf(obj);
+        if (obsIndex > -1) {
+            obstacles.splice(obsIndex, 1);
+        }
+        
+        // シーンから削除
+        scene.remove(obj);
+        
+        // メモリ解放
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+        
+        removedCount++;
+        console.log('Removed floating rooftop part:', obj.position);
+    }
+    
+    return removedCount;
 }
 
 function destroyObstacle(obstacle, explosionPosition) {
@@ -6217,6 +6507,18 @@ function animate() {
     }
     const timeElapsed = clock.getElapsedTime();
     const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+
+    // 定期的に浮遊屋根パーツをクリーンアップ
+    if (typeof lastFloatingCleanupTime === 'undefined') {
+        lastFloatingCleanupTime = timeElapsed;
+    }
+    if (timeElapsed - lastFloatingCleanupTime > 5.0) { // 5秒ごと
+        const removedCount = cleanupFloatingRooftopParts();
+        if (removedCount > 0) {
+            console.log(`Cleaned up ${removedCount} floating rooftop parts`);
+        }
+        lastFloatingCleanupTime = timeElapsed;
+    }
 
     // Player MG reload completion (needs to run even when not firing)
     if (playerMGReloadUntil > 0 && timeElapsed >= playerMGReloadUntil) {
