@@ -454,9 +454,17 @@ let characterEditorAnimationId = null;
                 if (selectedValue === 'default') {
                     gameSettings.mapType = 'default';
                     gameSettings.customMapName = '';
+                    // Immediately clear any custom map obstacles
+                    if (obstacles.length > 0) {
+                        resetObstacles();
+                    }
                 } else if (selectedValue === 'random') {
                     gameSettings.mapType = 'random';
                     gameSettings.customMapName = '';
+                    // Immediately clear any custom map obstacles
+                    if (obstacles.length > 0) {
+                        resetObstacles();
+                    }
                 } else if (selectedValue && selectedValue !== '---') {
                     // Custom map selected
                     gameSettings.mapType = 'custom';
@@ -465,6 +473,8 @@ let characterEditorAnimationId = null;
                     loadMapSettings(selectedValue);
                 }
                 saveSettings();
+                // ユーザーインタラクション後に音声を初期化
+                initializeAudio();
             });
         }
         const saveMapSettingsBtn = document.getElementById('save-map-settings-btn');
@@ -823,11 +833,35 @@ function hideReloadingText() {
     if (el) el.style.display = 'none';
 }
 
+function playSound(audioElement) {
+    if (!audioElement) return;
+    
+    try {
+        // 既存の再生中の同じ音声を停止
+        const allSameAudio = document.querySelectorAll(`audio[id="${audioElement.id}"]`);
+        allSameAudio.forEach(audio => {
+            if (!audio.paused && audio !== audioElement) {
+                audio.pause();
+                audio.currentTime = 0;
+            }
+        });
+        
+        // 新しいインスタンスを作成して再生
+        const soundClone = audioElement.cloneNode(true);
+        soundClone.volume = audioElement.volume || 1.0;
+        soundClone.play().catch(error => {
+            console.log('Sound play failed:', audioElement.id, error);
+        });
+    } catch (error) {
+        console.log('Sound error:', audioElement.id, error);
+    }
+}
+
 function playReloadSound() {
     if (relAudio) {
-        relAudio.cloneNode(true).play().catch(e => {
-            console.log('Reload sound play failed:', e);
-        });
+        setTimeout(() => {
+            playSound(relAudio);
+        }, 500);
     }
 }
 
@@ -1583,7 +1617,21 @@ const respawningPickups = [];
 const RESPAWN_DELAY = 60;
 const AI_INITIAL_POSITION = new THREE.Vector3(0, 0, 20);
 const NUM_RANDOM_OBSTACLES = 20;
-const defaultObstaclesConfig = []; // 固定障害物を完全に削除
+const defaultObstaclesConfig = [
+    { x: 5, z: 5, height: 1.8 }, { x: -5, z: -5 }, { x: 0, z: 10, height: 1.8 }, { x: 10, z: 0 }, { x: -10, z: 5 }, { x: 5, z: -10 },
+    { x: 15, z: 15, height: 1.8 }, { x: -15, z: 15 }, { x: 15, z: -15, height: 1.8 }, { x: -15, z: -15 }, { x: 0, z: -18, height: 1.8 }, { x: -18, z: 0 },
+    { x: 25, z: 0, width: 0.5, depth: 10 }, { x: -25, z: 0, width: 0.5, depth: 10 }, { x: 0, z: 25, width: 10, depth: 0.5 }, { x: 0, z: -25, width: 10, depth: 0.5 },
+    { x: 20, z: 20, height: 1.8 }, { x: -20, z: 20 }, { x: 20, z: -20, height: 1.8 }, { x: -20, z: -20 },
+    { x: 35, z: 10, width: 0.5, depth: 8 }, { x: -35, z: 10, width: 0.5, depth: 8 }, { x: 10, z: 35, width: 8, depth: 0.5 }, { x: -10, z: 35, width: 8, depth: 0.5 },
+    { x: 30, z: -30, height: 1.8 }, { x: -30, z: -30 },
+    { x: 40, z: 0, width: 0.5, depth: 15 }, { x: -40, z: 0, width: 0.5, depth: 15 }, { x: 0, z: 40, width: 15, depth: 0.5, height: 1.8 }, { x: 0, z: -40, width: 15, depth: 0.5 },
+    { x: 0, z: -30, width: 2, height: 1.8, depth: 2 },
+    { x: 10, z: -35, width: 2, height: 1.8, depth: 2 },
+    { x: -10, z: -35, width: 2, height: 1.8, depth: 2 },
+    { x: 20, z: -25, width: 3, height: 1.8, depth: 3 },
+    { x: -20, z: -25, width: 3, height: 1.8, depth: 3 },
+    { x: 30, z: -15, width: 2, height: 1.8, depth: 2 }
+];
 
 function getRandomSafePosition(itemWidth = 1, itemHeight = 1, itemDepth = 2) {
     const MAX_ATTEMPTS = 500;
@@ -1855,8 +1903,80 @@ function createAndAttachLadder(obstacle, ladderFace = -1) {
 }
 
 function addRooftopFeatures(obstacle, ladderFace) {
-    // 屋上の障害物生成を無効化 - 不要な障害物を防止
-    return;
+    if (!obstacle.userData.rooftopParts) {
+        obstacle.userData.rooftopParts = [];
+    }
+    
+    // ジオメトリの安全な取得
+    let buildingWidth, buildingHeight, buildingDepth;
+    
+    if (obstacle.geometry && obstacle.geometry.parameters) {
+        // BoxGeometryの場合
+        buildingWidth = obstacle.geometry.parameters.width || 6;
+        buildingHeight = obstacle.geometry.parameters.height || 4;
+        buildingDepth = obstacle.geometry.parameters.depth || 6;
+    } else {
+        // デフォルト値
+        buildingWidth = 6;
+        buildingHeight = 4;
+        buildingDepth = 6;
+    }
+    
+    const rooftopY = obstacle.position.y + (buildingHeight / 2);
+    
+    // Initialize textures if not done yet
+    initializeTextures();
+    
+    const wallHeight = 1.0;
+    const wallThickness = 0.5;
+    const wallMaterial = new THREE.MeshLambertMaterial({ 
+        map: brickTexture,
+        color: 0x880000 
+    });
+    const wallDefs = [
+        { face: 0, w: buildingWidth, h: wallHeight, d: wallThickness, ox: 0, oz: buildingDepth / 2 - wallThickness / 2 },
+        { face: 1, w: buildingWidth, h: wallHeight, d: wallThickness, ox: 0, oz: -(buildingDepth / 2 - wallThickness / 2) },
+        { face: 2, w: wallThickness, h: wallHeight, d: buildingDepth - wallThickness * 2, ox: buildingWidth / 2 - wallThickness / 2, oz: 0 },
+        { face: 3, w: wallThickness, h: wallHeight, d: buildingDepth - wallThickness * 2, ox: -(buildingWidth / 2 - wallThickness / 2), oz: 0 }
+    ];
+    const LADDER_WIDTH = 1.5;
+    const LADDER_GAP = LADDER_WIDTH + 1.0;
+    for (const def of wallDefs) {
+        if (def.face === ladderFace) {
+            const wallLength = def.w > def.d ? def.w : def.d;
+            const newWallLength = (wallLength - LADDER_GAP) / 2;
+            if (newWallLength <= 0) continue;
+            const wall1 = new THREE.Mesh(def.w > def.d ? new THREE.BoxGeometry(newWallLength, def.h, def.d) : new THREE.BoxGeometry(def.w, def.h, newWallLength), wallMaterial);
+            const wall2 = wall1.clone();
+            const offset = (wallLength / 2) - (newWallLength / 2);
+            if (def.w > def.d) {
+                wall1.position.set(obstacle.position.x + def.ox - offset, rooftopY + (def.h / 2), obstacle.position.z + def.oz);
+                wall2.position.set(obstacle.position.x + def.ox + offset, rooftopY + (def.h / 2), obstacle.position.z + def.oz);
+            } else {
+                wall1.position.set(obstacle.position.x + def.ox, rooftopY + (def.h / 2), obstacle.position.z + def.oz - offset);
+                wall2.position.set(obstacle.position.x + def.ox, rooftopY + (def.h / 2), obstacle.position.z + def.oz + offset);
+            }
+            wall1.userData.isWall = true;
+            wall1.userData.parentBuildingRef = obstacle;
+            scene.add(wall1);
+            obstacles.push(wall1);
+            obstacle.userData.rooftopParts.push(wall1);
+            wall2.userData.isWall = true;
+            wall2.userData.parentBuildingRef = obstacle;
+            scene.add(wall2);
+            obstacles.push(wall2);
+            obstacle.userData.rooftopParts.push(wall2);
+        } else {
+            const wallGeometry = new THREE.BoxGeometry(def.w, def.h, def.d);
+            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+            wall.position.set(obstacle.position.x + def.ox, rooftopY + (def.h / 2), obstacle.position.z + def.oz);
+            wall.userData.isWall = true;
+            wall.userData.parentBuildingRef = obstacle;
+            scene.add(wall);
+            obstacles.push(wall);
+            obstacle.userData.rooftopParts.push(wall);
+        }
+    }
 }
 
 function createHollowObstacle(x, z, width = 8, height = 5, depth = 8, color = 0xff4444, hp = 1, holeConfigs = [], isNew = true) {
@@ -2321,10 +2441,28 @@ function generateObstaclePositions(count) {
 }
 
 function resetObstacles() {
+    // Clean up all obstacles including rooftop parts
     for (const obstacle of obstacles) {
+        // Clean up rooftop parts first
+        if (obstacle.userData.rooftopParts && Array.isArray(obstacle.userData.rooftopParts)) {
+            for (const part of obstacle.userData.rooftopParts) {
+                scene.remove(part);
+                if (part.geometry) part.geometry.dispose();
+                if (part.material) part.material.dispose();
+            }
+        }
+        // Clean up ladders
+        const ladderGroup = obstacle.children.find(child => child.name === 'ladder');
+        if (ladderGroup) {
+            obstacle.remove(ladderGroup);
+        }
+        // Remove the main obstacle
         if (obstacle.parent) {
             obstacle.parent.remove(obstacle);
         }
+        // Dispose geometry and materials
+        if (obstacle.geometry) obstacle.geometry.dispose();
+        if (obstacle.material) obstacle.material.dispose();
     }
     obstacles.length = 0;
     HIDING_SPOTS.length = 0;
@@ -3952,7 +4090,7 @@ function handleFireRelease() {
         document.getElementById('night-vision-overlay').style.display = 'none';
         const timeSinceLastFire = clock.getElapsedTime() - lastFireTime;
         if ((ammoSR > 0 || isInfiniteDefaultWeaponActive(WEAPON_SR)) && timeSinceLastFire > FIRE_RATE_SR) {
-            if (srGunSound) srGunSound.cloneNode(true).play();
+            if (srGunSound) playSound(srGunSound);
             let direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
             const safeFire = getPlayerSafeFireData(direction);
@@ -4013,7 +4151,7 @@ function shoot() {
         if (currentWeapon === WEAPON_MG) soundToPlay = mgGunSound;
         else if (currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
         else if (currentWeapon === WEAPON_SG) soundToPlay = playerSgSound;
-        if (soundToPlay) soundToPlay.cloneNode(true).play();
+        if (soundToPlay) playSound(soundToPlay);
         let baseDirection = new THREE.Vector3();
         camera.getWorldDirection(baseDirection);
         const safeFire = getPlayerSafeFireData(baseDirection);
@@ -4262,7 +4400,7 @@ function aiShoot(ai, timeElapsed) {
         else if (ai.currentWeapon === WEAPON_SR) soundToPlay = aiSrGunSound;
         else if (ai.currentWeapon === WEAPON_SG) soundToPlay = aiSgSound;
         else soundToPlay = aiGunSound;
-        if (soundToPlay) soundToPlay.cloneNode(true).play();
+        if (soundToPlay) playSound(soundToPlay);
         const aiMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0));
         createMuzzleFlash(aiMuzzlePosition, 150, 3.0, 90, 0xffffff);
         createGroundFlash(aiMuzzlePosition, 0xffffff, 1.5, 150);
@@ -4622,21 +4760,22 @@ if (followButtonElement) {
 }
 
 function initializeAudio() {
-    // Preload and cache all audio elements
+    // ユーザーインタラクション後に音声を初期化
     const allAudio = document.querySelectorAll('audio');
     allAudio.forEach(audio => {
-        const originalVolume = audio.volume;
-        audio.volume = 0;
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-            playPromise.then(_ => {
-                audio.pause();
-                audio.currentTime = 0;
-                audio.volume = originalVolume;
-            }).catch(error => {
-                audio.volume = originalVolume;
-            });
-        }
+        // 音声ファイルをプリロード
+        audio.load();
+        // 一時的にミュートにして再生を試みる（ブラウザポリシー対応）
+        audio.muted = true;
+        audio.play().then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+            console.log('Audio initialized:', audio.id);
+        }).catch(error => {
+            audio.muted = false;
+            console.log('Audio initialization failed:', audio.id, error);
+        });
     });
 }
 
@@ -6415,7 +6554,7 @@ function animate() {
                         weaponName = 'SHOTGUN'; break;
                 }
                 const setSound = document.getElementById('setSound');
-                if (setSound) setSound.cloneNode(true).play();
+                if (setSound) playSound(setSound);
                 const weaponGetDisplay = document.getElementById('weapon-get-display');
                 if (weaponGetDisplay) {
                     weaponGetDisplay.textContent = `${weaponName} GET!`;
@@ -6432,7 +6571,7 @@ function animate() {
                     playerHPDisplay.textContent = `HP: ${playerHP}`;
                 }
                 const setSound = document.getElementById('setSound');
-                if (setSound) setSound.cloneNode(true).play();
+                if (setSound) playSound(setSound);
                 const weaponGetDisplay = document.getElementById('weapon-get-display');
                 if (weaponGetDisplay) {
                     weaponGetDisplay.textContent = `HP +1!`;
@@ -7732,7 +7871,7 @@ function animate() {
         }
         if (hitSomething) {
             if (p.isRocket) {
-                if (explosionSound) explosionSound.cloneNode(true).play();
+                if (explosionSound) playSound(explosionSound);
                 const explosionPos = p.mesh.position.clone();
                 createExplosionEffect(explosionPos);
                 const ROCKET_MAX_DAMAGE = 15;
