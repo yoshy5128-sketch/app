@@ -97,7 +97,7 @@ function startTimeLapseMode() {
         nightModeCheckbox.checked = false;
     }
     
-    console.log('Time Lapse Mode started - beginning with day mode');
+    // Time Lapse Mode started - beginning with day mode
 }
 
 function stopTimeLapseMode() {
@@ -108,7 +108,7 @@ function stopTimeLapseMode() {
     isTimeLapseMode = false;
     timeLapseStartTime = null;
     
-    console.log('Time Lapse Mode stopped');
+    // Time Lapse Mode stopped
 }
 
 function updateTimeLapseCycle() {
@@ -131,7 +131,7 @@ function updateTimeLapseCycle() {
     
     targetTransitionProgress = newTargetProgress;
     
-    console.log(`Time Lapse Debug: cyclePosition=${cyclePosition.toFixed(3)}, targetProgress=${targetTransitionProgress.toFixed(3)}`);
+    // Time Lapse Debug: cyclePosition=${cyclePosition.toFixed(3)}, targetProgress=${targetTransitionProgress.toFixed(3)}
     
     // Apply smooth transition
     applySmoothNightMode();
@@ -161,15 +161,15 @@ function applySmoothNightMode() {
     // Apply interpolated values
     if (ambientLight) {
         ambientLight.intensity = currentAmbientIntensity;
-        console.log(`Time Lapse: ambientLight intensity set to ${currentAmbientIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+        // Time Lapse: ambientLight intensity set to ${currentAmbientIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})
     }
     if (directionalLight) {
         directionalLight.intensity = currentDirectionalIntensity;
-        console.log(`Time Lapse: directionalLight intensity set to ${currentDirectionalIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+        // Time Lapse: directionalLight intensity set to ${currentDirectionalIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})
     }
     if (renderer) {
         renderer.setClearColor(currentClearColor);
-        console.log(`Time Lapse: renderer clear color set to #${currentClearColor.getHexString()} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+        // Time Lapse: renderer clear color set to #${currentClearColor.getHexString()} (nightIntensity: ${nightIntensity.toFixed(3)})
     }
     
     // Handle street lights - match regular night mode behavior
@@ -193,51 +193,51 @@ function applySmoothNightMode() {
 }
 
 function applyNightMode(isNight) {
-    console.log('applyNightMode called with:', isNight);
+    // applyNightMode called with:
     
     if (isNight) {
         // Apply night mode
-        console.log('Applying night mode');
+        // Applying night mode
         if (ambientLight) {
             ambientLight.intensity = 0.05;
-            console.log('ambientLight intensity set to 0.05');
+            // ambientLight intensity set to 0.05
         }
         if (directionalLight) {
             directionalLight.intensity = 0.05;
-            console.log('directionalLight intensity set to 0.05');
+            // directionalLight intensity set to 0.05
         }
         if (renderer) {
             renderer.setClearColor(0x111122);
-            console.log('renderer clear color set to night');
+            // renderer clear color set to night
         }
         if (streetLights && streetLights.length > 0) {
             streetLights.forEach(light => {
                 const pointLight = light.children.find(child => child.isPointLight);
                 if (pointLight) pointLight.intensity = gameSettings.nightModeLightIntensity;
             });
-            console.log('street lights turned on');
+            // street lights turned on
         }
     } else {
         // Apply day mode
-        console.log('Applying day mode');
+        // Applying day mode
         if (ambientLight) {
             ambientLight.intensity = 0.5;
-            console.log('ambientLight intensity set to 0.5');
+            // ambientLight intensity set to 0.5
         }
         if (directionalLight) {
             directionalLight.intensity = 0.8;
-            console.log('directionalLight intensity set to 0.8');
+            // directionalLight intensity set to 0.8
         }
         if (renderer) {
             renderer.setClearColor(0x87CEEB);
-            console.log('renderer clear color set to day');
+            // renderer clear color set to day
         }
         if (streetLights && streetLights.length > 0) {
             streetLights.forEach(light => {
                 const pointLight = light.children.find(child => child.isPointLight);
                 if (pointLight) pointLight.intensity = 0;
             });
-            console.log('street lights turned off');
+            // street lights turned off
         }
     }
 }
@@ -451,15 +451,12 @@ let characterEditorAnimationId = null;
             unifiedMapSelector.addEventListener('change', () => {
                 const selectedValue = unifiedMapSelector.value;
                 
+                // マップ切り替え前にシーン全体を強制リセット
+                console.log('Map selector changed, forcing COMPLETE scene reset...');
+                forceSceneReset();
+                
                 if (selectedValue === 'default') {
                     gameSettings.mapType = 'default';
-                    gameSettings.customMapName = '';
-                    // Immediately clear any custom map obstacles
-                    if (obstacles.length > 0) {
-                        resetObstacles();
-                    }
-                } else if (selectedValue === 'random') {
-                    gameSettings.mapType = 'random';
                     gameSettings.customMapName = '';
                     // Immediately clear any custom map obstacles
                     if (obstacles.length > 0) {
@@ -484,9 +481,9 @@ let characterEditorAnimationId = null;
                 const selectedValue = unifiedMapSelector ? unifiedMapSelector.value : '';
                 let selectedMapName = '';
                 
-                if (selectedValue === 'default' || selectedValue === 'random' || selectedValue === '---') {
+                if (selectedValue === 'default' || selectedValue === '---') {
                     // For built-in maps, use a generic name or skip saving
-                    selectedMapName = selectedValue === 'default' ? 'DefaultMap' : 'RandomMap';
+                    selectedMapName = selectedValue === 'default' ? 'DefaultMap' : '';
                 } else {
                     selectedMapName = selectedValue;
                 }
@@ -609,11 +606,6 @@ function updateUnifiedMapSelector() {
     defaultOption.textContent = 'DefaultMap';
     unifiedMapSelector.appendChild(defaultOption);
     
-    const randomOption = document.createElement('option');
-    randomOption.value = 'random';
-    randomOption.textContent = 'RandomMap';
-    unifiedMapSelector.appendChild(randomOption);
-    
     // Add separator
     const separator = document.createElement('option');
     separator.value = '---';
@@ -649,10 +641,6 @@ function updateUnifiedMapSelector() {
     // Check if we have saved settings and valid custom map
     if (gameSettings.mapType === 'custom' && gameSettings.customMapName && allCustomMaps[gameSettings.customMapName]) {
         currentValue = gameSettings.customMapName;
-    } else if (gameSettings.mapType === 'random') {
-        currentValue = 'random';
-    } else if (gameSettings.mapType === 'default') {
-        currentValue = 'default';
     } else {
         // If mapType is not set or invalid, default to 'default'
         gameSettings.mapType = 'default';
@@ -687,12 +675,23 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x111122);
+renderer.setClearColor(0x87CEEB);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
-const ambientLight = new THREE.AmbientLight(0xffffff, 0);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(0, 10, 5);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.width = 2048;
+directionalLight.shadow.mapSize.height = 2048;
+directionalLight.shadow.camera.near = 0.5;
+directionalLight.shadow.camera.far = 50;
+directionalLight.shadow.camera.left = -50;
+directionalLight.shadow.camera.right = 50;
+directionalLight.shadow.camera.top = 50;
+directionalLight.shadow.camera.bottom = -50;
 scene.add(directionalLight);
 const clock = new THREE.Clock();
 const player = new THREE.Object3D();
@@ -701,6 +700,7 @@ scene.add(player);
 player.position.copy(PLAYER_INITIAL_POSITION);
 player.rotation.y = Math.PI;
 camera.position.set(0, 0, 0);
+camera.position.z = 5; // カメラを少し後ろに配置
 let isGameRunning = false;
 let playerTargetHeight = 2.0;
 let isCrouchingToggle = false;
@@ -822,7 +822,7 @@ function showReloadingText() {
     setTimeout(() => {
         if (relAudio) {
             relAudio.cloneNode(true).play().catch(e => {
-                console.log('Reload sound play failed:', e);
+                // Reload sound play failed:
             });
         }
     }, 500);
@@ -850,10 +850,10 @@ function playSound(audioElement) {
         const soundClone = audioElement.cloneNode(true);
         soundClone.volume = audioElement.volume || 1.0;
         soundClone.play().catch(error => {
-            console.log('Sound play failed:', audioElement.id, error);
+            // Sound play failed:
         });
     } catch (error) {
-        console.log('Sound error:', audioElement.id, error);
+        // Sound error:
     }
 }
 
@@ -1041,7 +1041,7 @@ function saveSettings() {
 }
 
 function loadSettings() {
-    console.log('loadSettings() called');
+    // loadSettings() called
     const savedSettings = localStorage.getItem('gameSettings');
     if (savedSettings) {
         const parsedSavedSettings = JSON.parse(savedSettings);
@@ -1300,11 +1300,11 @@ function loadMapSettings(mapName) {
                                 fireButton.style.left = '';
                                 fireButton.style.top = '';
                                 fireButton.style.display = 'flex'; // モバイルなら表示
-                                console.log('loadSettings(): fireButton display set to flex (mobile)');
+                                // loadSettings(): fireButton display set to flex (mobile)
                             }
                         } else {
                             fireButton.style.display = 'none'; // PCなら非表示
-                            console.log('loadSettings(): fireButton display set to none (PC)');
+                            // loadSettings(): fireButton display set to none (PC)
                         }
                     }
                     if (crouchButton) {
@@ -1315,11 +1315,11 @@ function loadMapSettings(mapName) {
                                 crouchButton.style.left = '';
                                 crouchButton.style.top = '';
                                 crouchButton.style.display = 'flex'; // モバイルなら表示
-                                console.log('loadSettings(): crouchButton display set to flex (mobile)');
+                                // loadSettings(): crouchButton display set to flex (mobile)
                             }
                         } else {
                             crouchButton.style.display = 'none'; // PCなら非表示
-                            console.log('loadSettings(): crouchButton display set to none (PC)');
+                            // loadSettings(): crouchButton display set to none (PC)
                         }
                     }
                     if (joystickZone) {
@@ -1330,11 +1330,11 @@ function loadMapSettings(mapName) {
                                 joystickZone.style.right = '';
                                 joystickZone.style.top = '';
                                 joystickZone.style.display = 'block'; // モバイルなら表示
-                                console.log('loadSettings(): joystickZone display set to block (mobile)');
+                                // loadSettings(): joystickZone display set to block (mobile)
                             }
                         } else {
                             joystickZone.style.display = 'none'; // PCなら非表示
-                            console.log('loadSettings(): joystickZone display set to none (PC)');
+                            // loadSettings(): joystickZone display set to none (PC)
                         }
                     }
                     if (followButton) { // 追加
@@ -1344,12 +1344,12 @@ function loadMapSettings(mapName) {
                                 followButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
                                 followButton.style.left = '';
                                 followButton.style.top = '';
-                                console.log('loadSettings(): followButton display updated (mobile)');
+                                // loadSettings(): followButton display updated (mobile)
                                 // followButtonの表示/非表示はstartGame()内のゲームモード判定に任せる
                             }
                         } else {
                             followButton.style.display = 'none'; // PCなら非表示
-                            console.log('loadSettings(): followButton display set to none (PC)');
+                            // loadSettings(): followButton display set to none (PC)
                         }
                     }
         
@@ -1568,6 +1568,7 @@ const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
 floor.rotation.x = -Math.PI / 2;
 floor.position.y = -FLOOR_HEIGHT;
+floor.receiveShadow = true;
 scene.add(floor);
 const edgeGeometry = new THREE.TorusGeometry(ARENA_RADIUS, ARENA_EDGE_THICKNESS, 8, 64);
 const edgeMaterial = new THREE.MeshLambertMaterial({ color: 0x880000 });
@@ -2237,16 +2238,18 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     const box = new THREE.Mesh(boxGeometry, material);
     box.position.set(x, (height / 2) - FLOOR_HEIGHT, z);
     box.userData.hp = hp;
+    box.castShadow = false; // 影をキャストしない
     scene.add(box);
     obstacles.push(box);
     let ladderFace = -1;
     if (height > 6) {
         ladderFace = createAndAttachLadder(box);
     }
-    // if (height >= 8) {
-    //     createWindows(box, width, height, depth);
-    //     addRooftopFeatures(box, ladderFace);
-    // }
+    // カスタムマップの場合のみ屋上機能を有効化
+    if (gameSettings.mapType === 'custom' && height >= 8) {
+        createWindows(box, width, height, depth);
+        addRooftopFeatures(box, ladderFace);
+    }
     const HIDING_DISTANCE = 1.5;
     HIDING_SPOTS.push({ position: new THREE.Vector3(x + HIDING_DISTANCE, 0, z + HIDING_DISTANCE), obstacle: box });
     HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z + HIDING_DISTANCE), obstacle: box });
@@ -2255,8 +2258,6 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
 }
 
 function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, hp = 8, rotation = 0) {
-    console.log(`Creating house at (${x}, ${z}) with size ${width}x${height}x${depth}`);
-    
     // Initialize textures if not done yet
     initializeTextures();
     
@@ -2277,6 +2278,15 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     });
 
     const thickness = 0.2;
+
+    // 外壁用の明るい材料と内壁用の濃い材料を作成
+    const exteriorColor = new THREE.Color(color);
+    exteriorColor.multiplyScalar(1.0); // 外壁は100%の明るさに（明るく）
+    const exteriorMaterial = new THREE.MeshLambertMaterial({ color: exteriorColor });
+    
+    const interiorColor = new THREE.Color(color);
+    interiorColor.multiplyScalar(0.3); // 内壁は30%の明るさに（濃く）
+    const interiorMaterial = new THREE.MeshLambertMaterial({ color: interiorColor });
 
     // 穴あき壁を生成する共通関数
     function createWallMesh(w, h, t, mat, holes = []) {
@@ -2314,77 +2324,80 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     // house.add(floor);
 
     // 2. 正面壁 - ドア部分を空けて2つの壁パーツに分ける
-    console.log('Creating front wall without door section');
     
     // 左側の壁
     const leftWallWidth = (width - 2.5) / 2; // ドア幅2.5mを引いて半分に
-    console.log(`Creating left wall with width ${leftWallWidth}`);
     const frontLeftWall = new THREE.Mesh(
         new THREE.BoxGeometry(leftWallWidth, height, thickness),
-        material
+        exteriorMaterial
     );
     frontLeftWall.position.set(-width/2 + leftWallWidth/2, -height / 2 + height/2, depth / 2 - thickness/2);
     frontLeftWall.userData.isWall = true;
     frontLeftWall.userData.isHouseWall = true;
+    frontLeftWall.castShadow = false; // 影をキャストしない
     house.add(frontLeftWall);
     obstacles.push(frontLeftWall);
     
     // 右側の壁
-    console.log(`Creating right wall with width ${leftWallWidth}`);
     const rightWallPart = new THREE.Mesh(
         new THREE.BoxGeometry(leftWallWidth, height, thickness),
-        material
+        exteriorMaterial
     );
     rightWallPart.position.set(width/2 - leftWallWidth/2, -height / 2 + height/2, depth / 2 - thickness/2);
     rightWallPart.userData.isWall = true;
     rightWallPart.userData.isHouseWall = true;
+    rightWallPart.castShadow = false; // 影をキャストしない
     house.add(rightWallPart);
     obstacles.push(rightWallPart);
-    
-    console.log('Door opening created - no wall at center');
 
-    // 3. 背面壁 (窓2つ)
-    const backWall = createWallMesh(width, height, thickness, material, [
+    // 3. 背面壁 (窓2つ) - 内壁のみの壁は濃い色に
+    const backWall = createWallMesh(width, height, thickness, interiorMaterial, [
         { x: -width/4, y: 1.5, w: 1.5, h: 1.5 }, // 窓の位置を少し上げる
         { x: width/4, y: 1.5, w: 1.5, h: 1.5 }
     ]);
     backWall.position.set(0, -height / 2, -depth / 2);
     backWall.userData.isWall = true; // コリジョン用
     backWall.userData.isHouseWall = true;
+    backWall.castShadow = false; // 影をキャストしない
     house.add(backWall);
     obstacles.push(backWall); // 障害物リストに追加
 
-    // 4. 左壁 (窓1つ)
-    const leftSideWall = createWallMesh(depth, height, thickness, material, [
+    // 4. 左壁 (窓1つ) - 内壁のみの壁は濃い色に
+    const leftSideWall = createWallMesh(depth, height, thickness, interiorMaterial, [
         { x: 0, y: 1.5, w: 2, h: 1.5 } // 窓の位置を少し上げる
     ]);
     leftSideWall.rotation.y = Math.PI / 2;
     leftSideWall.position.set(-width / 2, -height / 2, 0);
     leftSideWall.userData.isWall = true; // コリジョン用
     leftSideWall.userData.isHouseWall = true;
+    leftSideWall.castShadow = false; // 影をキャストしない
     house.add(leftSideWall);
     obstacles.push(leftSideWall); // 障害物リストに追加
 
-    // 5. 右壁 (窓1つ)
-    const rightSideWall = createWallMesh(depth, height, thickness, material, [
+    // 5. 右壁 (窓1つ) - 内壁のみの壁は濃い色に
+    const rightSideWall = createWallMesh(depth, height, thickness, interiorMaterial, [
         { x: 0, y: 1.5, w: 2, h: 1.5 } // 窓の位置を少し上げる
     ]);
     rightSideWall.rotation.y = -Math.PI / 2;
     rightSideWall.position.set(width / 2, -height / 2, 0);
     rightSideWall.userData.isWall = true; // コリジョン用
     rightSideWall.userData.isHouseWall = true;
+    rightSideWall.castShadow = false; // 影をキャストしない
     house.add(rightSideWall);
     obstacles.push(rightSideWall); // 障害物リストに追加
 
     // 6. 屋根 - 1枚のみ、家の向きに合わせて回転しない
-    const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(width + 0.4, thickness, depth + 0.4),
-        material
-    );
-    roof.position.y = height / 2;
-    roof.castShadow = true;
-    roof.userData.isHouseRoof = true; // 家の屋根であることを識別
-    house.add(roof);
+    // カスタムマップの場合のみ屋根を生成
+    if (gameSettings.mapType === 'custom') {
+        const roof = new THREE.Mesh(
+            new THREE.BoxGeometry(width + 0.4, thickness, depth + 0.4),
+            material
+        );
+        roof.position.y = height / 2;
+        roof.castShadow = false; // 影をキャストしない
+        roof.userData.isHouseRoof = true; // 家の屋根であることを識別
+        house.add(roof);
+    }
 
     // userDataを設定
     house.userData = { 
@@ -2399,7 +2412,6 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
     scene.add(house);
     // obstacles.push(house); // 家全体は障害物にしない
     
-    console.log(`House created successfully with ${obstacles.filter(o => o.userData.isHouseWall).length} walls`);
     return house;
 }
 
@@ -2420,10 +2432,10 @@ function createSniperTower(x, z) {
     
     const tower = new THREE.Mesh(towerGeometry, towerMaterial);
     tower.position.set(x, towerYPos, z);
-    tower.userData.isTower = true;
     const DEFAULT_OBSTACLE_VOLUME = 2 * DEFAULT_OBSTACLE_HEIGHT * 2;
     const TOWER_VOLUME = TOWER_WIDTH * TOWER_HEIGHT * TOWER_DEPTH;
     tower.userData.hp = Math.round(TOWER_VOLUME / DEFAULT_OBSTACLE_VOLUME / 2);
+    tower.castShadow = false; // 影をキャストしない
     scene.add(tower);
     obstacles.push(tower);
     let ladderFace;
@@ -2434,7 +2446,10 @@ function createSniperTower(x, z) {
     }
     ladderFace = createAndAttachLadder(tower, ladderFace);
     // createWindows(tower, TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH); // Removed windows for performance
-    addRooftopFeatures(tower, ladderFace);
+    // カスタムマップの場合のみ屋上機能を有効化
+    if (gameSettings.mapType === 'custom') {
+        addRooftopFeatures(tower, ladderFace);
+    }
 }
 
 function generateObstaclePositions(count) {
@@ -2608,12 +2623,7 @@ function resetObstacles() {
     }
     ladderSwitches.length = 0;
     let obstaclesToCreate = [];
-    if (gameSettings.mapType === 'random') {
-        obstaclesToCreate = generateObstaclePositions(NUM_RANDOM_OBSTACLES);
-        // スナイパータワーの自動生成を無効化
-        // createSniperTower(35, -35);
-        // createSniperTower(-35, 35);
-    } else if (gameSettings.mapType === 'custom') {
+    if (gameSettings.mapType === 'custom') {
         const resolved = resolveCustomMapSelection();
         const selectedMapData = resolved.mapData;
         if (resolved.mapName && resolved.mapName !== gameSettings.customMapName) {
@@ -2647,7 +2657,6 @@ function resetObstacles() {
             createHouse(config.x, config.z, config.width, config.height, config.depth, config.color, config.hp, config.rotation || 0);
         } else {
             // 通常の建物の場合
-            console.log('Creating solid obstacle');
             createObstacle(config.x, config.z, config.width, config.height || DEFAULT_OBSTACLE_HEIGHT, config.depth, config.color || 0xff0000, config.hp || 1);
         }
     }
@@ -4032,8 +4041,11 @@ function createExplosionEffect(position) {
 }
 
 function immediateRooftopCleanup() {
-    console.log('Performing immediate rooftop cleanup...');
+    console.log('Performing IMMEDIATE rooftop cleanup...');
     let removedCount = 0;
+    
+    // すべてのマップタイプで屋根をクリーンアップ
+    // デフォルトマップかカスタムマップかに関わらず、すべての屋根オブジェクトを削除
     
     // シーン内の全オブジェクトをチェック
     const allObjects = [];
@@ -4043,52 +4055,45 @@ function immediateRooftopCleanup() {
         }
     });
     
+    console.log(`Total objects in scene: ${allObjects.length}`);
+    
     // 浮遊している屋根パーツを特定
     for (const obj of allObjects) {
         let shouldBeRemoved = false;
         
-        // 屋根パーツの判定
-        if (obj.userData.isRooftop || obj.userData.isWall || obj.userData.parentBuildingRef) {
-            // 家の壁パーツは保護
-            const isHouseWall = (
-                obj.userData.isHouseWall || // 優先的にチェック
-                (obj.userData.isWall && 
-                !obj.userData.isRooftop && 
-                !obj.userData.parentBuildingRef &&
-                obj.parent && obj.parent.userData && obj.parent.userData.type === 'house')
-            );
-            
-            // 家の屋根も保護
-            const isHouseRoof = (
-                obj.userData.isHouseRoof ||
-                (obj.parent && obj.parent.userData && obj.parent.userData.type === 'house')
-            );
-            
-            if (isHouseWall || isHouseRoof) {
-                continue; // 家のパーツはスキップ
-            }
-            
-            let hasValidParent = false;
-            
-            if (obj.userData.parentBuildingRef) {
-                // 親がobstacles配列に存在するかチェック
-                hasValidParent = obstacles.includes(obj.userData.parentBuildingRef);
-            }
-            
-            // 親が存在しない、または配列にない場合は削除対象
-            if (!hasValidParent) {
-                shouldBeRemoved = true;
-            }
+        // 地面は保護
+        if (obj.userData.isGround || obj.position && obj.position.y <= 0) {
+            console.log('PROTECTING ground object:', obj.name || 'unnamed', 'at position:', obj.position);
+            continue; // 地面は削除しない
+        }
+        
+        // 屋根パーツの判定 - すべての屋根オブジェクトを削除
+        if (obj.userData.isRooftop || obj.userData.isHouseRoof || obj.userData.parentBuildingRef) {
+            shouldBeRemoved = true;
+            console.log('Found rooftop object:', obj.userData);
         }
         
         // 赤レンガ色の孤立オブジェクトも削除
         if (!shouldBeRemoved && obj.material && obj.material.color && obj.material.color.getHex() === 0x880000) {
             if (!obstacles.includes(obj)) {
                 shouldBeRemoved = true;
+                console.log('Found orphaned red brick object at:', obj.position);
+            }
+        }
+        
+        // 位置が高いオブジェクトもチェック（浮遊屋根の可能性）
+        if (!shouldBeRemoved && obj.position && obj.position.y > 15) {
+            // 高い位置にあるオブジェクトをチェック
+            const isBuilding = obj.userData.type === 'house' || obj.userData.type === 'tower' || obj.userData.isWall;
+            if (!isBuilding && !obstacles.includes(obj)) {
+                shouldBeRemoved = true;
+                console.log('Found high floating object at:', obj.position);
             }
         }
         
         if (shouldBeRemoved) {
+            console.log('Removing object:', obj.name || 'unnamed', 'at position:', obj.position);
+            
             // シーンから削除
             scene.remove(obj);
             
@@ -4103,16 +4108,69 @@ function immediateRooftopCleanup() {
             if (obj.material) obj.material.dispose();
             
             removedCount++;
-            console.log('Immediately removed floating rooftop at:', obj.position);
         }
     }
     
-    console.log(`Immediate cleanup removed ${removedCount} floating rooftop parts`);
+    console.log(`Immediate cleanup removed ${removedCount} rooftop parts`);
+    
+    // 追加：シーン内のすべてのメッシュをダンプしてデバッグ
+    console.log('Remaining objects in scene after cleanup:');
+    let meshCount = 0;
+    scene.traverse((child) => {
+        if (child.isMesh) {
+            meshCount++;
+            console.log(`Mesh ${meshCount}:`, child.name || 'unnamed', 'type:', child.userData.type, 'position:', child.position);
+        }
+    });
+    
     return removedCount;
+}
+
+// 強制シーンリセット関数
+function forceSceneReset() {
+    console.log('FORCING COMPLETE SCENE RESET (protecting ground)...');
+    
+    // シーンからすべてのメッシュを削除（地面を除く）
+    const objectsToRemove = [];
+    scene.traverse((child) => {
+        if (child.isMesh) {
+            // 地面は保護
+            if (child.userData.isGround || child.position && child.position.y <= 0) {
+                console.log('PROTECTING ground object:', child.name || 'unnamed', 'at position:', child.position);
+                return; // 地面は削除しない
+            }
+            objectsToRemove.push(child);
+        }
+    });
+    
+    objectsToRemove.forEach(obj => {
+        console.log('Removing object:', obj.name || 'unnamed', 'type:', obj.userData.type, 'position:', obj.position);
+        scene.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+    });
+    
+    // obstacles配列から地面以外のオブジェクトを削除
+    const remainingObstacles = obstacles.filter(obj => {
+        const isGround = obj.userData.isGround || (obj.position && obj.position.y <= 0);
+        if (!isGround) {
+            console.log('Removing from obstacles:', obj.userData.type);
+        }
+        return isGround;
+    });
+    
+    // 配列をクリアして地面のみを再設定
+    obstacles.length = 0;
+    obstacles.push(...remainingObstacles);
+    
+    console.log(`Force reset removed ${objectsToRemove.length} objects (protected ground)`);
 }
 
 function cleanupFloatingRooftopParts() {
     let removedCount = 0;
+    
+    // すべてのマップタイプで屋根をクリーンアップ
+    // デフォルトマップかカスタムマップかに関わらず、すべての屋根オブジェクトを削除
     
     // シーン内のすべての子オブジェクトを直接スキャン
     const objectsToRemove = [];
@@ -4120,65 +4178,44 @@ function cleanupFloatingRooftopParts() {
     scene.traverse((child) => {
         // Meshオブジェクトのみを処理
         if (child.isMesh) {
-            // 屋根パーツの特徴を持つオブジェクトを検出
+            // 地面は保護
+            if (child.userData.isGround || child.position && child.position.y <= 0) {
+                return; // 地面は削除しない
+            }
+            
+            // 屋根パーツの特徴を持つオブジェクトを検出 - すべての屋根を削除
             const isRooftopPart = (
                 child.userData.isRooftop ||
+                child.userData.isHouseRoof ||
                 child.userData.parentBuildingRef ||
                 (child.material && child.material.color && child.material.color.getHex() === 0x880000) // 赤レンガ色
             );
             
-            // 家の壁パーツは保護
-            const isHouseWall = (
-                child.userData.isHouseWall || // 優先的にチェック
-                (child.userData.isWall && 
-                !child.userData.isRooftop && 
-                !child.userData.parentBuildingRef &&
-                child.parent && child.parent.userData && child.parent.userData.type === 'house')
-            );
-            
-            // 家の屋根も保護
-            const isHouseRoof = (
-                child.userData.isHouseRoof ||
-                (child.parent && child.parent.userData && child.parent.userData.type === 'house')
-            );
-            
-            if (isRooftopPart && !isHouseWall && !isHouseRoof) {
-                let parentExists = false;
-                
-                // 親障害物の存在確認
-                if (child.userData.parentBuildingRef) {
-                    parentExists = obstacles.includes(child.userData.parentBuildingRef);
-                }
-                
-                // obstacles配列内かつ親が存在しない場合
-                if (obstacles.includes(child) && !parentExists) {
-                    objectsToRemove.push(child);
-                }
-                // シーンに存在するがobstacles配列にない場合（孤立したオブジェクト）
-                else if (!obstacles.includes(child)) {
-                    objectsToRemove.push(child);
-                }
+            if (isRooftopPart) {
+                objectsToRemove.push(child);
             }
         }
     });
     
-    // 見つかったオブジェクトを削除
+    // 削除対象のオブジェクトを一括で削除
     for (const obj of objectsToRemove) {
-        // obstacles配列から削除
-        const obsIndex = obstacles.indexOf(obj);
-        if (obsIndex > -1) {
-            obstacles.splice(obsIndex, 1);
-        }
-        
-        // シーンから削除
         scene.remove(obj);
+        
+        // obstacles配列から削除
+        const index = obstacles.indexOf(obj);
+        if (index > -1) {
+            obstacles.splice(index, 1);
+        }
         
         // メモリ解放
         if (obj.geometry) obj.geometry.dispose();
         if (obj.material) obj.material.dispose();
         
         removedCount++;
-        console.log('Removed floating rooftop part:', obj.position);
+    }
+    
+    if (removedCount > 0) {
+        console.log(`Removed ${removedCount} floating rooftop parts`);
     }
     
     return removedCount;
@@ -4925,13 +4962,20 @@ function toggleFollowingPlayerMode() {
 document.addEventListener('keydown', (event) => {
     if (!isGameRunning) return;
     keySet.add(event.code);
+    // デバッグ: キー入力をログ
+    if (event.code === 'KeyW' || event.code === 'KeyA' || event.code === 'KeyS' || event.code === 'KeyD') {
+        console.log('Key pressed:', event.code, 'isGameRunning:', isGameRunning, 'justRestarted:', window.justRestarted);
+    }
     if (event.code === 'KeyC') {
         isCrouchingToggle = !isCrouchingToggle;
     } else if (event.code === 'KeyF') { // Fキーで追従モードをトグル
         toggleFollowingPlayerMode();
     }
 });
-document.addEventListener('keyup', (event) => { if (!isGameRunning) return; keySet.delete(event.code); });
+document.addEventListener('keyup', (event) => { 
+    if (!isGameRunning) return;
+    keySet.delete(event.code); 
+});
 const canvas = renderer.domElement;
 canvas.addEventListener('click', () => { if (!isGameRunning) return; if (document.pointerLockElement !== canvas) { canvas.requestPointerLock(); } });
 document.addEventListener('pointerlockchange', () => {
@@ -5220,7 +5264,7 @@ function restartGame() {
     }
     let customSpawnPoints = null;
     let availableSpawnPoints = [];
-    if (gameSettings.mapType === 'default' || gameSettings.mapType === 'random') {
+    if (gameSettings.mapType === 'default') {
         const R = ARENA_PLAY_AREA_RADIUS - 5;
         let currentAICount = gameSettings.aiCount;
         if (gameSettings.gameMode === 'arcade') {
@@ -6443,17 +6487,17 @@ function resumeGame() {
         }
 
         if ('ontouchstart' in window) {
-            console.log('resumeGame(): Mobile device detected. Setting UI to block/flex.');
+            // resumeGame(): Mobile device detected. Setting UI to block/flex.
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
             const pause = document.getElementById('pause-button');
-            if (joy) { joy.style.display = 'block'; console.log('resumeGame(): joystick-move display set to block'); }
-            if (fire) { fire.style.display = 'flex'; console.log('resumeGame(): fire-button display set to flex'); }
-            if (crouch) { crouch.style.display = 'flex'; console.log('resumeGame(): crouch-button display set to flex'); }
-            if (pause) { pause.style.display = 'block'; console.log('resumeGame(): pause-button display set to block'); }
+            if (joy) { joy.style.display = 'block'; }
+            if (fire) { fire.style.display = 'flex'; }
+            if (crouch) { crouch.style.display = 'flex'; }
+            if (pause) { pause.style.display = 'block'; }
         } else {
-            console.log('resumeGame(): PC device detected.');
+            // resumeGame(): PC device detected.
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
@@ -6468,23 +6512,18 @@ function resumeGame() {
 }
 
 function animate() {
-    // --- Force hide mobile buttons on PC ---
-    if (!('ontouchstart' in window)) {
-        const idsToHide = ['fire-button', 'crouch-button', 'joystick-move', 'follow-button'];
-        idsToHide.forEach(id => {
-            const btn = document.getElementById(id);
-            if (btn && btn.style.display !== 'none') {
-                btn.style.display = 'none';
-            }
-        });
-    }
-    // --- End force hide ---
-
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+    
     if (window.justRestarted) {
         window.justRestarted = false;
     }
-    requestAnimationFrame(animate);
-    const delta = clock.getDelta();
+    
+    if (!isGameRunning) {
+        // ゲームが実行中でない場合は最小限の処理のみ
+        renderer.render(scene, camera);
+        return;
+    }
 
     // Breadcrumb dropping logic
     if (isGameRunning) {
@@ -6511,12 +6550,13 @@ function animate() {
     // 定期的に浮遊屋根パーツをクリーンアップ
     if (typeof lastFloatingCleanupTime === 'undefined') {
         lastFloatingCleanupTime = timeElapsed;
+        // すべてのマップタイプで即時クリーンアップを実行
+        console.log('Initial cleanup - forcing complete scene reset...');
+        forceSceneReset();
     }
-    if (timeElapsed - lastFloatingCleanupTime > 5.0) { // 5秒ごと
-        const removedCount = cleanupFloatingRooftopParts();
-        if (removedCount > 0) {
-            console.log(`Cleaned up ${removedCount} floating rooftop parts`);
-        }
+    if (timeElapsed - lastFloatingCleanupTime > 10.0) { // 10秒ごとに軽量クリーンアップ
+        console.log('Periodic cleanup - using lightweight cleanup...');
+        const removedCount = cleanupFloatingRooftopParts(); // 軽量なクリーンアップを使用
         lastFloatingCleanupTime = timeElapsed;
     }
 
@@ -6646,12 +6686,18 @@ function animate() {
     if (keySet.has('KeyS')) keyboardMoveVector.y -= 1;
     if (keySet.has('KeyA')) keyboardMoveVector.x -= 1;
     if (keySet.has('KeyD')) keyboardMoveVector.x += 1;
+    
+    // デバッグ: キーボード移動ベクトルをログ
+    if (keyboardMoveVector.length() > 0) {
+        console.log('Keyboard move vector:', keyboardMoveVector, 'keys:', Array.from(keySet));
+    }
+    
     let finalMoveVector = joystickMoveVector.length() > 0 ? joystickMoveVector.clone() : keyboardMoveVector.clone();
 
     if (finalMoveVector.length() > 0) finalMoveVector.normalize();
     // リスポーン直後の移動を強制的に停止させる
     if (window.justRestarted || isPlayerDeathPlaying || isElevating) {
-        // console.log('Movement blocked - justRestarted:', window.justRestarted, 'isPlayerDeathPlaying:', isPlayerDeathPlaying, 'isElevating:', isElevating);
+        console.log('Movement blocked - justRestarted:', window.justRestarted, 'isPlayerDeathPlaying:', isPlayerDeathPlaying, 'isElevating:', isElevating);
         finalMoveVector.set(0, 0); // 移動を強制的にキャンセル
         keyboardMoveVector.set(0, 0); // 念のためキーボード移動もリセット
         joystickMoveVector.set(0, 0); // 念のためジョイスティック移動もリセット
@@ -8363,9 +8409,6 @@ if (startBtn) {
             const selectedValue = unifiedMapSelectorOnStart.value;
             if (selectedValue === 'default') {
                 gameSettings.mapType = 'default';
-                gameSettings.customMapName = '';
-            } else if (selectedValue === 'random') {
-                gameSettings.mapType = 'random';
                 gameSettings.customMapName = '';
             } else if (selectedValue && selectedValue !== '---') {
                 gameSettings.mapType = 'custom';
