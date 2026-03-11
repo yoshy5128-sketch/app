@@ -1,0 +1,41 @@
+{
+  "obstacles": [],
+  "lights": [],
+  "spawnPoints": [
+    {
+      "id": 0,
+      "x": 0,
+      "z": -57,
+      "color": 255,
+      "name": "Player"
+    },
+    {
+      "id": 1,
+      "x": 0,
+      "z": 57,
+      "color": 65280,
+      "name": "AI 1"
+    },
+    {
+      "id": 2,
+      "x": 57,
+      "z": 0,
+      "color": 65535,
+      "name": "AI 2"
+    },
+    {
+      "id": 3,
+      "x": -57,
+      "z": 0,
+      "color": 16758465,
+      "name": "AI 3"
+    }
+  ],
+  "persistentSize": {
+    "width": 4,
+    "height": 4,
+    "depth": 4,
+    "color": 8359053,
+    "hp": 1
+  }
+}
