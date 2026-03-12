@@ -4047,7 +4047,7 @@ function immediateRooftopCleanup() {
     // すべてのマップタイプで屋根をクリーンアップ
     // デフォルトマップかカスタムマップかに関わらず、すべての屋根オブジェクトを削除
     
-    // シーン内の全オブジェクトをチェック
+    // シーン内の全オブジェクトをチェック（再帰的にすべての子を含む）
     const allObjects = [];
     scene.traverse((child) => {
         if (child.isMesh) {
@@ -4067,10 +4067,14 @@ function immediateRooftopCleanup() {
             continue; // 地面は削除しない
         }
         
-        // 屋根パーツの判定 - すべての屋根オブジェクトを削除
-        if (obj.userData.isRooftop || obj.userData.isHouseRoof || obj.userData.parentBuildingRef) {
-            shouldBeRemoved = true;
-            console.log('Found rooftop object:', obj.userData);
+        // 屋根パーツの判定 - 孤立したオブジェクトのみを削除
+        // 重要：現在のマップの有効なオブジェクトは保護
+        if (obj.userData.isRooftop || obj.userData.isHouseRoof || obj.userData.isHouseWall || obj.userData.parentBuildingRef) {
+            // obstacles配列にない場合のみ孤立オブジェクトとみなして削除
+            if (!obstacles.includes(obj)) {
+                shouldBeRemoved = true;
+                console.log('Found orphaned rooftop or house wall object:', obj.userData);
+            }
         }
         
         // 赤レンガ色の孤立オブジェクトも削除
@@ -4092,10 +4096,14 @@ function immediateRooftopCleanup() {
         }
         
         if (shouldBeRemoved) {
-            console.log('Removing object:', obj.name || 'unnamed', 'at position:', obj.position);
+            console.log('Removing object:', obj.name || 'unnamed', 'type:', obj.userData.type, 'isHouseRoof:', obj.userData.isHouseRoof, 'isHouseWall:', obj.userData.isHouseWall, 'at position:', obj.position);
             
-            // シーンから削除
-            scene.remove(obj);
+            // 親から削除（重要：シーンから直接削除するのではなく、親から削除）
+            if (obj.parent) {
+                obj.parent.remove(obj);
+            } else {
+                scene.remove(obj);
+            }
             
             // obstacles配列から削除
             const index = obstacles.indexOf(obj);
@@ -4119,7 +4127,7 @@ function immediateRooftopCleanup() {
     scene.traverse((child) => {
         if (child.isMesh) {
             meshCount++;
-            console.log(`Mesh ${meshCount}:`, child.name || 'unnamed', 'type:', child.userData.type, 'position:', child.position);
+            console.log(`Mesh ${meshCount}:`, child.name || 'unnamed', 'type:', child.userData.type, 'isHouseRoof:', child.userData.isHouseRoof, 'isHouseWall:', child.userData.isHouseWall, 'position:', child.position);
         }
     });
     
@@ -5251,6 +5259,7 @@ function shuffle(array) {
 function restartGame() {
     console.log('restartGame() called');
     playerBreadcrumbs = []; // Reset the breadcrumb trail
+    
     resetObstacles();
     gameOverScreen.style.display = 'none';
     winScreen.style.display = 'none';
@@ -7203,10 +7212,11 @@ function animate() {
                 ai.state = 'MOVING';
                 ai.targetPosition.copy(ai.userData.rooftopLadderPos);
                 ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
-                if (ai.position.distanceTo(ai.targetPosition) < 1.0) {
+                if (ai.position.distanceTo(ai.targetPosition) < 0.8) {
                     const ladderSnap = ai.userData.rooftopSensor?.userData?.ladderPos || ai.userData.rooftopLadderPos;
-                    ai.position.x = ladderSnap.x;
-                    ai.position.z = ladderSnap.z;
+                    // 梯子にスムーズに接続するために位置を補完
+                    ai.position.x += (ladderSnap.x - ai.position.x) * 0.5;
+                    ai.position.z += (ladderSnap.z - ai.position.z) * 0.5;
                     ai.isElevating = true;
                     ai.userData.elevatingDirection = 1;
                     // 空洞建物の場合、床のジオメトリーから高さを取得
@@ -7265,6 +7275,16 @@ function animate() {
         if (ENABLE_AI_ROOFTOP_LOGIC && ai.isElevating) {
             const vDir = ai.userData.elevatingDirection || 1;
             const climbSpeed = 3.6;
+            
+            // 梯子登り中は水平位置を梯子に固定してふわふわを防止
+            if (ai.userData.rooftopLadderPos) {
+                const targetX = ai.userData.rooftopLadderPos.x;
+                const targetZ = ai.userData.rooftopLadderPos.z;
+                const lerpFactor = 0.15; // 滑らかに梯子位置に補完
+                ai.position.x += (targetX - ai.position.x) * lerpFactor;
+                ai.position.z += (targetZ - ai.position.z) * lerpFactor;
+            }
+            
             ai.position.y += vDir * climbSpeed * delta;
             ai.targetPosition.copy(ai.position);
             const targetY = ai.userData.rooftopTargetY ?? -FLOOR_HEIGHT;
@@ -7855,7 +7875,7 @@ function animate() {
                 }
             }
         }
-        if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING' && ai.state !== 'FOLLOWING' && ai.state !== 'ROOFTOP_COMBAT') {
+        if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING' && ai.state !== 'FOLLOWING' && ai.state !== 'ROOFTOP_COMBAT' && !ai.isElevating) {
             const oldAIPosition = ai.position.clone();
             let moveDirection = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
             const moveVectorDelta = moveDirection.clone().multiplyScalar(currentAISpeed * delta);

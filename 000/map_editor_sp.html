@@ -1302,26 +1302,64 @@
         }
 
         function exportMapToFile() {
-            const mapData = {
-                obstacles: obstacles.map(o => ({
-                    x: o.position.x, z: o.position.z,
-                    width: o.geometry.parameters.width, height: o.geometry.parameters.height, depth: o.geometry.parameters.depth,
-                    color: o.userData.color, hp: o.userData.hp
-                })),
-                lights: lights.map(l => ({ // 追加: 電灯データをエクスポート
-                    x: l.position.x, z: l.position.z,
-                    color: l.userData.color, intensity: l.userData.intensity
-                })),
-                spawnPoints: SPAWN_POINTS_DATA,
-                persistentSize: PERSISTENT_OBSTACLE_SIZE
-            };
-            const blob = new Blob([JSON.stringify(mapData, null, 2)], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `gunfight-map-${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(a.href);
-            showNotification('Map exported to file!');
+            try {
+                console.log('Starting map export...');
+                console.log('Obstacles array:', obstacles);
+                console.log('Obstacles count:', obstacles.length);
+                console.log('Lights array:', lights);
+                console.log('Lights count:', lights.length);
+                console.log('SPAWN_POINTS_DATA:', SPAWN_POINTS_DATA);
+                console.log('PERSISTENT_OBSTACLE_SIZE:', PERSISTENT_OBSTACLE_SIZE);
+                
+                if (!Array.isArray(obstacles)) {
+                    throw new Error('obstacles is not an array');
+                }
+                if (!Array.isArray(lights)) {
+                    throw new Error('lights is not an array');
+                }
+                
+                const mapData = {
+                    obstacles: obstacles.map(o => {
+                        if (!o.position || !o.geometry || !o.geometry.parameters) {
+                            console.warn('Invalid obstacle found:', o);
+                            return null;
+                        }
+                        return {
+                            x: o.position.x, z: o.position.z,
+                            width: o.geometry.parameters.width, height: o.geometry.parameters.height, depth: o.geometry.parameters.depth,
+                            color: o.userData.color, hp: o.userData.hp
+                        };
+                    }).filter(o => o !== null),
+                    lights: lights.map(l => { // 追加: 電灯データをエクスポート
+                        if (!l.position) {
+                            console.warn('Invalid light found:', l);
+                            return null;
+                        }
+                        return {
+                            x: l.position.x, z: l.position.z,
+                            color: l.userData.color, intensity: l.userData.intensity
+                        };
+                    }).filter(l => l !== null),
+                    spawnPoints: SPAWN_POINTS_DATA,
+                    persistentSize: PERSISTENT_OBSTACLE_SIZE
+                };
+                
+                console.log('Map data prepared:', mapData);
+                
+                const jsonString = JSON.stringify(mapData, null, 2);
+                console.log('JSON string created, length:', jsonString.length);
+                
+                const blob = new Blob([jsonString], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `gunfight-map-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+                showNotification('Map exported to file!');
+            } catch (error) {
+                console.error('Export failed:', error);
+                showNotification('Export failed: ' + error.message, true);
+            }
         }
 
         function importMapFromFile(event) {
@@ -1751,7 +1789,10 @@
             document.getElementById('add-light-button').addEventListener('click', () => setAddingMode('light')); // 追加
             document.getElementById('add-tower-button').addEventListener('click', () => setAddingMode('tower')); // 追加
             document.getElementById('add-house-button').addEventListener('click', () => setAddingMode('house')); // 追加
-            document.getElementById('export-file-button').addEventListener('click', exportMapToFile);
+            document.getElementById('export-file-button').addEventListener('click', () => {
+                console.log('Export button clicked!');
+                exportMapToFile();
+            });
             document.getElementById('import-file-button').addEventListener('click', () => document.getElementById('import-file-input').click());
             document.getElementById('import-file-input').addEventListener('change', importMapFromFile);
             
