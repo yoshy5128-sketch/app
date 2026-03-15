@@ -185,10 +185,10 @@
                 <input type="radio" name="ai-count" value="1"> 1 AI
             </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-count" value="2" checked> 2 AIs
+                <input type="radio" name="ai-count" value="2"> 2 AIs
             </label>
             <label style="display: block;">
-                <input type="radio" name="ai-count" value="3"> 3 AIs
+                <input type="radio" name="ai-count" value="3" checked> 3 AIs
             </label>
 
             <h2 style="margin-top: 20px;">Map Selection</h2>
@@ -224,6 +224,9 @@
             </label>
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="killcam-mode" value="playerOnly" checked> プレイヤーが倒した敵のみ再生（プレイヤー死亡は再生）
+            </label>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="killcam-mode" value="off"> OFF（キルカメラなし）
             </label>
             
             <h2 style="margin-top: 20px;">Auto-aim</h2>
@@ -291,6 +294,9 @@
     <div id="crosshair">
         <div class="cross-line" id="line-h"></div>
         <div class="cross-line" id="line-v"></div>
+        <div class="crosshair-circle" id="crosshair-circle"></div>
+        <div class="crosshair-plus-h" id="crosshair-plus-h"></div>
+        <div class="crosshair-plus-v" id="crosshair-plus-v"></div>
     </div>
 
     <div id="scope-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 150; display: none; pointer-events: none;">
