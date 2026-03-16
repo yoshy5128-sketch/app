@@ -78,7 +78,7 @@ canvas {
 }
 .crosshair-circle {
     position: absolute;
-    border: 2px solid white;
+    border: 1px solid white;
     border-radius: 50%;
     width: 24px;
     height: 24px;
@@ -92,8 +92,8 @@ canvas {
     background-color: white;
     display: none;
 }
-.crosshair-plus-h { width: 10px; height: 2px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
-.crosshair-plus-v { width: 2px; height: 10px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.crosshair-plus-h { width: 10px; height: 1px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.crosshair-plus-v { width: 1px; height: 10px; top: 50%; left: 50%; transform: translate(-50%, -50%); }
 .cross-line {
     position: absolute;
     background-color: white;
