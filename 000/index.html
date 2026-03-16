@@ -212,10 +212,10 @@
                 <input type="radio" name="game-mode" value="team"> Team Deathmatch (2V2 プレイヤー&AI1体 VS AI2体)
             </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (2V2 チーム戦でキル数を競う - 全員無限復活)
+                <input type="radio" name="game-mode" value="ffa"> Free For All (全員が敵同士 - 全員無限復活)
             </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="ffa"> Free For All (全員が敵同士 - 全員無限復活)
+                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (2V2 チーム戦でキル数を競う - 全員無限復活)
             </label>
 
             <h2 style="margin-top: 20px;">Kill Camera</h2>
@@ -229,7 +229,15 @@
                 <input type="radio" name="killcam-mode" value="off"> OFF（キルカメラなし）
             </label>
             
-            <h2 style="margin-top: 20px;">Auto-aim</h2>
+            <h2 style="margin-top: 20px;">Barrel Respawn</h2>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="barrel-respawn" value="true"> ON（30秒後に同じ場所へ復活）
+            </label>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="barrel-respawn" value="false" checked> OFF
+            </label>
+
+            <h2 style="margin-top: 20px;">Auto-aim（狙撃銃のスコープ）</h2>
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="auto-aim" value="true" checked> ON
             </label>
@@ -317,7 +325,7 @@
     <audio id="srGunSound" src="pss.mp3" preload="auto"></audio>
     <audio id="aimgGunSound" src="aimg.mp3" preload="auto"></audio>
     <audio id="aiGunSound" src="aigun.mp3" preload="auto"></audio>
-    <audio id="explosionSound" src="bom.mp3" preload="auto"></audio>
+    <audio id="explosionSound" src="bom2.mp3" preload="auto"></audio>
     <audio id="setSound" src="set.mp3" preload="auto"></audio>
     <audio id="aiSrGunSound" src="ss.mp3" preload="auto"></audio>
     <audio id="playerSgSound" src="sgun.mp3" preload="auto"></audio>

@@ -18,6 +18,7 @@ let gameSettings = {
     customMapName: 'Default Custom Map',
     gameMode: 'battle',
     killCamMode: 'playerOnly',
+    barrelRespawn: false,
     gameDuration: 180, // 3分間 (180秒)
     buttonPositions: {
         fire: { right: '20px', bottom: '120px' },
@@ -441,6 +442,15 @@ let characterEditorAnimationId = null;
                 }
             });
         });
+        const barrelRespawnRadios = document.querySelectorAll('input[name="barrel-respawn"]');
+        barrelRespawnRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.barrelRespawn = radio.value === 'true';
+                    saveSettings();
+                }
+            });
+        });
         const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
         const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
         if (nightModeIntensitySlider) {
@@ -512,7 +522,12 @@ let characterEditorAnimationId = null;
                 
                 // ハードリセット：完全なゲーム再起動
                 debugLog('Performing hard reset for map switching...');
-                restartGame();
+                if (isGameRunning && !isPaused) {
+                    restartGame();
+                } else {
+                    // ポーズ中や未開始時はバックグラウンドで開始しない
+                    debugLog('Map switch deferred until Start/Resume.');
+                }
                 
                 // ユーザーインタラクション後に音声を初期化
                 initializeAudio();
@@ -1080,6 +1095,10 @@ fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.
 function saveSettings() {
     gameSettings.autoAim = document.querySelector('input[name="auto-aim"]:checked').value;
     gameSettings.killCamMode = document.querySelector('input[name="killcam-mode"]:checked').value;
+    const barrelRespawnRadio = document.querySelector('input[name="barrel-respawn"]:checked');
+    if (barrelRespawnRadio) {
+        gameSettings.barrelRespawn = barrelRespawnRadio.value === 'true';
+    }
     gameSettings.nightModeEnabled = document.getElementById('night-mode').checked;
     gameSettings.nightModeIntensity = document.getElementById('night-mode-intensity').value;
     gameSettings.timeLapseMode = document.getElementById('time-lapse-mode').checked;
@@ -1125,6 +1144,9 @@ function loadSettings() {
         });
         document.querySelectorAll('input[name="killcam-mode"]').forEach(radio => {
             radio.checked = (radio.value === gameSettings.killCamMode);
+        });
+        document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
+            radio.checked = (radio.value === String(gameSettings.barrelRespawn));
         });
         document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
             check.checked = (gameSettings.defaultWeapon === check.value);
@@ -1315,6 +1337,9 @@ function loadMapSettings(mapName) {
                 });
                 document.querySelectorAll('input[name="killcam-mode"]').forEach(radio => {
                     radio.checked = (radio.value === gameSettings.killCamMode);
+                });
+                document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
+                    radio.checked = (radio.value === String(gameSettings.barrelRespawn));
                 });
                 const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
                 const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
@@ -1668,6 +1693,7 @@ const HIDING_SPOTS = [];
 const weaponPickups = [];
 const ladderSwitches = [];
 const respawningPickups = [];
+const respawningBarrels = [];
 const RESPAWN_DELAY = 60;
 const AI_INITIAL_POSITION = new THREE.Vector3(0, 0, 20);
 const NUM_RANDOM_OBSTACLES = 20;
@@ -2308,6 +2334,27 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z - HIDING_DISTANCE), obstacle: box });
 }
 
+function createExplosiveBarrel(x, z, color = 0xe74c3c, radius = 0.75, height = 2.4) {
+    const geometry = new THREE.CylinderGeometry(radius, radius, height, 20);
+    const material = new THREE.MeshLambertMaterial({ color: color });
+    const barrel = new THREE.Mesh(geometry, material);
+    barrel.position.set(x, (height / 2) - FLOOR_HEIGHT, z);
+    barrel.userData.type = 'barrel';
+    barrel.userData.color = color;
+    barrel.userData.radius = radius;
+    barrel.userData.height = height;
+    barrel.userData.spawnPos = new THREE.Vector3(x, barrel.position.y, z);
+    barrel.userData.hp = 1;
+    barrel.castShadow = false;
+    scene.add(barrel);
+    obstacles.push(barrel);
+    const HIDING_DISTANCE = radius + 0.6;
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x + HIDING_DISTANCE, 0, z), obstacle: barrel });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z), obstacle: barrel });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x, 0, z + HIDING_DISTANCE), obstacle: barrel });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x, 0, z - HIDING_DISTANCE), obstacle: barrel });
+}
+
 // マテリアルを安全に破棄する関数（配列対応）
 function disposeMaterial(material) {
     if (!material) return;
@@ -2860,6 +2907,8 @@ function resetObstacles() {
         } else if (config.type === 'house' && gameSettings.mapType === 'custom') {
             // カスタムマップの家データの場合のみ処理
             createHouse(config.x, config.z, config.width, config.height, config.depth, config.color, config.hp, config.rotation || 0);
+        } else if (config.type === 'barrel') {
+            createExplosiveBarrel(config.x, config.z, config.color, config.radius, config.height);
         } else {
             // 通常の建物の場合
             createObstacle(config.x, config.z, config.width, config.height || DEFAULT_OBSTACLE_HEIGHT, config.depth, config.color || 0xff0000, config.hp || 1);
@@ -4510,6 +4559,8 @@ const projectiles = [];
 const debris = [];
 const projectileSpeed = 50;
 const MAX_PROJECTILES = 180;
+const ROCKET_EXPLOSION_RADIUS = 5;
+const BARREL_EXPLOSION_RADIUS = ROCKET_EXPLOSION_RADIUS * 1.5;
 
 function createProjectile(startPos, direction, color, size = 0.1, isRocket = false, source = 'unknown', speed = projectileSpeed, isSniper = false, weaponType = null, shooter = null) {
     if (projectiles.length >= MAX_PROJECTILES) {
@@ -4958,6 +5009,123 @@ function destroyObstacle(obstacle, explosionPosition) {
         }
     }
     obstacle.geometry.dispose();
+}
+
+function destroyBarrel(barrel, explosionPosition) {
+    const barrelIndex = obstacles.indexOf(barrel);
+    if (barrelIndex > -1) {
+        obstacles.splice(barrelIndex, 1);
+    }
+    scene.remove(barrel);
+    const radius = barrel.userData.radius || 0.75;
+    const height = barrel.userData.height || 1.2;
+    const fragmentCount = 18;
+    const fragmentSize = Math.max(0.1, radius * 0.35);
+    const fragmentGeometry = new THREE.BoxGeometry(fragmentSize, fragmentSize, fragmentSize);
+    const fragmentMaterial = barrel.material;
+    for (let i = 0; i < fragmentCount; i++) {
+        const fragment = new THREE.Mesh(fragmentGeometry, fragmentMaterial);
+        const offset = new THREE.Vector3(
+            (Math.random() - 0.5) * radius * 1.6,
+            (Math.random() - 0.5) * height,
+            (Math.random() - 0.5) * radius * 1.6
+        );
+        fragment.position.copy(barrel.position).add(offset);
+        scene.add(fragment);
+        const forceDirection = new THREE.Vector3().subVectors(fragment.position, explosionPosition).normalize();
+        const forceMagnitude = 12 + Math.random() * 16;
+        const velocity = forceDirection.multiplyScalar(forceMagnitude);
+        velocity.y += Math.random() * 8;
+        const angularVelocity = new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12);
+        debris.push({ mesh: fragment, velocity: velocity, angularVelocity: angularVelocity, life: 2 + Math.random() * 2 });
+    }
+    if (barrel.geometry) barrel.geometry.dispose();
+    disposeMaterial(barrel.material);
+}
+
+function applyBarrelKillScoring(victimAI, source, shooter) {
+    if (source === 'player') {
+        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+            if (victimAI.team === 'enemy') playerTeamKills++;
+            if (victimAI.team === 'player') enemyTeamKills++;
+        } else if (gameSettings.gameMode === 'ffa' || gameSettings.gameMode === 'arcade') {
+            playerKills++;
+        }
+        return;
+    }
+    if (source === 'ai' && shooter) {
+        if (shooter.kills !== undefined) shooter.kills++;
+        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+            if (shooter.team === 'player' && victimAI.team === 'enemy') playerTeamKills++;
+            if (shooter.team === 'enemy' && victimAI.team === 'player') enemyTeamKills++;
+        }
+    }
+}
+
+function explodeBarrel(barrel, source = 'unknown', shooter = null) {
+    if (!barrel || (barrel.userData && barrel.userData.exploding)) return;
+    if (barrel.userData) barrel.userData.exploding = true;
+    const explosionPos = barrel.position.clone();
+    if (gameSettings.barrelRespawn) {
+        const spawnPos = (barrel.userData && barrel.userData.spawnPos) ? barrel.userData.spawnPos : barrel.position;
+        respawningBarrels.push({
+            x: spawnPos.x,
+            z: spawnPos.z,
+            color: barrel.userData?.color ?? 0xe74c3c,
+            radius: barrel.userData?.radius ?? 0.75,
+            height: barrel.userData?.height ?? 2.4,
+            respawnTime: clock.getElapsedTime() + 30
+        });
+    }
+    destroyBarrel(barrel, explosionPos);
+    if (explosionSound) playSound(explosionSound);
+    createExplosionEffect(explosionPos);
+    const radius = BARREL_EXPLOSION_RADIUS;
+    const chainTargets = obstacles.filter(o => o && o.userData && o.userData.type === 'barrel' && !o.userData.exploding && o.position && o.position.distanceTo(explosionPos) < radius);
+    chainTargets.forEach(target => explodeBarrel(target, source, shooter));
+    for (let j = ais.length - 1; j >= 0; j--) {
+        const ai = ais[j];
+        if (ai.hp <= 0) continue;
+        const distance = ai.position.distanceTo(explosionPos);
+        if (distance < radius) {
+            const aiCenter = ai.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+            if (checkLineOfSight(explosionPos, aiCenter, obstacles)) {
+                if (ai.hp !== Infinity) {
+                    ai.hp = 0;
+                    createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+                }
+                if (ai.hp <= 0) {
+                    applyBarrelKillScoring(ai, source, shooter);
+                    aiFallDownCinematicSequence(new THREE.Vector3().subVectors(ai.position, explosionPos), ai, source);
+                }
+            }
+        }
+    }
+    if (playerHP > 0) {
+        const distanceToPlayer = player.position.distanceTo(explosionPos);
+        if (distanceToPlayer < radius) {
+            const playerCenter = player.position.clone().add(new THREE.Vector3(0, 1, 0));
+            if (checkLineOfSight(explosionPos, playerCenter, obstacles)) {
+                if (playerHP !== Infinity) {
+                    playerHP = 0;
+                    screenShakeDuration = SHAKE_DURATION_MAX;
+                    if (redFlashOverlay) {
+                        redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+                        setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+                    }
+                }
+                if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                    if (source === 'ai' && shooter && shooter.kills !== undefined) {
+                        shooter.kills++;
+                        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                            enemyTeamKills++;
+                        }
+                    }
+                    startPlayerDeathSequence(null);
+                }
+            }
+        }
+    }
 }
 
 function createSmokeEffect(position) {
@@ -6673,9 +6841,11 @@ function startPlayerDeathSequence(projectile) {
         setTimeout(() => { // このsetTimeoutは全体の演出時間に合わせて調整
             isPlayerDeathPlaying = false;
             // プレイヤーモデルの回転をリセット
-            playerModel.rotation.set(0, 0, 0); 
-            // playerModelがplayerの子として正しく配置されるようにリセット
-            playerModel.position.set(0, -playerTargetHeight, 0); 
+            if (playerModel) {
+                playerModel.rotation.set(0, 0, 0); 
+                // playerModelがplayerの子として正しく配置されるようにリセット
+                playerModel.position.set(0, -playerTargetHeight, 0); 
+            }
     
             // カメラをリセット (通常のプレイヤー視点に戻す)
             camera.position.set(0, 0, 0); // 相対位置としてリセット
@@ -6897,9 +7067,11 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     const joy = document.getElementById('joystick-move');
     const fire = document.getElementById('fire-button');
     const cross = document.getElementById('crosshair');
+    const followBtn = document.getElementById('follow-button');
     if (joy) joy.style.display = 'none';
     if (fire) fire.style.display = 'none';
     if (cross) cross.style.display = 'none';
+    if (followBtn) followBtn.style.display = 'none';
     createRedSmokeEffect(ai.position);
     const aiDeathLocation = ai.position.clone();
     const aiLookAt = aiDeathLocation.clone().add(new THREE.Vector3(0, 1.2, 0));
@@ -6925,6 +7097,10 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
             if (joy) joy.style.display = 'block';
             if (fire) fire.style.display = 'block';
             if (cross) cross.style.display = 'block';
+            if (followBtn) {
+                const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+            }
             if (player) {
                 player.traverse((object) => { object.visible = true; }); // AI死亡演出終了時はプレイヤーを再表示
                 if (playerModel) {
@@ -7882,6 +8058,13 @@ function animate() {
                 createMedikitPickup(getRandomSafePosition(MEDIKIT_WIDTH, MEDIKIT_HEIGHT, MEDIKIT_DEPTH));
             }
             respawningPickups.splice(i, 1);
+        }
+    }
+    for (let i = respawningBarrels.length - 1; i >= 0; i--) {
+        const respawnBarrel = respawningBarrels[i];
+        if (timeElapsed >= respawnBarrel.respawnTime) {
+            createExplosiveBarrel(respawnBarrel.x, respawnBarrel.z, respawnBarrel.color, respawnBarrel.radius, respawnBarrel.height);
+            respawningBarrels.splice(i, 1);
         }
     }
     const AI_SEPARATION_FORCE = 2.0;
@@ -9205,11 +9388,14 @@ function animate() {
             hitType = 'floor';
         }
         if (hitSomething) {
-                if (p.isRocket) {
+                const hitIsBarrel = hitType === 'obstacle' && hitObject && hitObject.userData && hitObject.userData.type === 'barrel';
+                if (hitIsBarrel) {
+                    explodeBarrel(hitObject, p.source, p.shooter || null);
+                } else if (p.isRocket) {
                     if (explosionSound) playSound(explosionSound);
                     const explosionPos = p.mesh.position.clone();
                     createExplosionEffect(explosionPos);
-                const EXPLOSION_RADIUS_ACTUAL = 5;
+                const EXPLOSION_RADIUS_ACTUAL = ROCKET_EXPLOSION_RADIUS;
                 if (p.source === 'player') {
                     for (let j = ais.length - 1; j >= 0; j--) {
                         const ai = ais[j];
@@ -9269,6 +9455,8 @@ function animate() {
                 if (hitType === 'obstacle') {
                     if (hitObject.userData && hitObject.userData.isHouseWall) {
                         // Do not damage house walls
+                    } else if (hitObject.userData && hitObject.userData.type === 'barrel') {
+                        // Barrel already exploded above
                     } else {
                     if (hitObject.userData.hp === undefined) {
                         hitObject.userData.hp = 1;

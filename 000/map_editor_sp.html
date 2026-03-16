@@ -192,6 +192,14 @@
                         <button id="add-tower-button" style="width: 24%; margin: 0; background-color: #ff6b35;">Add Tower</button>
                         <button id="add-house-button" style="width: 24%; margin: 0; background-color: #9b59b6;">Add House</button>
                     </div>
+                    <div style="display: flex; justify-content: space-around; margin: 5px 0;">
+                        <button id="add-barrel-button" style="width: 100%; margin: 0; background-color: #e67e22;">Add Barrel</button>
+                    </div>
+                    
+                    <div id="floor-properties-editor" style="margin-top: 10px; padding: 10px; border: 1px solid #2ecc71; border-radius: 5px; background: rgba(46, 204, 113, 0.1);">
+                        <h4>Ground</h4>
+                        <label style="margin-bottom: 0;">Color: <input type="color" id="floor-color"></label>
+                    </div>
 
                     <div id="properties-editor">
                         <h4>Obstacle Properties</h4>
@@ -230,6 +238,12 @@
                         <label>HP (Rocket Hits): <input type="number" id="tower-hp" step="1" min="1" value="15"></label>
                         <label style="margin-bottom: 10px;">Color: <input type="color" id="tower-color" value="#ff6b35"></label>
                         <button id="apply-tower-props-button" style="background-color: #ff6b35; color: white;">Apply Tower Properties</button>
+                    </div>
+                    
+                    <div id="barrel-properties-editor" style="display: none;">
+                        <h4>Barrel Properties</h4>
+                        <label style="margin-bottom: 10px;">Color: <input type="color" id="barrel-color" value="#e74c3c"></label>
+                        <button id="apply-barrel-props-button" style="background-color: #e67e22; color: white;">Apply Barrel Properties</button>
                     </div>
 
                     <div id="spawn-editor">
@@ -275,11 +289,14 @@
         const ARENA_RADIUS = 60;
         const ARENA_EDGE_THICKNESS = 1;
         const FRUSTUM_SIZE = 200;
+        const FLOOR_DEFAULT_COLOR = 0x34495e;
         
         // --- GRID CONSTANTS (New) ---
         const GRID_SIZE = ARENA_RADIUS * 2; // 120
         const GRID_DIVISIONS = 40; // 120 / 40 = 3 => 3ユニットごとのグリッド
         const GRID_STEP = GRID_SIZE / GRID_DIVISIONS; // 3.0
+        const BARREL_HEIGHT = 2.4;
+        const BARREL_RADIUS = 0.75;
 
         let PERSISTENT_OBSTACLE_SIZE = { 
             width: 4, 
@@ -324,7 +341,7 @@
 
         // --- ARENA ---
         const floorGeometry = new THREE.CircleGeometry(ARENA_RADIUS, 64);
-        const floorMaterial = new THREE.MeshBasicMaterial({ color: 0x34495e }); 
+        const floorMaterial = new THREE.MeshBasicMaterial({ color: FLOOR_DEFAULT_COLOR }); 
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.rotation.x = -Math.PI / 2;
         floor.name = 'floor';
@@ -407,7 +424,7 @@
             });
             const roofMaterial = new THREE.MeshLambertMaterial({ 
                 map: roofTexture,
-                color: 0x8B4513 
+                color: color 
             });
 
             console.log('Textures created successfully');
@@ -758,6 +775,29 @@
             obstacles.push(obstacle);
         }
 
+        function createBarrel(x, z, color, radius = BARREL_RADIUS, height = BARREL_HEIGHT, isNew = true) {
+            color = color || parseInt(document.getElementById('barrel-color').value.replace('#', '0x'));
+            const geometry = new THREE.CylinderGeometry(radius, radius, height, 20);
+            const material = new THREE.MeshLambertMaterial({ color: color });
+            const barrel = new THREE.Mesh(geometry, material);
+            
+            const snappedX = snapToGrid(x);
+            const snappedZ = snapToGrid(z);
+            barrel.position.set(snappedX, height / 2, snappedZ);
+            barrel.userData = { type: 'barrel', color: color, radius: radius, height: height };
+            
+            if (isNew) {
+                const edgeCheck = new THREE.Vector2(snappedX, snappedZ);
+                if (edgeCheck.length() + radius > ARENA_RADIUS) {
+                    showNotification('Cannot place barrel outside the arena.', true);
+                    return;
+                }
+            }
+            
+            scene.add(barrel);
+            obstacles.push(barrel);
+        }
+
         // --- UI / STATE MANAGEMENT ---
         
         // 追加: オブジェクト追加モードを切り替える関数
@@ -767,24 +807,28 @@
             const lightBtn = document.getElementById('add-light-button');
             const towerBtn = document.getElementById('add-tower-button');
             const houseBtn = document.getElementById('add-house-button');
+            const barrelBtn = document.getElementById('add-barrel-button');
             
             // プロパティエディタの表示制御
             const propEditor = document.getElementById('properties-editor');
             const housePropEditor = document.getElementById('house-properties-editor');
             const lightPropEditor = document.getElementById('light-properties-editor');
             const towerPropEditor = document.getElementById('tower-properties-editor');
+            const barrelPropEditor = document.getElementById('barrel-properties-editor');
             
             // すべてのプロパティエディタを非表示
             propEditor.style.display = 'none';
             housePropEditor.style.display = 'none';
             lightPropEditor.style.display = 'none';
             towerPropEditor.style.display = 'none';
+            barrelPropEditor.style.display = 'none';
             
             // すべてのボタンを非アクティブ色にリセット
             obstacleBtn.style.backgroundColor = '#7f8c8d';
             lightBtn.style.backgroundColor = '#7f8c8d';
             towerBtn.style.backgroundColor = '#7f8c8d';
             houseBtn.style.backgroundColor = '#7f8c8d';
+            barrelBtn.style.backgroundColor = '#7f8c8d';
             
             // アクティブなモードのボタン色とプロパティエディタを変更
             if (mode === 'obstacle') {
@@ -799,6 +843,9 @@
             } else if (mode === 'house') {
                 houseBtn.style.backgroundColor = '#9b59b6';
                 housePropEditor.style.display = 'block';
+            } else if (mode === 'barrel') {
+                barrelBtn.style.backgroundColor = '#e67e22';
+                barrelPropEditor.style.display = 'block';
             }
         }
 
@@ -808,6 +855,7 @@
             const propEditor = document.getElementById('properties-editor');
             const spawnEditor = document.getElementById('spawn-editor');
             const lightPropEditor = document.getElementById('light-properties-editor'); 
+            const barrelPropEditor = document.getElementById('barrel-properties-editor');
 
             // 選択解除処理
             if (selectedObject) {
@@ -824,6 +872,7 @@
             propEditor.style.display = 'none';
             spawnEditor.style.display = 'none';
             lightPropEditor.style.display = 'none'; 
+            barrelPropEditor.style.display = 'none';
 
             if (object) {
                 console.log('Object is not null, processing...');
@@ -870,6 +919,11 @@
                     
                     document.getElementById('light-intensity').value = intensity;
                     document.getElementById('light-color').value = '#' + color.toString(16).padStart(6, '0');
+                } else if (userData.type === 'barrel') {
+                    selectedObject.material.emissive.setHex(0xe67e22);
+                    barrelPropEditor.style.display = 'block';
+                    const color = userData.color || 0xe74c3c;
+                    document.getElementById('barrel-color').value = '#' + color.toString(16).padStart(6, '0');
                 }
             } else {
                 selectedObject = null;
@@ -926,6 +980,19 @@
             selectedObject.material.color.setHex(newColor); // 表現用メッシュの色も更新
 
             showNotification('Light properties applied!');
+        }
+
+        function applyBarrelProperties() {
+            if (!selectedObject || selectedObject.userData.type !== 'barrel') return;
+            const hexColor = document.getElementById('barrel-color').value;
+            const newColor = parseInt(hexColor.replace('#', '0x'));
+            if (Number.isNaN(newColor)) {
+                showNotification('Invalid barrel color.', true);
+                return;
+            }
+            selectedObject.material.color.setHex(newColor);
+            selectedObject.userData.color = newColor;
+            showNotification('Barrel properties applied!');
         }
 
         function applyHouseProperties() {
@@ -1065,6 +1132,21 @@
                 addRecentColor(newColor); 
             }
         }
+
+        function updatePersistentObstacleSizeFromInputs() {
+            const width = parseFloat(document.getElementById('prop-width').value);
+            const height = parseFloat(document.getElementById('prop-height').value);
+            const depth = parseFloat(document.getElementById('prop-depth').value);
+            const hp = parseInt(document.getElementById('prop-hp').value, 10);
+            const hexColor = document.getElementById('prop-color').value;
+            const color = parseInt(hexColor.replace('#', '0x'));
+
+            if (!Number.isNaN(width) && width > 0) PERSISTENT_OBSTACLE_SIZE.width = width;
+            if (!Number.isNaN(height) && height > 0) PERSISTENT_OBSTACLE_SIZE.height = height;
+            if (!Number.isNaN(depth) && depth > 0) PERSISTENT_OBSTACLE_SIZE.depth = depth;
+            if (!Number.isNaN(hp) && hp > 0) PERSISTENT_OBSTACLE_SIZE.hp = hp;
+            if (!Number.isNaN(color)) PERSISTENT_OBSTACLE_SIZE.color = color;
+        }
         
         function loadRecentColors() {
             const savedColors = localStorage.getItem('recentMapEditorColors');
@@ -1106,6 +1188,18 @@
                 paletteDiv.appendChild(colorSwatch);
             });
             if (recentColors.length === 0) paletteDiv.innerHTML = '<span style="color: #999; font-size: 0.8em;">No recent colors.</span>';
+        }
+
+        function setFloorColor(colorValue) {
+            const hex = typeof colorValue === 'number'
+                ? colorValue
+                : parseInt(String(colorValue).replace('#', '0x'));
+            if (Number.isNaN(hex)) return;
+            floor.material.color.setHex(hex);
+            const floorColorInput = document.getElementById('floor-color');
+            if (floorColorInput) {
+                floorColorInput.value = '#' + hex.toString(16).padStart(6, '0');
+            }
         }
 
         function showNotification(message, isError = false) {
@@ -1176,6 +1270,14 @@
                             hp: o.userData.hp,
                             rotation: o.rotation.y || 0 // 回転角度を保存
                         };
+                    } else if (o.userData.type === 'barrel') {
+                        return {
+                            x: o.position.x, z: o.position.z,
+                            type: 'barrel',
+                            radius: o.userData.radius || BARREL_RADIUS,
+                            height: o.userData.height || BARREL_HEIGHT,
+                            color: o.userData.color || 0xe74c3c
+                        };
                     } else {
                         // 通常の障害物
                         return {
@@ -1190,7 +1292,8 @@
                     color: l.userData.color, intensity: l.userData.intensity
                 })),
                 spawnPoints: SPAWN_POINTS_DATA,
-                persistentSize: PERSISTENT_OBSTACLE_SIZE
+                persistentSize: PERSISTENT_OBSTACLE_SIZE,
+                floorColor: floor.material.color.getHex()
             };
             
             allCustomMaps[mapName] = mapData;
@@ -1224,6 +1327,8 @@
                         if (lastHouse && lastHouse.userData.type === 'house') {
                             lastHouse.rotation.y = d.rotation || 0;
                         }
+                    } else if (d.type === 'barrel') {
+                        createBarrel(d.x, d.z, d.color, d.radius, d.height, false);
                     } else {
                         // 通常の障害物
                         createObstacle(d.x, d.z, d.width, d.height, d.depth, d.color, d.hp, false);
@@ -1232,6 +1337,8 @@
                 if (mapData.lights) mapData.lights.forEach(d => createLight(d.x, d.z, d.color, d.intensity, false)); // 追加: 電灯データを読み込み
                 if (mapData.spawnPoints) SPAWN_POINTS_DATA = mapData.spawnPoints.map(d => ({...d, x: snapToGrid(d.x), z: snapToGrid(d.z)}));
                 if (mapData.persistentSize) PERSISTENT_OBSTACLE_SIZE = mapData.persistentSize;
+                if (mapData.floorColor !== undefined) setFloorColor(mapData.floorColor);
+                else setFloorColor(FLOOR_DEFAULT_COLOR);
                 
                 renderSpawnPoints();
                 showNotification(`Map "${mapName}" loaded!`);
@@ -1298,6 +1405,7 @@
             ].map(d => ({...d, x: snapToGrid(d.x), z: snapToGrid(d.z)}));
             
             renderSpawnPoints();
+            setFloorColor(FLOOR_DEFAULT_COLOR);
             if (showNote) showNotification('New map created.'); 
         }
 
@@ -1324,6 +1432,15 @@
                             console.warn('Invalid obstacle found:', o);
                             return null;
                         }
+                        if (o.userData.type === 'barrel') {
+                            return {
+                                x: o.position.x, z: o.position.z,
+                                type: 'barrel',
+                                radius: o.userData.radius || BARREL_RADIUS,
+                                height: o.userData.height || BARREL_HEIGHT,
+                                color: o.userData.color || 0xe74c3c
+                            };
+                        }
                         return {
                             x: o.position.x, z: o.position.z,
                             width: o.geometry.parameters.width, height: o.geometry.parameters.height, depth: o.geometry.parameters.depth,
@@ -1341,7 +1458,8 @@
                         };
                     }).filter(l => l !== null),
                     spawnPoints: SPAWN_POINTS_DATA,
-                    persistentSize: PERSISTENT_OBSTACLE_SIZE
+                    persistentSize: PERSISTENT_OBSTACLE_SIZE,
+                    floorColor: floor.material.color.getHex()
                 };
                 
                 console.log('Map data prepared:', mapData);
@@ -1373,10 +1491,20 @@
                     if (!mapData.obstacles) throw new Error('Invalid map format.'); // 障害物がない場合はエラーとする
                     
                     resetMap(false); 
-                    if (mapData.obstacles) mapData.obstacles.forEach(d => createObstacle(d.x, d.z, d.width, d.height, d.depth, d.color, d.hp, false));
+                    if (mapData.obstacles) mapData.obstacles.forEach(d => {
+                        if (d.type === 'barrel') {
+                            createBarrel(d.x, d.z, d.color, d.radius, d.height, false);
+                        } else {
+                            createObstacle(d.x, d.z, d.width, d.height, d.depth, d.color, d.hp, false);
+                        }
+                    });
                     if (mapData.lights) mapData.lights.forEach(d => createLight(d.x, d.z, d.color, d.intensity, false)); // 追加: 電灯データをインポート
                     if (mapData.spawnPoints) SPAWN_POINTS_DATA = mapData.spawnPoints.map(d => ({...d, x: snapToGrid(d.x), z: snapToGrid(d.z)}));
                     if (mapData.persistentSize) PERSISTENT_OBSTACLE_SIZE = mapData.persistentSize;
+                    if (mapData.floorColor !== undefined) setFloorColor(mapData.floorColor);
+                    else setFloorColor(FLOOR_DEFAULT_COLOR);
+                    if (mapData.floorColor !== undefined) setFloorColor(mapData.floorColor);
+                    else setFloorColor(FLOOR_DEFAULT_COLOR);
                     
                     renderSpawnPoints();
                     showNotification('Map imported successfully!');
@@ -1437,6 +1565,11 @@
                     if (corners.some(corner => corner.length() > ARENA_RADIUS)) {
                         canMove = false;
                     }
+                } else if (selectedObject.userData.type === 'barrel') {
+                    const radius = selectedObject.userData.radius || BARREL_RADIUS;
+                    if (Math.hypot(snappedX, snappedZ) + radius > ARENA_RADIUS) {
+                        canMove = false;
+                    }
                 } else {
                     if (Math.hypot(snappedX, snappedZ) > ARENA_RADIUS) {
                         canMove = false;
@@ -1492,6 +1625,9 @@
                 } else {
                     showNotification('Failed to create house!', true);
                 }
+            } else if (addingMode === 'barrel') {
+                createBarrel(snappedX, snappedZ);
+                showNotification('Barrel added!');
             }
         }
         
@@ -1533,6 +1669,10 @@
                 scene.remove(targetObject);
                 obstacles = obstacles.filter(o => o !== targetObject);
                 showNotification('Tower deleted!');
+            } else if (type === 'barrel') {
+                scene.remove(targetObject);
+                obstacles = obstacles.filter(o => o !== targetObject);
+                showNotification('Barrel deleted!');
             } else {
                 // デバッグ情報
                 console.log('Unknown object type:', targetObject.userData);
@@ -1784,11 +1924,19 @@
             document.getElementById('apply-props-button').addEventListener('click', applyProperties);
             document.getElementById('apply-light-props-button').addEventListener('click', applyLightProperties); // 追加
             document.getElementById('apply-house-props-button').addEventListener('click', applyHouseProperties); // 追加
+            document.getElementById('apply-barrel-props-button').addEventListener('click', applyBarrelProperties); // 追加
             document.getElementById('prop-color').addEventListener('input', onColorChange);
+            document.getElementById('prop-width').addEventListener('input', updatePersistentObstacleSizeFromInputs);
+            document.getElementById('prop-height').addEventListener('input', updatePersistentObstacleSizeFromInputs);
+            document.getElementById('prop-depth').addEventListener('input', updatePersistentObstacleSizeFromInputs);
+            document.getElementById('prop-hp').addEventListener('input', updatePersistentObstacleSizeFromInputs);
+            document.getElementById('prop-color').addEventListener('input', updatePersistentObstacleSizeFromInputs);
+            document.getElementById('floor-color').addEventListener('input', (e) => setFloorColor(e.target.value));
             document.getElementById('add-obstacle-button').addEventListener('click', () => setAddingMode('obstacle')); // 追加
             document.getElementById('add-light-button').addEventListener('click', () => setAddingMode('light')); // 追加
             document.getElementById('add-tower-button').addEventListener('click', () => setAddingMode('tower')); // 追加
             document.getElementById('add-house-button').addEventListener('click', () => setAddingMode('house')); // 追加
+            document.getElementById('add-barrel-button').addEventListener('click', () => setAddingMode('barrel')); // 追加
             document.getElementById('export-file-button').addEventListener('click', () => {
                 console.log('Export button clicked!');
                 exportMapToFile();
@@ -1875,6 +2023,13 @@
             document.getElementById('tower-depth').value = '4';
             document.getElementById('tower-hp').value = '15';
             document.getElementById('tower-color').value = '#ff6b35';
+            
+            // バレルのデフォルト値
+            document.getElementById('barrel-color').value = '#e74c3c';
+            
+            // 地面のデフォルト値
+            document.getElementById('floor-color').value = '#34495e';
+            updatePersistentObstacleSizeFromInputs();
         }
 
         function animate() {
