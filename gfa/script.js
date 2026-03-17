@@ -7,10 +7,11 @@ let gameSettings = {
     rrCount: 1,
     srCount: 1,
     sgCount: 1,
+    mrCount: 1,
     defaultWeapon: 'pistol',
     medikitCount: 0,
     mapType: 'default',
-    aiCount: 2,
+    aiCount: 3,
     autoAim: true,
     nightModeEnabled: false,
     nightModeLightIntensity: 3.0,
@@ -18,6 +19,7 @@ let gameSettings = {
     customMapName: 'Default Custom Map',
     gameMode: 'battle',
     killCamMode: 'playerOnly',
+    barrelRespawn: false,
     gameDuration: 180, // 3分間 (180秒)
     buttonPositions: {
         fire: { right: '20px', bottom: '120px' },
@@ -28,8 +30,12 @@ let gameSettings = {
 };
 let originalSettings = {};
 let isPaused = false;
+const DEBUG_LOG = false;
+function debugLog(...args) {
+    if (DEBUG_LOG) debugLog(...args);
+}
 
-// Character customization settings
+// キャラクター設定
 let characterCustomization = {
     player: {
         hairStyle: 'default',
@@ -65,39 +71,39 @@ let characterCustomization = {
     }
 };
 
-// Time Lapse Mode variables
+// タイムラプスモード変数
 let timeLapseInterval = null;
 let timeLapseStartTime = null;
 let isTimeLapseMode = false;
 let currentTransitionProgress = 0; // 0 = fully day, 1 = fully night
 let targetTransitionProgress = 0;
-const TIME_LAPSE_CYCLE_TIME = 60000; // 60 seconds in milliseconds (夜の長さを2倍にした)
+const TIME_LAPSE_CYCLE_TIME = 100000; // 100 seconds in milliseconds (夜を80秒に拡大)
 const TRANSITION_DURATION = 5000; // 5 seconds for smooth transition
 
-// Time Lapse Mode functions
+// タイムラプスモード関数
 function startTimeLapseMode() {
-    if (timeLapseInterval) return; // Already running
+    if (timeLapseInterval) return; // すでに実行中
     
     isTimeLapseMode = true;
     timeLapseStartTime = Date.now();
-    currentTransitionProgress = 0; // Start with day mode
+    currentTransitionProgress = 0; // 昼モードで開始
     targetTransitionProgress = 0;
     
-    // Start cycle - check every second for smooth transitions
+    // サイクル開始 - スムーズな遷移のために毎秒チェック
     timeLapseInterval = setInterval(() => {
         updateTimeLapseCycle();
-    }, 1000); // Check every second
+    }, 1000); // 毎秒チェック
     
-    // Initial state - start with day mode
+    // 初期状態 - 昼モードで開始
     applyNightMode(false);
     
-    // Update UI
+    // UIを更新
     const nightModeCheckbox = document.getElementById('night-mode');
     if (nightModeCheckbox) {
         nightModeCheckbox.checked = false;
     }
     
-    console.log('Time Lapse Mode started - beginning with day mode');
+    // タイムラプスモード開始 - 昼モードから開始
 }
 
 function stopTimeLapseMode() {
@@ -108,7 +114,7 @@ function stopTimeLapseMode() {
     isTimeLapseMode = false;
     timeLapseStartTime = null;
     
-    console.log('Time Lapse Mode stopped');
+    // タイムラプスモード停止
 }
 
 function updateTimeLapseCycle() {
@@ -117,73 +123,73 @@ function updateTimeLapseCycle() {
     const cycleTime = parseInt(TIME_LAPSE_CYCLE_TIME);
     const cyclePosition = (elapsedTime % cycleTime) / cycleTime;
     
-    // Calculate target transition progress based on cycle position
-    // 0-0.33: day mode (1 -> 0) - 20 seconds
-    // 0.33-1.0: night mode (0 -> 1) - 40 seconds
+    // サイクル位置に基づいて目標遷移進行度を計算
+    // 0-0.20: 昼モード (1 -> 0) - 20秒
+    // 0.20-1.0: 夜モード (0 -> 1) - 80秒
     let newTargetProgress;
-    if (cyclePosition < 0.33) {
-        // First third: day mode (1 -> 0)
-        newTargetProgress = 1 - (cyclePosition * 3); // 1 to 0 over 20 seconds
+    if (cyclePosition < 0.20) {
+        // 最初の5分の1: 昼モード (1 -> 0)
+        newTargetProgress = 1 - (cyclePosition * 5); // 20秒で1から0へ
     } else {
-        // Last two-thirds: night mode (0 -> 1)
-        newTargetProgress = (cyclePosition - 0.33) * 1.5; // 0 to 1 over 40 seconds
+        // 最後の4分の5: 夜モード (0 -> 1)
+        newTargetProgress = (cyclePosition - 0.20) * 1.25; // 80秒で0から1へ
     }
     
     targetTransitionProgress = newTargetProgress;
     
-    console.log(`Time Lapse Debug: cyclePosition=${cyclePosition.toFixed(3)}, targetProgress=${targetTransitionProgress.toFixed(3)}`);
+    // タイムラプスデバッグ: cyclePosition=${cyclePosition.toFixed(3)}, targetProgress=${targetTransitionProgress.toFixed(3)}
     
-    // Apply smooth transition
+    // スムーズな遷移を適用
     applySmoothNightMode();
 }
 
 function applySmoothNightMode() {
-    // Use target progress directly instead of smooth transition
-    // This prevents the "gakuri" sudden darkness
+    // スムーズな遷移の代わりに目標進行度を直接使用
+    // これにより「ガクッ」とした突然の暗さを防ぐ
     const nightIntensity = targetTransitionProgress;
     const dayIntensity = 1 - targetTransitionProgress;
     
-    // Day settings
+    // 昼の設定
     const dayAmbientIntensity = 0.7; // 増加 (0.5 → 0.7)
     const dayDirectionalIntensity = 1.0; // 増加 (0.8 → 1.0)
-    const dayClearColor = new THREE.Color(0xADD8E6); // Light blue (brighter)
+    const dayClearColor = new THREE.Color(0xADD8E6); // 薄い青（より明るく）
     
-    // Night settings - same as regular night mode
-    const nightAmbientIntensity = 0.05; // Same as regular night mode
-    const nightDirectionalIntensity = 0.05; // Same as regular night mode
-    const nightClearColor = new THREE.Color(0x111122); // Same as regular night mode
+    // 夜の設定 - 通常の夜モードと同じ
+    const nightAmbientIntensity = 0.05; // 通常の夜モードと同じ
+    const nightDirectionalIntensity = 0.05; // 通常の夜モードと同じ
+    const nightClearColor = new THREE.Color(0x111122); // 通常の夜モードと同じ
     
-    // Interpolate between day and night
+    // 昼と夜の間を補間
     const currentAmbientIntensity = dayAmbientIntensity * dayIntensity + nightAmbientIntensity * nightIntensity;
     const currentDirectionalIntensity = dayDirectionalIntensity * dayIntensity + nightDirectionalIntensity * nightIntensity;
     const currentClearColor = dayClearColor.clone().lerp(nightClearColor, nightIntensity);
     
-    // Apply interpolated values
+    // 補間値を適用
     if (ambientLight) {
         ambientLight.intensity = currentAmbientIntensity;
-        console.log(`Time Lapse: ambientLight intensity set to ${currentAmbientIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+        // タイムラプス: ambientLight intensity set to ${currentAmbientIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})
     }
     if (directionalLight) {
         directionalLight.intensity = currentDirectionalIntensity;
-        console.log(`Time Lapse: directionalLight intensity set to ${currentDirectionalIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+        // タイムラプス: directionalLight intensity set to ${currentDirectionalIntensity.toFixed(3)} (nightIntensity: ${nightIntensity.toFixed(3)})
     }
     if (renderer) {
         renderer.setClearColor(currentClearColor);
-        console.log(`Time Lapse: renderer clear color set to #${currentClearColor.getHexString()} (nightIntensity: ${nightIntensity.toFixed(3)})`);
+        // タイムラプス: renderer clear color set to #${currentClearColor.getHexString()} (nightIntensity: ${nightIntensity.toFixed(3)})
     }
     
-    // Handle street lights - match regular night mode behavior
+    // 街灯を処理 - 通常の夜モードの動作に合わせる
     if (streetLights && streetLights.length > 0) {
         streetLights.forEach(light => {
             const pointLight = light.children.find(child => child.isPointLight);
             if (pointLight) {
-                // Use direct intensity like regular night mode, not smooth transition
+                // スムーズな遷移ではなく、通常の夜モードのように直接強度を使用
                 pointLight.intensity = nightIntensity * gameSettings.nightModeLightIntensity;
             }
         });
     }
     
-    // Update UI checkbox (snap to nearest state)
+    // UIチェックボックスを更新（最も近い状態にスナップ）
     const shouldBeNightMode = nightIntensity > 0.5;
     gameSettings.nightModeEnabled = shouldBeNightMode;
     const nightModeCheckbox = document.getElementById('night-mode');
@@ -193,59 +199,59 @@ function applySmoothNightMode() {
 }
 
 function applyNightMode(isNight) {
-    console.log('applyNightMode called with:', isNight);
+    // applyNightModeが呼び出されました:
     
     if (isNight) {
-        // Apply night mode
-        console.log('Applying night mode');
+        // 夜モードを適用
+        // 夜モードを適用中
         if (ambientLight) {
             ambientLight.intensity = 0.05;
-            console.log('ambientLight intensity set to 0.05');
+            // ambientLight強度を0.05に設定
         }
         if (directionalLight) {
             directionalLight.intensity = 0.05;
-            console.log('directionalLight intensity set to 0.05');
+            // directionalLight強度を0.05に設定
         }
         if (renderer) {
             renderer.setClearColor(0x111122);
-            console.log('renderer clear color set to night');
+            // renderer clear colorを夜の色に設定
         }
         if (streetLights && streetLights.length > 0) {
             streetLights.forEach(light => {
                 const pointLight = light.children.find(child => child.isPointLight);
                 if (pointLight) pointLight.intensity = gameSettings.nightModeLightIntensity;
             });
-            console.log('street lights turned on');
+            // 街灯をオン
         }
     } else {
-        // Apply day mode
-        console.log('Applying day mode');
+        // 昼モードを適用
+        // 昼モードを適用中
         if (ambientLight) {
             ambientLight.intensity = 0.5;
-            console.log('ambientLight intensity set to 0.5');
+            // ambientLight強度を0.5に設定
         }
         if (directionalLight) {
             directionalLight.intensity = 0.8;
-            console.log('directionalLight intensity set to 0.8');
+            // directionalLight強度を0.8に設定
         }
         if (renderer) {
             renderer.setClearColor(0x87CEEB);
-            console.log('renderer clear color set to day');
+            // renderer clear colorを昼の色に設定
         }
         if (streetLights && streetLights.length > 0) {
             streetLights.forEach(light => {
                 const pointLight = light.children.find(child => child.isPointLight);
                 if (pointLight) pointLight.intensity = 0;
             });
-            console.log('street lights turned off');
+            // 街灯をオフ
         }
     }
 }
 
-// Night mode variables
+// 夜モード変数
 let isNightMode = false;
 
-// Character editor variables
+// キャラクターエディター変数
 let characterEditorScene = null;
 let characterEditorCamera = null;
 let characterEditorRenderer = null;
@@ -265,6 +271,8 @@ let characterEditorAnimationId = null;
         mgGunSound = document.getElementById('mgGunSound');
         rrGunSound = document.getElementById('rrGunSound');
         srGunSound = document.getElementById('srGunSound');
+        m1GunSound = document.getElementById('m1GunSound');
+        aiM1GunSound = document.getElementById('aiM1GunSound');
         aimgGunSound = document.getElementById('aimgGunSound');
         aiGunSound = document.getElementById('aiGunSound');
         explosionSound = document.getElementById('explosionSound');
@@ -274,6 +282,7 @@ let characterEditorAnimationId = null;
         aiSrGunSound = document.getElementById('aiSrGunSound');
         playerSgSound = document.getElementById('playerSgSound');
         aiSgSound = document.getElementById('aiSgSound');
+        clipSound = document.getElementById('clipSound');
         winScreen = document.getElementById('win-screen');
         playerHPDisplay = document.getElementById('player-hp-display');
         playerWeaponDisplay = document.getElementById('player-weapon-display'); // 追加
@@ -289,6 +298,9 @@ let characterEditorAnimationId = null;
         }
         scopeOverlay = document.getElementById('scope-overlay');
         cancelScopeButton = document.getElementById('cancel-scope-button');
+        crosshairCircle = document.getElementById('crosshair-circle');
+        crosshairPlusH = document.getElementById('crosshair-plus-h');
+        crosshairPlusV = document.getElementById('crosshair-plus-v');
         killCountDisplay = document.getElementById('kill-count-display');
         gameTimerDisplay = document.getElementById('game-timer-display');
         playerTeamKillsDisplay = document.getElementById('player-team-kills-display');
@@ -311,6 +323,7 @@ let characterEditorAnimationId = null;
         const rrCountSelect = document.getElementById('rr-count');
         const srCountSelect = document.getElementById('sr-count');
         const sgCountSelect = document.getElementById('sg-count');
+        const mrCountSelect = document.getElementById('mr-count');
         const aiCountRadios = document.querySelectorAll('input[name="ai-count"]');
         const autoAimRadios = document.querySelectorAll('input[name="auto-aim"]');
         const nightModeRadios = document.querySelectorAll('input[name="night-mode"]');
@@ -369,6 +382,7 @@ let characterEditorAnimationId = null;
         if (rrCountSelect) rrCountSelect.addEventListener('change', () => { gameSettings.rrCount = parseInt(rrCountSelect.value, 10); saveSettings(); });
         if (srCountSelect) srCountSelect.addEventListener('change', () => { gameSettings.srCount = parseInt(srCountSelect.value, 10); saveSettings(); });
         if (sgCountSelect) sgCountSelect.addEventListener('change', () => { gameSettings.sgCount = parseInt(sgCountSelect.value, 10); saveSettings(); });
+        if (mrCountSelect) mrCountSelect.addEventListener('change', () => { gameSettings.mrCount = parseInt(mrCountSelect.value, 10); saveSettings(); });
         const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
         if (defaultWeaponChecks.length > 0) {
             defaultWeaponChecks.forEach(check => {
@@ -434,6 +448,15 @@ let characterEditorAnimationId = null;
                 }
             });
         });
+        const barrelRespawnRadios = document.querySelectorAll('input[name="barrel-respawn"]');
+        barrelRespawnRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.barrelRespawn = radio.value === 'true';
+                    saveSettings();
+                }
+            });
+        });
         const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
         const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
         if (nightModeIntensitySlider) {
@@ -454,17 +477,66 @@ let characterEditorAnimationId = null;
                 if (selectedValue === 'default') {
                     gameSettings.mapType = 'default';
                     gameSettings.customMapName = '';
-                } else if (selectedValue === 'random') {
-                    gameSettings.mapType = 'random';
-                    gameSettings.customMapName = '';
                 } else if (selectedValue && selectedValue !== '---') {
                     // Custom map selected
                     gameSettings.mapType = 'custom';
                     gameSettings.customMapName = selectedValue;
-                    // Load saved settings for this custom map
-                    loadMapSettings(selectedValue);
                 }
+                
                 saveSettings();
+                
+                // 核のオプション：地面以外のすべてのメッシュを強制削除
+                debugLog('NUCLEAR OPTION: Deleting ALL mesh objects except ground...');
+                const allObjects = [];
+                scene.traverse((child) => {
+                    if (child && child.isMesh) {
+                        allObjects.push(child);
+                    }
+                });
+                
+                let deletedCount = 0;
+                for (const obj of allObjects) {
+                    // 地面だけは保護
+                    if (obj.userData.isGround || (obj.position && obj.position.y <= 0)) {
+                        debugLog('PROTECTING ground object:', obj.name || 'unnamed');
+                        continue;
+                    }
+                    
+                    debugLog('NUCLEAR DELETING:', obj.name || 'unnamed', 'type:', obj.userData.type, 'isHouseRoof:', obj.userData.isHouseRoof, 'position:', obj.position);
+                    
+                    // 親から削除
+                    if (obj.parent) {
+                        obj.parent.remove(obj);
+                    } else {
+                        scene.remove(obj);
+                    }
+                    
+                    // obstacles配列から削除
+                    const index = obstacles.indexOf(obj);
+                    if (index > -1) {
+                        obstacles.splice(index, 1);
+                    }
+                    
+                    // メモリ解放
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) obj.material.dispose();
+                    
+                    deletedCount++;
+                }
+                
+                debugLog(`NUCLEAR OPTION: Deleted ${deletedCount} objects`);
+                
+                // ハードリセット：完全なゲーム再起動
+                debugLog('Performing hard reset for map switching...');
+                if (isGameRunning && !isPaused) {
+                    restartGame();
+                } else {
+                    // ポーズ中や未開始時はバックグラウンドで開始しない
+                    debugLog('Map switch deferred until Start/Resume.');
+                }
+                
+                // ユーザーインタラクション後に音声を初期化
+                initializeAudio();
             });
         }
         const saveMapSettingsBtn = document.getElementById('save-map-settings-btn');
@@ -474,9 +546,9 @@ let characterEditorAnimationId = null;
                 const selectedValue = unifiedMapSelector ? unifiedMapSelector.value : '';
                 let selectedMapName = '';
                 
-                if (selectedValue === 'default' || selectedValue === 'random' || selectedValue === '---') {
+                if (selectedValue === 'default' || selectedValue === '---') {
                     // For built-in maps, use a generic name or skip saving
-                    selectedMapName = selectedValue === 'default' ? 'DefaultMap' : 'RandomMap';
+                    selectedMapName = selectedValue === 'default' ? 'DefaultMap' : '';
                 } else {
                     selectedMapName = selectedValue;
                 }
@@ -599,11 +671,6 @@ function updateUnifiedMapSelector() {
     defaultOption.textContent = 'DefaultMap';
     unifiedMapSelector.appendChild(defaultOption);
     
-    const randomOption = document.createElement('option');
-    randomOption.value = 'random';
-    randomOption.textContent = 'RandomMap';
-    unifiedMapSelector.appendChild(randomOption);
-    
     // Add separator
     const separator = document.createElement('option');
     separator.value = '---';
@@ -639,10 +706,6 @@ function updateUnifiedMapSelector() {
     // Check if we have saved settings and valid custom map
     if (gameSettings.mapType === 'custom' && gameSettings.customMapName && allCustomMaps[gameSettings.customMapName]) {
         currentValue = gameSettings.customMapName;
-    } else if (gameSettings.mapType === 'random') {
-        currentValue = 'random';
-    } else if (gameSettings.mapType === 'default') {
-        currentValue = 'default';
     } else {
         // If mapType is not set or invalid, default to 'default'
         gameSettings.mapType = 'default';
@@ -677,12 +740,23 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x111122);
+renderer.setClearColor(0x87CEEB);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
-const ambientLight = new THREE.AmbientLight(0xffffff, 0);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
 directionalLight.position.set(0, 10, 5);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.width = 2048;
+directionalLight.shadow.mapSize.height = 2048;
+directionalLight.shadow.camera.near = 0.5;
+directionalLight.shadow.camera.far = 50;
+directionalLight.shadow.camera.left = -50;
+directionalLight.shadow.camera.right = 50;
+directionalLight.shadow.camera.top = 50;
+directionalLight.shadow.camera.bottom = -50;
 scene.add(directionalLight);
 const clock = new THREE.Clock();
 const player = new THREE.Object3D();
@@ -691,6 +765,7 @@ scene.add(player);
 player.position.copy(PLAYER_INITIAL_POSITION);
 player.rotation.y = Math.PI;
 camera.position.set(0, 0, 0);
+camera.position.z = 5; // カメラを少し後ろに配置
 let isGameRunning = false;
 let playerTargetHeight = 2.0;
 let isCrouchingToggle = false;
@@ -710,21 +785,27 @@ const WEAPON_MG = 'machinegun';
 const WEAPON_RR = 'rocketlauncher';
 const WEAPON_SR = 'sniperrifle';
 const WEAPON_SG = 'shotgun';
+const WEAPON_MR = 'm1rifle';
 let currentWeapon = WEAPON_PISTOL;
 let ammoMG = 0;
 let ammoRR = 0;
 let ammoSR = 0;
 let ammoSG = 0;
+let ammoMR = 0;
 let playerMGReloadUntil = 0;
+let playerMRReloadUntil = 0;
 const MAX_AMMO_MG = 50;
 const MAX_AMMO_RR = 3;
 const MAX_AMMO_SR = 5;
 const MAX_AMMO_SG = 10;
+const MAX_AMMO_MR = 8;
 const FIRE_RATE_PISTOL = 0.3;
 const FIRE_RATE_MG = 0.1;
 const FIRE_RATE_RR = 1.5;
 const FIRE_RATE_SR = 2.0;
 const FIRE_RATE_SG = 0.8;
+const FIRE_RATE_MR = 0.3;
+const MR_PROJECTILE_SPEED_MULT = 1.6;
 const SHOTGUN_PELLET_COUNT = 7;
 const SHOTGUN_SPREAD_ANGLE = Math.PI / 16;
 const SHOTGUN_RANGE = 15;
@@ -733,7 +814,9 @@ const WEAPON_SG_SOUND = 'sgun.mp3';
 const AI_WEAPON_SG_SOUND = 'aisgun.mp3';
 const ENABLE_EXPERIMENTAL_AI_FLOW = false;
 // Enable rooftop logic so AI can find ladders, climb to rooftops and engage players there.
-const ENABLE_AI_ROOFTOP_LOGIC = true;
+// 家の屋根には登れないようにする - 完全に無効化
+const ENABLE_AI_ROOFTOP_LOGIC = true; // デフォルトマップでもAIが塔に登れるように有効化
+const FORCE_AI_ROOFTOP_TEST = false; // テスト用: AIを強制的に塔へ向かわせる
 
 function isInfiniteDefaultWeaponActive(weaponType) {
     return false;
@@ -746,6 +829,7 @@ function applyPlayerDefaultWeaponLoadout() {
     ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
     ammoSR = selected === WEAPON_SR ? MAX_AMMO_SR : 0;
     ammoSG = selected === WEAPON_SG ? MAX_AMMO_SG : 0;
+    ammoMR = selected === WEAPON_MR ? MAX_AMMO_MR : 0;
 }
 
 function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
@@ -760,6 +844,7 @@ function applyAIDefaultWeaponLoadout(ai) {
     ai.ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
     ai.ammoSR = selected === WEAPON_SR ? MAX_AMMO_SR : 0;
     ai.ammoSG = selected === WEAPON_SG ? MAX_AMMO_SG : 0;
+    ai.ammoMR = selected === WEAPON_MR ? MAX_AMMO_MR : 0;
 }
 
 function getPlayerFallbackWeapon() {
@@ -775,6 +860,7 @@ function switchPlayerToFallbackWeapon() {
     if (fallback === WEAPON_RR && ammoRR <= 0) ammoRR = MAX_AMMO_RR;
     if (fallback === WEAPON_SR && ammoSR <= 0) ammoSR = MAX_AMMO_SR;
     if (fallback === WEAPON_SG && ammoSG <= 0) ammoSG = MAX_AMMO_SG;
+    if (fallback === WEAPON_MR && ammoMR <= 0) ammoMR = MAX_AMMO_MR;
 }
 
 function switchAIToFallbackWeapon(ai) {
@@ -787,6 +873,7 @@ function switchAIToFallbackWeapon(ai) {
     if (fallback === WEAPON_RR && ai.ammoRR <= 0) ai.ammoRR = MAX_AMMO_RR;
     if (fallback === WEAPON_SR && ai.ammoSR <= 0) ai.ammoSR = MAX_AMMO_SR;
     if (fallback === WEAPON_SG && ai.ammoSG <= 0) ai.ammoSG = MAX_AMMO_SG;
+    if (fallback === WEAPON_MR && ai.ammoMR <= 0) ai.ammoMR = MAX_AMMO_MR;
 }
 
 function showReloadingText() {
@@ -812,7 +899,7 @@ function showReloadingText() {
     setTimeout(() => {
         if (relAudio) {
             relAudio.cloneNode(true).play().catch(e => {
-                console.log('Reload sound play failed:', e);
+                // Reload sound play failed:
             });
         }
     }, 500);
@@ -823,17 +910,45 @@ function hideReloadingText() {
     if (el) el.style.display = 'none';
 }
 
-function playReloadSound() {
-    if (relAudio) {
-        relAudio.cloneNode(true).play().catch(e => {
-            console.log('Reload sound play failed:', e);
+function playSound(audioElement) {
+    if (!audioElement) return;
+    
+    try {
+        // 既存の再生中の同じ音声を停止
+        const allSameAudio = document.querySelectorAll(`audio[id="${audioElement.id}"]`);
+        allSameAudio.forEach(audio => {
+            if (!audio.paused && audio !== audioElement) {
+                audio.pause();
+                audio.currentTime = 0;
+            }
         });
+        
+        // 新しいインスタンスを作成して再生
+        const soundClone = audioElement.cloneNode(true);
+        soundClone.volume = audioElement.volume || 1.0;
+        soundClone.play().catch(error => {
+            // Sound play failed:
+        });
+    } catch (error) {
+        // Sound error:
     }
 }
 
+function playReloadSound() {
+    if (relAudio) {
+        setTimeout(() => {
+            playSound(relAudio);
+        }, 500);
+    }
+}
+
+let lastFloatingCleanupTime = 0;
+const FLOATING_CLEANUP_INTERVAL = 5.0; // 5秒ごとにクリーンアップ
 let lastFireTime = -FIRE_RATE_PISTOL;
 let isMouseButtonDown = false;
 let isScoping = false;
+let isRifleZoomed = false;
+const MR_ZOOM_FOV = 55;
 let isElevating = false;
 let elevatingTargetY = 0;
 let elevatingTargetObstacle = null;
@@ -998,6 +1113,10 @@ fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.
 function saveSettings() {
     gameSettings.autoAim = document.querySelector('input[name="auto-aim"]:checked').value;
     gameSettings.killCamMode = document.querySelector('input[name="killcam-mode"]:checked').value;
+    const barrelRespawnRadio = document.querySelector('input[name="barrel-respawn"]:checked');
+    if (barrelRespawnRadio) {
+        gameSettings.barrelRespawn = barrelRespawnRadio.value === 'true';
+    }
     gameSettings.nightModeEnabled = document.getElementById('night-mode').checked;
     gameSettings.nightModeIntensity = document.getElementById('night-mode-intensity').value;
     gameSettings.timeLapseMode = document.getElementById('time-lapse-mode').checked;
@@ -1005,7 +1124,7 @@ function saveSettings() {
 }
 
 function loadSettings() {
-    console.log('loadSettings() called');
+    // loadSettings() called
     const savedSettings = localStorage.getItem('gameSettings');
     if (savedSettings) {
         const parsedSavedSettings = JSON.parse(savedSettings);
@@ -1023,6 +1142,9 @@ function loadSettings() {
         }
         if (parsedSavedSettings.defaultWeapon === undefined) {
             parsedSavedSettings.defaultWeapon = 'pistol';
+        }
+        if (parsedSavedSettings.mrCount === undefined) {
+            parsedSavedSettings.mrCount = gameSettings.mrCount;
         }
         Object.assign(gameSettings, parsedSavedSettings);
         // Add default for buttonPositions if it doesn't exist
@@ -1043,6 +1165,9 @@ function loadSettings() {
         });
         document.querySelectorAll('input[name="killcam-mode"]').forEach(radio => {
             radio.checked = (radio.value === gameSettings.killCamMode);
+        });
+        document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
+            radio.checked = (radio.value === String(gameSettings.barrelRespawn));
         });
         document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
             check.checked = (gameSettings.defaultWeapon === check.value);
@@ -1213,6 +1338,7 @@ function loadMapSettings(mapName) {
                 document.getElementById('rr-count').value = gameSettings.rrCount;
                 document.getElementById('sr-count').value = gameSettings.srCount;
                 if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
+                if (document.getElementById('mr-count')) document.getElementById('mr-count').value = gameSettings.mrCount;
                 document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
                     check.checked = (gameSettings.defaultWeapon === check.value);
                 });
@@ -1233,6 +1359,9 @@ function loadMapSettings(mapName) {
                 });
                 document.querySelectorAll('input[name="killcam-mode"]').forEach(radio => {
                     radio.checked = (radio.value === gameSettings.killCamMode);
+                });
+                document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
+                    radio.checked = (radio.value === String(gameSettings.barrelRespawn));
                 });
                 const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
                 const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
@@ -1264,11 +1393,11 @@ function loadMapSettings(mapName) {
                                 fireButton.style.left = '';
                                 fireButton.style.top = '';
                                 fireButton.style.display = 'flex'; // モバイルなら表示
-                                console.log('loadSettings(): fireButton display set to flex (mobile)');
+                                // loadSettings(): fireButton display set to flex (mobile)
                             }
                         } else {
                             fireButton.style.display = 'none'; // PCなら非表示
-                            console.log('loadSettings(): fireButton display set to none (PC)');
+                            // loadSettings(): fireButton display set to none (PC)
                         }
                     }
                     if (crouchButton) {
@@ -1279,11 +1408,11 @@ function loadMapSettings(mapName) {
                                 crouchButton.style.left = '';
                                 crouchButton.style.top = '';
                                 crouchButton.style.display = 'flex'; // モバイルなら表示
-                                console.log('loadSettings(): crouchButton display set to flex (mobile)');
+                                // loadSettings(): crouchButton display set to flex (mobile)
                             }
                         } else {
                             crouchButton.style.display = 'none'; // PCなら非表示
-                            console.log('loadSettings(): crouchButton display set to none (PC)');
+                            // loadSettings(): crouchButton display set to none (PC)
                         }
                     }
                     if (joystickZone) {
@@ -1294,11 +1423,11 @@ function loadMapSettings(mapName) {
                                 joystickZone.style.right = '';
                                 joystickZone.style.top = '';
                                 joystickZone.style.display = 'block'; // モバイルなら表示
-                                console.log('loadSettings(): joystickZone display set to block (mobile)');
+                                // loadSettings(): joystickZone display set to block (mobile)
                             }
                         } else {
                             joystickZone.style.display = 'none'; // PCなら非表示
-                            console.log('loadSettings(): joystickZone display set to none (PC)');
+                            // loadSettings(): joystickZone display set to none (PC)
                         }
                     }
                     if (followButton) { // 追加
@@ -1308,12 +1437,12 @@ function loadMapSettings(mapName) {
                                 followButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
                                 followButton.style.left = '';
                                 followButton.style.top = '';
-                                console.log('loadSettings(): followButton display updated (mobile)');
+                                // loadSettings(): followButton display updated (mobile)
                                 // followButtonの表示/非表示はstartGame()内のゲームモード判定に任せる
                             }
                         } else {
                             followButton.style.display = 'none'; // PCなら非表示
-                            console.log('loadSettings(): followButton display set to none (PC)');
+                            // loadSettings(): followButton display set to none (PC)
                         }
                     }
         
@@ -1360,6 +1489,8 @@ let playerGunSound;
 let mgGunSound;
 let rrGunSound;
 let srGunSound;
+let m1GunSound;
+let aiM1GunSound;
 let aimgGunSound;
 let aiGunSound;
 let explosionSound;
@@ -1369,6 +1500,7 @@ let gameOverScreen;
 let aiSrGunSound;
 let playerSgSound;
 let aiSgSound;
+let clipSound;
 let winScreen;
 let playerHPDisplay;
 let playerWeaponDisplay; // 追加
@@ -1380,6 +1512,9 @@ let followStatusDisplay; // 追加
 let followButton; // 追加
 let scopeOverlay;
 let cancelScopeButton;
+let crosshairCircle;
+let crosshairPlusH;
+let crosshairPlusV;
 let killCountDisplay;
 let playerKills = 0;
 let playerTeamKills = 0;
@@ -1532,6 +1667,8 @@ const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
 floor.rotation.x = -Math.PI / 2;
 floor.position.y = -FLOOR_HEIGHT;
+floor.receiveShadow = true;
+floor.userData.isGround = true; // 地面を保護するフラグ
 scene.add(floor);
 const edgeGeometry = new THREE.TorusGeometry(ARENA_RADIUS, ARENA_EDGE_THICKNESS, 8, 64);
 const edgeMaterial = new THREE.MeshLambertMaterial({ color: 0x880000 });
@@ -1576,10 +1713,12 @@ function createStreetLights() {
 }
 
 const obstacles = [];
+const houses = [];
 const HIDING_SPOTS = [];
 const weaponPickups = [];
 const ladderSwitches = [];
 const respawningPickups = [];
+const respawningBarrels = [];
 const RESPAWN_DELAY = 60;
 const AI_INITIAL_POSITION = new THREE.Vector3(0, 0, 20);
 const NUM_RANDOM_OBSTACLES = 20;
@@ -1741,6 +1880,7 @@ function createWeaponPickups(aiList = []) {
     for (let i = 0; i < gameSettings.rrCount; i++) weaponTypes.push({ name: 'RL', type: WEAPON_RR });
     for (let i = 0; i < gameSettings.srCount; i++) weaponTypes.push({ name: 'SR', type: WEAPON_SR });
     for (let i = 0; i < gameSettings.sgCount; i++) weaponTypes.push({ name: 'SG', type: WEAPON_SG });
+    for (let i = 0; i < gameSettings.mrCount; i++) weaponTypes.push({ name: 'MR', type: WEAPON_MR });
 
     shuffle(weaponTypes);
 
@@ -1923,11 +2063,13 @@ function addRooftopFeatures(obstacle, ladderFace) {
                 wall2.position.set(obstacle.position.x + def.ox, rooftopY + (def.h / 2), obstacle.position.z + def.oz + offset);
             }
             wall1.userData.isWall = true;
+            wall1.userData.isRooftop = true;
             wall1.userData.parentBuildingRef = obstacle;
             scene.add(wall1);
             obstacles.push(wall1);
             obstacle.userData.rooftopParts.push(wall1);
             wall2.userData.isWall = true;
+            wall2.userData.isRooftop = true;
             wall2.userData.parentBuildingRef = obstacle;
             scene.add(wall2);
             obstacles.push(wall2);
@@ -1937,17 +2079,19 @@ function addRooftopFeatures(obstacle, ladderFace) {
             const wall = new THREE.Mesh(wallGeometry, wallMaterial);
             wall.position.set(obstacle.position.x + def.ox, rooftopY + (def.h / 2), obstacle.position.z + def.oz);
             wall.userData.isWall = true;
+            wall.userData.isRooftop = true;
             wall.userData.parentBuildingRef = obstacle;
             scene.add(wall);
             obstacles.push(wall);
             obstacle.userData.rooftopParts.push(wall);
         }
     }
+
 }
 
 function createHollowObstacle(x, z, width = 8, height = 5, depth = 8, color = 0xff4444, hp = 1, holeConfigs = [], isNew = true) {
-    console.log('=== HOLLOW OBSTACLE (WORKING VERSION) ===');
-    console.log('Building height:', height);
+    debugLog('=== 中空障害物（動作バージョン） ===');
+    debugLog('建物の高さ:', height);
     
     const building = new THREE.Group();
     building.position.set(x, 0, z);
@@ -1989,7 +2133,7 @@ function createHollowObstacle(x, z, width = 8, height = 5, depth = 8, color = 0x
     
     scene.add(building);
     
-    console.log('=== CREATION COMPLETE ===');
+    debugLog('=== 作成完了 ===');
 }
 
 // 基本の壁形状を作成する補助関数
@@ -2008,8 +2152,8 @@ function createFrontWallWithDoor(building, width, height, thickness, zPos, mater
     const doorWidth = 2.0;
     const doorHeight = 3.2; // プレイヤーの高さ3.0m + 余裕
     
-    console.log('FRONT WALL: door width =', doorWidth, 'door height =', doorHeight);
-    console.log('Building width =', width, 'height =', height);
+    debugLog('FRONT WALL: door width =', doorWidth, 'door height =', doorHeight);
+    debugLog('Building width =', width, 'height =', height);
     
     // TOP PIECE - ドアの上
     const topHeight = height - doorHeight;
@@ -2020,7 +2164,7 @@ function createFrontWallWithDoor(building, width, height, thickness, zPos, mater
         topPiece.userData.isWall = true;
         building.add(topPiece);
         obstacles.push(topPiece);
-        console.log('Top piece: height =', topHeight, 'y =', doorHeight + topHeight/2);
+        debugLog('Top piece: height =', topHeight, 'y =', doorHeight + topHeight/2);
     }
     
     // LEFT PIECE - ドアの左
@@ -2032,7 +2176,7 @@ function createFrontWallWithDoor(building, width, height, thickness, zPos, mater
         leftPiece.userData.isWall = true;
         building.add(leftPiece);
         obstacles.push(leftPiece);
-        console.log('Left piece: width =', leftWidth, 'y =', doorHeight/2);
+        debugLog('Left piece: width =', leftWidth, 'y =', doorHeight/2);
     }
     
     // RIGHT PIECE - ドアの右
@@ -2043,10 +2187,10 @@ function createFrontWallWithDoor(building, width, height, thickness, zPos, mater
         rightPiece.userData.isWall = true;
         building.add(rightPiece);
         obstacles.push(rightPiece);
-        console.log('Right piece: width =', leftWidth, 'y =', doorHeight/2);
+        debugLog('Right piece: width =', leftWidth, 'y =', doorHeight/2);
     }
     
-    console.log('Front wall with door created using BoxGeometry method');
+    debugLog('Front wall with door created using BoxGeometry method');
 }
 
 function createBackWallWithWindows(building, width, height, thickness, zPos, material) {
@@ -2056,7 +2200,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
     const windowY = 0.3; // プレイヤーの視線レベルにさらに下げる
     const windowSpacing = 0.5; // 窓の間隔
     
-    console.log('BACK WALL: window width =', windowWidth, 'height =', windowHeight, 'y =', windowY);
+    debugLog('BACK WALL: window width =', windowWidth, 'height =', windowHeight, 'y =', windowY);
     
     // TOP PIECE - 窓の上
     const topHeight = height - windowY - windowHeight;
@@ -2067,7 +2211,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
         topPiece.userData.isWall = true;
         building.add(topPiece);
         obstacles.push(topPiece);
-        console.log('Back top piece: height =', topHeight, 'y =', windowY + windowHeight + topHeight/2);
+        debugLog('Back top piece: height =', topHeight, 'y =', windowY + windowHeight + topHeight/2);
     }
     
     // BOTTOM PIECE - 窓の下
@@ -2079,7 +2223,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
         bottomPiece.userData.isWall = true;
         building.add(bottomPiece);
         obstacles.push(bottomPiece);
-        console.log('Back bottom piece: height =', bottomHeight, 'y =', bottomHeight/2);
+        debugLog('Back bottom piece: height =', bottomHeight, 'y =', bottomHeight/2);
     }
     
     // LEFT PIECE - 左の窓の左
@@ -2091,7 +2235,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
         leftPiece.userData.isWall = true;
         building.add(leftPiece);
         obstacles.push(leftPiece);
-        console.log('Back left piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
+        debugLog('Back left piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
     }
     
     // MIDDLE PIECE - 窓の間
@@ -2101,7 +2245,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
     middlePiece.userData.isWall = true;
     building.add(middlePiece);
     obstacles.push(middlePiece);
-    console.log('Back middle piece: width =', windowSpacing, 'y =', windowY + windowHeight/2);
+    debugLog('Back middle piece: width =', windowSpacing, 'y =', windowY + windowHeight/2);
     
     // RIGHT PIECE - 右の窓の右
     if (leftWidth > 0) {
@@ -2111,10 +2255,10 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
         rightPiece.userData.isWall = true;
         building.add(rightPiece);
         obstacles.push(rightPiece);
-        console.log('Back right piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
+        debugLog('Back right piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
     }
     
-    console.log('Back wall with windows created using BoxGeometry method');
+    debugLog('Back wall with windows created using BoxGeometry method');
 }
 
 function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, material, rotationY) {
@@ -2123,7 +2267,7 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
     const windowHeight = 1.2;
     const windowY = 0.3; // プレイヤーの視線レベルにさらに下げる
     
-    console.log('SIDE WALL: window width =', windowWidth, 'height =', windowHeight, 'y =', windowY);
+    debugLog('SIDE WALL: window width =', windowWidth, 'height =', windowHeight, 'y =', windowY);
     
     // TOP PIECE - 窓の上
     const topHeight = height - windowY - windowHeight;
@@ -2134,7 +2278,7 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
         topPiece.userData.isWall = true;
         building.add(topPiece);
         obstacles.push(topPiece);
-        console.log('Side top piece: height =', topHeight, 'y =', windowY + windowHeight + topHeight/2);
+        debugLog('Side top piece: height =', topHeight, 'y =', windowY + windowHeight + topHeight/2);
     }
     
     // BOTTOM PIECE - 窓の下
@@ -2146,7 +2290,7 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
         bottomPiece.userData.isWall = true;
         building.add(bottomPiece);
         obstacles.push(bottomPiece);
-        console.log('Side bottom piece: height =', bottomHeight, 'y =', bottomHeight/2);
+        debugLog('Side bottom piece: height =', bottomHeight, 'y =', bottomHeight/2);
     }
     
     // LEFT PIECE - 窓の左
@@ -2158,7 +2302,7 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
         leftPiece.userData.isWall = true;
         building.add(leftPiece);
         obstacles.push(leftPiece);
-        console.log('Side left piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
+        debugLog('Side left piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
     }
     
     // RIGHT PIECE - 窓の右
@@ -2169,10 +2313,10 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
         rightPiece.userData.isWall = true;
         building.add(rightPiece);
         obstacles.push(rightPiece);
-        console.log('Side right piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
+        debugLog('Side right piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
     }
     
-    console.log('Side wall with window created using BoxGeometry method');
+    debugLog('Side wall with window created using BoxGeometry method');
 }
 
 function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth = 2, color = 0xff0000, hp = 1) {
@@ -2198,16 +2342,17 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     const box = new THREE.Mesh(boxGeometry, material);
     box.position.set(x, (height / 2) - FLOOR_HEIGHT, z);
     box.userData.hp = hp;
+    box.castShadow = false; // 影をキャストしない
     scene.add(box);
     obstacles.push(box);
     let ladderFace = -1;
     if (height > 6) {
         ladderFace = createAndAttachLadder(box);
+        // Ensure tall obstacles (towers) always get rooftop cover.
+        addRooftopFeatures(box, ladderFace);
     }
-    // if (height >= 8) {
-    //     createWindows(box, width, height, depth);
-    //     addRooftopFeatures(box, ladderFace);
-    // }
+    // 家の屋根には登れないようにする - 屋上機能を無効化
+    // addRooftopFeatures(box, ladderFace); // 家には梯子を設置しない
     const HIDING_DISTANCE = 1.5;
     HIDING_SPOTS.push({ position: new THREE.Vector3(x + HIDING_DISTANCE, 0, z + HIDING_DISTANCE), obstacle: box });
     HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z + HIDING_DISTANCE), obstacle: box });
@@ -2215,16 +2360,58 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z - HIDING_DISTANCE), obstacle: box });
 }
 
-function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, hp = 8) {
+function createExplosiveBarrel(x, z, color = 0xe74c3c, radius = 0.75, height = 2.4) {
+    const geometry = new THREE.CylinderGeometry(radius, radius, height, 20);
+    const material = new THREE.MeshLambertMaterial({ color: color });
+    const barrel = new THREE.Mesh(geometry, material);
+    barrel.position.set(x, (height / 2) - FLOOR_HEIGHT, z);
+    barrel.userData.type = 'barrel';
+    barrel.userData.color = color;
+    barrel.userData.radius = radius;
+    barrel.userData.height = height;
+    barrel.userData.spawnPos = new THREE.Vector3(x, barrel.position.y, z);
+    barrel.userData.hp = 1;
+    barrel.castShadow = false;
+    scene.add(barrel);
+    obstacles.push(barrel);
+    const HIDING_DISTANCE = radius + 0.6;
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x + HIDING_DISTANCE, 0, z), obstacle: barrel });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z), obstacle: barrel });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x, 0, z + HIDING_DISTANCE), obstacle: barrel });
+    HIDING_SPOTS.push({ position: new THREE.Vector3(x, 0, z - HIDING_DISTANCE), obstacle: barrel });
+}
+
+// マテリアルを安全に破棄する関数（配列対応）
+function disposeMaterial(material) {
+    if (!material) return;
+    
+    if (Array.isArray(material)) {
+        // マテリアル配列の場合
+        material.forEach(mat => {
+            if (mat && mat.dispose) {
+                mat.dispose();
+            }
+        });
+    } else if (material.dispose) {
+        // 単一マテリアルの場合
+        material.dispose();
+    }
+}
+
+function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, hp = 8, rotation = 0) {
     // Initialize textures if not done yet
     initializeTextures();
     
     const house = new THREE.Group();
-    house.position.set(x, 0, z);
+    house.position.set(x, height / 2 - FLOOR_HEIGHT, z); // 地面に完全に接地させる
     
-    // ランダムな入口向きを追加
-    const randomRotation = Math.floor(Math.random() * 4) * (Math.PI / 2); // 0, 90, 180, 270度
-    house.rotation.y = randomRotation;
+    // 回転角度を設定
+    if (rotation !== undefined) {
+        house.rotation.y = rotation;
+    } else if (arguments.length <= 2) { // パラメータがx, zのみの場合はランダム
+        const randomRotation = Math.floor(Math.random() * 4) * (Math.PI / 2); // 0, 90, 180, 270度
+        house.rotation.y = randomRotation;
+    }
 
     const material = new THREE.MeshLambertMaterial({ 
         color: color, 
@@ -2233,106 +2420,234 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
 
     const thickness = 0.2;
 
-    // 穴あき壁を生成する共通関数
-    function createWallMesh(w, h, t, mat, holes = []) {
-        const shape = new THREE.Shape();
-        shape.moveTo(-w / 2, 0);
-        shape.lineTo(w / 2, 0);
-        shape.lineTo(w / 2, h);
-        shape.lineTo(-w / 2, h);
-        shape.lineTo(-w / 2, 0);
-
-        holes.forEach(hole => {
-            const holePath = new THREE.Path();
-            holePath.moveTo(hole.x - hole.w / 2, hole.y);
-            holePath.lineTo(hole.x + hole.w / 2, hole.y);
-            holePath.lineTo(hole.x + hole.w / 2, hole.y + hole.h);
-            holePath.lineTo(hole.x - hole.w / 2, hole.y + hole.h);
-            holePath.lineTo(hole.x - hole.w / 2, hole.y);
-            shape.holes.push(holePath);
-        });
-
-        const geometry = new THREE.ExtrudeGeometry(shape, {
-            depth: t,
-            bevelEnabled: false
-        });
-        const mesh = new THREE.Mesh(geometry, mat);
-        return mesh;
+    // 外壁は指定色、内壁は濃い色に固定（光の影響を受けにくくする）
+    const baseColor = new THREE.Color(color);
+    const baseHSL = { h: 0, s: 0, l: 0 };
+    baseColor.getHSL(baseHSL);
+    const exteriorColor = new THREE.Color().setHSL(baseHSL.h, baseHSL.s, Math.min(1, baseHSL.l * 1.0));
+    const interiorColor = new THREE.Color().setHSL(baseHSL.h, baseHSL.s, Math.max(0, baseHSL.l * 0.55));
+    const exteriorMaterial = new THREE.MeshStandardMaterial({
+        color: exteriorColor,
+        emissive: exteriorColor.clone().multiplyScalar(0.12),
+        roughness: 0.95,
+        metalness: 0.0,
+        side: THREE.DoubleSide
+    });
+    const interiorMaterial = new THREE.MeshStandardMaterial({
+        color: interiorColor,
+        emissive: new THREE.Color(0x000000),
+        roughness: 0.98,
+        metalness: 0.0,
+        side: THREE.DoubleSide
+    });
+    
+    // 両面マテリアルを作成（内側と外側で色を塗り分け）
+    function createDualSidedWallMaterial(exteriorMat, interiorMat) {
+        const materials = [
+            exteriorMat, // +X面（外側）
+            interiorMat, // -X面（内側）
+            exteriorMat, // +Y面（上面）
+            exteriorMat, // -Y面（下面）
+            exteriorMat, // +Z面（外側）
+            interiorMat  // -Z面（内側）
+        ];
+        return materials;
     }
 
-    // 1. 床 - 削除して内部移動を可能に
+    function addHouseWallSegmentMesh(w, h, t, pos, rotY = 0) {
+        const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, t),
+            createDualSidedWallMaterial(exteriorMaterial, interiorMaterial)
+        );
+        mesh.position.copy(pos);
+        mesh.rotation.y = rotY;
+        mesh.userData.isWall = true;
+        mesh.userData.isHouseWall = true;
+        mesh.castShadow = false;
+        mesh.geometry.computeBoundingBox();
+        mesh.geometry.computeBoundingSphere();
+        house.add(mesh);
+    }
+
+    // 1. 床 - 完全に削除して内部移動を可能に
     // const floor = new THREE.Mesh(
     //     new THREE.BoxGeometry(width, thickness, depth),
     //     material
     // );
     // floor.position.y = thickness / 2;
-    // floor.receiveShadow = true;
     // house.add(floor);
 
     // 2. 正面壁 - ドア部分を空けて2つの壁パーツに分ける
-    console.log('Creating front wall without door section');
     
     // 左側の壁
-    const leftWallWidth = (width - 2) / 2; // ドア幅2mを引いて半分に
+    const leftWallWidth = (width - 2.5) / 2; // ドア幅2.5mを引いて半分に
     const frontLeftWall = new THREE.Mesh(
         new THREE.BoxGeometry(leftWallWidth, height, thickness),
-        material
+        createDualSidedWallMaterial(exteriorMaterial, interiorMaterial)
     );
-    frontLeftWall.position.set(-width/2 + leftWallWidth/2, height/2, depth / 2 - thickness/2);
+    frontLeftWall.position.set(-width/2 + leftWallWidth/2, 0, depth / 2);
     frontLeftWall.userData.isWall = true;
+    frontLeftWall.userData.isHouseWall = true;
+    frontLeftWall.castShadow = false; // 影をキャストしない
+    // 境界ボックスを計算して確実なコリジョンを保証
+    frontLeftWall.geometry.computeBoundingBox();
+    frontLeftWall.geometry.computeBoundingSphere();
     house.add(frontLeftWall);
-    obstacles.push(frontLeftWall);
+    // obstacles.push(frontLeftWall); // コリジョンは専用コライダーで処理
     
     // 右側の壁
     const rightWallPart = new THREE.Mesh(
         new THREE.BoxGeometry(leftWallWidth, height, thickness),
-        material
+        createDualSidedWallMaterial(exteriorMaterial, interiorMaterial)
     );
-    rightWallPart.position.set(width/2 - leftWallWidth/2, height/2, depth / 2 - thickness/2);
+    rightWallPart.position.set(width/2 - leftWallWidth/2, 0, depth / 2);
     rightWallPart.userData.isWall = true;
+    rightWallPart.userData.isHouseWall = true;
+    rightWallPart.castShadow = false; // 影をキャストしない
+    // 境界ボックスを計算して確実なコリジョンを保証
+    rightWallPart.geometry.computeBoundingBox();
+    rightWallPart.geometry.computeBoundingSphere();
     house.add(rightWallPart);
-    obstacles.push(rightWallPart);
-    
-    console.log('Door opening created - no wall at center');
+    // obstacles.push(rightWallPart); // コリジョンは専用コライダーで処理
 
-    // 3. 背面壁 (窓2つ)
-    const backWall = createWallMesh(width, height, thickness, material, [
-        { x: -width/4, y: 1.5, w: 1.5, h: 1.5 },
-        { x: width/4, y: 1.5, w: 1.5, h: 1.5 }
-    ]);
-    backWall.position.set(0, 0, -depth / 2);
-    backWall.userData.isWall = true; // コリジョン用
-    house.add(backWall);
-    obstacles.push(backWall); // 障害物リストに追加
+    // 3. 背面壁 (窓2つ) - 分割Boxで生成
+    // 4. 左壁 (窓1つ) - 分割Boxで生成
+    // 5. 右壁 (窓1つ) - 分割Boxで生成
 
-    // 4. 左壁 (窓1つ)
-    const leftSideWall = createWallMesh(depth, height, thickness, material, [
-        { x: 0, y: 1.5, w: 2, h: 1.5 }
-    ]);
-    leftSideWall.rotation.y = Math.PI / 2;
-    leftSideWall.position.set(-width / 2, 0, 0);
-    leftSideWall.userData.isWall = true; // コリジョン用
-    house.add(leftSideWall);
-    obstacles.push(leftSideWall); // 障害物リストに追加
+    // 6. 屋根 - 1枚のみ、家の向きに合わせて回転しない
+    // カスタムマップの場合のみ屋根を生成
+    if (gameSettings.mapType === 'custom') {
+        const roof = new THREE.Mesh(
+            new THREE.BoxGeometry(width + 0.4, thickness, depth + 0.4),
+            createDualSidedWallMaterial(exteriorMaterial, interiorMaterial)
+        );
+        roof.position.y = height / 2;
+        roof.castShadow = false; // 影をキャストしない
+        roof.userData.isRoof = true; // 屋根としてマーク
+        roof.userData.isHouseRoof = true; // 家の屋根であることを識別
+        house.add(roof);
+        // obstacles.push(roof); // 個別に追加しない
+    }
 
-    // 5. 右壁 (窓1つ)
-    const rightSideWall = createWallMesh(depth, height, thickness, material, [
-        { x: 0, y: 1.5, w: 2, h: 1.5 }
-    ]);
-    rightSideWall.rotation.y = -Math.PI / 2;
-    rightSideWall.position.set(width / 2, 0, 0);
-    rightSideWall.userData.isWall = true; // コリジョン用
-    house.add(rightSideWall);
-    obstacles.push(rightSideWall); // 障害物リストに追加
+    // House collision-only walls (respect windows/door openings)
+    function addHouseWallCollider(w, h, t, pos, rotY = 0, blocksProjectiles = true, face = '') {
+        const collider = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, t),
+            new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.0, depthWrite: false })
+        );
+        collider.visible = true; // Raycaster hit needs visible objects
+        collider.position.copy(pos);
+        collider.rotation.y = rotY;
+        collider.userData.isWall = true;
+        collider.userData.isHouseWall = true;
+        collider.userData.isHouseCollider = true;
+        collider.userData.blocksProjectiles = blocksProjectiles;
+        collider.userData.houseRef = house;
+        collider.userData.houseFace = face;
+        house.add(collider);
+        obstacles.push(collider);
+    }
 
-    // 6. 屋根
-    const roof = new THREE.Mesh(
-        new THREE.BoxGeometry(width + 0.4, thickness, depth + 0.4),
-        material
+    function addWindowWallVisuals(span, wallHeight, t, wallOffset, windowCenters, windowSize, rotY = 0, baseY = 0) {
+        const windowBottom = windowCenters[0].y;
+        const windowHeight = windowSize.h;
+        const topHeight = Math.max(0, wallHeight - (windowBottom + windowHeight));
+        const bottomHeight = Math.max(0, windowBottom);
+
+        if (bottomHeight > 0) {
+            const pos = wallOffset.clone().setY(baseY + (-wallHeight / 2 + bottomHeight / 2));
+            addHouseWallSegmentMesh(span, bottomHeight, t, pos, rotY);
+        }
+        if (topHeight > 0) {
+            const topCenterY = baseY + (-wallHeight / 2 + windowBottom + windowHeight + topHeight / 2);
+            const pos = wallOffset.clone().setY(topCenterY);
+            addHouseWallSegmentMesh(span, topHeight, t, pos, rotY);
+        }
+
+        // Vertical strips between windows
+        const halfSpan = span / 2;
+        const segments = [];
+        let prev = -halfSpan;
+        const sorted = windowCenters
+            .map(c => ({ min: c.x - windowSize.w / 2, max: c.x + windowSize.w / 2 }))
+            .sort((a, b) => a.min - b.min);
+        for (const w of sorted) {
+            if (w.min > prev) segments.push({ min: prev, max: w.min });
+            prev = w.max;
+        }
+        if (prev < halfSpan) segments.push({ min: prev, max: halfSpan });
+
+        const midY = baseY + (-wallHeight / 2 + windowBottom + windowHeight / 2);
+        for (const seg of segments) {
+            const segWidth = seg.max - seg.min;
+            if (segWidth <= 0.01) continue;
+            const segCenter = (seg.min + seg.max) / 2;
+            const pos = wallOffset.clone();
+            if (rotY === 0) {
+                pos.x += segCenter;
+            } else {
+                pos.z += segCenter;
+            }
+            pos.y = midY;
+            addHouseWallSegmentMesh(segWidth, windowHeight, t, pos, rotY);
+        }
+    }
+
+    // Front wall: left/right colliders (door opening remains)
+    addHouseWallCollider(leftWallWidth, height, thickness, new THREE.Vector3(-width / 2 + leftWallWidth / 2, 0, depth / 2), 0, true, 'front');
+    addHouseWallCollider(leftWallWidth, height, thickness, new THREE.Vector3(width / 2 - leftWallWidth / 2, 0, depth / 2), 0, true, 'front');
+
+    // Back wall windows (two)
+    addWindowWallVisuals(
+        width,
+        height,
+        thickness,
+        new THREE.Vector3(0, 0, -depth / 2),
+        [{ x: -width / 4, y: 1.5 }, { x: width / 4, y: 1.5 }],
+        { w: 1.5, h: 1.5 },
+        0,
+        0
     );
-    roof.position.y = height + thickness;
-    roof.castShadow = true;
-    house.add(roof);
+
+    // Left wall window (rotated)
+    addWindowWallVisuals(
+        depth,
+        height,
+        thickness,
+        new THREE.Vector3(-width / 2, 0, 0),
+        [{ x: 0, y: 1.5 }],
+        { w: 2.0, h: 1.5 },
+        Math.PI / 2,
+        0
+    );
+
+    // Right wall window (rotated)
+    addWindowWallVisuals(
+        depth,
+        height,
+        thickness,
+        new THREE.Vector3(width / 2, 0, 0),
+        [{ x: 0, y: 1.5 }],
+        { w: 2.0, h: 1.5 },
+        Math.PI / 2,
+        0
+    );
+
+    // Solid colliders for window walls (bullets will pass through windows via analytic check)
+    addHouseWallCollider(width, height, thickness, new THREE.Vector3(0, 0, -depth / 2), 0, true, 'back');
+    addHouseWallCollider(depth, height, thickness, new THREE.Vector3(-width / 2, 0, 0), Math.PI / 2, true, 'left');
+    addHouseWallCollider(depth, height, thickness, new THREE.Vector3(width / 2, 0, 0), Math.PI / 2, true, 'right');
+
+    // Store window specs for analytic projectile pass-through
+    house.userData.windowSpec = {
+        back: [
+            { x: -width / 4, y: 1.5, w: 1.5, h: 1.5 },
+            { x: width / 4, y: 1.5, w: 1.5, h: 1.5 }
+        ],
+        side: [
+            { x: 0, y: 1.5, w: 2.0, h: 1.5 }
+        ]
+    };
 
     // userDataを設定
     house.userData = { 
@@ -2341,10 +2656,13 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
         height: height,
         depth: depth,
         color: color,
-        hp: hp
+        hp: hp,
+        windowSpec: house.userData.windowSpec
     };
     
     scene.add(house);
+    // obstacles.push(house); // 家全体を障害物として追加しない（個別の壁パーツを追加済み）
+    houses.push(house);
     
     return house;
 }
@@ -2367,9 +2685,11 @@ function createSniperTower(x, z) {
     const tower = new THREE.Mesh(towerGeometry, towerMaterial);
     tower.position.set(x, towerYPos, z);
     tower.userData.isTower = true;
+    tower.userData.type = 'tower';
     const DEFAULT_OBSTACLE_VOLUME = 2 * DEFAULT_OBSTACLE_HEIGHT * 2;
     const TOWER_VOLUME = TOWER_WIDTH * TOWER_HEIGHT * TOWER_DEPTH;
     tower.userData.hp = Math.round(TOWER_VOLUME / DEFAULT_OBSTACLE_VOLUME / 2);
+    tower.castShadow = false; // 影をキャストしない
     scene.add(tower);
     obstacles.push(tower);
     let ladderFace;
@@ -2380,76 +2700,208 @@ function createSniperTower(x, z) {
     }
     ladderFace = createAndAttachLadder(tower, ladderFace);
     // createWindows(tower, TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH); // Removed windows for performance
+    // すべてのマップで屋上機能を有効化
     addRooftopFeatures(tower, ladderFace);
 }
 
 function generateObstaclePositions(count) {
     const generatedConfigs = [];
-    const MIN_OBSTACLE_SIZE = 2;
-    const MAX_OBSTACLE_SIZE = 15;
-    const playerExclusionBox = new THREE.Box3().setFromCenterAndSize(PLAYER_INITIAL_POSITION, new THREE.Vector3(5, BODY_HEIGHT + (2 * HEAD_RADIUS), 5));
-    const aiExclusionBoxes = AI_INITIAL_POSITIONS.map(pos => {
-        return new THREE.Box3().setFromCenterAndSize(pos, new THREE.Vector3(5, BODY_HEIGHT + (2 * HEAD_RADIUS), 5));
-    });
+    
+    // アリーナ全体に障害物をランダム配置
+    const maxRadius = ARENA_PLAY_AREA_RADIUS - 5; // エッジから5m内側
+    
+    // 基本的な障害物を配置
     for (let i = 0; i < count; i++) {
-        let positionFound = false;
         let attempts = 0;
-        while (!positionFound && attempts < 100) {
-            const width = Math.floor(Math.random() * (MAX_OBSTACLE_SIZE - MIN_OBSTACLE_SIZE + 1)) + MIN_OBSTACLE_SIZE;
-            const depth = Math.floor(Math.random() * (MAX_OBSTACLE_SIZE - MIN_OBSTACLE_SIZE + 1)) + MIN_OBSTACLE_SIZE;
-            const effectiveRadius = ARENA_RADIUS - ARENA_EDGE_THICKNESS - Math.max(width, depth) / 2;
+        let validPosition = false;
+        let x, z;
+        
+        while (!validPosition && attempts < 50) {
+            // 極座標でランダムな位置を生成
             const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * effectiveRadius;
-            const x = Math.cos(angle) * radius;
-            const z = Math.sin(angle) * radius;
-            const newObstacleBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(x, 0, z), new THREE.Vector3(width, BODY_HEIGHT + (2 * HEAD_RADIUS), depth));
-            let intersectsWithSpawn = newObstacleBox.intersectsBox(playerExclusionBox);
-            if (!intersectsWithSpawn) {
-                for (const box of aiExclusionBoxes) {
-                    if (newObstacleBox.intersectsBox(box)) {
-                        intersectsWithSpawn = true;
-                        break;
-                    }
-                }
-            }
-            if (intersectsWithSpawn) {
+            const radius = Math.random() * maxRadius;
+            x = Math.cos(angle) * radius;
+            z = Math.sin(angle) * radius;
+            
+            // 中央エリア（半径10m）は避ける
+            const distFromCenter = Math.sqrt(x * x + z * z);
+            if (distFromCenter < 10) {
                 attempts++;
                 continue;
             }
-            let overlapsWithExisting = false;
-            for (const existingConfig of generatedConfigs) {
-                const existingObstacleBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(existingConfig.x, 0, existingConfig.z), new THREE.Vector3(existingConfig.width, BODY_HEIGHT + (2 * HEAD_RADIUS), existingConfig.depth));
-                if (newObstacleBox.intersectsBox(existingObstacleBox)) {
-                    overlapsWithExisting = true;
+            
+            // 既存の障害物との距離をチェック
+            validPosition = true;
+            for (const existing of generatedConfigs) {
+                const dist = Math.sqrt((x - existing.x) ** 2 + (z - existing.z) ** 2);
+                if (dist < 4) { // 4m以上離す
+                    validPosition = false;
                     break;
                 }
             }
-            if (!overlapsWithExisting) {
-                generatedConfigs.push({ x, z, width, depth });
-                positionFound = true;
+            attempts++;
+        }
+        
+        if (validPosition) {
+            const width = 2 + Math.random() * 3; // 2-5m
+            const height = 1.5 + Math.random() * 2; // 1.5-3.5m
+            const depth = 2 + Math.random() * 3; // 2-5m
+            const color = Math.random() > 0.5 ? 0x888888 : 0x666666;
+            
+            generatedConfigs.push({
+                x: x,
+                z: z,
+                width: width,
+                height: height,
+                depth: depth,
+                color: color
+            });
+        }
+    }
+    
+    // 家をランダムに配置（0-5個）
+    const houseCount = Math.floor(Math.random() * 6); // 0-5個
+    for (let i = 0; i < houseCount; i++) {
+        let attempts = 0;
+        let validPosition = false;
+        let x, z;
+        
+        while (!validPosition && attempts < 50) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 15 + Math.random() * (maxRadius - 15); // 15m以降に配置
+            x = Math.cos(angle) * radius;
+            z = Math.sin(angle) * radius;
+            
+            // 既存の障害物との距離をチェック
+            validPosition = true;
+            for (const existing of generatedConfigs) {
+                const dist = Math.sqrt((x - existing.x) ** 2 + (z - existing.z) ** 2);
+                if (dist < 6) { // 家は6m以上離す
+                    validPosition = false;
+                    break;
+                }
             }
             attempts++;
         }
+        
+        if (validPosition) {
+            const width = 4 + Math.random() * 3; // 4-7m
+            const height = 3 + Math.random() * 2; // 3-5m
+            const depth = 4 + Math.random() * 3; // 4-7m
+            const color = 0x8B4513; // 茶色
+            
+            generatedConfigs.push({
+                type: 'house',
+                x: x,
+                z: z,
+                width: width,
+                height: height,
+                depth: depth,
+                color: color,
+                hp: 50,
+                rotation: Math.random() * Math.PI * 2
+            });
+        }
     }
+    
+    // スナイパーの塔をランダムに配置（0-2個）
+    const towerCount = Math.floor(Math.random() * 3); // 0-2個
+    for (let i = 0; i < towerCount; i++) {
+        let attempts = 0;
+        let validPosition = false;
+        let x, z;
+        
+        while (!validPosition && attempts < 50) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 20 + Math.random() * (maxRadius - 20); // 20m以降に配置
+            x = Math.cos(angle) * radius;
+            z = Math.sin(angle) * radius;
+            
+            // 既存の障害物との距離をチェック
+            validPosition = true;
+            for (const existing of generatedConfigs) {
+                const dist = Math.sqrt((x - existing.x) ** 2 + (z - existing.z) ** 2);
+                if (dist < 8) { // 塔は8m以上離す
+                    validPosition = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+        
+        if (validPosition) {
+            generatedConfigs.push({
+                type: 'tower',
+                x: x,
+                z: z
+            });
+        }
+    }
+    
     return generatedConfigs;
 }
 
 function resetObstacles() {
+    // まず即時クリーンアップを実行
+    immediateRooftopCleanup();
+    
+    // Clean up all obstacles including rooftop parts
     for (const obstacle of obstacles) {
+        // 家の場合は、すべての子オブジェクトを明示的に削除
+        if (obstacle && obstacle.userData.type === 'house') {
+            // 家のすべての子をトラバースして削除
+            const childrenToRemove = [];
+            if (obstacle.traverse) {
+                obstacle.traverse((child) => {
+                    if (child && child.isMesh && child !== obstacle) {
+                        childrenToRemove.push(child);
+                    }
+                });
+            }
+            // 子オブジェクトを削除
+            for (const child of childrenToRemove) {
+                obstacle.remove(child);
+                scene.remove(child);
+                if (child.geometry) child.geometry.dispose();
+                disposeMaterial(child.material); // 安全なマテリアル破棄を使用
+                // obstacles配列からも削除
+                const childIndex = obstacles.indexOf(child);
+                if (childIndex > -1) {
+                    obstacles.splice(childIndex, 1);
+                }
+            }
+        }
+        
+        // Clean up rooftop parts first
+        if (obstacle.userData.rooftopParts && Array.isArray(obstacle.userData.rooftopParts)) {
+            for (const part of obstacle.userData.rooftopParts) {
+                scene.remove(part);
+                if (part.geometry) part.geometry.dispose();
+                disposeMaterial(part.material); // 安全なマテリアル破棄を使用
+            }
+        }
+        // Clean up ladders
+        const ladderGroup = obstacle.children.find(child => child.name === 'ladder');
+        if (ladderGroup) {
+            obstacle.remove(ladderGroup);
+        }
+        // Remove the main obstacle
         if (obstacle.parent) {
             obstacle.parent.remove(obstacle);
         }
+        // Dispose geometry and materials
+        if (obstacle.geometry) obstacle.geometry.dispose();
+        disposeMaterial(obstacle.material); // 安全なマテリアル破棄を使用
     }
     obstacles.length = 0;
+    houses.length = 0;
     HIDING_SPOTS.length = 0;
     for (const ladderSwitch of ladderSwitches) {
         scene.remove(ladderSwitch);
     }
     ladderSwitches.length = 0;
     let obstaclesToCreate = [];
-    if (gameSettings.mapType === 'random') {
-        obstaclesToCreate = generateObstaclePositions(NUM_RANDOM_OBSTACLES);
-    } else if (gameSettings.mapType === 'custom') {
+    if (gameSettings.mapType === 'custom') {
         const resolved = resolveCustomMapSelection();
         const selectedMapData = resolved.mapData;
         if (resolved.mapName && resolved.mapName !== gameSettings.customMapName) {
@@ -2478,12 +2930,13 @@ function resetObstacles() {
         if (config.type === 'tower') {
             // カスタムマップの塔データの場合
             createSniperTower(config.x, config.z);
-        } else if (config.type === 'house') {
-            // カスタムマップの家データの場合
-            createHouse(config.x, config.z, config.width, config.height, config.depth, config.color, config.hp);
+        } else if (config.type === 'house' && gameSettings.mapType === 'custom') {
+            // カスタムマップの家データの場合のみ処理
+            createHouse(config.x, config.z, config.width, config.height, config.depth, config.color, config.hp, config.rotation || 0);
+        } else if (config.type === 'barrel') {
+            createExplosiveBarrel(config.x, config.z, config.color, config.radius, config.height);
         } else {
             // 通常の建物の場合
-            console.log('Creating solid obstacle');
             createObstacle(config.x, config.z, config.width, config.height || DEFAULT_OBSTACLE_HEIGHT, config.depth, config.color || 0xff0000, config.hp || 1);
         }
     }
@@ -2528,7 +2981,7 @@ function cleanupAI(aiObject) {
             const child = aiObject.children[0];
             aiObject.remove(child);
             if (child.geometry) child.geometry.dispose();
-            if (child.material) child.material.dispose();
+            disposeMaterial(child.material); // 安全なマテリアル破棄を使用
             if (child.texture) child.texture.dispose(); // Also dispose textures if any
         }
         // Remove the main AI group from the scene
@@ -2823,7 +3276,7 @@ function applyGunStyle(gunMesh, weaponType) {
         const child = gunMesh.children[0];
         gunMesh.remove(child);
         if (child.geometry) child.geometry.dispose();
-        if (child.material) child.material.dispose();
+        disposeMaterial(child.material); // 安全なマテリアル破棄を使用
     }
 
     let length = 1.2;
@@ -2836,6 +3289,7 @@ function applyGunStyle(gunMesh, weaponType) {
         case WEAPON_RR: length = 2.6; thickness = 0.22; color = 0x6b4b1f; shape = 'cylinder'; break;
         case WEAPON_SR: length = 1.65; thickness = 0.09; color = 0xcccccc; break;
         case WEAPON_SG: length = 1.2; thickness = 0.12; color = 0x444444; break;
+        case WEAPON_MR: length = 1.4; thickness = 0.12; color = 0x444444; break;
     }
     gunMesh.geometry.dispose();
     if (shape === 'cylinder') {
@@ -2881,6 +3335,14 @@ function applyGunStyle(gunMesh, weaponType) {
         scope.rotation.x = Math.PI / 2; // along Z
         scope.position.set(0, thickness * 0.9, length * 0.18);
         gunMesh.add(scope);
+    } else if (weaponType === WEAPON_MR) {
+        // Add a longer barrel with reddish-brown color
+        const barrel = new THREE.Mesh(
+            new THREE.BoxGeometry(thickness * 0.5, thickness * 0.5, length * 0.6),
+            new THREE.MeshLambertMaterial({ color: 0x8b4513 })
+        );
+        barrel.position.set(0, 0, length * 0.25);
+        gunMesh.add(barrel);
     }
 }
 
@@ -3245,7 +3707,7 @@ function applyWeaponPose(parts, weaponType) {
         // Rocket sits around shoulder, not floating in front.
         parts.gun.position.set(-0.22, 0.24, 0.34);
         parts.gun.rotation.set(0.0, 0.0, 0.0);
-    } else if (weaponType === WEAPON_SG || weaponType === WEAPON_MG) {
+    } else if (weaponType === WEAPON_SG || weaponType === WEAPON_MG || weaponType === WEAPON_MR) {
         // JSON slot: rifle (used for MG/SG)
         parts.aimGroup.position.y = parts.baseAimY;
         parts.leftArm.position.set(-0.45, 0.22, 0.0);
@@ -3275,6 +3737,7 @@ function createAI(color, customization = null) {
     aiObject.ammoMG = 0;
     aiObject.ammoRR = 0;
     aiObject.ammoSR = 0;
+    aiObject.ammoMR = 0;
     aiObject.targetWeaponPickup = null;
     aiObject.hp = 3;
     aiObject.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
@@ -3408,7 +3871,213 @@ function checkLineOfSight(startPosition, endPosition, objectsToAvoid) {
     raycaster.set(startPosition, direction);
     raycaster.far = distance;
     const intersects = raycaster.intersectObjects(objectsToAvoid, true);
-    return intersects.length === 0;
+    for (const hit of intersects) {
+        if (hit.object && hit.object.userData && hit.object.userData.blocksProjectiles === false) continue;
+        if (isHouseProjectilePassThrough(hit)) continue;
+        return false;
+    }
+    return true;
+}
+
+function getFirstProjectileHit(ray, objects) {
+    const intersects = ray.intersectObjects(objects, true);
+    let bestHit = null;
+    for (const hit of intersects) {
+        if (hit.object && hit.object.userData && hit.object.userData.blocksProjectiles === false) continue;
+        if (isHouseProjectilePassThrough(hit)) continue;
+        bestHit = hit;
+        break;
+    }
+    const houseHit = getHouseRayHit(ray.ray.origin, ray.ray.direction, ray.far);
+    if (houseHit && (!bestHit || houseHit.distance < bestHit.distance)) {
+        return houseHit;
+    }
+    return bestHit;
+}
+
+function isHouseProjectilePassThrough(hit) {
+    if (!hit || !hit.object || !hit.object.userData) return false;
+    const face = hit.object.userData.houseFace;
+    const house = hit.object.userData.houseRef;
+    if (!face || !house || !house.userData) return false;
+    const spec = house.userData.windowSpec;
+    if (!spec) return false;
+    const dims = house.userData;
+    const local = house.worldToLocal(hit.point.clone());
+    const height = dims.height || 5;
+    const depth = dims.depth || 8;
+    const width = dims.width || 8;
+    const windowBottom = (win) => (-height / 2 + win.y);
+    const inWindow = (win, axisVal) => {
+        const centerY = windowBottom(win) + win.h / 2;
+        if (local.y < centerY - win.h / 2 || local.y > centerY + win.h / 2) return false;
+        if (axisVal < win.x - win.w / 2 || axisVal > win.x + win.w / 2) return false;
+        return true;
+    };
+    if (face === 'back') {
+        if (Math.abs(local.z + depth / 2) > 0.4) return false;
+        for (const win of spec.back) {
+            if (inWindow(win, local.x)) return true;
+        }
+    }
+    if (face === 'left') {
+        if (Math.abs(local.x + width / 2) > 0.4) return false;
+        for (const win of spec.side) {
+            if (inWindow(win, local.z)) return true;
+        }
+    }
+    if (face === 'right') {
+        if (Math.abs(local.x - width / 2) > 0.4) return false;
+        for (const win of spec.side) {
+            if (inWindow(win, local.z)) return true;
+        }
+    }
+    return false;
+}
+
+function getHouseRayHit(origin, direction, maxDist) {
+    let best = null;
+    for (const house of houses) {
+        if (!house || !house.userData) continue;
+        const w = house.userData.width || 8;
+        const h = house.userData.height || 5;
+        const d = house.userData.depth || 8;
+        const doorHalf = Math.min(2.5, w * 0.6) / 2;
+        const winBack = house.userData.windowSpec?.back || [];
+        const winSide = house.userData.windowSpec?.side || [];
+
+        const q = new THREE.Quaternion();
+        house.getWorldQuaternion(q);
+        const invQ = q.clone().invert();
+        const localOrigin = house.worldToLocal(origin.clone());
+        const localDir = direction.clone().applyQuaternion(invQ).normalize();
+
+        const tryPlane = (t, face) => {
+            if (t <= 0 || t > maxDist) return;
+            const p = localOrigin.clone().add(localDir.clone().multiplyScalar(t));
+            if (p.y < -h / 2 || p.y > h / 2) return;
+            if (face === 'front') {
+                if (p.x < -w / 2 || p.x > w / 2) return;
+                if (Math.abs(p.x) < doorHalf) return;
+            }
+            if (face === 'back') {
+                if (p.x < -w / 2 || p.x > w / 2) return;
+                for (const win of winBack) {
+                    const cy = -h / 2 + win.y + win.h / 2;
+                    if (p.x >= win.x - win.w / 2 && p.x <= win.x + win.w / 2 &&
+                        p.y >= cy - win.h / 2 && p.y <= cy + win.h / 2) {
+                        return;
+                    }
+                }
+            }
+            if (face === 'left') {
+                if (p.z < -d / 2 || p.z > d / 2) return;
+                for (const win of winSide) {
+                    const cy = -h / 2 + win.y + win.h / 2;
+                    if (p.z >= win.x - win.w / 2 && p.z <= win.x + win.w / 2 &&
+                        p.y >= cy - win.h / 2 && p.y <= cy + win.h / 2) {
+                        return;
+                    }
+                }
+            }
+            if (face === 'right') {
+                if (p.z < -d / 2 || p.z > d / 2) return;
+                for (const win of winSide) {
+                    const cy = -h / 2 + win.y + win.h / 2;
+                    if (p.z >= win.x - win.w / 2 && p.z <= win.x + win.w / 2 &&
+                        p.y >= cy - win.h / 2 && p.y <= cy + win.h / 2) {
+                        return;
+                    }
+                }
+            }
+            const worldPoint = house.localToWorld(p.clone());
+            if (!best || t < best.distance) {
+                best = {
+                    object: { userData: { isHouseWall: true, isHouseHitProxy: true } },
+                    point: worldPoint,
+                    distance: t
+                };
+            }
+        };
+
+        if (Math.abs(localDir.z) > 1e-6) {
+            tryPlane((d / 2 - localOrigin.z) / localDir.z, 'front');
+            tryPlane((-d / 2 - localOrigin.z) / localDir.z, 'back');
+        }
+        if (Math.abs(localDir.x) > 1e-6) {
+            tryPlane((-w / 2 - localOrigin.x) / localDir.x, 'left');
+            tryPlane((w / 2 - localOrigin.x) / localDir.x, 'right');
+        }
+    }
+    return best;
+}
+
+function getObjectAABBForCollision(object) {
+    const pos = object.position;
+    const box = new THREE.Box3();
+    if (ais.includes(object)) {
+        const aiBodyHeight = BODY_HEIGHT + (HEAD_RADIUS * 2); 
+        const aiCollisionHeight = object.isCrouching ? aiBodyHeight * 0.7 : aiBodyHeight; 
+        box.min.set(pos.x - 0.3, pos.y - aiCollisionHeight, pos.z - 0.3);
+        box.max.set(pos.x + 0.3, pos.y, pos.z + 0.3);
+    } else {
+        box.min.set(pos.x - 0.2, pos.y - playerTargetHeight, pos.z - 0.2);
+        box.max.set(pos.x + 0.2, pos.y, pos.z + 0.2);
+    }
+    return box;
+}
+
+function checkHouseCollisionBox(objectBox) {
+    const corners = [
+        new THREE.Vector3(objectBox.min.x, objectBox.min.y, objectBox.min.z),
+        new THREE.Vector3(objectBox.min.x, objectBox.min.y, objectBox.max.z),
+        new THREE.Vector3(objectBox.min.x, objectBox.max.y, objectBox.min.z),
+        new THREE.Vector3(objectBox.min.x, objectBox.max.y, objectBox.max.z),
+        new THREE.Vector3(objectBox.max.x, objectBox.min.y, objectBox.min.z),
+        new THREE.Vector3(objectBox.max.x, objectBox.min.y, objectBox.max.z),
+        new THREE.Vector3(objectBox.max.x, objectBox.max.y, objectBox.min.z),
+        new THREE.Vector3(objectBox.max.x, objectBox.max.y, objectBox.max.z)
+    ];
+    for (const house of houses) {
+        if (!house || !house.userData) continue;
+        const w = house.userData.width || 8;
+        const h = house.userData.height || 5;
+        const d = house.userData.depth || 8;
+        const doorHalf = Math.min(2.5, w * 0.6) / 2;
+        const localMin = new THREE.Vector3(Infinity, Infinity, Infinity);
+        const localMax = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+        for (const c of corners) {
+            const lc = house.worldToLocal(c.clone());
+            localMin.min(lc);
+            localMax.max(lc);
+        }
+        const t = 0.15;
+        // Front wall (door opening allowed)
+        if (localMax.z >= d / 2 - t && localMin.z <= d / 2 + t &&
+            localMax.y >= -h / 2 && localMin.y <= h / 2 &&
+            localMax.x >= -w / 2 && localMin.x <= w / 2) {
+            if (localMin.x < -doorHalf || localMax.x > doorHalf) return true;
+        }
+        // Back wall
+        if (localMax.z >= -d / 2 - t && localMin.z <= -d / 2 + t &&
+            localMax.y >= -h / 2 && localMin.y <= h / 2 &&
+            localMax.x >= -w / 2 && localMin.x <= w / 2) {
+            return true;
+        }
+        // Left wall
+        if (localMax.x >= -w / 2 - t && localMin.x <= -w / 2 + t &&
+            localMax.y >= -h / 2 && localMin.y <= h / 2 &&
+            localMax.z >= -d / 2 && localMin.z <= d / 2) {
+            return true;
+        }
+        // Right wall
+        if (localMax.x >= w / 2 - t && localMin.x <= w / 2 + t &&
+            localMax.y >= -h / 2 && localMin.y <= h / 2 &&
+            localMax.z >= -d / 2 && localMin.z <= d / 2) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function resolveCustomMapSelection() {
@@ -3459,10 +4128,22 @@ function getAIRooftopClimbChance(ai) {
     // Sniper: 50%, Machinegun: 20%, RocketLauncher: 20%, Pistol: 10%
     // Shotgun and other weapons: 0%
     if (!ai || !ai.currentWeapon) return 0.0;
+    const nearbyLadder = findNearbyLadderSensor(ai, 22);
+    const nearbyTower = nearbyLadder && isTowerObstacle(nearbyLadder.userData?.obstacle);
+    if (nearbyTower) {
+        switch (ai.currentWeapon) {
+            case WEAPON_SR: return 0.6;
+            case WEAPON_MG: return 0.35;
+            case WEAPON_RR: return 0.3;
+            case WEAPON_PISTOL: return 0.12;
+            case WEAPON_SG: return 0.0;
+            default: return 0.0;
+        }
+    }
     switch (ai.currentWeapon) {
-        case WEAPON_SR: return 0.5;
-        case WEAPON_MG: return 0.2;
-        case WEAPON_RR: return 0.2;
+        case WEAPON_SR: return 0.45;
+        case WEAPON_MG: return 0.25;
+        case WEAPON_RR: return 0.22;
         case WEAPON_PISTOL: return 0.1;
         case WEAPON_SG: return 0.0;
         default: return 0.0;
@@ -3476,6 +4157,7 @@ function isAIWeaponOutOfAmmo(ai) {
         case WEAPON_RR: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR) && ai.ammoRR <= 0;
         case WEAPON_SR: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR) && ai.ammoSR <= 0;
         case WEAPON_SG: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG) && ai.ammoSG <= 0;
+        case WEAPON_MR: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MR) && ai.ammoMR <= 0;
         default: return false;
     }
 }
@@ -3509,7 +4191,8 @@ function chooseLadderForAI(ai) {
         if (!ladderPos || !obstacle) continue;
         const dAI = ai.position.distanceTo(ladderPos);
         const dEnemy = targetPos.distanceTo(obstacle.position);
-        const score = dAI * 0.65 + dEnemy * 0.35;
+        const towerBias = isTowerObstacle(obstacle) ? 0.8 : 1.0;
+        const score = (dAI * 0.65 + dEnemy * 0.35) * towerBias;
         if (score < bestScore) {
             bestScore = score;
             best = sensor;
@@ -3518,19 +4201,110 @@ function chooseLadderForAI(ai) {
     return best;
 }
 
+function getObstacleHeight(obstacle) {
+    if (!obstacle) return 0;
+    const geometry = obstacle.geometry || (obstacle.children && obstacle.children[0] ? obstacle.children[0].geometry : null);
+    return geometry && geometry.parameters && geometry.parameters.height ? geometry.parameters.height : 0;
+}
+
+function isTowerObstacle(obstacle) {
+    if (!obstacle) return false;
+    if (obstacle.userData && obstacle.userData.isTower) return true;
+    return getObstacleHeight(obstacle) >= DEFAULT_OBSTACLE_HEIGHT * 2.2;
+}
+
+function findNearbyLadderSensor(ai, maxDist) {
+    if (!ladderSwitches || ladderSwitches.length === 0) return null;
+    let best = null;
+    let bestDist = Infinity;
+    for (const sensor of ladderSwitches) {
+        const ladderPos = sensor.userData?.ladderPos || sensor.position;
+        if (!ladderPos) continue;
+        const d = ai.position.distanceTo(ladderPos);
+        if (d < maxDist && d < bestDist) {
+            bestDist = d;
+            best = sensor;
+        }
+    }
+    return best;
+}
+
+function findSafeRooftopLanding(ai, obstacle, ladderPos) {
+    if (!ai || !obstacle) return null;
+    const geometry = obstacle.geometry || (obstacle.children && obstacle.children[0] ? obstacle.children[0].geometry : null);
+    const width = geometry && geometry.parameters && geometry.parameters.width ? geometry.parameters.width : 6;
+    const depth = geometry && geometry.parameters && geometry.parameters.depth ? geometry.parameters.depth : 6;
+    const height = geometry && geometry.parameters && geometry.parameters.height ? geometry.parameters.height : 4;
+    const center = obstacle.position.clone();
+    const halfW = Math.max(1.0, width / 2 - 0.7);
+    const halfD = Math.max(1.0, depth / 2 - 0.7);
+    const roofY = obstacle.position.y + height / 2;
+    const dir = center.clone().sub(ladderPos || center);
+    dir.y = 0;
+    if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+    dir.normalize();
+
+    const candidates = [];
+    // Center-first landing to avoid pushing off the rooftop.
+    candidates.push(center.clone());
+    const base = (ladderPos ? ladderPos.clone() : center.clone()).add(dir.clone().multiplyScalar(0.8));
+    base.x = THREE.MathUtils.clamp(base.x, center.x - halfW, center.x + halfW);
+    base.z = THREE.MathUtils.clamp(base.z, center.z - halfD, center.z + halfD);
+    candidates.push(base);
+    candidates.push(center.clone().add(new THREE.Vector3(halfW * 0.35, 0, halfD * 0.35)));
+    candidates.push(center.clone().add(new THREE.Vector3(-halfW * 0.35, 0, halfD * 0.35)));
+    candidates.push(center.clone().add(new THREE.Vector3(halfW * 0.35, 0, -halfD * 0.35)));
+    candidates.push(center.clone().add(new THREE.Vector3(-halfW * 0.35, 0, -halfD * 0.35)));
+
+    const originalPos = ai.position.clone();
+    for (const c of candidates) {
+        c.y = roofY;
+        ai.position.copy(c);
+        if (!checkCollision(ai, obstacles)) {
+            ai.position.copy(originalPos);
+            return c;
+        }
+    }
+    ai.position.copy(originalPos);
+    const fallback = center.clone();
+    fallback.y = roofY;
+    return fallback;
+}
+
+function clampAIToRooftop(ai) {
+    if (!ai || !ai.userData || !ai.userData.onRooftop || !ai.userData.rooftopObstacle) return;
+    const obstacle = ai.userData.rooftopObstacle;
+    const geometry = obstacle.geometry || (obstacle.children && obstacle.children[0] ? obstacle.children[0].geometry : null);
+    if (!geometry || !geometry.parameters) return;
+    const width = geometry.parameters.width || 6;
+    const depth = geometry.parameters.depth || 6;
+    const height = geometry.parameters.height || DEFAULT_OBSTACLE_HEIGHT;
+    const center = obstacle.position;
+    const margin = 0.6;
+    const halfW = Math.max(0.5, width / 2 - margin);
+    const halfD = Math.max(0.5, depth / 2 - margin);
+    ai.position.x = THREE.MathUtils.clamp(ai.position.x, center.x - halfW, center.x + halfW);
+    ai.position.z = THREE.MathUtils.clamp(ai.position.z, center.z - halfD, center.z + halfD);
+    ai.position.y = center.y + height / 2;
+}
+
 function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate) {
     if (!ai || ai.hp <= 0 || !ai.userData) return false;
     if (ladderSwitches.length === 0) return false;
     if (isFollowLockedTeammate) return false;
     if (ai.userData.onRooftop || ai.userData.rooftopIntent || ai.isElevating) return false;
     if ((ai.userData.rooftopPhase || 'none') !== 'none') return false;
-    if ((ai.userData.nextRooftopDecisionAt || 0) > timeElapsed) return false;
-    ai.userData.nextRooftopDecisionAt = timeElapsed + 0.7 + Math.random() * 0.9;
+    if (!FORCE_AI_ROOFTOP_TEST) {
+        if ((ai.userData.nextRooftopDecisionAt || 0) > timeElapsed) return false;
+        ai.userData.nextRooftopDecisionAt = timeElapsed + 0.7 + Math.random() * 0.9;
+    }
 
-    const chance = getAIRooftopClimbChance(ai);
-    if (chance <= 0 || Math.random() >= chance) return false;
+    if (!FORCE_AI_ROOFTOP_TEST) {
+        const chance = getAIRooftopClimbChance(ai);
+        if (chance <= 0 || Math.random() >= chance) return false;
+    }
 
-    if (ai.team === 'enemy' && isEnemyRooftopSlotBusy(ai)) return false;
+    if (!FORCE_AI_ROOFTOP_TEST && ai.team === 'enemy' && isEnemyRooftopSlotBusy(ai)) return false;
 
     const sensor = chooseLadderForAI(ai);
     if (!sensor) return false;
@@ -3543,6 +4317,7 @@ function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate) {
     ai.userData.rooftopObstacle = obstacle;
     // Move to the sensor area (outside wall), then snap to ladder line when climbing starts.
     ai.userData.rooftopLadderPos = sensor.position.clone();
+    ai.userData.rooftopLadderSnap = ladderPos.clone();
     // 空洞建物の場合、床のジオメトリーから高さを取得
     const geometry = obstacle.geometry || (obstacle.children && obstacle.children[0] ? obstacle.children[0].geometry : null);
     const height = geometry ? geometry.parameters.height : 4;
@@ -3784,8 +4559,16 @@ function findAndTargetWeapon(ai) {
     const isTeammate = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player';
     const isFollowTeammate = isTeammate && isFollowingPlayerMode && ai.userData && ai.userData.followActive !== false;
     const lowAmmo = isTeammate
-        ? ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 30) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 3) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 3) || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 4))
-        : ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 12) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 2) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 2) || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 2));
+        ? ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 30)
+            || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 3)
+            || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 3)
+            || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 4)
+            || (ai.currentWeapon === WEAPON_MR && ai.ammoMR < 4))
+        : ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 12)
+            || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 2)
+            || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 2)
+            || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 2)
+            || (ai.currentWeapon === WEAPON_MR && ai.ammoMR < 2));
     const aggressivePickup = ai.currentWeapon === WEAPON_PISTOL || lowAmmo || Math.random() < 0.25;
     const needsUpgrade = weaponPickups.length > 0 && (isFollowTeammate || aggressivePickup);
     if (!needsUpgrade || ai.targetWeaponPickup) {
@@ -3821,6 +4604,8 @@ const projectiles = [];
 const debris = [];
 const projectileSpeed = 50;
 const MAX_PROJECTILES = 180;
+const ROCKET_EXPLOSION_RADIUS = 5;
+const BARREL_EXPLOSION_RADIUS = ROCKET_EXPLOSION_RADIUS * 1.5;
 
 function createProjectile(startPos, direction, color, size = 0.1, isRocket = false, source = 'unknown', speed = projectileSpeed, isSniper = false, weaponType = null, shooter = null) {
     if (projectiles.length >= MAX_PROJECTILES) {
@@ -3860,11 +4645,355 @@ function createExplosionEffect(position) {
     new TWEEN.Tween(explosionMaterial).to({ opacity: 0 }, duration * 1000).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
         scene.remove(explosionMesh);
         explosionMesh.geometry.dispose();
-        explosionMesh.material.dispose();
+        disposeMaterial(explosionMesh.material); // 安全なマテリアル破棄を使用
     }).start();
     for (let i = 0; i < 5; i++) {
         createSmokeEffect(position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 10)));
     }
+}
+
+function immediateRooftopCleanup() {
+    debugLog('Performing safe rooftop cleanup...');
+    let removedCount = 0;
+    
+    // より安全なクリーンアップ：obstacles配列をベースに処理
+    const objectsToRemove = [];
+    
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obj = obstacles[i];
+        if (!obj) continue;
+        
+        // 屋根パーツのみを対象にする
+        if (obj.userData.isRooftop || obj.userData.isHouseRoof) {
+            // obstacles配列に含まれるが、親が存在しない孤立オブジェクトを削除
+            if (!obj.parent || obj.parent === scene) {
+                objectsToRemove.push(obj);
+            }
+        }
+    }
+    
+    // オブジェクトを削除
+    for (const obj of objectsToRemove) {
+        scene.remove(obj);
+        const index = obstacles.indexOf(obj);
+        if (index > -1) {
+            obstacles.splice(index, 1);
+        }
+        if (obj.geometry) obj.geometry.dispose();
+        disposeMaterial(obj.material); // 安全なマテリアル破棄を使用
+        removedCount++;
+    }
+    
+    debugLog(`Safe cleanup removed ${removedCount} rooftop parts`);
+    return removedCount;
+}
+
+// 建築物専用強制クリーンアップ関数
+function forceBuildingCleanup() {
+    debugLog('FORCING BUILDING CLEANUP - removing all ungrouped building remnants...');
+    let removedCount = 0;
+    
+    // シーンからすべての建築物を検索して削除
+    const objectsToRemove = [];
+    scene.traverse(child => {
+        // 建築物の条件をチェック
+        if (child.isMesh && (
+            child.userData.isHollow ||
+            child.userData.type === 'hollow_obstacle' ||
+            child.userData.type === 'floor' ||
+            child.userData.type === 'ceiling' ||
+            (child.userData.isWall && !child.userData.isHouseWall) // 家の壁ではない一般の壁
+        )) {
+            debugLog('Found building remnant:', child.name || 'unnamed', 'type:', child.userData.type, 'position:', child.position);
+            objectsToRemove.push(child);
+        }
+        
+        // グループ内もチェック
+        if (child.isObject3D && child.children && child.children.length > 0) {
+            child.children.forEach(grandchild => {
+                if (grandchild.isMesh && (
+                    grandchild.userData.isHollow ||
+                    grandchild.userData.type === 'hollow_obstacle' ||
+                    grandchild.userData.type === 'floor' ||
+                    grandchild.userData.type === 'ceiling' ||
+                    (grandchild.userData.isWall && !grandchild.userData.isHouseWall)
+                )) {
+                    debugLog('Found building in group:', grandchild.name || 'unnamed', 'type:', grandchild.userData.type, 'parent:', child.name || 'group');
+                    objectsToRemove.push(grandchild);
+                }
+            });
+        }
+    });
+    
+    // 建築物を削除
+    for (const building of objectsToRemove) {
+        scene.remove(building);
+        if (building.parent) {
+            building.parent.remove(building); // 親からも削除
+        }
+        if (building.geometry) building.geometry.dispose();
+        disposeMaterial(building.material);
+        removedCount++;
+    }
+    
+    // obstacles配列からも削除
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obj = obstacles[i];
+        if (obj.isMesh && (
+            obj.userData.isHollow ||
+            obj.userData.type === 'hollow_obstacle' ||
+            obj.userData.type === 'floor' ||
+            obj.userData.type === 'ceiling' ||
+            (obj.userData.isWall && !obj.userData.isHouseWall)
+        )) {
+            obstacles.splice(i, 1);
+            debugLog('Removed building from obstacles array');
+        }
+    }
+    
+    debugLog(`Building cleanup removed ${removedCount} building remnants`);
+    return removedCount;
+}
+
+// 屋根専用強制クリーンアップ関数
+function forceRoofCleanup() {
+    debugLog('FORCING ROOF CLEANUP - removing all roof remnants...');
+    let removedCount = 0;
+    
+    // シーンからすべての屋根を検索して削除
+    const objectsToRemove = [];
+    scene.traverse(child => {
+        // 屋根の条件をチェック（より広範囲に）
+        if (child.isMesh && (
+            child.userData.isRoof || 
+            child.userData.isHouseRoof ||
+            child.name === 'roof' ||
+            (child.position && child.position.y > 4 && child.geometry && 
+             child.geometry.parameters && 
+             (child.geometry.parameters.width > 5 || child.geometry.parameters.depth > 5)) // 大きくて高い位置のメッシュ
+        )) {
+            debugLog('Found roof remnant:', child.name || 'unnamed', 'position:', child.position, 'userData:', child.userData);
+            objectsToRemove.push(child);
+        }
+        
+        // 家のグループ内もチェック
+        if (child.isObject3D && child.children && child.children.length > 0) {
+            child.children.forEach(grandchild => {
+                if (grandchild.isMesh && (
+                    grandchild.userData.isRoof || 
+                    grandchild.userData.isHouseRoof ||
+                    grandchild.name === 'roof' ||
+                    (grandchild.position && grandchild.position.y > 4 && grandchild.geometry && 
+                     grandchild.geometry.parameters && 
+                     (grandchild.geometry.parameters.width > 5 || grandchild.geometry.parameters.depth > 5))
+                )) {
+                    debugLog('Found roof in house group:', grandchild.name || 'unnamed', 'parent:', child.name || 'house', 'position:', grandchild.position);
+                    objectsToRemove.push(grandchild);
+                }
+            });
+        }
+    });
+    
+    // 屋根を削除
+    for (const roof of objectsToRemove) {
+        scene.remove(roof);
+        if (roof.parent) {
+            roof.parent.remove(roof); // 親からも削除
+        }
+        if (roof.geometry) roof.geometry.dispose();
+        disposeMaterial(roof.material);
+        removedCount++;
+    }
+    
+    // obstacles配列からも削除
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+        const obj = obstacles[i];
+        if (obj.isMesh && (
+            obj.userData.isRoof || 
+            obj.userData.isHouseRoof ||
+            obj.name === 'roof' ||
+            (obj.position && obj.position.y > 4 && obj.geometry && 
+             obj.geometry.parameters && 
+             (obj.geometry.parameters.width > 5 || obj.geometry.parameters.depth > 5))
+        )) {
+            obstacles.splice(i, 1);
+            debugLog('Removed roof from obstacles array');
+        }
+    }
+    
+    debugLog(`Roof cleanup removed ${removedCount} roof remnants`);
+    return removedCount;
+}
+
+// 家オブジェクト専用の強制クリーンアップ関数
+function forceHouseCleanup() {
+    debugLog('FORCING HOUSE CLEANUP - removing all house remnants...');
+    let removedCount = 0;
+    const objectsToRemove = new Set();
+
+    // シーンから家グループ・家パーツを検索
+    scene.traverse(child => {
+        if (!child) return;
+
+        const isHouseGroup = child.isGroup && child.userData && child.userData.type === 'house';
+        const isHousePart = child.isMesh && (child.userData.isHouseWall || child.userData.isHouseRoof);
+
+        let hasHouseAncestor = false;
+        if (child.parent) {
+            let p = child.parent;
+            while (p) {
+                if (p.userData && p.userData.type === 'house') {
+                    hasHouseAncestor = true;
+                    break;
+                }
+                p = p.parent;
+            }
+        }
+
+        if (isHouseGroup || isHousePart || (child.isMesh && hasHouseAncestor)) {
+            objectsToRemove.add(child);
+        }
+    });
+
+    // メッシュを先に削除
+    for (const obj of objectsToRemove) {
+        if (!obj.isMesh) continue;
+        if (obj.parent) {
+            obj.parent.remove(obj);
+        } else {
+            scene.remove(obj);
+        }
+        const index = obstacles.indexOf(obj);
+        if (index > -1) {
+            obstacles.splice(index, 1);
+        }
+        if (obj.geometry) obj.geometry.dispose();
+        disposeMaterial(obj.material);
+        removedCount++;
+    }
+
+    // 家グループを最後に削除
+    for (const obj of objectsToRemove) {
+        if (!obj.isGroup || !obj.userData || obj.userData.type !== 'house') continue;
+        if (obj.parent) {
+            obj.parent.remove(obj);
+        } else {
+            scene.remove(obj);
+        }
+        removedCount++;
+    }
+
+    debugLog(`House cleanup removed ${removedCount} house remnants`);
+    return removedCount;
+}
+
+// 強制シーンリセット関数
+function forceSceneReset() {
+    debugLog('FORCING COMPLETE SCENE RESET (protecting ground)...');
+    
+    // 屋根を先にクリーンアップ
+    forceRoofCleanup();
+    
+    // シーンからすべてのメッシュを削除（地面を除く）
+    const objectsToRemove = [];
+    if (scene && scene.traverse) {
+        scene.traverse((child) => {
+            if (child && child.isMesh) {
+                // 地面は保護
+                if (child.userData.isGround) {
+                    return;
+                }
+                objectsToRemove.push(child);
+            }
+        });
+    }
+    
+    objectsToRemove.forEach(obj => {
+        debugLog('Removing object:', obj.name || 'unnamed', 'type:', obj.userData.type, 'position:', obj.position);
+        scene.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        disposeMaterial(obj.material); // 安全なマテリアル破棄を使用
+    });
+    
+    // obstacles配列から地面以外のオブジェクトを削除
+    const remainingObstacles = obstacles.filter(obj => {
+        const isGround = obj.userData.isGround || (obj.position && obj.position.y <= 0);
+        if (!isGround) {
+            debugLog('Removing from obstacles:', obj.userData.type);
+        }
+        return isGround;
+    });
+    
+    // 配列をクリアして地面のみを再設定
+    obstacles.length = 0;
+    obstacles.push(...remainingObstacles);
+    
+    debugLog(`Force reset removed ${objectsToRemove.length} objects (protected ground)`);
+}
+
+function cleanupFloatingRooftopParts() {
+    let removedCount = 0;
+    
+    // すべてのマップタイプで屋根をクリーンアップ
+    // デフォルトマップかカスタムマップかに関わらず、すべての屋根オブジェクトを削除
+    
+    // シーン内のすべての子オブジェクトを直接スキャン
+    const objectsToRemove = [];
+    
+    scene.traverse((child) => {
+        // Meshオブジェクトのみを処理
+        if (child.isMesh) {
+            // 地面は保護
+            if (child.userData.isGround || child.position && child.position.y <= 0) {
+                return; // 地面は削除しない
+            }
+            
+    // 屋根パーツの特徴を持つオブジェクトを検出
+    const isRooftopPart = (
+        child.userData.isRooftop ||
+        child.userData.isHouseRoof ||
+        child.userData.parentBuildingRef ||
+        (child.material && child.material.color && child.material.color.getHex() === 0x880000) // 赤レンガ色
+    );
+    
+    if (!isRooftopPart) return;
+
+    // Only remove truly orphaned rooftop parts.
+    const parentRef = child.userData.parentBuildingRef;
+    if (parentRef) {
+        const parentAlive = parentRef.parent && obstacles.includes(parentRef);
+        if (!parentAlive) {
+            objectsToRemove.push(child);
+        }
+        return;
+    }
+
+    // No parent reference: treat as valid by default to avoid deleting active rooftops.
+        }
+    });
+    
+    // 削除対象のオブジェクトを一括で削除
+    for (const obj of objectsToRemove) {
+        scene.remove(obj);
+        
+        // obstacles配列から削除
+        const index = obstacles.indexOf(obj);
+        if (index > -1) {
+            obstacles.splice(index, 1);
+        }
+        
+        // メモリ解放
+        if (obj.geometry) obj.geometry.dispose();
+        disposeMaterial(obj.material); // 安全なマテリアル破棄を使用
+        
+        removedCount++;
+    }
+    
+    if (removedCount > 0) {
+        debugLog(`Removed ${removedCount} floating rooftop parts`);
+    }
+    
+    return removedCount;
 }
 
 function destroyObstacle(obstacle, explosionPosition) {
@@ -3882,7 +5011,7 @@ function destroyObstacle(obstacle, explosionPosition) {
             }
             scene.remove(part);
             if (part.geometry) part.geometry.dispose();
-            if (part.material) part.material.dispose();
+            disposeMaterial(part.material); // 安全なマテリアル破棄を使用
         }
     }
     const ladderGroup = obstacle.children.find(child => child.name === 'ladder');
@@ -3895,7 +5024,7 @@ function destroyObstacle(obstacle, explosionPosition) {
             scene.remove(sensorArea);
             ladderSwitches.splice(i, 1);
             if (sensorArea.geometry) sensorArea.geometry.dispose();
-            if (sensorArea.material) sensorArea.material.dispose();
+            disposeMaterial(sensorArea.material); // 安全なマテリアル破棄を使用
         }
     }
     scene.remove(obstacle);
@@ -3927,6 +5056,123 @@ function destroyObstacle(obstacle, explosionPosition) {
     obstacle.geometry.dispose();
 }
 
+function destroyBarrel(barrel, explosionPosition) {
+    const barrelIndex = obstacles.indexOf(barrel);
+    if (barrelIndex > -1) {
+        obstacles.splice(barrelIndex, 1);
+    }
+    scene.remove(barrel);
+    const radius = barrel.userData.radius || 0.75;
+    const height = barrel.userData.height || 1.2;
+    const fragmentCount = 18;
+    const fragmentSize = Math.max(0.1, radius * 0.35);
+    const fragmentGeometry = new THREE.BoxGeometry(fragmentSize, fragmentSize, fragmentSize);
+    const fragmentMaterial = barrel.material;
+    for (let i = 0; i < fragmentCount; i++) {
+        const fragment = new THREE.Mesh(fragmentGeometry, fragmentMaterial);
+        const offset = new THREE.Vector3(
+            (Math.random() - 0.5) * radius * 1.6,
+            (Math.random() - 0.5) * height,
+            (Math.random() - 0.5) * radius * 1.6
+        );
+        fragment.position.copy(barrel.position).add(offset);
+        scene.add(fragment);
+        const forceDirection = new THREE.Vector3().subVectors(fragment.position, explosionPosition).normalize();
+        const forceMagnitude = 12 + Math.random() * 16;
+        const velocity = forceDirection.multiplyScalar(forceMagnitude);
+        velocity.y += Math.random() * 8;
+        const angularVelocity = new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12);
+        debris.push({ mesh: fragment, velocity: velocity, angularVelocity: angularVelocity, life: 2 + Math.random() * 2 });
+    }
+    if (barrel.geometry) barrel.geometry.dispose();
+    disposeMaterial(barrel.material);
+}
+
+function applyBarrelKillScoring(victimAI, source, shooter) {
+    if (source === 'player') {
+        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+            if (victimAI.team === 'enemy') playerTeamKills++;
+            if (victimAI.team === 'player') enemyTeamKills++;
+        } else if (gameSettings.gameMode === 'ffa' || gameSettings.gameMode === 'arcade') {
+            playerKills++;
+        }
+        return;
+    }
+    if (source === 'ai' && shooter) {
+        if (shooter.kills !== undefined) shooter.kills++;
+        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+            if (shooter.team === 'player' && victimAI.team === 'enemy') playerTeamKills++;
+            if (shooter.team === 'enemy' && victimAI.team === 'player') enemyTeamKills++;
+        }
+    }
+}
+
+function explodeBarrel(barrel, source = 'unknown', shooter = null) {
+    if (!barrel || (barrel.userData && barrel.userData.exploding)) return;
+    if (barrel.userData) barrel.userData.exploding = true;
+    const explosionPos = barrel.position.clone();
+    if (gameSettings.barrelRespawn) {
+        const spawnPos = (barrel.userData && barrel.userData.spawnPos) ? barrel.userData.spawnPos : barrel.position;
+        respawningBarrels.push({
+            x: spawnPos.x,
+            z: spawnPos.z,
+            color: barrel.userData?.color ?? 0xe74c3c,
+            radius: barrel.userData?.radius ?? 0.75,
+            height: barrel.userData?.height ?? 2.4,
+            respawnTime: clock.getElapsedTime() + 30
+        });
+    }
+    destroyBarrel(barrel, explosionPos);
+    if (explosionSound) playSound(explosionSound);
+    createExplosionEffect(explosionPos);
+    const radius = BARREL_EXPLOSION_RADIUS;
+    const chainTargets = obstacles.filter(o => o && o.userData && o.userData.type === 'barrel' && !o.userData.exploding && o.position && o.position.distanceTo(explosionPos) < radius);
+    chainTargets.forEach(target => explodeBarrel(target, source, shooter));
+    for (let j = ais.length - 1; j >= 0; j--) {
+        const ai = ais[j];
+        if (ai.hp <= 0) continue;
+        const distance = ai.position.distanceTo(explosionPos);
+        if (distance < radius) {
+            const aiCenter = ai.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+            if (checkLineOfSight(explosionPos, aiCenter, obstacles)) {
+                if (ai.hp !== Infinity) {
+                    ai.hp = 0;
+                    createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+                }
+                if (ai.hp <= 0) {
+                    applyBarrelKillScoring(ai, source, shooter);
+                    aiFallDownCinematicSequence(new THREE.Vector3().subVectors(ai.position, explosionPos), ai, source);
+                }
+            }
+        }
+    }
+    if (playerHP > 0) {
+        const distanceToPlayer = player.position.distanceTo(explosionPos);
+        if (distanceToPlayer < radius) {
+            const playerCenter = player.position.clone().add(new THREE.Vector3(0, 1, 0));
+            if (checkLineOfSight(explosionPos, playerCenter, obstacles)) {
+                if (playerHP !== Infinity) {
+                    playerHP = 0;
+                    screenShakeDuration = SHAKE_DURATION_MAX;
+                    if (redFlashOverlay) {
+                        redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+                        setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+                    }
+                }
+                if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                    if (source === 'ai' && shooter && shooter.kills !== undefined) {
+                        shooter.kills++;
+                        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                            enemyTeamKills++;
+                        }
+                    }
+                    startPlayerDeathSequence(null);
+                }
+            }
+        }
+    }
+}
+
 function createSmokeEffect(position) {
     const SMOKE_PARTICLE_COUNT = 5;
     for (let i = 0; i < SMOKE_PARTICLE_COUNT; i++) {
@@ -3942,7 +5188,7 @@ function createSmokeEffect(position) {
         new TWEEN.Tween(smokeMaterial).to({ opacity: 0 }, duration * 1000).easing(TWEEN.Easing.Linear.None).onComplete(() => {
             scene.remove(smoke);
             smoke.geometry.dispose();
-            smoke.material.dispose();
+            disposeMaterial(smoke.material); // 安全なマテリアル破棄を使用
         }).start();
     }
 }
@@ -3962,7 +5208,7 @@ function createRedSmokeEffect(position) {
         new TWEEN.Tween(smokeMaterial).to({ opacity: 0 }, duration * 1000).easing(TWEEN.Easing.Linear.None).onComplete(() => {
             scene.remove(smoke);
             smoke.geometry.dispose();
-            smoke.material.dispose();
+            disposeMaterial(smoke.material); // 安全なマテリアル破棄を使用
         }).start();
     }
 }
@@ -3978,7 +5224,7 @@ function createRocketTrail(position) {
     new TWEEN.Tween(trailMaterial).to({ opacity: 0 }, duration * 1000).easing(TWEEN.Easing.Linear.None).onComplete(() => {
         scene.remove(particle);
         particle.geometry.dispose();
-        particle.material.dispose();
+        disposeMaterial(particle.material); // 安全なマテリアル破棄を使用
     }).start();
 }
 
@@ -4015,10 +5261,31 @@ function getPlayerSafeFireData(direction) {
 function getAISafeFireData(startPos, direction) {
     const dir = direction.clone().normalize();
     raycaster.set(startPos, dir);
-    raycaster.far = 0.35;
+    raycaster.far = 2.0; // 適切な距離で壁を検出するように増加
     const wallHits = raycaster.intersectObjects(obstacles, true);
+    
     if (wallHits.length > 0) {
-        return { blocked: true, impactPoint: wallHits[0].point.clone() };
+        const hitObject = wallHits[0].object;
+        
+        // AIが塔の内部にいる場合、その塔自体との衝突は無視する
+        // ただし、他の障害物や他の塔とは衝突する
+        let shouldIgnore = false;
+        for (const ai of ais) {
+            // AIの位置から最も近い塔を探す
+            if (ai.position && hitObject.userData.type === 'tower') {
+                const aiToTowerDist = ai.position.distanceTo(hitObject.position);
+                const towerSize = 6; // 塔の幅は6
+                if (aiToTowerDist < towerSize / 2) {
+                    // AIが塔の内部にいる場合、この塔との衝突を無視
+                    shouldIgnore = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!shouldIgnore) {
+            return { blocked: true, impactPoint: wallHits[0].point.clone() };
+        }
     }
     return { blocked: false, impactPoint: null };
 }
@@ -4057,13 +5324,21 @@ function cancelScope() {
     new TWEEN.Tween(camera).to({ fov: 75 }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
 }
 
+function setRifleZoom(enabled) {
+    if (isScoping) return;
+    if (isRifleZoomed === enabled) return;
+    isRifleZoomed = enabled;
+    const targetFov = enabled ? MR_ZOOM_FOV : 75;
+    new TWEEN.Tween(camera).to({ fov: targetFov }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
+}
+
 function handleFireRelease() {
     if (!isGameRunning) return;
     if (isScoping) {
         document.getElementById('night-vision-overlay').style.display = 'none';
         const timeSinceLastFire = clock.getElapsedTime() - lastFireTime;
         if ((ammoSR > 0 || isInfiniteDefaultWeaponActive(WEAPON_SR)) && timeSinceLastFire > FIRE_RATE_SR) {
-            if (srGunSound) srGunSound.cloneNode(true).play();
+            if (srGunSound) playSound(srGunSound);
             let direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
             const safeFire = getPlayerSafeFireData(direction);
@@ -4098,10 +5373,18 @@ function shoot() {
         ammoMG = MAX_AMMO_MG;
         hideReloadingText();
     }
+    if (playerMRReloadUntil > 0 && now >= playerMRReloadUntil) {
+        playerMRReloadUntil = 0;
+        ammoMR = MAX_AMMO_MR;
+        hideReloadingText();
+    }
     let canFire = false;
     let projectileColor = 0xffff00;
     let projectileSize = 0.1;
     let fireRate = FIRE_RATE_PISTOL;
+    let projectileSpeedOverride = projectileSpeed;
+    let weaponType = null;
+    let isSniperShot = false;
     switch (currentWeapon) {
         case WEAPON_PISTOL: canFire = true; fireRate = FIRE_RATE_PISTOL; break;
         case WEAPON_MG:
@@ -4117,6 +5400,19 @@ function shoot() {
             break;
         case WEAPON_RR: if (ammoRR > 0 || isInfiniteDefaultWeaponActive(WEAPON_RR)) { canFire = true; projectileColor = 0xff8c00; projectileSize = 0.5; fireRate = FIRE_RATE_RR; } break;
         case WEAPON_SG: if (ammoSG > 0 || isInfiniteDefaultWeaponActive(WEAPON_SG)) { canFire = true; projectileColor = 0xffa500; projectileSize = 0.05; fireRate = FIRE_RATE_SG; } break;
+        case WEAPON_MR:
+            if (playerMRReloadUntil > 0 && now < playerMRReloadUntil) {
+                canFire = false;
+                break;
+            }
+            if (ammoMR > 0 || isInfiniteDefaultWeaponActive(WEAPON_MR)) {
+                canFire = true;
+                projectileColor = 0xffff00;
+                fireRate = FIRE_RATE_MR;
+                projectileSpeedOverride = projectileSpeed * MR_PROJECTILE_SPEED_MULT;
+                weaponType = WEAPON_MR;
+            }
+            break;
     }
     const timeSinceLastFire = now - lastFireTime;
     if (canFire && timeSinceLastFire > fireRate) {
@@ -4124,7 +5420,8 @@ function shoot() {
         if (currentWeapon === WEAPON_MG) soundToPlay = mgGunSound;
         else if (currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
         else if (currentWeapon === WEAPON_SG) soundToPlay = playerSgSound;
-        if (soundToPlay) soundToPlay.cloneNode(true).play();
+        else if (currentWeapon === WEAPON_MR) soundToPlay = m1GunSound;
+        if (soundToPlay) playSound(soundToPlay);
         let baseDirection = new THREE.Vector3();
         camera.getWorldDirection(baseDirection);
         const safeFire = getPlayerSafeFireData(baseDirection);
@@ -4147,7 +5444,7 @@ function shoot() {
                 createProjectile(safeFire.startPosition, spreadDirection, projectileColor, projectileSize, false, 'player', projectileSpeed, false, WEAPON_SG);
             }
         } else {
-            createProjectile(safeFire.startPosition, baseDirection, projectileColor, projectileSize, currentWeapon === WEAPON_RR, 'player');
+            createProjectile(safeFire.startPosition, baseDirection, projectileColor, projectileSize, currentWeapon === WEAPON_RR, 'player', projectileSpeedOverride, isSniperShot, weaponType);
         }
         lastFireTime = now;
         if (currentWeapon === WEAPON_MG) {
@@ -4161,6 +5458,13 @@ function shoot() {
             if (!isInfiniteDefaultWeaponActive(WEAPON_RR) && --ammoRR === 0) switchPlayerToFallbackWeapon();
         } else if (currentWeapon === WEAPON_SG) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_SG) && --ammoSG === 0) switchPlayerToFallbackWeapon();
+        } else if (currentWeapon === WEAPON_MR) {
+            if (!isInfiniteDefaultWeaponActive(WEAPON_MR) && --ammoMR === 0) {
+                if (clipSound) playSound(clipSound);
+                ammoMR = 0;
+                playerMRReloadUntil = now + 2.0;
+                showReloadingText();
+            }
         }
     }
 }
@@ -4170,6 +5474,10 @@ function aiShoot(ai, timeElapsed) {
     if (ai && ai.userData && ai.userData.mgReloadUntil && timeElapsed >= ai.userData.mgReloadUntil) {
         ai.userData.mgReloadUntil = 0;
         ai.ammoMG = MAX_AMMO_MG;
+    }
+    if (ai && ai.userData && ai.userData.mrReloadUntil && timeElapsed >= ai.userData.mrReloadUntil) {
+        ai.userData.mrReloadUntil = 0;
+        ai.ammoMR = MAX_AMMO_MR;
     }
     let startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0));
     const aimOrigin = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.65 : BODY_HEIGHT * 0.9, 0));
@@ -4354,6 +5662,18 @@ function aiShoot(ai, timeElapsed) {
         case WEAPON_RR: if (ai.ammoRR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR)) { canAIShoot = true; aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0); aiProjectileSize = 0.5; aiProjectileColor = 0xff8c00; } break;
         case WEAPON_SR: if (ai.ammoSR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR)) { canAIShoot = true; aiFireRate = FIRE_RATE_SR * (1.0 + (1.0 - ai.aggression) * 0.5); aiProjectileColor = 0xffff00; aiProjectileSpeed = projectileSpeed * 2; } break;
         case WEAPON_SG: if (ai.ammoSG > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG)) { canAIShoot = true; aiFireRate = FIRE_RATE_SG; aiProjectileColor = 0xffa500; aiProjectileSize = 0.05; if (distanceToPlayer < SHOTGUN_RANGE * 1.5) { aiFireRate /= (1 + ai.aggression); } } break;
+        case WEAPON_MR:
+            if (ai.userData && ai.userData.mrReloadUntil && timeElapsed < ai.userData.mrReloadUntil) {
+                canAIShoot = false;
+                break;
+            }
+            if (ai.ammoMR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MR)) {
+                canAIShoot = true;
+                aiFireRate = FIRE_RATE_MR;
+                aiProjectileColor = 0xffff00;
+                aiProjectileSpeed = projectileSpeed * MR_PROJECTILE_SPEED_MULT;
+            }
+            break;
     }
     if (isTeamModeOrTeamArcade && ai.team === 'player' && ai.currentWeapon !== WEAPON_MG) {
         // 味方AIはやや高頻度で攻撃（ただしMGは敵と同じレートにするため除外）
@@ -4372,8 +5692,9 @@ function aiShoot(ai, timeElapsed) {
         else if (ai.currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
         else if (ai.currentWeapon === WEAPON_SR) soundToPlay = aiSrGunSound;
         else if (ai.currentWeapon === WEAPON_SG) soundToPlay = aiSgSound;
+        else if (ai.currentWeapon === WEAPON_MR) soundToPlay = aiM1GunSound;
         else soundToPlay = aiGunSound;
-        if (soundToPlay) soundToPlay.cloneNode(true).play();
+        if (soundToPlay) playSound(soundToPlay);
         const aiMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0));
         createMuzzleFlash(aiMuzzlePosition, 150, 3.0, 90, 0xffffff);
         createGroundFlash(aiMuzzlePosition, 0xffffff, 1.5, 150);
@@ -4386,7 +5707,7 @@ function aiShoot(ai, timeElapsed) {
         new TWEEN.Tween(spark.material).to({ opacity: 0 }, 150).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
             scene.remove(spark);
             spark.geometry.dispose();
-            spark.material.dispose();
+            disposeMaterial(spark.material); // 安全なマテリアル破棄を使用
         }).start();
         if (ai.currentWeapon === WEAPON_SG) {
             const upVector = new THREE.Vector3(0, 1, 0);
@@ -4402,7 +5723,8 @@ function aiShoot(ai, timeElapsed) {
                 createProjectile(startPosition, spreadDirection, aiProjectileColor, aiProjectileSize, false, 'ai', aiProjectileSpeed, false, WEAPON_SG, ai);
             }
         } else {
-            createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR, null, ai);
+            const aiWeaponType = ai.currentWeapon === WEAPON_MR ? WEAPON_MR : null;
+            createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR, aiWeaponType, ai);
         }
         ai.lastAttackTime = timeElapsed;
         if (ai.currentWeapon === WEAPON_MG) {
@@ -4417,6 +5739,11 @@ function aiShoot(ai, timeElapsed) {
             if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR) && --ai.ammoSR === 0) switchAIToFallbackWeapon(ai);
         } else if (ai.currentWeapon === WEAPON_SG) {
             if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG) && --ai.ammoSG === 0) switchAIToFallbackWeapon(ai);
+        } else if (ai.currentWeapon === WEAPON_MR) {
+            if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MR) && --ai.ammoMR === 0) {
+                ai.ammoMR = 0;
+                if (ai.userData) ai.userData.mrReloadUntil = timeElapsed + 2.0;
+            }
         }
     }
 }
@@ -4432,6 +5759,7 @@ function aiCheckPickup(ai) {
                 case WEAPON_RR: ai.currentWeapon = WEAPON_RR; ai.ammoRR = MAX_AMMO_RR; break;
                 case WEAPON_SR: ai.currentWeapon = WEAPON_SR; ai.ammoSR = MAX_AMMO_SR; break;
                 case WEAPON_SG: ai.currentWeapon = WEAPON_SG; ai.ammoSG = MAX_AMMO_SG; break;
+                case WEAPON_MR: ai.currentWeapon = WEAPON_MR; ai.ammoMR = MAX_AMMO_MR; break;
             }
             scene.remove(pickup);
             weaponPickups.splice(i, 1);
@@ -4519,6 +5847,34 @@ function getFollowSlotPosition(ai) {
     return slotPos;
 }
 
+function getSafeFollowSlotPosition(ai) {
+    const base = getFollowSlotPosition(ai);
+    const offsets = [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(1.8, 0, 0),
+        new THREE.Vector3(-1.8, 0, 0),
+        new THREE.Vector3(0, 0, 1.8),
+        new THREE.Vector3(0, 0, -1.8),
+        new THREE.Vector3(2.6, 0, 2.6),
+        new THREE.Vector3(-2.6, 0, 2.6),
+        new THREE.Vector3(2.6, 0, -2.6),
+        new THREE.Vector3(-2.6, 0, -2.6)
+    ];
+
+    const originalPos = ai.position.clone();
+    for (const offset of offsets) {
+        const candidate = base.clone().add(offset);
+        candidate.y = getGroundSurfaceY(candidate);
+        ai.position.copy(candidate);
+        if (!checkCollision(ai, obstacles)) {
+            ai.position.copy(originalPos);
+            return candidate;
+        }
+    }
+    ai.position.copy(originalPos);
+    return base;
+}
+
 function getNearbyTeammateSpawnPosition(ai) {
     const playerForward = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion);
     playerForward.y = 0;
@@ -4554,12 +5910,16 @@ function warpTeammatesInFrontForFollow() {
     const reviveHPSetting = gameSettings.aiHP === 'Infinity' ? Infinity : Math.max(1, parseInt(gameSettings.aiHP, 10) || 3);
 
     teammates.forEach((ai) => {
-        const targetPos = getFollowSlotPosition(ai);
+        const targetPos = getSafeFollowSlotPosition(ai);
         if (ai.hp <= 0) {
             ai.hp = reviveHPSetting;
             ai.visible = true;
         }
+        const originalPos = ai.position.clone();
         ai.position.copy(targetPos);
+        if (checkCollision(ai, obstacles)) {
+            ai.position.copy(originalPos);
+        }
         ai.targetPosition.copy(targetPos);
         ai.userData.followActive = true;
         ai.state = 'FOLLOWING';
@@ -4570,7 +5930,7 @@ function warpTeammatesInFrontForFollow() {
 
 function setFollowingPlayerMode(enabled) {
     isFollowingPlayerMode = enabled;
-    console.log(`AI Following Mode: ${isFollowingPlayerMode ? 'ON' : 'OFF'}`);
+    debugLog(`AI Following Mode: ${isFollowingPlayerMode ? 'ON' : 'OFF'}`);
     if (followStatusDisplay) {
         if (isFollowingPlayerMode) {
             followStatusDisplay.style.display = 'block';
@@ -4608,13 +5968,20 @@ function toggleFollowingPlayerMode() {
 document.addEventListener('keydown', (event) => {
     if (!isGameRunning) return;
     keySet.add(event.code);
+    // デバッグ: キー入力をログ
+    if (event.code === 'KeyW' || event.code === 'KeyA' || event.code === 'KeyS' || event.code === 'KeyD') {
+        debugLog('Key pressed:', event.code, 'isGameRunning:', isGameRunning, 'justRestarted:', window.justRestarted);
+    }
     if (event.code === 'KeyC') {
         isCrouchingToggle = !isCrouchingToggle;
     } else if (event.code === 'KeyF') { // Fキーで追従モードをトグル
         toggleFollowingPlayerMode();
     }
 });
-document.addEventListener('keyup', (event) => { if (!isGameRunning) return; keySet.delete(event.code); });
+document.addEventListener('keyup', (event) => { 
+    if (!isGameRunning) return;
+    keySet.delete(event.code); 
+});
 const canvas = renderer.domElement;
 canvas.addEventListener('click', () => { if (!isGameRunning) return; if (document.pointerLockElement !== canvas) { canvas.requestPointerLock(); } });
 document.addEventListener('pointerlockchange', () => {
@@ -4639,7 +6006,9 @@ document.addEventListener('mousedown', (event) => {
     if (event.button === 0) { // Left click
         handleFirePress();
     } else if (event.button === 2) { // Right click
-        if (isScoping) {
+        if (currentWeapon === WEAPON_MR) {
+            setRifleZoom(!isRifleZoomed);
+        } else if (isScoping) {
             cancelScope();
         }
     }
@@ -4733,26 +6102,36 @@ if (followButtonElement) {
 }
 
 function initializeAudio() {
-    // Preload and cache all audio elements
+    // ユーザーインタラクション後に音声を初期化
     const allAudio = document.querySelectorAll('audio');
     allAudio.forEach(audio => {
-        const originalVolume = audio.volume;
-        audio.volume = 0;
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-            playPromise.then(_ => {
-                audio.pause();
-                audio.currentTime = 0;
-                audio.volume = originalVolume;
-            }).catch(error => {
-                audio.volume = originalVolume;
-            });
-        }
+        // 音声ファイルをプリロード
+        audio.load();
+        // 一時的にミュートにして再生を試みる（ブラウザポリシー対応）
+        audio.muted = true;
+        audio.play().then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.muted = false;
+            debugLog('Audio initialized:', audio.id);
+        }).catch(error => {
+            audio.muted = false;
+            debugLog('Audio initialization failed:', audio.id, error);
+        });
     });
 }
 
 function startGame() {
-    console.log('startGame() called');
+    debugLog('startGame() called');
+    
+    // シーンを完全にクリーンアップ（マップ切り替え時のゴースト対策）
+    forceRoofCleanup();
+    forceBuildingCleanup(); // 建築物クリーンアップを追加
+    resetObstacles();
+    isRifleZoomed = false;
+    camera.fov = 75;
+    camera.updateProjectionMatrix();
+    
     const startSc = document.getElementById('start-screen');
     if (startSc) startSc.style.display = 'none';
     if (renderer && renderer.domElement) {
@@ -4810,36 +6189,36 @@ function startGame() {
     const element = document.documentElement;
 
     if ('ontouchstart' in window) {
-        console.log('startGame(): Mobile device detected. Setting UI to block/flex.');
+        debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
         const pause = document.getElementById('pause-button');
         const followBtn = document.getElementById('follow-button'); 
 
-        if (joy) { joy.style.display = 'block'; console.log('startGame(): joystick-move display set to block'); }
-        if (fire) { fire.style.display = 'flex'; console.log('startGame(): fire-button display set to flex'); }
-        if (crouch) { crouch.style.display = 'flex'; console.log('startGame(): crouch-button display set to flex'); }
-        if (pause) { pause.style.display = 'block'; console.log('startGame(): pause-button display set to block'); }
+        if (joy) { joy.style.display = 'block'; debugLog('startGame(): joystick-move display set to block'); }
+        if (fire) { fire.style.display = 'flex'; debugLog('startGame(): fire-button display set to flex'); }
+        if (crouch) { crouch.style.display = 'flex'; debugLog('startGame(): crouch-button display set to flex'); }
+        if (pause) { pause.style.display = 'block'; debugLog('startGame(): pause-button display set to block'); }
 
         if (followBtn) { 
             if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
-                followBtn.style.display = 'flex'; console.log('startGame(): follow-button display set to flex (team mode)');
+                followBtn.style.display = 'flex'; debugLog('startGame(): follow-button display set to flex (team mode)');
             } else {
-                followBtn.style.display = 'none'; console.log('startGame(): follow-button display set to none (non-team mode)');
+                followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none (non-team mode)');
             }
         }
     } else {
-        console.log('startGame(): PC device detected. Setting UI to none.');
+        debugLog('startGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
         const followBtn = document.getElementById('follow-button'); 
 
-        if (joy) { joy.style.display = 'none'; console.log('startGame(): joystick-move display set to none'); }
-        if (fire) { fire.style.display = 'none'; console.log('startGame(): fire-button display set to none'); }
-        if (crouch) { crouch.style.display = 'none'; console.log('startGame(): crouch-button display set to none'); }
-        if (followBtn) { followBtn.style.display = 'none'; console.log('startGame(): follow-button display set to none'); }
+        if (joy) { joy.style.display = 'none'; debugLog('startGame(): joystick-move display set to none'); }
+        if (fire) { fire.style.display = 'none'; debugLog('startGame(): fire-button display set to none'); }
+        if (crouch) { crouch.style.display = 'none'; debugLog('startGame(): crouch-button display set to none'); }
+        if (followBtn) { followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none'); }
     }
     try {
         if (element.requestFullscreen) {
@@ -4887,8 +6266,14 @@ function shuffle(array) {
 }
 
 function restartGame() {
-    console.log('restartGame() called');
+    debugLog('restartGame() called');
     playerBreadcrumbs = []; // Reset the breadcrumb trail
+    
+    // 屋根ゴーストと建築物を先にクリーンアップ
+    forceHouseCleanup();
+    forceRoofCleanup();
+    forceBuildingCleanup(); // 建築物クリーンアップを追加
+    
     resetObstacles();
     gameOverScreen.style.display = 'none';
     winScreen.style.display = 'none';
@@ -4902,7 +6287,7 @@ function restartGame() {
     }
     let customSpawnPoints = null;
     let availableSpawnPoints = [];
-    if (gameSettings.mapType === 'default' || gameSettings.mapType === 'random') {
+    if (gameSettings.mapType === 'default') {
         const R = ARENA_PLAY_AREA_RADIUS - 5;
         let currentAICount = gameSettings.aiCount;
         if (gameSettings.gameMode === 'arcade') {
@@ -4931,7 +6316,7 @@ function restartGame() {
             saveSettings();
         }
         if (selectedMapData) {
-            console.log("Custom map selected. selectedMapData:", selectedMapData); // 追加
+            debugLog("カスタムマップが選択されました。選択されたマップデータ:", selectedMapData); // 追加
             try {
                 if (selectedMapData && selectedMapData.obstacles) {
                     customSpawnPoints = selectedMapData.spawnPoints.map(p => new THREE.Vector3(p.x, 2.0, p.z));
@@ -5191,25 +6576,25 @@ function restartGame() {
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
     if ('ontouchstart' in window) {
-        console.log('restartGame(): Mobile device detected. Setting UI to block/flex.');
+        debugLog('restartGame(): Mobile device detected. Setting UI to block/flex.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
         const pause = document.getElementById('pause-button');
-        if (joy) { joy.style.display = 'block'; console.log('restartGame(): joystick-move display set to block'); }
-        if (fire) { fire.style.display = 'flex'; console.log('restartGame(): fire-button display set to flex'); }
-        if (crouch) { crouch.style.display = 'flex'; console.log('restartGame(): crouch-button display set to flex'); }
-        if (pause) { pause.style.display = 'block'; console.log('restartGame(): pause-button display set to block'); }
+        if (joy) { joy.style.display = 'block'; debugLog('restartGame(): joystick-move display set to block'); }
+        if (fire) { fire.style.display = 'flex'; debugLog('restartGame(): fire-button display set to flex'); }
+        if (crouch) { crouch.style.display = 'flex'; debugLog('restartGame(): crouch-button display set to flex'); }
+        if (pause) { pause.style.display = 'block'; debugLog('restartGame(): pause-button display set to block'); }
     } else {
-        console.log('restartGame(): PC device detected. Setting UI to none.');
+        debugLog('restartGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
         const pause = document.getElementById('pause-button');
-        if (joy) { joy.style.display = 'none'; console.log('restartGame(): joystick-move display set to none'); }
-        if (fire) { fire.style.display = 'none'; console.log('restartGame(): fire-button display set to none'); }
-        if (crouch) { crouch.style.display = 'none'; console.log('restartGame(): crouch-button display set to none'); }
-        if (pause) { pause.style.display = 'none'; console.log('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
+        if (joy) { joy.style.display = 'none'; debugLog('restartGame(): joystick-move display set to none'); }
+        if (fire) { fire.style.display = 'none'; debugLog('restartGame(): fire-button display set to none'); }
+        if (crouch) { crouch.style.display = 'none'; debugLog('restartGame(): crouch-button display set to none'); }
+        if (pause) { pause.style.display = 'none'; debugLog('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
     }
     for (let i = projectiles.length - 1; i >= 0; i--) scene.remove(projectiles[i].mesh);
     projectiles.length = 0;
@@ -5230,6 +6615,7 @@ function restartGame() {
     clock.start();
     lastFireTime = -1;
     playerMGReloadUntil = 0;
+    playerMRReloadUntil = 0;
     hideReloadingText();
     keySet.clear();
     joystickMoveVector.set(0, 0);
@@ -5332,8 +6718,13 @@ function respawnAI(ai) {
     const isTeamModeOrArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
 
     if (isFollowingPlayerMode && isTeamModeOrArcade && isTeammate) {
-        const followPos = getFollowSlotPosition(ai);
+        const followPos = getSafeFollowSlotPosition(ai);
+        const originalPos = ai.position.clone();
         ai.position.copy(followPos);
+        if (checkCollision(ai, obstacles)) {
+            ai.position.copy(originalPos);
+            ai.position.copy(getNearbyTeammateSpawnPosition(ai));
+        }
         ai.rotation.set(0, player.rotation.y, 0);
         ai.state = 'FOLLOWING';
         ai.userData.followActive = true;
@@ -5376,6 +6767,8 @@ function respawnAI(ai) {
     ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false; ai.isCrouching = false;
     ai.isElevating = false;
     if (ai.userData) ai.userData.mgReloadUntil = 0;
+    if (ai.userData) ai.userData.mrReloadUntil = 0;
+    if (ai.userData) ai.userData.mrReloadUntil = 0;
     ai.userData.rooftopIntent = false;
     ai.userData.onRooftop = false;
     ai.userData.rooftopSensor = null;
@@ -5562,9 +6955,11 @@ function startPlayerDeathSequence(projectile) {
         setTimeout(() => { // このsetTimeoutは全体の演出時間に合わせて調整
             isPlayerDeathPlaying = false;
             // プレイヤーモデルの回転をリセット
-            playerModel.rotation.set(0, 0, 0); 
-            // playerModelがplayerの子として正しく配置されるようにリセット
-            playerModel.position.set(0, -playerTargetHeight, 0); 
+            if (playerModel) {
+                playerModel.rotation.set(0, 0, 0); 
+                // playerModelがplayerの子として正しく配置されるようにリセット
+                playerModel.position.set(0, -playerTargetHeight, 0); 
+            }
     
             // カメラをリセット (通常のプレイヤー視点に戻す)
             camera.position.set(0, 0, 0); // 相対位置としてリセット
@@ -5591,10 +6986,59 @@ function startPlayerDeathSequence(projectile) {
                     const el = document.getElementById(id);
                     if (el) el.style.display = 'block';
                 });
-            } else {            // teamArcade以外のモードではゲームオーバー画面へ
-            showGameOver();
-        }
+            } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                // チームモード：残りHPを確認
+                const playerTeamAlive = checkTeamAlive('player');
+                const enemyTeamAlive = checkTeamAlive('enemy');
+                
+                if (!playerTeamAlive) {
+                    showGameOver();
+                } else if (!enemyTeamAlive) {
+                    showWinScreen();
+                } else {
+                    // まだ生存者がいる場合はリスポーン
+                    respawnPlayer();
+                    if (isFollowingPlayerMode) {
+                        for (const ai of ais) {
+                            if (ai && ai.team === 'player') ai.userData.followActive = true;
+                        }
+                        warpTeammatesInFrontForFollow();
+                    }
+                    isGameRunning = true;
+                    if (player) player.traverse((object) => { object.visible = true; });
+                    // UIを再表示
+                    const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
+                    if ('ontouchstart' in window) {
+                        uiToShow.push('joystick-move', 'fire-button', 'crouch-button');
+                    } else {
+                        canvas.requestPointerLock();
+                    }
+                    uiToShow.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.style.display = 'block';
+                    });
+                }
+            } else {
+                // FFAモード：ゲームオーバー
+                showGameOver();
+            }
     }, 3000); // 3秒後にリスポーンまたはゲームオーバー
+}
+
+function checkTeamAlive(team) {
+    // プレイヤーチームの場合はプレイヤーもチェック
+    if (team === 'player') {
+        if (playerHP > 0) return true;
+    }
+    
+    // AIチームメンバーをチェック
+    for (const ai of ais) {
+        if (ai.team === team && ai.hp > 0) {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 function findFlankingSpot(ai, timeElapsed) {
@@ -5674,11 +7118,41 @@ function createWindows(obstacleMesh, buildingWidth, buildingHeight, buildingDept
 
 function shouldPlayAIDeathKillCam(ai, killerSource) {
     const mode = gameSettings.killCamMode || 'playerOnly';
+    if (mode === 'off') return false;
     if (mode === 'all') return true;
     if (mode === 'playerOnly') {
         return killerSource === 'player' && ai && ai.team === 'enemy';
     }
     return true;
+}
+
+let enemyKilledMessageTimer = null;
+function showEnemyKilledMessage() {
+    let el = document.getElementById('enemy-killed-message');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'enemy-killed-message';
+        el.textContent = 'enemy killed';
+        el.style.position = 'fixed';
+        el.style.left = '50%';
+        el.style.top = '44%';
+        el.style.transform = 'translate(-50%, -50%)';
+        el.style.color = 'red';
+        el.style.fontSize = '24px';
+        el.style.fontWeight = 'bold';
+        el.style.pointerEvents = 'none';
+        el.style.zIndex = '9999';
+        el.style.display = 'none';
+        document.body.appendChild(el);
+    }
+    el.style.display = 'block';
+    if (enemyKilledMessageTimer) {
+        clearTimeout(enemyKilledMessageTimer);
+        enemyKilledMessageTimer = null;
+    }
+    enemyKilledMessageTimer = setTimeout(() => {
+        el.style.display = 'none';
+    }, 2000);
 }
 
 function finalizeAIDeathWithoutKillCam(ai) {
@@ -5693,6 +7167,9 @@ function finalizeAIDeathWithoutKillCam(ai) {
 
 function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown') {
     if (!shouldPlayAIDeathKillCam(ai, killerSource)) {
+        if (gameSettings.killCamMode === 'off' && killerSource === 'player' && ai) {
+            showEnemyKilledMessage();
+        }
         finalizeAIDeathWithoutKillCam(ai);
         return;
     }
@@ -5704,9 +7181,11 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     const joy = document.getElementById('joystick-move');
     const fire = document.getElementById('fire-button');
     const cross = document.getElementById('crosshair');
+    const followBtn = document.getElementById('follow-button');
     if (joy) joy.style.display = 'none';
     if (fire) fire.style.display = 'none';
     if (cross) cross.style.display = 'none';
+    if (followBtn) followBtn.style.display = 'none';
     createRedSmokeEffect(ai.position);
     const aiDeathLocation = ai.position.clone();
     const aiLookAt = aiDeathLocation.clone().add(new THREE.Vector3(0, 1.2, 0));
@@ -5732,6 +7211,10 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
             if (joy) joy.style.display = 'block';
             if (fire) fire.style.display = 'block';
             if (cross) cross.style.display = 'block';
+            if (followBtn) {
+                const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+            }
             if (player) {
                 player.traverse((object) => { object.visible = true; }); // AI死亡演出終了時はプレイヤーを再表示
                 if (playerModel) {
@@ -5758,42 +7241,125 @@ function showWinScreen() {
     if(pauseBtn) pauseBtn.style.display = 'none';
 }
 
+function updateCrosshairForWeapon() {
+    const crosshair = document.getElementById('crosshair');
+    if (!crosshair) return;
+    const lineH = document.getElementById('line-h');
+    const lineV = document.getElementById('line-v');
+    const circle = crosshairCircle || document.getElementById('crosshair-circle');
+    const plusH = crosshairPlusH || document.getElementById('crosshair-plus-h');
+    const plusV = crosshairPlusV || document.getElementById('crosshair-plus-v');
+    if (lineH) lineH.style.display = 'block';
+    if (lineV) lineV.style.display = 'block';
+    if (circle) circle.style.display = 'none';
+    if (plusH) plusH.style.display = 'none';
+    if (plusV) plusV.style.display = 'none';
+
+    if (currentWeapon === WEAPON_SG) {
+        if (lineH) lineH.style.display = 'none';
+        if (lineV) lineV.style.display = 'none';
+        if (circle) circle.style.display = 'block';
+    } else if (currentWeapon === WEAPON_RR) {
+        if (lineH) lineH.style.display = 'none';
+        if (lineV) lineV.style.display = 'none';
+        if (circle) circle.style.display = 'block';
+        if (plusH) plusH.style.display = 'block';
+        if (plusV) plusV.style.display = 'block';
+    }
+}
+
 function checkCollision(object, obstacles, ignoreObstacle = null) {
     const objectBox = new THREE.Box3();
     const pos = object.position;
     let currentObjectBox;
-    if (object === player) {
-        currentObjectBox = objectBox;
-        currentObjectBox.min.set(pos.x - 0.25, pos.y - playerTargetHeight - 0.1, pos.z - 0.25);
-        currentObjectBox.max.set(pos.x + 0.25, pos.y + 0.1, pos.z + 0.25);
-    } else if (object.userData && object.userData.isAI) {
-        currentObjectBox = objectBox;
-        const aiHeight = object.userData.height || BODY_HEIGHT + HEAD_RADIUS * 2;
-        currentObjectBox.min.set(pos.x - 0.2, pos.y - aiHeight, pos.z - 0.2);
-        currentObjectBox.max.set(pos.x + 0.2, pos.y, pos.z + 0.2);
-    } else {
-        currentObjectBox = new THREE.Box3().setFromObject(object);
-    }
+    
     for (const obstacle of obstacles) {
         if (obstacle === ignoreObstacle) continue;
         if (obstacle === object) continue;
         
-        // 屋上の床は衝突判定から除外
-        if (obstacle.userData.isRooftop) continue;
+        // 屋上の床は衝突判定から除外（家の屋根は強力な衝突判定）
+        if (obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof) continue;
         
-        // The current 'ignoreObstacle' logic is designed to ignore only the specific object passed.
-        // It should NOT ignore objects that are merely children or parts of the ignored object,
-        // unless those parts are explicitly handled (like isRooftop floors).
-        // Removing the broad parent/building reference ignore condition.
-        // if (ignoreObstacle && (obstacle.userData.parentTower === ignoreObstacle || obstacle.userData.parentBuildingRef === ignoreObstacle)) {
-        //    continue;
-        // }
-        const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-        if (currentObjectBox.intersectsBox(obstacleBox)) {
+        // 家の屋根はAIに対して強力な衝突判定を適用
+        if (obstacle.userData.isHouseRoof && ais.includes(object)) {
+            const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+            const objectBox = new THREE.Box3().setFromObject(object);
+            if (obstacleBox.intersectsBox(objectBox)) {
+                return true; // 強力な衝突
+            }
+        }
+        
+        // 家の屋根はAIの地面計算から完全に除外
+        if (obstacle.userData.isHouseRoof && ais.includes(object)) {
+            continue;
+        }
+        
+        // AIが家に入れるように特別処理
+        if (ais.includes(object) && obstacle.userData.type === 'house') {
+            // 家の壁は個別に衝突判定するため、家グループ自体とは衝突しない
+            // 壁はobstacles配列に個別に追加されていないため、子要素をチェック
+            let hasCollision = false;
+            obstacle.traverse((child) => {
+                if (child.userData.isWall && child.isMesh) {
+                    const childBox = new THREE.Box3().setFromObject(child);
+                    const objectBox = new THREE.Box3().setFromObject(object);
+                    if (childBox.intersectsBox(objectBox)) {
+                        hasCollision = true;
+                    }
+                }
+            });
+            if (hasCollision) return true;
+            continue;
+        }
+        
+        currentObjectBox = new THREE.Box3().setFromObject(obstacle);
+        
+        // AIの場合は少し大きめのバウンディングボックスを使用
+        if (ais.includes(object)) {
+            const aiBodyHeight = BODY_HEIGHT + (HEAD_RADIUS * 2); 
+            const aiCollisionHeight = object.isCrouching ? aiBodyHeight * 0.7 : aiBodyHeight; 
+            objectBox.min.set(pos.x - 0.3, pos.y - aiCollisionHeight, pos.z - 0.3);
+            objectBox.max.set(pos.x + 0.3, pos.y, pos.z + 0.3);
+        } else {
+            // プレイヤーの場合
+            objectBox.min.set(pos.x - 0.2, pos.y - playerTargetHeight, pos.z - 0.2);
+            objectBox.max.set(pos.x + 0.2, pos.y, pos.z + 0.2);
+        }
+        
+        if (objectBox.intersectsBox(currentObjectBox)) {
             return true;
         }
     }
+    if (checkHouseCollisionBox(objectBox)) return true;
     return false;
+}
+
+// AI移動のスイープチェック（薄い壁のすり抜け対策）
+function applyAIMovementWithSweep(ai, moveVec, ignoreObstacle = null) {
+    const moveLen = moveVec.length();
+    if (moveLen < 1e-6) return false;
+    const origin = ai.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+    const dir = moveVec.clone().normalize();
+    raycaster.set(origin, dir);
+    raycaster.far = moveLen + 0.35;
+    const hits = raycaster.intersectObjects(obstacles, true);
+    for (const hit of hits) {
+        const obj = hit.object;
+        if (obj === ignoreObstacle) continue;
+        if (obj.userData && obj.userData.isRooftop && !obj.userData.isHouseRoof) continue;
+        const safeLen = Math.max(0, hit.distance - 0.35);
+        if (safeLen < moveLen) {
+            moveVec.multiplyScalar(safeLen / moveLen);
+        }
+        break;
+    }
+    const oldPos = ai.position.clone();
+    ai.position.add(moveVec);
+    if (checkCollision(ai, obstacles)) {
+        ai.position.copy(oldPos);
+        return false;
+    }
+    return true;
 }
 
 // AI専用の衝突判定関数
@@ -5947,8 +7513,11 @@ function getGroundSurfaceY(position) {
     for (const obs of obstacles) {
         if (obs.userData.isWall) continue;
         
-        // 屋上の床の場合は特別処理
-        if (obs.userData.isRooftop) {
+        // 家の屋根は完全に無視
+        if (obs.userData.isHouseRoof) continue;
+        
+        // 屋上の床の場合は特別処理（家の屋根は含めない）
+        if (obs.userData.isRooftop && !obs.userData.isHouseRoof) {
             const obstacleBox = new THREE.Box3().setFromObject(obs);
             const obstacleHorizontalBox = new THREE.Box2(
                 new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z),
@@ -5994,8 +7563,8 @@ function resolvePlayerCollision(playerObj, obstaclesArray, pushOutDistance = 0.0
     let resolved = false;
 
     for (const obstacle of obstaclesArray) {
-        // 梯子昇降中のタワーや、屋上床は衝突判定から除外
-        if (obstacle.userData.isRooftop) continue;
+        // 梯子昇降中のタワーや、屋上床は衝突判定から除外（家の屋根は含めない）
+        if (obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof) continue;
         // 梯子を登っている最中は、そのタワーとは衝突しないようにする
         if (obstacle.userData.isTower && playerObj === player && isIgnoringTowerCollision && obstacle === lastClimbedTower) {
             continue;
@@ -6078,7 +7647,7 @@ function showSettingsAndPause() {
 }
 
 function resumeGame() {
-    console.log('resumeGame() called');
+    debugLog('resumeGame() called');
     const settingsChanged = JSON.stringify(originalSettings) !== JSON.stringify(gameSettings);
 
     startScreen.style.display = 'none';
@@ -6115,17 +7684,17 @@ function resumeGame() {
         }
 
         if ('ontouchstart' in window) {
-            console.log('resumeGame(): Mobile device detected. Setting UI to block/flex.');
+            // resumeGame(): Mobile device detected. Setting UI to block/flex.
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
             const pause = document.getElementById('pause-button');
-            if (joy) { joy.style.display = 'block'; console.log('resumeGame(): joystick-move display set to block'); }
-            if (fire) { fire.style.display = 'flex'; console.log('resumeGame(): fire-button display set to flex'); }
-            if (crouch) { crouch.style.display = 'flex'; console.log('resumeGame(): crouch-button display set to flex'); }
-            if (pause) { pause.style.display = 'block'; console.log('resumeGame(): pause-button display set to block'); }
+            if (joy) { joy.style.display = 'block'; }
+            if (fire) { fire.style.display = 'flex'; }
+            if (crouch) { crouch.style.display = 'flex'; }
+            if (pause) { pause.style.display = 'block'; }
         } else {
-            console.log('resumeGame(): PC device detected.');
+            // resumeGame(): PC device detected.
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
@@ -6140,23 +7709,18 @@ function resumeGame() {
 }
 
 function animate() {
-    // --- Force hide mobile buttons on PC ---
-    if (!('ontouchstart' in window)) {
-        const idsToHide = ['fire-button', 'crouch-button', 'joystick-move', 'follow-button'];
-        idsToHide.forEach(id => {
-            const btn = document.getElementById(id);
-            if (btn && btn.style.display !== 'none') {
-                btn.style.display = 'none';
-            }
-        });
-    }
-    // --- End force hide ---
-
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+    
     if (window.justRestarted) {
         window.justRestarted = false;
     }
-    requestAnimationFrame(animate);
-    const delta = clock.getDelta();
+    
+    if (!isGameRunning) {
+        // ゲームが実行中でない場合は最小限の処理のみ
+        renderer.render(scene, camera);
+        return;
+    }
 
     // Breadcrumb dropping logic
     if (isGameRunning) {
@@ -6180,10 +7744,28 @@ function animate() {
     const timeElapsed = clock.getElapsedTime();
     const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
 
+    // 定期的に浮遊屋根パーツをクリーンアップ
+    if (typeof lastFloatingCleanupTime === 'undefined') {
+        lastFloatingCleanupTime = timeElapsed;
+        // すべてのマップタイプで即時クリーンアップを実行
+        debugLog('Initial cleanup - forcing complete scene reset...');
+        forceSceneReset();
+    }
+    if (timeElapsed - lastFloatingCleanupTime > 10.0) { // 10秒ごとに軽量クリーンアップ
+        debugLog('Periodic cleanup - using lightweight cleanup...');
+        const removedCount = cleanupFloatingRooftopParts(); // 軽量なクリーンアップを使用
+        lastFloatingCleanupTime = timeElapsed;
+    }
+
     // Player MG reload completion (needs to run even when not firing)
     if (playerMGReloadUntil > 0 && timeElapsed >= playerMGReloadUntil) {
         playerMGReloadUntil = 0;
         ammoMG = MAX_AMMO_MG;
+        hideReloadingText();
+    }
+    if (playerMRReloadUntil > 0 && timeElapsed >= playerMRReloadUntil) {
+        playerMRReloadUntil = 0;
+        ammoMR = MAX_AMMO_MR;
         hideReloadingText();
     }
     
@@ -6200,7 +7782,7 @@ function animate() {
         player.position.y += playerTargetHeight - oldPlayerTargetHeight;
     }
 
-    const currentMoveSpeed = isCrouchingToggle ? moveSpeed / 2 : moveSpeed;
+    const currentMoveSpeed = (isCrouchingToggle || isRifleZoomed) ? moveSpeed / 2 : moveSpeed;
     for (let i = debris.length - 1; i >= 0; i--) {
         const d = debris[i];
         d.velocity.y -= GRAVITY * delta;
@@ -6286,13 +7868,18 @@ function animate() {
             case WEAPON_RR: weaponName = 'Rocket'; ammoCount = ammoRR; break;
             case WEAPON_SR: weaponName = 'Sniper'; ammoCount = ammoSR; break;
             case WEAPON_SG: weaponName = 'Shotgun'; ammoCount = ammoSG; break;
+            case WEAPON_MR: weaponName = 'M1 Rifle'; ammoCount = ammoMR; break;
             case WEAPON_PISTOL: weaponName = 'Pistol'; ammoCount = '∞'; break;
         }
         playerWeaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`; // playerWeaponDisplayを使用
     }
-    if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG)) {
+    if (isRifleZoomed && currentWeapon !== WEAPON_MR) {
+        setRifleZoom(false);
+    }
+    if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
         shoot();
     }
+    updateCrosshairForWeapon();
     if (isScoping) {
         document.getElementById('crosshair').style.display = 'none';
         updateSniperScopeAutoAim(delta);
@@ -6306,12 +7893,18 @@ function animate() {
     if (keySet.has('KeyS')) keyboardMoveVector.y -= 1;
     if (keySet.has('KeyA')) keyboardMoveVector.x -= 1;
     if (keySet.has('KeyD')) keyboardMoveVector.x += 1;
+    
+    // デバッグ: キーボード移動ベクトルをログ
+    if (keyboardMoveVector.length() > 0) {
+        debugLog('Keyboard move vector:', keyboardMoveVector, 'keys:', Array.from(keySet));
+    }
+    
     let finalMoveVector = joystickMoveVector.length() > 0 ? joystickMoveVector.clone() : keyboardMoveVector.clone();
 
     if (finalMoveVector.length() > 0) finalMoveVector.normalize();
     // リスポーン直後の移動を強制的に停止させる
     if (window.justRestarted || isPlayerDeathPlaying || isElevating) {
-        // console.log('Movement blocked - justRestarted:', window.justRestarted, 'isPlayerDeathPlaying:', isPlayerDeathPlaying, 'isElevating:', isElevating);
+        debugLog('Movement blocked - justRestarted:', window.justRestarted, 'isPlayerDeathPlaying:', isPlayerDeathPlaying, 'isElevating:', isElevating);
         finalMoveVector.set(0, 0); // 移動を強制的にキャンセル
         keyboardMoveVector.set(0, 0); // 念のためキーボード移動もリセット
         joystickMoveVector.set(0, 0); // 念のためジョイスティック移動もリセット
@@ -6328,17 +7921,17 @@ function animate() {
         const elevateSpeed = 5.0;
         player.position.y += elevateSpeed * delta;
         if (player.position.y >= elevatingTargetY) {
-            // console.log('Climb completed! Dropping to rooftop...');
+            // debugLog('Climb completed! Dropping to rooftop...');
             player.position.y = elevatingTargetY;
             isElevating = false;
-            // console.log('isElevating set to false');
+            // debugLog('isElevating set to false');
             isIgnoringTowerCollision = true;
             ignoreTowerTimer = 5.0; // Extended to 5.0s for permanent rooftop safety
             lastClimbedTower = elevatingTargetObstacle;
             isCrouchingToggle = false; // 強制的に立ち状態に
             
             // Let player drop naturally to rooftop - no forward push
-            // console.log('Dropping from height to rooftop');
+            // debugLog('Dropping from height to rooftop');
             
             // Mark player as being on rooftop for permanent collision ignoring
             player.userData.onRooftop = true;
@@ -6352,7 +7945,7 @@ function animate() {
         for (const sensorArea of ladderSwitches) {
             const sensorBoundingBox = new THREE.Box3().setFromObject(sensorArea);
             if (playerBoundingBox.intersectsBox(sensorBoundingBox)) {
-                // console.log('Ladder detected! Starting climb...');
+                // debugLog('Ladder detected! Starting climb...');
                 inSensorArea = true; const obs = sensorArea.userData.obstacle;
                 isElevating = true;
                 elevatingTargetObstacle = obs;
@@ -6369,15 +7962,15 @@ function animate() {
             }
         }
         if (!inSensorArea || player.userData.onRooftop) {
-            // console.log('Movement check - inSensorArea:', inSensorArea, 'onRooftop:', player.userData.onRooftop);
+            // debugLog('Movement check - inSensorArea:', inSensorArea, 'onRooftop:', player.userData.onRooftop);
             if (player.userData.onRooftop) {
-                // console.log('On rooftop - allowing movement');
+                // debugLog('On rooftop - allowing movement');
             }
             if (finalMoveVector.length() > 0) {
-                // console.log('Input detected - finalMoveVector length:', finalMoveVector.length());
+                // debugLog('Input detected - finalMoveVector length:', finalMoveVector.length());
                 finalMoveVector.normalize();
             } else {
-                // console.log('No input detected');
+                // debugLog('No input detected');
             }
             const forwardMove = finalMoveVector.y * currentMoveSpeed * delta;
             const rightMove = finalMoveVector.x * currentMoveSpeed * delta;
@@ -6387,12 +7980,40 @@ function animate() {
             forwardVector.y = 0;
             forwardVector.normalize();
             const rightVector = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forwardVector);
-            const moveX = rightVector.x * rightMove + forwardVector.x * -forwardMove;
-            const moveZ = rightVector.z * rightMove + forwardVector.z * -forwardMove;
+            let moveX = rightVector.x * rightMove + forwardVector.x * -forwardMove;
+            let moveZ = rightVector.z * rightMove + forwardVector.z * -forwardMove;
             
-            // console.log('Movement calculated - moveX:', moveX, 'moveZ:', moveZ);
+            // debugLog('Movement calculated - moveX:', moveX, 'moveZ:', moveZ);
             
             const ignoreObstacle = isIgnoringTowerCollision ? lastClimbedTower : currentGroundObstacle;
+
+            // 薄い壁のすり抜け対策：移動ベクトルのスイープチェック
+            const moveVec = new THREE.Vector3(moveX, 0, moveZ);
+            const moveLen = moveVec.length();
+            if (moveLen > 0) {
+                const origin = player.position.clone().add(new THREE.Vector3(0, playerTargetHeight * 0.5, 0));
+                const dir = moveVec.clone().normalize();
+                raycaster.set(origin, dir);
+                raycaster.far = moveLen + 0.35;
+                const hits = raycaster.intersectObjects(obstacles, true);
+                let blockingHit = null;
+                for (const hit of hits) {
+                    const obj = hit.object;
+                    if (obj.userData && obj.userData.isRooftop && !obj.userData.isHouseRoof) continue;
+                    if (obj.userData && obj.userData.isLadder && player.userData.onRooftop) continue;
+                    if (obj === ignoreObstacle) continue;
+                    blockingHit = hit;
+                    break;
+                }
+                if (blockingHit && blockingHit.distance < moveLen + 0.35) {
+                    const safeLen = Math.max(0, blockingHit.distance - 0.35);
+                    if (safeLen < moveLen) {
+                        const scale = safeLen / moveLen;
+                        moveX *= scale;
+                        moveZ *= scale;
+                    }
+                }
+            }
 
             // まず、プレイヤーのXとZの位置を更新
             player.position.x += moveX;
@@ -6412,28 +8033,28 @@ function animate() {
 
             // 新しい位置で衝突があるかチェックし、あれば解決を試みる
             if (checkCollision(player, obstacles, ignoreObstacle)) {
-                // console.log('Collision detected, resolving...');
+                // debugLog('Collision detected, resolving...');
                 // 屋上にいる場合は押し出し距離を増やす
                 const pushDistance = player.userData.onRooftop ? 0.2 : 0.05;
-                // console.log('Using push distance:', pushDistance);
+                // debugLog('Using push distance:', pushDistance);
                 // 衝突解決を試みる。resolvePlayerCollisionはplayer.positionを直接変更する
                 const collisionResolved = resolvePlayerCollision(player, obstacles, pushDistance);
 
                 // もし衝突解決後もまだ衝突している場合は、元の位置に戻す
                 // これはresolvePlayerCollisionが全ての衝突を一度に解決できない場合のフォールバック
                 if (!collisionResolved || checkCollision(player, obstacles, ignoreObstacle)) {
-                    console.log('Collision resolution failed, reverting to old position');
-                    console.log('Old position:', oldPlayerPosition);
-                    console.log('Current position before revert:', player.position);
+                    debugLog('Collision resolution failed, reverting to old position');
+                    debugLog('Old position:', oldPlayerPosition);
+                    debugLog('Current position before revert:', player.position);
                     player.position.copy(oldPlayerPosition); 
-                    console.log('Position after revert:', player.position);
+                    debugLog('Position after revert:', player.position);
                 } else {
-                    console.log('Collision resolved successfully');
+                    debugLog('Collision resolved successfully');
                 }
             } else {
-                console.log('No collision detected');
+                debugLog('No collision detected');
             }
-            console.log('Final position after movement:', player.position);
+            debugLog('Final position after movement:', player.position);
             const playerDistFromCenter = Math.sqrt(player.position.x * player.position.x + player.position.z * player.position.z);
             if (playerDistFromCenter > ARENA_PLAY_AREA_RADIUS) {
                 const ratio = ARENA_PLAY_AREA_RADIUS / playerDistFromCenter;
@@ -6447,7 +8068,7 @@ function animate() {
 
             // Use a lenient tolerance after climbing or on a rooftop, otherwise use a strict one.
             let yTolerance = 0.5;
-            if (isIgnoringTowerCollision || (currentGroundObstacle && currentGroundObstacle.userData.isRooftop)) {
+            if (isIgnoringTowerCollision || (currentGroundObstacle && currentGroundObstacle.userData.isRooftop && !currentGroundObstacle.userData.isHouseRoof)) {
                 yTolerance = 2.0;
             }
 
@@ -6460,7 +8081,7 @@ function animate() {
                 const playerHorizontalBox = new THREE.Box2(new THREE.Vector2(player.position.x - 0.5, player.position.z - 0.5), new THREE.Vector2(player.position.x + 0.5, player.position.z + 0.5));
                 const obstacleHorizontalBox = new THREE.Box2(new THREE.Vector2(obstacleBox.min.x, obstacleBox.min.z), new THREE.Vector2(obstacleBox.max.x, obstacleBox.max.z));
                 if (playerHorizontalBox.intersectsBox(obstacleHorizontalBox)) {
-                    if ((obs.userData.isRooftop || !obs.userData.isWall) && playerFeetY >= topOfObstacle - yTolerance && playerFeetY <= topOfObstacle + 1.0) {
+                    if (((obs.userData.isRooftop && !obs.userData.isHouseRoof) || !obs.userData.isWall) && playerFeetY >= topOfObstacle - yTolerance && playerFeetY <= topOfObstacle + 1.0) {
                         onGround = true;
                         currentGroundObstacle = obs;
                         groundY = topOfObstacle;
@@ -6473,7 +8094,7 @@ function animate() {
                 groundY = 0;
             }
             if (onGround) {
-                if (currentGroundObstacle && currentGroundObstacle.userData.isRooftop) {
+                if (currentGroundObstacle && currentGroundObstacle.userData.isRooftop && !currentGroundObstacle.userData.isHouseRoof) {
                                     // 空洞建物の場合、床のジオメトリーから高さを取得
                                     const geometry = currentGroundObstacle.geometry || (currentGroundObstacle.children && currentGroundObstacle.children[0] ? currentGroundObstacle.children[0].geometry : null);
                                     const height = geometry ? geometry.parameters.height : 4;
@@ -6514,9 +8135,13 @@ function animate() {
                         if (currentWeapon === WEAPON_SG) { ammoSG = Math.min(ammoSG + MAX_AMMO_SG, MAX_AMMO_SG * 2); } 
                         else { currentWeapon = WEAPON_SG; ammoSG = MAX_AMMO_SG; } 
                         weaponName = 'SHOTGUN'; break;
+                    case WEAPON_MR:
+                        if (currentWeapon === WEAPON_MR) { ammoMR = Math.min(ammoMR + MAX_AMMO_MR, MAX_AMMO_MR * 2); }
+                        else { currentWeapon = WEAPON_MR; ammoMR = MAX_AMMO_MR; }
+                        weaponName = 'M1 RIFLE'; break;
                 }
                 const setSound = document.getElementById('setSound');
-                if (setSound) setSound.cloneNode(true).play();
+                if (setSound) playSound(setSound);
                 const weaponGetDisplay = document.getElementById('weapon-get-display');
                 if (weaponGetDisplay) {
                     weaponGetDisplay.textContent = `${weaponName} GET!`;
@@ -6533,7 +8158,7 @@ function animate() {
                     playerHPDisplay.textContent = `HP: ${playerHP}`;
                 }
                 const setSound = document.getElementById('setSound');
-                if (setSound) setSound.cloneNode(true).play();
+                if (setSound) playSound(setSound);
                 const weaponGetDisplay = document.getElementById('weapon-get-display');
                 if (weaponGetDisplay) {
                     weaponGetDisplay.textContent = `HP +1!`;
@@ -6551,7 +8176,11 @@ function animate() {
         const respawnItem = respawningPickups[i];
         if (timeElapsed >= respawnItem.respawnTime) {
             if (respawnItem.type === 'weapon') {
-                const weaponText = respawnItem.weaponType === WEAPON_MG ? 'MG' : respawnItem.weaponType === WEAPON_RR ? 'RL' : respawnItem.weaponType === WEAPON_SR ? 'SR' : 'SG';
+                const weaponText = respawnItem.weaponType === WEAPON_MG ? 'MG'
+                    : respawnItem.weaponType === WEAPON_RR ? 'RL'
+                    : respawnItem.weaponType === WEAPON_SR ? 'SR'
+                    : respawnItem.weaponType === WEAPON_MR ? 'MR'
+                    : 'SG';
                 const weaponBoxWidth = 1;
                 const weaponBoxHeight = 0.8;
                 const weaponBoxDepth = 2;
@@ -6562,17 +8191,29 @@ function animate() {
             respawningPickups.splice(i, 1);
         }
     }
+    for (let i = respawningBarrels.length - 1; i >= 0; i--) {
+        const respawnBarrel = respawningBarrels[i];
+        if (timeElapsed >= respawnBarrel.respawnTime) {
+            createExplosiveBarrel(respawnBarrel.x, respawnBarrel.z, respawnBarrel.color, respawnBarrel.radius, respawnBarrel.height);
+            respawningBarrels.splice(i, 1);
+        }
+    }
     const AI_SEPARATION_FORCE = 2.0;
     ais.forEach((ai, index) => {
         if (ai.hp <= 0 && gameSettings.gameMode !== 'arcade') {
             ai.visible = false; // Just in case
             return;
         }
+        const aiStartPos = ai.position.clone();
 
         // AI MG reload completion
         if (ai.userData && ai.userData.mgReloadUntil && timeElapsed >= ai.userData.mgReloadUntil) {
             ai.userData.mgReloadUntil = 0;
             ai.ammoMG = MAX_AMMO_MG;
+        }
+        if (ai.userData && ai.userData.mrReloadUntil && timeElapsed >= ai.userData.mrReloadUntil) {
+            ai.userData.mrReloadUntil = 0;
+            ai.ammoMR = MAX_AMMO_MR;
         }
 
         if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.hp > 0) {
@@ -6814,13 +8455,19 @@ function animate() {
                 ai.userData.rooftopIntent = false;
                 ai.userData.rooftopPhase = 'none';
             } else {
+                if ((timeElapsed - (ai.userData.rooftopStateSince || timeElapsed)) > 6.0) {
+                    ai.userData.rooftopIntent = false;
+                    ai.userData.rooftopPhase = 'none';
+                    ai.userData.nextRooftopDecisionAt = timeElapsed + 3.0;
+                }
                 ai.state = 'MOVING';
                 ai.targetPosition.copy(ai.userData.rooftopLadderPos);
                 ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
-                if (ai.position.distanceTo(ai.targetPosition) < 1.0) {
-                    const ladderSnap = ai.userData.rooftopSensor?.userData?.ladderPos || ai.userData.rooftopLadderPos;
-                    ai.position.x = ladderSnap.x;
-                    ai.position.z = ladderSnap.z;
+                if (ai.position.distanceTo(ai.targetPosition) < 0.8) {
+                    const ladderSnap = ai.userData.rooftopLadderSnap || ai.userData.rooftopSensor?.userData?.ladderPos || ai.userData.rooftopLadderPos;
+                    // 梯子にスムーズに接続するために位置を補完
+                    ai.position.x += (ladderSnap.x - ai.position.x) * 0.5;
+                    ai.position.z += (ladderSnap.z - ai.position.z) * 0.5;
                     ai.isElevating = true;
                     ai.userData.elevatingDirection = 1;
                     // 空洞建物の場合、床のジオメトリーから高さを取得
@@ -6837,6 +8484,9 @@ function animate() {
             ai.userData.onRooftop = true;
             ai.state = 'ATTACKING';
             aiShoot(ai, timeElapsed);
+            if (!ai.userData.rooftopLeaveAt) {
+                ai.userData.rooftopLeaveAt = timeElapsed + 6.0 + Math.random() * 4.0;
+            }
             if (ai.userData.rooftopObstacle) {
                 const c = ai.userData.rooftopObstacle.position;
                 const halfW = (ai.userData.rooftopObstacle.geometry.parameters.width || 6) * 0.32;
@@ -6852,6 +8502,16 @@ function animate() {
                 ai.userData.rooftopDecisionMade = true;
                 ai.userData.rooftopPhase = 'to_ground';
                 ai.userData.rooftopStateSince = timeElapsed;
+            }
+            if (ai.userData.rooftopLeaveAt && timeElapsed > ai.userData.rooftopLeaveAt) {
+                const canSee = canAISeeAnyOpponent(ai);
+                if (canSee && (ai.currentWeapon === WEAPON_SR || ai.currentWeapon === WEAPON_MG)) {
+                    ai.userData.rooftopLeaveAt = timeElapsed + 2.0;
+                } else {
+                    ai.userData.rooftopDecisionMade = true;
+                    ai.userData.rooftopPhase = 'to_ground';
+                    ai.userData.rooftopStateSince = timeElapsed;
+                }
             }
         }
 
@@ -6879,6 +8539,17 @@ function animate() {
         if (ENABLE_AI_ROOFTOP_LOGIC && ai.isElevating) {
             const vDir = ai.userData.elevatingDirection || 1;
             const climbSpeed = 3.6;
+            
+            // 梯子登り中は水平位置を梯子に固定してふわふわを防止
+            if (ai.userData.rooftopLadderSnap || ai.userData.rooftopLadderPos) {
+                const snap = ai.userData.rooftopLadderSnap || ai.userData.rooftopLadderPos;
+                const targetX = snap.x;
+                const targetZ = snap.z;
+                const lerpFactor = 0.15; // 滑らかに梯子位置に補完
+                ai.position.x += (targetX - ai.position.x) * lerpFactor;
+                ai.position.z += (targetZ - ai.position.z) * lerpFactor;
+            }
+            
             ai.position.y += vDir * climbSpeed * delta;
             ai.targetPosition.copy(ai.position);
             const targetY = ai.userData.rooftopTargetY ?? -FLOOR_HEIGHT;
@@ -6903,14 +8574,12 @@ function animate() {
                         ai.userData.rooftopPhase = 'on_roof';
                         ai.userData.rooftopStateSince = timeElapsed;
                         ai.userData.rooftopDecisionMade = false;
+                        ai.userData.rooftopLeaveAt = timeElapsed + 6.0 + Math.random() * 4.0;
                         if (ai.userData.rooftopObstacle) {
-                            const center = ai.userData.rooftopObstacle.position.clone();
-                            const dir = new THREE.Vector3().subVectors(center, ai.position);
-                            dir.y = 0;
-                            if (dir.lengthSq() > 1e-6) {
-                                dir.normalize();
-                                ai.position.add(dir.multiplyScalar(1.2));
-                            }
+                            const ladderPos = ai.userData.rooftopLadderSnap || ai.userData.rooftopSensor?.userData?.ladderPos || ai.userData.rooftopLadderPos || ai.position.clone();
+                            const landing = findSafeRooftopLanding(ai, ai.userData.rooftopObstacle, ladderPos);
+                            ai.position.copy(landing);
+                            ai.targetPosition.copy(landing);
                         }
                     }
                 } else {
@@ -6919,9 +8588,11 @@ function animate() {
                     ai.userData.rooftopSensor = null;
                     ai.userData.rooftopObstacle = null;
                     ai.userData.rooftopLadderPos = null;
+                    ai.userData.rooftopLadderSnap = null;
                     ai.userData.rooftopDecisionMade = false;
                     ai.userData.rooftopPhase = 'none';
                     ai.userData.rooftopStateSince = timeElapsed;
+                    ai.userData.rooftopLeaveAt = 0;
                 }
             }
         }
@@ -7003,7 +8674,12 @@ function animate() {
                 }
             }
             ai.scale.y = ai.isCrouching ? 0.7 : 1.0;
-            ai.position.y = getGroundSurfaceY(ai.position);
+            if (ai.userData && ai.userData.onRooftop && ai.userData.rooftopObstacle) {
+                const height = getObstacleHeight(ai.userData.rooftopObstacle) || DEFAULT_OBSTACLE_HEIGHT;
+                ai.position.y = ai.userData.rooftopObstacle.position.y + height / 2;
+            } else {
+                ai.position.y = getGroundSurfaceY(ai.position);
+            }
         }
         if (ai.state === 'ATTACKING' || isMoving) {
             let targetAngle;
@@ -7138,10 +8814,8 @@ function animate() {
                 } else {
                     // 障害物がなければ移動
                     const finalMove_follow = moveDirection_follow.multiplyScalar(currentAISpeed * delta);
-                    ai.position.add(finalMove_follow);
-                    
-                    // 移動後に衝突した場合の最終的な回避
-                    if (checkCollision(ai, obstacles)) {
+                    const moved = applyAIMovementWithSweep(ai, finalMove_follow);
+                    if (!moved) {
                         ai.position.copy(oldAIPosition_follow);
                         findObstacleAvoidanceSpot(ai, moveDirection_follow, ai.targetPosition);
                     }
@@ -7155,7 +8829,8 @@ function animate() {
                     ai.userData.onRooftop = false;
                     ai.userData.rooftopSensor = null;
                     ai.userData.rooftopObstacle = null;
-                    ai.userData.rooftopLadderPos = null;
+        ai.userData.rooftopLadderPos = null;
+        ai.userData.rooftopLadderSnap = null;
                     ai.userData.rooftopDecisionMade = false;
                     ai.state = 'ATTACKING';
                     ai.currentAttackTime = timeElapsed;
@@ -7432,7 +9107,8 @@ function animate() {
                         ai.userData.onRooftop = false;
                         ai.userData.rooftopSensor = null;
                         ai.userData.rooftopObstacle = null;
-                        ai.userData.rooftopLadderPos = null;
+        ai.userData.rooftopLadderPos = null;
+        ai.userData.rooftopLadderSnap = null;
                         ai.userData.rooftopDecisionMade = false;
                     }
                     const anchor = (visibleOpponentInfo && visibleOpponentInfo.targetPos)
@@ -7469,7 +9145,7 @@ function animate() {
                 }
             }
         }
-        if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING' && ai.state !== 'FOLLOWING' && ai.state !== 'ROOFTOP_COMBAT') {
+        if (isMoving && ai.state !== 'HIDING' && ai.state !== 'ATTACKING' && ai.state !== 'CLIMBING' && ai.state !== 'FOLLOWING' && ai.state !== 'ROOFTOP_COMBAT' && !ai.isElevating) {
             const oldAIPosition = ai.position.clone();
             let moveDirection = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
             const moveVectorDelta = moveDirection.clone().multiplyScalar(currentAISpeed * delta);
@@ -7481,8 +9157,8 @@ function animate() {
                 findObstacleAvoidanceSpot(ai, moveDirection, ai.targetPosition);
             } else {
                 const finalMove = moveDirection.multiplyScalar(currentAISpeed * delta);
-                ai.position.add(finalMove);
-                if (checkCollision(ai, obstacles)) {
+                const moved = applyAIMovementWithSweep(ai, finalMove);
+                if (!moved) {
                     ai.position.copy(oldAIPosition);
                     findObstacleAvoidanceSpot(ai, moveDirection, ai.targetPosition);
                 }
@@ -7501,8 +9177,15 @@ function animate() {
                 } else {
                     toAI.normalize();
                 }
-                ai.position.copy(player.position.clone().add(toAI.multiplyScalar(minSeparation)));
-                ai.position.y = -FLOOR_HEIGHT;
+                const desired = player.position.clone().add(toAI.multiplyScalar(minSeparation));
+                desired.y = getGroundSurfaceY(desired);
+                const oldPos = ai.position.clone();
+                ai.position.copy(desired);
+                const desiredHead = desired.clone().add(new THREE.Vector3(0, 1.0, 0));
+                const aiHead = oldPos.clone().add(new THREE.Vector3(0, 1.0, 0));
+                if (checkCollision(ai, obstacles) || !checkLineOfSight(aiHead, desiredHead, obstacles)) {
+                    ai.position.copy(oldPos);
+                }
             }
         }
         const aiDistFromCenter = Math.sqrt(ai.position.x * ai.position.x + ai.position.z * ai.position.z);
@@ -7564,6 +9247,14 @@ function animate() {
             const actuallyMoving = ai.position.distanceTo(ai.lastPosition) > 0.001; // 実際に動いているかを判定
             applyCrouchPose(parts, ai.isCrouching, timeElapsed, actuallyMoving);
         }
+        // 最終的な衝突チェック（薄い壁のすり抜け対策）
+        if (checkCollision(ai, obstacles)) {
+            const resolved = resolvePlayerCollision(ai, obstacles, 0.06);
+            if (!resolved && checkCollision(ai, obstacles)) {
+                ai.position.copy(aiStartPos);
+            }
+        }
+        clampAIToRooftop(ai);
         // AIの現在の位置を保存して次フレームで比較できるようにする
         ai.lastPosition.copy(ai.position);
 
@@ -7588,12 +9279,12 @@ function animate() {
             const moveDir = moveVector.clone().normalize();
             raycaster.set(prevProjectilePos, moveDir);
             raycaster.far = moveDistance;
-            const intersects = raycaster.intersectObjects(obstacles, true);
-            if (intersects.length > 0) {
+            const hit = getFirstProjectileHit(raycaster, obstacles);
+            if (hit) {
                 hitSomething = true;
-                hitObject = intersects[0].object;
+                hitObject = hit.object;
                 hitType = 'obstacle';
-                p.mesh.position.copy(intersects[0].point);
+                p.mesh.position.copy(hit.point);
             } else {
                 p.mesh.position.copy(prevProjectilePos).add(moveVector);
             }
@@ -7625,6 +9316,7 @@ function animate() {
                     hitType = 'ai';
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
+                    else if (p.weaponType === WEAPON_MR) damageAmount = 2;
                     else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
                     
                     if (ai.hp !== Infinity) {
@@ -7688,6 +9380,7 @@ function animate() {
                         hitType = 'ai';
                         let damageAmount = 1;
                         if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
+                        else if (p.weaponType === WEAPON_MR) damageAmount = 2;
                         else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
                         if (ai.hp !== Infinity) {
                             ai.hp -= damageAmount;
@@ -7779,6 +9472,7 @@ function animate() {
                     hitType = 'player';
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
+                    else if (p.weaponType === WEAPON_MR) damageAmount = 2;
                     else if (p.isSniper || p.isRocket) damageAmount = playerHP;
                     if (playerHP !== Infinity) {
                         playerHP -= damageAmount;
@@ -7832,12 +9526,14 @@ function animate() {
             hitType = 'floor';
         }
         if (hitSomething) {
-            if (p.isRocket) {
-                if (explosionSound) explosionSound.cloneNode(true).play();
-                const explosionPos = p.mesh.position.clone();
-                createExplosionEffect(explosionPos);
-                const ROCKET_MAX_DAMAGE = 15;
-                const EXPLOSION_RADIUS_ACTUAL = 5;
+                const hitIsBarrel = hitType === 'obstacle' && hitObject && hitObject.userData && hitObject.userData.type === 'barrel';
+                if (hitIsBarrel) {
+                    explodeBarrel(hitObject, p.source, p.shooter || null);
+                } else if (p.isRocket) {
+                    if (explosionSound) playSound(explosionSound);
+                    const explosionPos = p.mesh.position.clone();
+                    createExplosionEffect(explosionPos);
+                const EXPLOSION_RADIUS_ACTUAL = ROCKET_EXPLOSION_RADIUS;
                 if (p.source === 'player') {
                     for (let j = ais.length - 1; j >= 0; j--) {
                         const ai = ais[j];
@@ -7846,14 +9542,29 @@ function animate() {
                         if (distance < EXPLOSION_RADIUS_ACTUAL) {
                             const aiCenter = ai.position.clone().add(new THREE.Vector3(0, 1.5, 0));
                             if (checkLineOfSight(explosionPos, aiCenter, obstacles)) {
-                                const damage = 1;
                                 if (ai.hp !== Infinity) {
-                                    ai.hp -= damage;
+                                    ai.hp = 0;
                                     createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
                                 }
                                 if (ai.hp <= 0) {
                                     aiFallDownCinematicSequence(new THREE.Vector3().subVectors(ai.position, explosionPos), ai, 'player');
-                                    ais.splice(j, 1);
+                                }
+                            }
+                        }
+                    }
+                    if (playerHP > 0) {
+                        const distanceToPlayer = player.position.distanceTo(explosionPos);
+                        if (distanceToPlayer < EXPLOSION_RADIUS_ACTUAL) {
+                            const playerCenter = player.position.clone().add(new THREE.Vector3(0, 1, 0));
+                            if (checkLineOfSight(explosionPos, playerCenter, obstacles)) {
+                                if (playerHP !== Infinity) {
+                                    playerHP = 0;
+                                    screenShakeDuration = SHAKE_DURATION_MAX;
+                                    redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+                                    setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+                                }
+                                if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                                    startPlayerDeathSequence(p);
                                 }
                             }
                         }
@@ -7864,9 +9575,8 @@ function animate() {
                     if (distanceToPlayer < EXPLOSION_RADIUS_ACTUAL) {
                         const playerCenter = player.position.clone().add(new THREE.Vector3(0, 1, 0));
                         if (checkLineOfSight(explosionPos, playerCenter, obstacles)) {
-                            const damage = 1;
                             if (playerHP !== Infinity) {
-                                playerHP -= damage;
+                                playerHP = 0;
                                 screenShakeDuration = SHAKE_DURATION_MAX;
                                 redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
                                 setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
@@ -7881,12 +9591,18 @@ function animate() {
                     }
                 }
                 if (hitType === 'obstacle') {
+                    if (hitObject.userData && hitObject.userData.isHouseWall) {
+                        // Do not damage house walls
+                    } else if (hitObject.userData && hitObject.userData.type === 'barrel') {
+                        // Barrel already exploded above
+                    } else {
                     if (hitObject.userData.hp === undefined) {
                         hitObject.userData.hp = 1;
                     }
                     hitObject.userData.hp -= 1;
                     if (hitObject.userData.hp <= 0) {
                         destroyObstacle(hitObject, p.mesh.position);
+                    }
                     }
                 }
             } else {
@@ -8017,15 +9733,15 @@ if (startBtn) {
         gameSettings.rrCount = parseInt(document.getElementById('rr-count').value, 10);
         gameSettings.srCount = parseInt(document.getElementById('sr-count').value, 10);
         gameSettings.sgCount = parseInt(document.getElementById('sg-count').value, 10);
+        if (document.getElementById('mr-count')) {
+            gameSettings.mrCount = parseInt(document.getElementById('mr-count').value, 10);
+        }
         // Get map selection from unified selector
         const unifiedMapSelectorOnStart = document.getElementById('unified-map-selector');
         if (unifiedMapSelectorOnStart && unifiedMapSelectorOnStart.value) {
             const selectedValue = unifiedMapSelectorOnStart.value;
             if (selectedValue === 'default') {
                 gameSettings.mapType = 'default';
-                gameSettings.customMapName = '';
-            } else if (selectedValue === 'random') {
-                gameSettings.mapType = 'random';
                 gameSettings.customMapName = '';
             } else if (selectedValue && selectedValue !== '---') {
                 gameSettings.mapType = 'custom';
@@ -8437,7 +10153,7 @@ function resetCharacterToDefault(character) {
             updatePreviewCharacter();
         }
         
-        console.log(`${character} reset to default settings`);
+        debugLog(`${character} reset to default settings`);
     }
 }
 
@@ -8567,7 +10283,7 @@ function updatePreviewCharacter() {
         characterEditorScene.remove(previewCharacter);
         previewCharacter.traverse(child => {
             if (child.geometry) child.geometry.dispose();
-            if (child.material) child.material.dispose();
+            disposeMaterial(child.material); // 安全なマテリアル破棄を使用
         });
     }
     
@@ -8714,7 +10430,7 @@ function exportCharacterDataToJSON() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    console.log('Character data exported to JSON:', characterData);
+    debugLog('Character data exported to JSON:', characterData);
 }
 
 // Import character data from JSON
@@ -8747,7 +10463,7 @@ function importCharacterDataFromJSON(file) {
                 updatePreviewCharacter();
             }
             
-            console.log('Character data imported successfully:', characterData);
+            debugLog('Character data imported successfully:', characterData);
             alert('Character data imported successfully!');
             
         } catch (error) {
@@ -8783,7 +10499,7 @@ document.addEventListener('DOMContentLoaded', function() {
             gameSettings.nightModeEnabled = this.checked;
             applyNightMode(this.checked);
             saveSettings();
-            console.log('Manual night mode toggle:', this.checked);
+            debugLog('Manual night mode toggle:', this.checked);
         });
     }
     

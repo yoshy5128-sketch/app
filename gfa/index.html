@@ -155,6 +155,15 @@
                 <option value="5">5</option>
                 <option value="10">10</option>
             </select>
+            <br>
+            <label for="mr-count" style="margin-top: 10px; display: inline-block;">M1 Rifles (MR):</label>
+            <select id="mr-count" style="font-size: 1em; padding: 5px;">
+                <option value="0">0</option>
+                <option value="1" selected>1</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+            </select>
 
             <h2 style="margin-top: 20px;">Default Weapon (Infinite Ammo)</h2>
             <label style="display: block; margin-bottom: 5px;">
@@ -168,6 +177,9 @@
             </label>
             <label style="display: block;">
                 <input type="checkbox" id="default-weapon-sg" name="default-weapon" value="shotgun"> Shotgun
+            </label>
+            <label style="display: block;">
+                <input type="checkbox" id="default-weapon-mr" name="default-weapon" value="m1rifle"> M1 Rifle
             </label>
 
             <h2 style="margin-top: 20px;">MediKit (ArcadeMode Only)</h2>
@@ -185,10 +197,10 @@
                 <input type="radio" name="ai-count" value="1"> 1 AI
             </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-count" value="2" checked> 2 AIs
+                <input type="radio" name="ai-count" value="2"> 2 AIs
             </label>
             <label style="display: block;">
-                <input type="radio" name="ai-count" value="3"> 3 AIs
+                <input type="radio" name="ai-count" value="3" checked> 3 AIs
             </label>
 
             <h2 style="margin-top: 20px;">Map Selection</h2>
@@ -212,10 +224,10 @@
                 <input type="radio" name="game-mode" value="team"> Team Deathmatch (2V2 プレイヤー&AI1体 VS AI2体)
             </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (2V2 チーム戦でキル数を競う - 全員無限復活)
+                <input type="radio" name="game-mode" value="ffa"> Free For All (全員が敵同士 - 全員無限復活)
             </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="ffa"> Free For All (全員が敵同士 - 全員無限復活)
+                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (2V2 チーム戦でキル数を競う - 全員無限復活)
             </label>
 
             <h2 style="margin-top: 20px;">Kill Camera</h2>
@@ -225,8 +237,19 @@
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="killcam-mode" value="playerOnly" checked> プレイヤーが倒した敵のみ再生（プレイヤー死亡は再生）
             </label>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="killcam-mode" value="off"> OFF（キルカメラなし）
+            </label>
             
-            <h2 style="margin-top: 20px;">Auto-aim</h2>
+            <h2 style="margin-top: 20px;">Barrel Respawn</h2>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="barrel-respawn" value="true"> ON（30秒後に同じ場所へ復活）
+            </label>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="barrel-respawn" value="false" checked> OFF
+            </label>
+
+            <h2 style="margin-top: 20px;">Auto-aim（狙撃銃のスコープ）</h2>
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="auto-aim" value="true" checked> ON
             </label>
@@ -291,6 +314,9 @@
     <div id="crosshair">
         <div class="cross-line" id="line-h"></div>
         <div class="cross-line" id="line-v"></div>
+        <div class="crosshair-circle" id="crosshair-circle"></div>
+        <div class="crosshair-plus-h" id="crosshair-plus-h"></div>
+        <div class="crosshair-plus-v" id="crosshair-plus-v"></div>
     </div>
 
     <div id="scope-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 150; display: none; pointer-events: none;">
@@ -309,14 +335,17 @@
     <audio id="mgGunSound" src="mg.mp3" preload="auto"></audio>
     <audio id="rrGunSound" src="rr.mp3" preload="auto"></audio>
     <audio id="srGunSound" src="pss.mp3" preload="auto"></audio>
+    <audio id="m1GunSound" src="m1.mp3" preload="auto"></audio>
+    <audio id="aiM1GunSound" src="m1_.mp3" preload="auto"></audio>
     <audio id="aimgGunSound" src="aimg.mp3" preload="auto"></audio>
     <audio id="aiGunSound" src="aigun.mp3" preload="auto"></audio>
-    <audio id="explosionSound" src="bom.mp3" preload="auto"></audio>
+    <audio id="explosionSound" src="bom2.mp3" preload="auto"></audio>
     <audio id="setSound" src="set.mp3" preload="auto"></audio>
     <audio id="aiSrGunSound" src="ss.mp3" preload="auto"></audio>
     <audio id="playerSgSound" src="sgun.mp3" preload="auto"></audio>
     <audio id="aiSgSound" src="aisgun.mp3" preload="auto"></audio>
     <audio id="rel-audio" src="rel.mp3" preload="auto" volume="1.0"></audio>
+    <audio id="clipSound" src="clip.mp3" preload="auto"></audio>
     
     <div id="character-editor-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto;">
         <div style="padding: 20px; min-height: 100%; max-width: 1200px; margin: 0 auto;">
