@@ -24,6 +24,7 @@ let gameSettings = {
     buttonPositions: {
         fire: { right: '20px', bottom: '120px' },
         crouch: { right: '20px', bottom: '55px' },
+        zoom: { right: '90px', bottom: '55px' },
         joystick: { left: '10%', bottom: '10%' },
         follow: { right: '20px', bottom: '190px' }
     }
@@ -1152,10 +1153,13 @@ function loadSettings() {
             parsedSavedSettings.buttonPositions = {
                 fire: { right: '20px', bottom: '120px' },
                 crouch: { right: '20px', bottom: '55px' },
+                zoom: { right: '90px', bottom: '55px' },
                 joystick: { left: '10%', bottom: '10%' }
             };
         } else if (parsedSavedSettings.buttonPositions.joystick === undefined) {
             parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
+        } else if (parsedSavedSettings.buttonPositions.zoom === undefined) {
+            parsedSavedSettings.buttonPositions.zoom = { right: '90px', bottom: '55px' };
         }
 
         Object.assign(gameSettings, parsedSavedSettings);
@@ -1205,10 +1209,12 @@ function loadSettings() {
         if (gameSettings.buttonPositions) {
             const fireButton = document.getElementById('fire-button');
             const crouchButton = document.getElementById('crouch-button');
+            const zoomButton = document.getElementById('zoom-button');
             const joystickZone = document.getElementById('joystick-move');
             const followButton = document.getElementById('follow-button');
             const previewFireButton = document.getElementById('preview-fire-button');
             const previewCrouchButton = document.getElementById('preview-crouch-button');
+            const previewZoomButton = document.getElementById('preview-zoom-button');
             const previewJoystickZone = document.getElementById('preview-joystick-zone');
             const previewFollowButton = document.getElementById('preview-follow-button');
 
@@ -1229,6 +1235,7 @@ function loadSettings() {
             
             setupButton(fireButton, gameSettings.buttonPositions.fire, 'flex');
             setupButton(crouchButton, gameSettings.buttonPositions.crouch, 'flex');
+            setupButton(zoomButton, gameSettings.buttonPositions.zoom, 'flex');
             setupButton(joystickZone, gameSettings.buttonPositions.joystick, 'block');
             setupButton(followButton, gameSettings.buttonPositions.follow, 'flex');
 
@@ -1243,6 +1250,12 @@ function loadSettings() {
                 previewCrouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
                 previewCrouchButton.style.left = '';
                 previewCrouchButton.style.top = '';
+            }
+            if (previewZoomButton && gameSettings.buttonPositions.zoom) {
+                previewZoomButton.style.right = gameSettings.buttonPositions.zoom.right;
+                previewZoomButton.style.bottom = gameSettings.buttonPositions.zoom.bottom;
+                previewZoomButton.style.left = '';
+                previewZoomButton.style.top = '';
             }
             if (previewJoystickZone && gameSettings.buttonPositions.joystick) {
                 previewJoystickZone.style.left = gameSettings.buttonPositions.joystick.left;
@@ -1312,12 +1325,15 @@ function loadMapSettings(mapName) {
                         fire: { right: '20px', bottom: '120px' },
                         crouch: { right: '20px', bottom: '55px' },
                         joystick: { left: '10%', bottom: '10%' },
+                        zoom: { right: '90px', bottom: '55px' },
                         follow: { right: '20px', bottom: '190px' } // 追加
                     };
                 } else if (parsedSavedSettings.buttonPositions.joystick === undefined) {
                     parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
                 } else if (parsedSavedSettings.buttonPositions.follow === undefined) { // 追加
                     parsedSavedSettings.buttonPositions.follow = { right: '20px', bottom: '190px' }; // 追加
+                } else if (parsedSavedSettings.buttonPositions.zoom === undefined) {
+                    parsedSavedSettings.buttonPositions.zoom = { right: '90px', bottom: '55px' };
                 }
                 
                 // gameSettingsに適用
@@ -1376,10 +1392,12 @@ function loadMapSettings(mapName) {
                 if (gameSettings.buttonPositions) {
                     const fireButton = document.getElementById('fire-button');
                     const crouchButton = document.getElementById('crouch-button');
+                    const zoomButton = document.getElementById('zoom-button');
                     const joystickZone = document.getElementById('joystick-move');
                     const followButton = document.getElementById('follow-button'); // 追加
                     const previewFireButton = document.getElementById('preview-fire-button');
                     const previewCrouchButton = document.getElementById('preview-crouch-button');
+                    const previewZoomButton = document.getElementById('preview-zoom-button');
                     const previewJoystickZone = document.getElementById('preview-joystick-zone');
                     const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
         
@@ -1413,6 +1431,19 @@ function loadMapSettings(mapName) {
                         } else {
                             crouchButton.style.display = 'none'; // PCなら非表示
                             // loadSettings(): crouchButton display set to none (PC)
+                        }
+                    }
+                    if (zoomButton) {
+                        if ('ontouchstart' in window) {
+                            if (gameSettings.buttonPositions.zoom) {
+                                zoomButton.style.right = gameSettings.buttonPositions.zoom.right;
+                                zoomButton.style.bottom = gameSettings.buttonPositions.zoom.bottom;
+                                zoomButton.style.left = '';
+                                zoomButton.style.top = '';
+                                zoomButton.style.display = 'flex';
+                            }
+                        } else {
+                            zoomButton.style.display = 'none';
                         }
                     }
                     if (joystickZone) {
@@ -1458,6 +1489,12 @@ function loadMapSettings(mapName) {
                         previewCrouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
                         previewCrouchButton.style.left = '';
                         previewCrouchButton.style.top = '';
+                    }
+                    if (previewZoomButton && gameSettings.buttonPositions.zoom) {
+                        previewZoomButton.style.right = gameSettings.buttonPositions.zoom.right;
+                        previewZoomButton.style.bottom = gameSettings.buttonPositions.zoom.bottom;
+                        previewZoomButton.style.left = '';
+                        previewZoomButton.style.top = '';
                     }
                     if (previewJoystickZone && gameSettings.buttonPositions.joystick) {
                         previewJoystickZone.style.left = gameSettings.buttonPositions.joystick.left;
@@ -1552,7 +1589,7 @@ function startTimer() {
             document.exitPointerLock();
 
             // UI要素を非表示にする
-            const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display'];
+            const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'zoom-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display'];
             uiToHide.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
@@ -6091,6 +6128,25 @@ if (crouchButton) {
     }, { passive: false });
 }
 
+// zoomButton のイベントリスナーを追加
+const zoomButtonElement = document.getElementById('zoom-button');
+if (zoomButtonElement) {
+    const toggleZoom = (event) => {
+        if (!isGameRunning) return;
+        if (currentWeapon === WEAPON_MR) {
+            setRifleZoom(!isRifleZoomed);
+        } else if (isScoping) {
+            cancelScope();
+        }
+        event.preventDefault();
+    };
+    if ('ontouchstart' in window) {
+        zoomButtonElement.addEventListener('touchstart', toggleZoom, { passive: false });
+    } else {
+        zoomButtonElement.addEventListener('click', toggleZoom);
+    }
+}
+
 // followButton のイベントリスナーを追加
 const followButtonElement = document.getElementById('follow-button');
 if (followButtonElement) {
@@ -6193,12 +6249,14 @@ function startGame() {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
         const pause = document.getElementById('pause-button');
         const followBtn = document.getElementById('follow-button'); 
 
         if (joy) { joy.style.display = 'block'; debugLog('startGame(): joystick-move display set to block'); }
         if (fire) { fire.style.display = 'flex'; debugLog('startGame(): fire-button display set to flex'); }
         if (crouch) { crouch.style.display = 'flex'; debugLog('startGame(): crouch-button display set to flex'); }
+        if (zoom) { zoom.style.display = 'flex'; debugLog('startGame(): zoom-button display set to flex'); }
         if (pause) { pause.style.display = 'block'; debugLog('startGame(): pause-button display set to block'); }
 
         if (followBtn) { 
@@ -6213,11 +6271,13 @@ function startGame() {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
         const followBtn = document.getElementById('follow-button'); 
 
         if (joy) { joy.style.display = 'none'; debugLog('startGame(): joystick-move display set to none'); }
         if (fire) { fire.style.display = 'none'; debugLog('startGame(): fire-button display set to none'); }
         if (crouch) { crouch.style.display = 'none'; debugLog('startGame(): crouch-button display set to none'); }
+        if (zoom) { zoom.style.display = 'none'; debugLog('startGame(): zoom-button display set to none'); }
         if (followBtn) { followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none'); }
     }
     try {
@@ -6580,20 +6640,24 @@ function restartGame() {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
         const pause = document.getElementById('pause-button');
         if (joy) { joy.style.display = 'block'; debugLog('restartGame(): joystick-move display set to block'); }
         if (fire) { fire.style.display = 'flex'; debugLog('restartGame(): fire-button display set to flex'); }
         if (crouch) { crouch.style.display = 'flex'; debugLog('restartGame(): crouch-button display set to flex'); }
+        if (zoom) { zoom.style.display = 'flex'; debugLog('restartGame(): zoom-button display set to flex'); }
         if (pause) { pause.style.display = 'block'; debugLog('restartGame(): pause-button display set to block'); }
     } else {
         debugLog('restartGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
         const pause = document.getElementById('pause-button');
         if (joy) { joy.style.display = 'none'; debugLog('restartGame(): joystick-move display set to none'); }
         if (fire) { fire.style.display = 'none'; debugLog('restartGame(): fire-button display set to none'); }
         if (crouch) { crouch.style.display = 'none'; debugLog('restartGame(): crouch-button display set to none'); }
+        if (zoom) { zoom.style.display = 'none'; debugLog('restartGame(): zoom-button display set to none'); }
         if (pause) { pause.style.display = 'none'; debugLog('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
     }
     for (let i = projectiles.length - 1; i >= 0; i--) scene.remove(projectiles[i].mesh);
@@ -6863,7 +6927,7 @@ function startPlayerDeathSequence(projectile) {
     }
 
     // UIを非表示
-    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button'];
+    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'zoom-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button'];
     uiToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -6978,7 +7042,7 @@ function startPlayerDeathSequence(projectile) {
                 // UIを再表示
                 const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
                 if ('ontouchstart' in window) {
-                    uiToShow.push('joystick-move', 'fire-button', 'crouch-button');
+                    uiToShow.push('joystick-move', 'fire-button', 'crouch-button', 'zoom-button');
                 } else {
                     canvas.requestPointerLock();
                 }
@@ -7009,7 +7073,7 @@ function startPlayerDeathSequence(projectile) {
                     // UIを再表示
                     const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
                     if ('ontouchstart' in window) {
-                        uiToShow.push('joystick-move', 'fire-button', 'crouch-button');
+                        uiToShow.push('joystick-move', 'fire-button', 'crouch-button', 'zoom-button');
                     } else {
                         canvas.requestPointerLock();
                     }
@@ -7631,7 +7695,7 @@ function showSettingsAndPause() {
 
     document.exitPointerLock();
 
-    const elementsToHide = ['joystick-move', 'fire-button', 'crouch-button', 'crosshair', 'scope-overlay', 'kill-count-display', 'player-hp-display', 'player-weapon-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'pause-button'];
+    const elementsToHide = ['joystick-move', 'fire-button', 'crouch-button', 'zoom-button', 'crosshair', 'scope-overlay', 'kill-count-display', 'player-hp-display', 'player-weapon-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'pause-button'];
     elementsToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -7688,19 +7752,23 @@ function resumeGame() {
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
+            const zoom = document.getElementById('zoom-button');
             const pause = document.getElementById('pause-button');
             if (joy) { joy.style.display = 'block'; }
             if (fire) { fire.style.display = 'flex'; }
             if (crouch) { crouch.style.display = 'flex'; }
+            if (zoom) { zoom.style.display = 'flex'; }
             if (pause) { pause.style.display = 'block'; }
         } else {
             // resumeGame(): PC device detected.
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
+            const zoom = document.getElementById('zoom-button');
             if (joy) { joy.style.display = 'none'; }
             if (fire) { fire.style.display = 'none'; }
             if (crouch) { crouch.style.display = 'none'; }
+            if (zoom) { zoom.style.display = 'none'; }
             canvas.requestPointerLock();
         }
 
@@ -9799,6 +9867,7 @@ backToSettingsBtn.addEventListener('click', () => {
 saveButtonPositionsBtn.addEventListener('click', () => {
     const previewFireButton = document.getElementById('preview-fire-button');
     const previewCrouchButton = document.getElementById('preview-crouch-button');
+    const previewZoomButton = document.getElementById('preview-zoom-button');
     const previewJoystickZone = document.getElementById('preview-joystick-zone');
     const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
 
@@ -9807,6 +9876,8 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const fireBottom = (parseInt(previewFireButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
     const crouchRight = (parseInt(previewCrouchButton.style.right, 10) / window.innerWidth) * 100 + '%';
     const crouchBottom = (parseInt(previewCrouchButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
+    const zoomRight = (parseInt(previewZoomButton.style.right, 10) / window.innerWidth) * 100 + '%';
+    const zoomBottom = (parseInt(previewZoomButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
     const joystickLeft = (parseInt(previewJoystickZone.style.left, 10) / window.innerWidth) * 100 + '%';
     const joystickBottom = (parseInt(previewJoystickZone.style.bottom, 10) / window.innerHeight) * 100 + '%';
     const followRight = (parseInt(previewFollowButton.style.right, 10) / window.innerWidth) * 100 + '%'; // 追加
@@ -9814,6 +9885,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
 
     gameSettings.buttonPositions.fire = { right: fireRight, bottom: fireBottom };
     gameSettings.buttonPositions.crouch = { right: crouchRight, bottom: crouchBottom };
+    gameSettings.buttonPositions.zoom = { right: zoomRight, bottom: zoomBottom };
     gameSettings.buttonPositions.joystick = { left: joystickLeft, bottom: joystickBottom };
     gameSettings.buttonPositions.follow = { right: followRight, bottom: followBottom }; // 追加
 
@@ -9822,6 +9894,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     // Apply to actual buttons immediately
     const fireButton = document.getElementById('fire-button');
     const crouchButton = document.getElementById('crouch-button');
+    const zoomButton = document.getElementById('zoom-button');
     const joystickZone = document.getElementById('joystick-move');
     const followButton = document.getElementById('follow-button'); // 追加
 
@@ -9838,6 +9911,12 @@ saveButtonPositionsBtn.addEventListener('click', () => {
             crouchButton.style.left = '';
             crouchButton.style.top = '';
         }
+        if(zoomButton) {
+            zoomButton.style.right = zoomRight;
+            zoomButton.style.bottom = zoomBottom;
+            zoomButton.style.left = '';
+            zoomButton.style.top = '';
+        }
         if(joystickZone) {
             joystickZone.style.left = joystickLeft;
             joystickZone.style.bottom = joystickBottom;
@@ -9853,6 +9932,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     } else {
         if(fireButton) fireButton.style.display = 'none';
         if(crouchButton) crouchButton.style.display = 'none';
+        if(zoomButton) zoomButton.style.display = 'none';
         if(joystickZone) joystickZone.style.display = 'none';
         if (followButton) followButton.style.display = 'none';
     }
@@ -9916,6 +9996,7 @@ function makeDraggable(element, isJoystick = false) {
 
 makeDraggable(document.getElementById('preview-fire-button'));
 makeDraggable(document.getElementById('preview-crouch-button'));
+makeDraggable(document.getElementById('preview-zoom-button'));
 makeDraggable(document.getElementById('preview-joystick-zone'), true);
 makeDraggable(document.getElementById('preview-follow-button')); // 追加
 
