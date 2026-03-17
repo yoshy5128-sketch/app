@@ -483,7 +483,15 @@
             console.log('House created successfully, returning house object');
             return house;
         }
-        function createTower(x, z, isNew = true) {
+        function createTower(x, z, optionsOrIsNew = true) {
+            let isNew = true;
+            let options = {};
+            if (optionsOrIsNew && typeof optionsOrIsNew === 'object') {
+                options = optionsOrIsNew;
+                if (typeof options.isNew === 'boolean') isNew = options.isNew;
+            } else if (typeof optionsOrIsNew === 'boolean') {
+                isNew = optionsOrIsNew;
+            }
             const snappedX = snapToGrid(x);
             const snappedZ = snapToGrid(z);
 
@@ -496,14 +504,22 @@
             }
 
             // ゲーム本体と同じ塔作成ロジック - UIから現在の設定を読み込む
-            const TOWER_WIDTH = parseFloat(document.getElementById('tower-width').value) || 6;
-            const TOWER_DEPTH = parseFloat(document.getElementById('tower-depth').value) || 6;
-            const TOWER_HEIGHT = parseFloat(document.getElementById('tower-height').value) || 12;
+            const uiWidth = parseFloat(document.getElementById('tower-width').value) || 6;
+            const uiDepth = parseFloat(document.getElementById('tower-depth').value) || 6;
+            const uiHeight = parseFloat(document.getElementById('tower-height').value) || 12;
+            const uiColor = parseInt(document.getElementById('tower-color').value.replace('#', '0x')) || 0x4A4A4A;
+            const uiHp = 6;
+
+            const TOWER_WIDTH = Number.isFinite(options.width) ? options.width : uiWidth;
+            const TOWER_DEPTH = Number.isFinite(options.depth) ? options.depth : uiDepth;
+            const TOWER_HEIGHT = Number.isFinite(options.height) ? options.height : uiHeight;
+            const TOWER_COLOR = Number.isFinite(options.color) ? options.color : uiColor;
+            const TOWER_HP = Number.isFinite(options.hp) ? options.hp : uiHp;
             const towerYPos = (TOWER_HEIGHT / 2);
             const towerGeometry = new THREE.BoxGeometry(TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH);
             
             const towerMaterial = new THREE.MeshLambertMaterial({ 
-                color: parseInt(document.getElementById('tower-color').value.replace('#', '0x')) || 0x4A4A4A
+                color: TOWER_COLOR
             });
             
             const tower = new THREE.Mesh(towerGeometry, towerMaterial);
@@ -514,8 +530,8 @@
                 width: TOWER_WIDTH,
                 height: TOWER_HEIGHT,
                 depth: TOWER_DEPTH,
-                color: parseInt(document.getElementById('tower-color').value.replace('#', '0x')) || 0x4A4A4A,
-                hp: 6 // ゲーム本体と同じHP
+                color: TOWER_COLOR,
+                hp: TOWER_HP // ゲーム本体と同じHP
             };
             
             scene.add(tower);
@@ -1239,6 +1255,13 @@
             }
         }
 
+        function inferObstacleType(o) {
+            if (o.userData && o.userData.type) return o.userData.type;
+            if (o.userData && o.userData.isTower) return 'tower';
+            if (o.isGroup || o.type === 'Group') return 'house';
+            return 'obstacle';
+        }
+
         function saveMap() {
             const mapName = document.getElementById('map-name-input').value.trim();
             if (!mapName) {
@@ -1248,7 +1271,10 @@
 
             const mapData = {
                 obstacles: obstacles.map(o => {
-                    if (o.userData.type === 'tower') {
+                    const type = inferObstacleType(o);
+                    if (!o.userData) o.userData = {};
+                    if (!o.userData.type) o.userData.type = type;
+                    if (type === 'tower') {
                         // 塔の場合は特別なデータ形式で保存
                         return {
                             x: o.position.x, z: o.position.z,
@@ -1256,9 +1282,10 @@
                             width: o.userData.width,
                             height: o.userData.height,
                             depth: o.userData.depth,
+                            color: o.userData.color,
                             hp: o.userData.hp
                         };
-                    } else if (o.userData.type === 'house') {
+                    } else if (type === 'house') {
                         // 家の場合は特別なデータ形式で保存
                         return {
                             x: o.position.x, z: o.position.z,
@@ -1270,7 +1297,7 @@
                             hp: o.userData.hp,
                             rotation: o.rotation.y || 0 // 回転角度を保存
                         };
-                    } else if (o.userData.type === 'barrel') {
+                    } else if (type === 'barrel') {
                         return {
                             x: o.position.x, z: o.position.z,
                             type: 'barrel',
@@ -1318,7 +1345,14 @@
                 if (mapData.obstacles) mapData.obstacles.forEach(d => {
                     if (d.type === 'tower') {
                         // 塔の場合は塔作成関数を呼び出す
-                        createTower(d.x, d.z, false);
+                        createTower(d.x, d.z, {
+                            width: d.width,
+                            height: d.height,
+                            depth: d.depth,
+                            color: d.color,
+                            hp: d.hp,
+                            isNew: false
+                        });
                     } else if (d.type === 'house') {
                         // 家の場合は家作成関数を呼び出す
                         createHouse(d.x, d.z, d.width, d.height, d.depth, d.color, d.hp, false);
@@ -1428,11 +1462,37 @@
                 
                 const mapData = {
                     obstacles: obstacles.map(o => {
-                        if (!o.position || !o.geometry || !o.geometry.parameters) {
-                            console.warn('Invalid obstacle found:', o);
+                        if (!o.position) {
+                            console.warn('Invalid obstacle found (no position):', o);
                             return null;
                         }
-                        if (o.userData.type === 'barrel') {
+                        const type = inferObstacleType(o);
+                        if (!o.userData) o.userData = {};
+                        if (!o.userData.type) o.userData.type = type;
+                        if (type === 'tower') {
+                            return {
+                                x: o.position.x, z: o.position.z,
+                                type: 'tower',
+                                width: o.userData.width,
+                                height: o.userData.height,
+                                depth: o.userData.depth,
+                                color: o.userData.color,
+                                hp: o.userData.hp
+                            };
+                        }
+                        if (type === 'house') {
+                            return {
+                                x: o.position.x, z: o.position.z,
+                                type: 'house',
+                                width: o.userData.width,
+                                height: o.userData.height,
+                                depth: o.userData.depth,
+                                color: o.userData.color,
+                                hp: o.userData.hp,
+                                rotation: (o.rotation && o.rotation.y) ? o.rotation.y : 0
+                            };
+                        }
+                        if (type === 'barrel') {
                             return {
                                 x: o.position.x, z: o.position.z,
                                 type: 'barrel',
@@ -1441,8 +1501,13 @@
                                 color: o.userData.color || 0xe74c3c
                             };
                         }
+                        if (!o.geometry || !o.geometry.parameters) {
+                            console.warn('Invalid obstacle found (no geometry):', o);
+                            return null;
+                        }
                         return {
                             x: o.position.x, z: o.position.z,
+                            type: 'obstacle',
                             width: o.geometry.parameters.width, height: o.geometry.parameters.height, depth: o.geometry.parameters.depth,
                             color: o.userData.color, hp: o.userData.hp
                         };
@@ -1492,7 +1557,18 @@
                     
                     resetMap(false); 
                     if (mapData.obstacles) mapData.obstacles.forEach(d => {
-                        if (d.type === 'barrel') {
+                        if (d.type === 'tower') {
+                            createTower(d.x, d.z, {
+                                width: d.width,
+                                height: d.height,
+                                depth: d.depth,
+                                color: d.color,
+                                hp: d.hp,
+                                isNew: false
+                            });
+                        } else if (d.type === 'house') {
+                            createHouse(d.x, d.z, d.width, d.height, d.depth, d.color, d.hp, d.rotation || 0, false);
+                        } else if (d.type === 'barrel') {
                             createBarrel(d.x, d.z, d.color, d.radius, d.height, false);
                         } else {
                             createObstacle(d.x, d.z, d.width, d.height, d.depth, d.color, d.hp, false);

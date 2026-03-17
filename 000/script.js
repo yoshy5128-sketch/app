@@ -7,6 +7,7 @@ let gameSettings = {
     rrCount: 1,
     srCount: 1,
     sgCount: 1,
+    mrCount: 1,
     defaultWeapon: 'pistol',
     medikitCount: 0,
     mapType: 'default',
@@ -270,6 +271,8 @@ let characterEditorAnimationId = null;
         mgGunSound = document.getElementById('mgGunSound');
         rrGunSound = document.getElementById('rrGunSound');
         srGunSound = document.getElementById('srGunSound');
+        m1GunSound = document.getElementById('m1GunSound');
+        aiM1GunSound = document.getElementById('aiM1GunSound');
         aimgGunSound = document.getElementById('aimgGunSound');
         aiGunSound = document.getElementById('aiGunSound');
         explosionSound = document.getElementById('explosionSound');
@@ -279,6 +282,7 @@ let characterEditorAnimationId = null;
         aiSrGunSound = document.getElementById('aiSrGunSound');
         playerSgSound = document.getElementById('playerSgSound');
         aiSgSound = document.getElementById('aiSgSound');
+        clipSound = document.getElementById('clipSound');
         winScreen = document.getElementById('win-screen');
         playerHPDisplay = document.getElementById('player-hp-display');
         playerWeaponDisplay = document.getElementById('player-weapon-display'); // 追加
@@ -319,6 +323,7 @@ let characterEditorAnimationId = null;
         const rrCountSelect = document.getElementById('rr-count');
         const srCountSelect = document.getElementById('sr-count');
         const sgCountSelect = document.getElementById('sg-count');
+        const mrCountSelect = document.getElementById('mr-count');
         const aiCountRadios = document.querySelectorAll('input[name="ai-count"]');
         const autoAimRadios = document.querySelectorAll('input[name="auto-aim"]');
         const nightModeRadios = document.querySelectorAll('input[name="night-mode"]');
@@ -377,6 +382,7 @@ let characterEditorAnimationId = null;
         if (rrCountSelect) rrCountSelect.addEventListener('change', () => { gameSettings.rrCount = parseInt(rrCountSelect.value, 10); saveSettings(); });
         if (srCountSelect) srCountSelect.addEventListener('change', () => { gameSettings.srCount = parseInt(srCountSelect.value, 10); saveSettings(); });
         if (sgCountSelect) sgCountSelect.addEventListener('change', () => { gameSettings.sgCount = parseInt(sgCountSelect.value, 10); saveSettings(); });
+        if (mrCountSelect) mrCountSelect.addEventListener('change', () => { gameSettings.mrCount = parseInt(mrCountSelect.value, 10); saveSettings(); });
         const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
         if (defaultWeaponChecks.length > 0) {
             defaultWeaponChecks.forEach(check => {
@@ -779,21 +785,27 @@ const WEAPON_MG = 'machinegun';
 const WEAPON_RR = 'rocketlauncher';
 const WEAPON_SR = 'sniperrifle';
 const WEAPON_SG = 'shotgun';
+const WEAPON_MR = 'm1rifle';
 let currentWeapon = WEAPON_PISTOL;
 let ammoMG = 0;
 let ammoRR = 0;
 let ammoSR = 0;
 let ammoSG = 0;
+let ammoMR = 0;
 let playerMGReloadUntil = 0;
+let playerMRReloadUntil = 0;
 const MAX_AMMO_MG = 50;
 const MAX_AMMO_RR = 3;
 const MAX_AMMO_SR = 5;
 const MAX_AMMO_SG = 10;
+const MAX_AMMO_MR = 8;
 const FIRE_RATE_PISTOL = 0.3;
 const FIRE_RATE_MG = 0.1;
 const FIRE_RATE_RR = 1.5;
 const FIRE_RATE_SR = 2.0;
 const FIRE_RATE_SG = 0.8;
+const FIRE_RATE_MR = 0.3;
+const MR_PROJECTILE_SPEED_MULT = 1.6;
 const SHOTGUN_PELLET_COUNT = 7;
 const SHOTGUN_SPREAD_ANGLE = Math.PI / 16;
 const SHOTGUN_RANGE = 15;
@@ -817,6 +829,7 @@ function applyPlayerDefaultWeaponLoadout() {
     ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
     ammoSR = selected === WEAPON_SR ? MAX_AMMO_SR : 0;
     ammoSG = selected === WEAPON_SG ? MAX_AMMO_SG : 0;
+    ammoMR = selected === WEAPON_MR ? MAX_AMMO_MR : 0;
 }
 
 function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
@@ -831,6 +844,7 @@ function applyAIDefaultWeaponLoadout(ai) {
     ai.ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
     ai.ammoSR = selected === WEAPON_SR ? MAX_AMMO_SR : 0;
     ai.ammoSG = selected === WEAPON_SG ? MAX_AMMO_SG : 0;
+    ai.ammoMR = selected === WEAPON_MR ? MAX_AMMO_MR : 0;
 }
 
 function getPlayerFallbackWeapon() {
@@ -846,6 +860,7 @@ function switchPlayerToFallbackWeapon() {
     if (fallback === WEAPON_RR && ammoRR <= 0) ammoRR = MAX_AMMO_RR;
     if (fallback === WEAPON_SR && ammoSR <= 0) ammoSR = MAX_AMMO_SR;
     if (fallback === WEAPON_SG && ammoSG <= 0) ammoSG = MAX_AMMO_SG;
+    if (fallback === WEAPON_MR && ammoMR <= 0) ammoMR = MAX_AMMO_MR;
 }
 
 function switchAIToFallbackWeapon(ai) {
@@ -858,6 +873,7 @@ function switchAIToFallbackWeapon(ai) {
     if (fallback === WEAPON_RR && ai.ammoRR <= 0) ai.ammoRR = MAX_AMMO_RR;
     if (fallback === WEAPON_SR && ai.ammoSR <= 0) ai.ammoSR = MAX_AMMO_SR;
     if (fallback === WEAPON_SG && ai.ammoSG <= 0) ai.ammoSG = MAX_AMMO_SG;
+    if (fallback === WEAPON_MR && ai.ammoMR <= 0) ai.ammoMR = MAX_AMMO_MR;
 }
 
 function showReloadingText() {
@@ -931,6 +947,8 @@ const FLOATING_CLEANUP_INTERVAL = 5.0; // 5秒ごとにクリーンアップ
 let lastFireTime = -FIRE_RATE_PISTOL;
 let isMouseButtonDown = false;
 let isScoping = false;
+let isRifleZoomed = false;
+const MR_ZOOM_FOV = 55;
 let isElevating = false;
 let elevatingTargetY = 0;
 let elevatingTargetObstacle = null;
@@ -1125,6 +1143,9 @@ function loadSettings() {
         if (parsedSavedSettings.defaultWeapon === undefined) {
             parsedSavedSettings.defaultWeapon = 'pistol';
         }
+        if (parsedSavedSettings.mrCount === undefined) {
+            parsedSavedSettings.mrCount = gameSettings.mrCount;
+        }
         Object.assign(gameSettings, parsedSavedSettings);
         // Add default for buttonPositions if it doesn't exist
         if (parsedSavedSettings.buttonPositions === undefined) {
@@ -1317,6 +1338,7 @@ function loadMapSettings(mapName) {
                 document.getElementById('rr-count').value = gameSettings.rrCount;
                 document.getElementById('sr-count').value = gameSettings.srCount;
                 if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
+                if (document.getElementById('mr-count')) document.getElementById('mr-count').value = gameSettings.mrCount;
                 document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
                     check.checked = (gameSettings.defaultWeapon === check.value);
                 });
@@ -1467,6 +1489,8 @@ let playerGunSound;
 let mgGunSound;
 let rrGunSound;
 let srGunSound;
+let m1GunSound;
+let aiM1GunSound;
 let aimgGunSound;
 let aiGunSound;
 let explosionSound;
@@ -1476,6 +1500,7 @@ let gameOverScreen;
 let aiSrGunSound;
 let playerSgSound;
 let aiSgSound;
+let clipSound;
 let winScreen;
 let playerHPDisplay;
 let playerWeaponDisplay; // 追加
@@ -1855,6 +1880,7 @@ function createWeaponPickups(aiList = []) {
     for (let i = 0; i < gameSettings.rrCount; i++) weaponTypes.push({ name: 'RL', type: WEAPON_RR });
     for (let i = 0; i < gameSettings.srCount; i++) weaponTypes.push({ name: 'SR', type: WEAPON_SR });
     for (let i = 0; i < gameSettings.sgCount; i++) weaponTypes.push({ name: 'SG', type: WEAPON_SG });
+    for (let i = 0; i < gameSettings.mrCount; i++) weaponTypes.push({ name: 'MR', type: WEAPON_MR });
 
     shuffle(weaponTypes);
 
@@ -3263,6 +3289,7 @@ function applyGunStyle(gunMesh, weaponType) {
         case WEAPON_RR: length = 2.6; thickness = 0.22; color = 0x6b4b1f; shape = 'cylinder'; break;
         case WEAPON_SR: length = 1.65; thickness = 0.09; color = 0xcccccc; break;
         case WEAPON_SG: length = 1.2; thickness = 0.12; color = 0x444444; break;
+        case WEAPON_MR: length = 1.4; thickness = 0.12; color = 0x444444; break;
     }
     gunMesh.geometry.dispose();
     if (shape === 'cylinder') {
@@ -3308,6 +3335,14 @@ function applyGunStyle(gunMesh, weaponType) {
         scope.rotation.x = Math.PI / 2; // along Z
         scope.position.set(0, thickness * 0.9, length * 0.18);
         gunMesh.add(scope);
+    } else if (weaponType === WEAPON_MR) {
+        // Add a longer barrel with reddish-brown color
+        const barrel = new THREE.Mesh(
+            new THREE.BoxGeometry(thickness * 0.5, thickness * 0.5, length * 0.6),
+            new THREE.MeshLambertMaterial({ color: 0x8b4513 })
+        );
+        barrel.position.set(0, 0, length * 0.25);
+        gunMesh.add(barrel);
     }
 }
 
@@ -3672,7 +3707,7 @@ function applyWeaponPose(parts, weaponType) {
         // Rocket sits around shoulder, not floating in front.
         parts.gun.position.set(-0.22, 0.24, 0.34);
         parts.gun.rotation.set(0.0, 0.0, 0.0);
-    } else if (weaponType === WEAPON_SG || weaponType === WEAPON_MG) {
+    } else if (weaponType === WEAPON_SG || weaponType === WEAPON_MG || weaponType === WEAPON_MR) {
         // JSON slot: rifle (used for MG/SG)
         parts.aimGroup.position.y = parts.baseAimY;
         parts.leftArm.position.set(-0.45, 0.22, 0.0);
@@ -3702,6 +3737,7 @@ function createAI(color, customization = null) {
     aiObject.ammoMG = 0;
     aiObject.ammoRR = 0;
     aiObject.ammoSR = 0;
+    aiObject.ammoMR = 0;
     aiObject.targetWeaponPickup = null;
     aiObject.hp = 3;
     aiObject.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
@@ -4121,6 +4157,7 @@ function isAIWeaponOutOfAmmo(ai) {
         case WEAPON_RR: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR) && ai.ammoRR <= 0;
         case WEAPON_SR: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR) && ai.ammoSR <= 0;
         case WEAPON_SG: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG) && ai.ammoSG <= 0;
+        case WEAPON_MR: return !isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MR) && ai.ammoMR <= 0;
         default: return false;
     }
 }
@@ -4522,8 +4559,16 @@ function findAndTargetWeapon(ai) {
     const isTeammate = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player';
     const isFollowTeammate = isTeammate && isFollowingPlayerMode && ai.userData && ai.userData.followActive !== false;
     const lowAmmo = isTeammate
-        ? ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 30) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 3) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 3) || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 4))
-        : ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 12) || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 2) || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 2) || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 2));
+        ? ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 30)
+            || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 3)
+            || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 3)
+            || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 4)
+            || (ai.currentWeapon === WEAPON_MR && ai.ammoMR < 4))
+        : ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 12)
+            || (ai.currentWeapon === WEAPON_RR && ai.ammoRR < 2)
+            || (ai.currentWeapon === WEAPON_SR && ai.ammoSR < 2)
+            || (ai.currentWeapon === WEAPON_SG && ai.ammoSG < 2)
+            || (ai.currentWeapon === WEAPON_MR && ai.ammoMR < 2));
     const aggressivePickup = ai.currentWeapon === WEAPON_PISTOL || lowAmmo || Math.random() < 0.25;
     const needsUpgrade = weaponPickups.length > 0 && (isFollowTeammate || aggressivePickup);
     if (!needsUpgrade || ai.targetWeaponPickup) {
@@ -5279,6 +5324,14 @@ function cancelScope() {
     new TWEEN.Tween(camera).to({ fov: 75 }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
 }
 
+function setRifleZoom(enabled) {
+    if (isScoping) return;
+    if (isRifleZoomed === enabled) return;
+    isRifleZoomed = enabled;
+    const targetFov = enabled ? MR_ZOOM_FOV : 75;
+    new TWEEN.Tween(camera).to({ fov: targetFov }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
+}
+
 function handleFireRelease() {
     if (!isGameRunning) return;
     if (isScoping) {
@@ -5320,10 +5373,18 @@ function shoot() {
         ammoMG = MAX_AMMO_MG;
         hideReloadingText();
     }
+    if (playerMRReloadUntil > 0 && now >= playerMRReloadUntil) {
+        playerMRReloadUntil = 0;
+        ammoMR = MAX_AMMO_MR;
+        hideReloadingText();
+    }
     let canFire = false;
     let projectileColor = 0xffff00;
     let projectileSize = 0.1;
     let fireRate = FIRE_RATE_PISTOL;
+    let projectileSpeedOverride = projectileSpeed;
+    let weaponType = null;
+    let isSniperShot = false;
     switch (currentWeapon) {
         case WEAPON_PISTOL: canFire = true; fireRate = FIRE_RATE_PISTOL; break;
         case WEAPON_MG:
@@ -5339,6 +5400,19 @@ function shoot() {
             break;
         case WEAPON_RR: if (ammoRR > 0 || isInfiniteDefaultWeaponActive(WEAPON_RR)) { canFire = true; projectileColor = 0xff8c00; projectileSize = 0.5; fireRate = FIRE_RATE_RR; } break;
         case WEAPON_SG: if (ammoSG > 0 || isInfiniteDefaultWeaponActive(WEAPON_SG)) { canFire = true; projectileColor = 0xffa500; projectileSize = 0.05; fireRate = FIRE_RATE_SG; } break;
+        case WEAPON_MR:
+            if (playerMRReloadUntil > 0 && now < playerMRReloadUntil) {
+                canFire = false;
+                break;
+            }
+            if (ammoMR > 0 || isInfiniteDefaultWeaponActive(WEAPON_MR)) {
+                canFire = true;
+                projectileColor = 0xffff00;
+                fireRate = FIRE_RATE_MR;
+                projectileSpeedOverride = projectileSpeed * MR_PROJECTILE_SPEED_MULT;
+                weaponType = WEAPON_MR;
+            }
+            break;
     }
     const timeSinceLastFire = now - lastFireTime;
     if (canFire && timeSinceLastFire > fireRate) {
@@ -5346,6 +5420,7 @@ function shoot() {
         if (currentWeapon === WEAPON_MG) soundToPlay = mgGunSound;
         else if (currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
         else if (currentWeapon === WEAPON_SG) soundToPlay = playerSgSound;
+        else if (currentWeapon === WEAPON_MR) soundToPlay = m1GunSound;
         if (soundToPlay) playSound(soundToPlay);
         let baseDirection = new THREE.Vector3();
         camera.getWorldDirection(baseDirection);
@@ -5369,7 +5444,7 @@ function shoot() {
                 createProjectile(safeFire.startPosition, spreadDirection, projectileColor, projectileSize, false, 'player', projectileSpeed, false, WEAPON_SG);
             }
         } else {
-            createProjectile(safeFire.startPosition, baseDirection, projectileColor, projectileSize, currentWeapon === WEAPON_RR, 'player');
+            createProjectile(safeFire.startPosition, baseDirection, projectileColor, projectileSize, currentWeapon === WEAPON_RR, 'player', projectileSpeedOverride, isSniperShot, weaponType);
         }
         lastFireTime = now;
         if (currentWeapon === WEAPON_MG) {
@@ -5383,6 +5458,13 @@ function shoot() {
             if (!isInfiniteDefaultWeaponActive(WEAPON_RR) && --ammoRR === 0) switchPlayerToFallbackWeapon();
         } else if (currentWeapon === WEAPON_SG) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_SG) && --ammoSG === 0) switchPlayerToFallbackWeapon();
+        } else if (currentWeapon === WEAPON_MR) {
+            if (!isInfiniteDefaultWeaponActive(WEAPON_MR) && --ammoMR === 0) {
+                if (clipSound) playSound(clipSound);
+                ammoMR = 0;
+                playerMRReloadUntil = now + 2.0;
+                showReloadingText();
+            }
         }
     }
 }
@@ -5392,6 +5474,10 @@ function aiShoot(ai, timeElapsed) {
     if (ai && ai.userData && ai.userData.mgReloadUntil && timeElapsed >= ai.userData.mgReloadUntil) {
         ai.userData.mgReloadUntil = 0;
         ai.ammoMG = MAX_AMMO_MG;
+    }
+    if (ai && ai.userData && ai.userData.mrReloadUntil && timeElapsed >= ai.userData.mrReloadUntil) {
+        ai.userData.mrReloadUntil = 0;
+        ai.ammoMR = MAX_AMMO_MR;
     }
     let startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0));
     const aimOrigin = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.65 : BODY_HEIGHT * 0.9, 0));
@@ -5576,6 +5662,18 @@ function aiShoot(ai, timeElapsed) {
         case WEAPON_RR: if (ai.ammoRR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR)) { canAIShoot = true; aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0); aiProjectileSize = 0.5; aiProjectileColor = 0xff8c00; } break;
         case WEAPON_SR: if (ai.ammoSR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR)) { canAIShoot = true; aiFireRate = FIRE_RATE_SR * (1.0 + (1.0 - ai.aggression) * 0.5); aiProjectileColor = 0xffff00; aiProjectileSpeed = projectileSpeed * 2; } break;
         case WEAPON_SG: if (ai.ammoSG > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG)) { canAIShoot = true; aiFireRate = FIRE_RATE_SG; aiProjectileColor = 0xffa500; aiProjectileSize = 0.05; if (distanceToPlayer < SHOTGUN_RANGE * 1.5) { aiFireRate /= (1 + ai.aggression); } } break;
+        case WEAPON_MR:
+            if (ai.userData && ai.userData.mrReloadUntil && timeElapsed < ai.userData.mrReloadUntil) {
+                canAIShoot = false;
+                break;
+            }
+            if (ai.ammoMR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MR)) {
+                canAIShoot = true;
+                aiFireRate = FIRE_RATE_MR;
+                aiProjectileColor = 0xffff00;
+                aiProjectileSpeed = projectileSpeed * MR_PROJECTILE_SPEED_MULT;
+            }
+            break;
     }
     if (isTeamModeOrTeamArcade && ai.team === 'player' && ai.currentWeapon !== WEAPON_MG) {
         // 味方AIはやや高頻度で攻撃（ただしMGは敵と同じレートにするため除外）
@@ -5594,6 +5692,7 @@ function aiShoot(ai, timeElapsed) {
         else if (ai.currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
         else if (ai.currentWeapon === WEAPON_SR) soundToPlay = aiSrGunSound;
         else if (ai.currentWeapon === WEAPON_SG) soundToPlay = aiSgSound;
+        else if (ai.currentWeapon === WEAPON_MR) soundToPlay = aiM1GunSound;
         else soundToPlay = aiGunSound;
         if (soundToPlay) playSound(soundToPlay);
         const aiMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0));
@@ -5624,7 +5723,8 @@ function aiShoot(ai, timeElapsed) {
                 createProjectile(startPosition, spreadDirection, aiProjectileColor, aiProjectileSize, false, 'ai', aiProjectileSpeed, false, WEAPON_SG, ai);
             }
         } else {
-            createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR, null, ai);
+            const aiWeaponType = ai.currentWeapon === WEAPON_MR ? WEAPON_MR : null;
+            createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR, aiWeaponType, ai);
         }
         ai.lastAttackTime = timeElapsed;
         if (ai.currentWeapon === WEAPON_MG) {
@@ -5639,6 +5739,11 @@ function aiShoot(ai, timeElapsed) {
             if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR) && --ai.ammoSR === 0) switchAIToFallbackWeapon(ai);
         } else if (ai.currentWeapon === WEAPON_SG) {
             if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG) && --ai.ammoSG === 0) switchAIToFallbackWeapon(ai);
+        } else if (ai.currentWeapon === WEAPON_MR) {
+            if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MR) && --ai.ammoMR === 0) {
+                ai.ammoMR = 0;
+                if (ai.userData) ai.userData.mrReloadUntil = timeElapsed + 2.0;
+            }
         }
     }
 }
@@ -5654,6 +5759,7 @@ function aiCheckPickup(ai) {
                 case WEAPON_RR: ai.currentWeapon = WEAPON_RR; ai.ammoRR = MAX_AMMO_RR; break;
                 case WEAPON_SR: ai.currentWeapon = WEAPON_SR; ai.ammoSR = MAX_AMMO_SR; break;
                 case WEAPON_SG: ai.currentWeapon = WEAPON_SG; ai.ammoSG = MAX_AMMO_SG; break;
+                case WEAPON_MR: ai.currentWeapon = WEAPON_MR; ai.ammoMR = MAX_AMMO_MR; break;
             }
             scene.remove(pickup);
             weaponPickups.splice(i, 1);
@@ -5900,7 +6006,9 @@ document.addEventListener('mousedown', (event) => {
     if (event.button === 0) { // Left click
         handleFirePress();
     } else if (event.button === 2) { // Right click
-        if (isScoping) {
+        if (currentWeapon === WEAPON_MR) {
+            setRifleZoom(!isRifleZoomed);
+        } else if (isScoping) {
             cancelScope();
         }
     }
@@ -6020,6 +6128,9 @@ function startGame() {
     forceRoofCleanup();
     forceBuildingCleanup(); // 建築物クリーンアップを追加
     resetObstacles();
+    isRifleZoomed = false;
+    camera.fov = 75;
+    camera.updateProjectionMatrix();
     
     const startSc = document.getElementById('start-screen');
     if (startSc) startSc.style.display = 'none';
@@ -6504,6 +6615,7 @@ function restartGame() {
     clock.start();
     lastFireTime = -1;
     playerMGReloadUntil = 0;
+    playerMRReloadUntil = 0;
     hideReloadingText();
     keySet.clear();
     joystickMoveVector.set(0, 0);
@@ -6655,6 +6767,8 @@ function respawnAI(ai) {
     ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false; ai.isCrouching = false;
     ai.isElevating = false;
     if (ai.userData) ai.userData.mgReloadUntil = 0;
+    if (ai.userData) ai.userData.mrReloadUntil = 0;
+    if (ai.userData) ai.userData.mrReloadUntil = 0;
     ai.userData.rooftopIntent = false;
     ai.userData.onRooftop = false;
     ai.userData.rooftopSensor = null;
@@ -7649,6 +7763,11 @@ function animate() {
         ammoMG = MAX_AMMO_MG;
         hideReloadingText();
     }
+    if (playerMRReloadUntil > 0 && timeElapsed >= playerMRReloadUntil) {
+        playerMRReloadUntil = 0;
+        ammoMR = MAX_AMMO_MR;
+        hideReloadingText();
+    }
     
     // Crouching state change adjustment
     const oldPlayerTargetHeight = playerTargetHeight;
@@ -7663,7 +7782,7 @@ function animate() {
         player.position.y += playerTargetHeight - oldPlayerTargetHeight;
     }
 
-    const currentMoveSpeed = isCrouchingToggle ? moveSpeed / 2 : moveSpeed;
+    const currentMoveSpeed = (isCrouchingToggle || isRifleZoomed) ? moveSpeed / 2 : moveSpeed;
     for (let i = debris.length - 1; i >= 0; i--) {
         const d = debris[i];
         d.velocity.y -= GRAVITY * delta;
@@ -7749,11 +7868,15 @@ function animate() {
             case WEAPON_RR: weaponName = 'Rocket'; ammoCount = ammoRR; break;
             case WEAPON_SR: weaponName = 'Sniper'; ammoCount = ammoSR; break;
             case WEAPON_SG: weaponName = 'Shotgun'; ammoCount = ammoSG; break;
+            case WEAPON_MR: weaponName = 'M1 Rifle'; ammoCount = ammoMR; break;
             case WEAPON_PISTOL: weaponName = 'Pistol'; ammoCount = '∞'; break;
         }
         playerWeaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`; // playerWeaponDisplayを使用
     }
-    if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG)) {
+    if (isRifleZoomed && currentWeapon !== WEAPON_MR) {
+        setRifleZoom(false);
+    }
+    if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
         shoot();
     }
     updateCrosshairForWeapon();
@@ -8012,6 +8135,10 @@ function animate() {
                         if (currentWeapon === WEAPON_SG) { ammoSG = Math.min(ammoSG + MAX_AMMO_SG, MAX_AMMO_SG * 2); } 
                         else { currentWeapon = WEAPON_SG; ammoSG = MAX_AMMO_SG; } 
                         weaponName = 'SHOTGUN'; break;
+                    case WEAPON_MR:
+                        if (currentWeapon === WEAPON_MR) { ammoMR = Math.min(ammoMR + MAX_AMMO_MR, MAX_AMMO_MR * 2); }
+                        else { currentWeapon = WEAPON_MR; ammoMR = MAX_AMMO_MR; }
+                        weaponName = 'M1 RIFLE'; break;
                 }
                 const setSound = document.getElementById('setSound');
                 if (setSound) playSound(setSound);
@@ -8049,7 +8176,11 @@ function animate() {
         const respawnItem = respawningPickups[i];
         if (timeElapsed >= respawnItem.respawnTime) {
             if (respawnItem.type === 'weapon') {
-                const weaponText = respawnItem.weaponType === WEAPON_MG ? 'MG' : respawnItem.weaponType === WEAPON_RR ? 'RL' : respawnItem.weaponType === WEAPON_SR ? 'SR' : 'SG';
+                const weaponText = respawnItem.weaponType === WEAPON_MG ? 'MG'
+                    : respawnItem.weaponType === WEAPON_RR ? 'RL'
+                    : respawnItem.weaponType === WEAPON_SR ? 'SR'
+                    : respawnItem.weaponType === WEAPON_MR ? 'MR'
+                    : 'SG';
                 const weaponBoxWidth = 1;
                 const weaponBoxHeight = 0.8;
                 const weaponBoxDepth = 2;
@@ -8079,6 +8210,10 @@ function animate() {
         if (ai.userData && ai.userData.mgReloadUntil && timeElapsed >= ai.userData.mgReloadUntil) {
             ai.userData.mgReloadUntil = 0;
             ai.ammoMG = MAX_AMMO_MG;
+        }
+        if (ai.userData && ai.userData.mrReloadUntil && timeElapsed >= ai.userData.mrReloadUntil) {
+            ai.userData.mrReloadUntil = 0;
+            ai.ammoMR = MAX_AMMO_MR;
         }
 
         if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.hp > 0) {
@@ -9181,6 +9316,7 @@ function animate() {
                     hitType = 'ai';
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
+                    else if (p.weaponType === WEAPON_MR) damageAmount = 2;
                     else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
                     
                     if (ai.hp !== Infinity) {
@@ -9244,6 +9380,7 @@ function animate() {
                         hitType = 'ai';
                         let damageAmount = 1;
                         if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
+                        else if (p.weaponType === WEAPON_MR) damageAmount = 2;
                         else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
                         if (ai.hp !== Infinity) {
                             ai.hp -= damageAmount;
@@ -9335,6 +9472,7 @@ function animate() {
                     hitType = 'player';
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
+                    else if (p.weaponType === WEAPON_MR) damageAmount = 2;
                     else if (p.isSniper || p.isRocket) damageAmount = playerHP;
                     if (playerHP !== Infinity) {
                         playerHP -= damageAmount;
@@ -9595,6 +9733,9 @@ if (startBtn) {
         gameSettings.rrCount = parseInt(document.getElementById('rr-count').value, 10);
         gameSettings.srCount = parseInt(document.getElementById('sr-count').value, 10);
         gameSettings.sgCount = parseInt(document.getElementById('sg-count').value, 10);
+        if (document.getElementById('mr-count')) {
+            gameSettings.mrCount = parseInt(document.getElementById('mr-count').value, 10);
+        }
         // Get map selection from unified selector
         const unifiedMapSelectorOnStart = document.getElementById('unified-map-selector');
         if (unifiedMapSelectorOnStart && unifiedMapSelectorOnStart.value) {

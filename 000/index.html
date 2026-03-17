@@ -155,6 +155,15 @@
                 <option value="5">5</option>
                 <option value="10">10</option>
             </select>
+            <br>
+            <label for="mr-count" style="margin-top: 10px; display: inline-block;">M1 Rifles (MR):</label>
+            <select id="mr-count" style="font-size: 1em; padding: 5px;">
+                <option value="0">0</option>
+                <option value="1" selected>1</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+                <option value="10">10</option>
+            </select>
 
             <h2 style="margin-top: 20px;">Default Weapon (Infinite Ammo)</h2>
             <label style="display: block; margin-bottom: 5px;">
@@ -168,6 +177,9 @@
             </label>
             <label style="display: block;">
                 <input type="checkbox" id="default-weapon-sg" name="default-weapon" value="shotgun"> Shotgun
+            </label>
+            <label style="display: block;">
+                <input type="checkbox" id="default-weapon-mr" name="default-weapon" value="m1rifle"> M1 Rifle
             </label>
 
             <h2 style="margin-top: 20px;">MediKit (ArcadeMode Only)</h2>
@@ -323,6 +335,8 @@
     <audio id="mgGunSound" src="mg.mp3" preload="auto"></audio>
     <audio id="rrGunSound" src="rr.mp3" preload="auto"></audio>
     <audio id="srGunSound" src="pss.mp3" preload="auto"></audio>
+    <audio id="m1GunSound" src="m1.mp3" preload="auto"></audio>
+    <audio id="aiM1GunSound" src="m1_.mp3" preload="auto"></audio>
     <audio id="aimgGunSound" src="aimg.mp3" preload="auto"></audio>
     <audio id="aiGunSound" src="aigun.mp3" preload="auto"></audio>
     <audio id="explosionSound" src="bom2.mp3" preload="auto"></audio>
@@ -331,6 +345,7 @@
     <audio id="playerSgSound" src="sgun.mp3" preload="auto"></audio>
     <audio id="aiSgSound" src="aisgun.mp3" preload="auto"></audio>
     <audio id="rel-audio" src="rel.mp3" preload="auto" volume="1.0"></audio>
+    <audio id="clipSound" src="clip.mp3" preload="auto"></audio>
     
     <div id="character-editor-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto;">
         <div style="padding: 20px; min-height: 100%; max-width: 1200px; margin: 0 auto;">
