@@ -3326,7 +3326,7 @@ function applyGunStyle(gunMesh, weaponType) {
         case WEAPON_RR: length = 2.6; thickness = 0.22; color = 0x6b4b1f; shape = 'cylinder'; break;
         case WEAPON_SR: length = 1.65; thickness = 0.09; color = 0xcccccc; break;
         case WEAPON_SG: length = 1.2; thickness = 0.12; color = 0x444444; break;
-        case WEAPON_MR: length = 1.4; thickness = 0.12; color = 0x444444; break;
+        case WEAPON_MR: length = 1.4; thickness = 0.12; color = 0x8b4513; break;
     }
     gunMesh.geometry.dispose();
     if (shape === 'cylinder') {
@@ -3373,12 +3373,12 @@ function applyGunStyle(gunMesh, weaponType) {
         scope.position.set(0, thickness * 0.9, length * 0.18);
         gunMesh.add(scope);
     } else if (weaponType === WEAPON_MR) {
-        // Add a longer barrel with reddish-brown color
+        // Add a slightly longer black barrel
         const barrel = new THREE.Mesh(
-            new THREE.BoxGeometry(thickness * 0.5, thickness * 0.5, length * 0.6),
-            new THREE.MeshLambertMaterial({ color: 0x8b4513 })
+            new THREE.BoxGeometry(thickness * 0.5, thickness * 0.5, length * 0.75),
+            new THREE.MeshLambertMaterial({ color: 0x111111 })
         );
-        barrel.position.set(0, 0, length * 0.25);
+        barrel.position.set(0, 0, length * 0.35);
         gunMesh.add(barrel);
     }
 }
@@ -5265,6 +5265,12 @@ function createRocketTrail(position) {
     }).start();
 }
 
+function clearAIRocketInFlight(projectile) {
+    if (!projectile || !projectile.isRocket || projectile.source !== 'ai') return;
+    const shooter = projectile.shooter;
+    if (shooter && shooter.userData) shooter.userData.rocketInFlight = false;
+}
+
 function getPlayerSafeFireData(direction) {
     const dir = direction.clone().normalize();
     const eyePos = new THREE.Vector3();
@@ -5696,7 +5702,18 @@ function aiShoot(ai, timeElapsed) {
                 aiFireRate = FIRING_RATE * (0.5 + (1.0 - (ai.aggression || 0.5)) * 0.5);
             }
             break;
-        case WEAPON_RR: if (ai.ammoRR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR)) { canAIShoot = true; aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0); aiProjectileSize = 0.5; aiProjectileColor = 0xff8c00; } break;
+        case WEAPON_RR:
+            if (ai.userData && ai.userData.rocketInFlight) {
+                canAIShoot = false;
+                break;
+            }
+            if (ai.ammoRR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR)) {
+                canAIShoot = true;
+                aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0);
+                aiProjectileSize = 0.5;
+                aiProjectileColor = 0xff8c00;
+            }
+            break;
         case WEAPON_SR: if (ai.ammoSR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR)) { canAIShoot = true; aiFireRate = FIRE_RATE_SR * (1.0 + (1.0 - ai.aggression) * 0.5); aiProjectileColor = 0xffff00; aiProjectileSpeed = projectileSpeed * 2; } break;
         case WEAPON_SG: if (ai.ammoSG > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG)) { canAIShoot = true; aiFireRate = FIRE_RATE_SG; aiProjectileColor = 0xffa500; aiProjectileSize = 0.05; if (distanceToPlayer < SHOTGUN_RANGE * 1.5) { aiFireRate /= (1 + ai.aggression); } } break;
         case WEAPON_MR:
@@ -5761,6 +5778,9 @@ function aiShoot(ai, timeElapsed) {
             }
         } else {
             const aiWeaponType = ai.currentWeapon === WEAPON_MR ? WEAPON_MR : null;
+            if (ai.currentWeapon === WEAPON_RR && ai.userData) {
+                ai.userData.rocketInFlight = true;
+            }
             createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR, aiWeaponType, ai);
         }
         ai.lastAttackTime = timeElapsed;
@@ -6660,7 +6680,10 @@ function restartGame() {
         if (zoom) { zoom.style.display = 'none'; debugLog('restartGame(): zoom-button display set to none'); }
         if (pause) { pause.style.display = 'none'; debugLog('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
     }
-    for (let i = projectiles.length - 1; i >= 0; i--) scene.remove(projectiles[i].mesh);
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        clearAIRocketInFlight(projectiles[i]);
+        scene.remove(projectiles[i].mesh);
+    }
     projectiles.length = 0;
     for (let i = debris.length - 1; i >= 0; i--) {
         const mesh = debris[i].mesh;
@@ -6778,6 +6801,7 @@ function findSaferRespawnPosition(entity, hostilePositions, objectBodyHeight, mi
 function respawnAI(ai) {
     const aiHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
     ai.hp = aiHP;
+    if (ai.userData) ai.userData.rocketInFlight = false;
     const isTeammate = ai.team === 'player';
     const isTeamModeOrArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
 
@@ -6927,7 +6951,7 @@ function startPlayerDeathSequence(projectile) {
     }
 
     // UIを非表示
-    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'zoom-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button'];
+    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'zoom-button', 'follow-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button'];
     uiToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -7050,6 +7074,11 @@ function startPlayerDeathSequence(projectile) {
                     const el = document.getElementById(id);
                     if (el) el.style.display = 'block';
                 });
+                const followBtn = document.getElementById('follow-button');
+                if (followBtn) {
+                    const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                    followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+                }
             } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
                 // チームモード：残りHPを確認
                 const playerTeamAlive = checkTeamAlive('player');
@@ -7081,6 +7110,11 @@ function startPlayerDeathSequence(projectile) {
                         const el = document.getElementById(id);
                         if (el) el.style.display = 'block';
                     });
+                    const followBtn = document.getElementById('follow-button');
+                    if (followBtn) {
+                        const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                        followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+                    }
                 }
             } else {
                 // FFAモード：ゲームオーバー
@@ -7185,7 +7219,9 @@ function shouldPlayAIDeathKillCam(ai, killerSource) {
     if (mode === 'off') return false;
     if (mode === 'all') return true;
     if (mode === 'playerOnly') {
-        return killerSource === 'player' && ai && ai.team === 'enemy';
+        if (killerSource !== 'player' || !ai) return false;
+        if (gameSettings.gameMode === 'ffa') return true;
+        return ai.team === 'enemy';
     }
     return true;
 }
@@ -9335,11 +9371,12 @@ function animate() {
         let hitType = '';
         if (p.life !== Infinity) {
             p.life -= delta;
-            if (p.life <= 0) {
-                scene.remove(p.mesh);
-                projectiles.splice(i, 1);
-                continue;
-            }
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    clearAIRocketInFlight(p);
+                    projectiles.splice(i, 1);
+                    continue;
+                }
         }
         const moveVector = p.velocity.clone().multiplyScalar(delta);
         const moveDistance = moveVector.length();
@@ -9384,7 +9421,7 @@ function animate() {
                     hitType = 'ai';
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
-                    else if (p.weaponType === WEAPON_MR) damageAmount = 2;
+                    else if (p.weaponType === WEAPON_MR) damageAmount = 9;
                     else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
                     
                     if (ai.hp !== Infinity) {
@@ -9425,6 +9462,7 @@ function animate() {
                     }
                     if (p.weaponType === WEAPON_SG) {
                         scene.remove(p.mesh);
+                        clearAIRocketInFlight(p);
                         projectiles.splice(i, 1);
                     }
                 }
@@ -9448,7 +9486,7 @@ function animate() {
                         hitType = 'ai';
                         let damageAmount = 1;
                         if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
-                        else if (p.weaponType === WEAPON_MR) damageAmount = 2;
+                        else if (p.weaponType === WEAPON_MR) damageAmount = 9;
                         else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
                         if (ai.hp !== Infinity) {
                             ai.hp -= damageAmount;
@@ -9488,6 +9526,7 @@ function animate() {
                         }
                         if (p.weaponType === WEAPON_SG) {
                             scene.remove(p.mesh);
+                            clearAIRocketInFlight(p);
                             projectiles.splice(i, 1);
                         }
                         break;
@@ -9540,7 +9579,7 @@ function animate() {
                     hitType = 'player';
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
-                    else if (p.weaponType === WEAPON_MR) damageAmount = 2;
+                    else if (p.weaponType === WEAPON_MR) damageAmount = 9;
                     else if (p.isSniper || p.isRocket) damageAmount = playerHP;
                     if (playerHP !== Infinity) {
                         playerHP -= damageAmount;
@@ -9580,8 +9619,9 @@ function animate() {
                         startPlayerDeathSequence(p);
                     }
                     if (p.weaponType === WEAPON_SG) {
-                        projectiles.splice(i, 1);
                         scene.remove(p.mesh);
+                        clearAIRocketInFlight(p);
+                        projectiles.splice(i, 1);
                     }
                     break;
                 }
@@ -9678,6 +9718,7 @@ function animate() {
             }
             if (p.weaponType !== WEAPON_SG) {
                 scene.remove(p.mesh);
+                clearAIRocketInFlight(p);
                 projectiles.splice(i, 1);
             }
             continue;
@@ -9685,6 +9726,7 @@ function animate() {
         const projArenaR = Math.sqrt(p.mesh.position.x * p.mesh.position.x + p.mesh.position.z * p.mesh.position.z);
         if (projArenaR > ARENA_PLAY_AREA_RADIUS) {
             scene.remove(p.mesh);
+            clearAIRocketInFlight(p);
             projectiles.splice(i, 1);
         }
     }
