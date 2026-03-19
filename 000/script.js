@@ -3297,7 +3297,7 @@ if (playerModel.userData.parts && playerModel.userData.parts.gun) {
 player.add(playerModel);
 playerModel.position.set(0, -playerTargetHeight, 0);
 playerModel.visible = false;
-const AI_SPEED = 15.0;
+const AI_SPEED = 12.0;
 const HIDE_DURATION = 3.0;
 const ATTACK_DURATION = 1.0;
 const FLANK_COOLDOWN = 10.0;
@@ -7115,18 +7115,21 @@ function getPlayerRespawnHostilePositions() {
 
 function findSaferRespawnPosition(entity, hostilePositions, objectBodyHeight, minDistanceFromAIs = 0, excludedAI = null) {
     const R = ARENA_PLAY_AREA_RADIUS - 5;
-    const NUM_CANDIDATES = 90;
+    const NUM_CANDIDATES = 140;
     const oldPos = entity.position.clone();
     const oldRot = entity.rotation.clone();
+    const avoidPos = entity && entity.userData && entity.userData.lastRespawnPos ? entity.userData.lastRespawnPos : null;
+    const minDistanceFromLast = Math.max(8, objectBodyHeight * 2);
 
-    let bestPos = null;
-    let bestScore = -Infinity;
+    const candidatePool = [];
 
     for (let i = 0; i < NUM_CANDIDATES; i++) {
         const angle = Math.random() * Math.PI * 2;
         const radius = Math.random() * R;
         const candidate = new THREE.Vector3(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
         candidate.y = getGroundY(candidate, objectBodyHeight);
+
+        if (avoidPos && candidate.distanceTo(avoidPos) < minDistanceFromLast) continue;
 
         entity.position.copy(candidate);
         if (checkCollision(entity, obstacles)) continue;
@@ -7152,14 +7155,18 @@ function findSaferRespawnPosition(entity, hostilePositions, objectBodyHeight, mi
             }
         }
 
-        if (nearestHostileDist > bestScore) {
-            bestScore = nearestHostileDist;
-            bestPos = candidate.clone();
-        }
+        candidatePool.push({ pos: candidate.clone(), score: nearestHostileDist });
     }
 
     entity.position.copy(oldPos);
     entity.rotation.copy(oldRot);
+    if (candidatePool.length === 0) return null;
+
+    candidatePool.sort((a, b) => b.score - a.score);
+    const topCount = Math.min(6, candidatePool.length);
+    const pickIndex = Math.floor(Math.random() * topCount);
+    const bestPos = candidatePool[pickIndex].pos.clone();
+    if (entity && entity.userData) entity.userData.lastRespawnPos = bestPos.clone();
     return bestPos;
 }
 
