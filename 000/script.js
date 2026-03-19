@@ -993,6 +993,10 @@ let audioCtx;
 const audioBufferCache = new Map();
 const spatialAudioPools = new Map();
 const SPATIAL_POOL_SIZE = 6;
+let audioListenerPos = new THREE.Vector3();
+let audioListenerForward = new THREE.Vector3();
+let audioListenerRight = new THREE.Vector3();
+let audioListenerUp = new THREE.Vector3();
 
 function getAudioContext() {
     if (!audioCtx) {
@@ -1015,6 +1019,12 @@ function updateAudioListenerFromCamera(camera) {
     camera.getWorldPosition(position);
     camera.getWorldDirection(forward);
     up.copy(camera.up).applyQuaternion(camera.quaternion).normalize();
+    const right = new THREE.Vector3().crossVectors(forward, up).normalize();
+
+    audioListenerPos.copy(position);
+    audioListenerForward.copy(forward);
+    audioListenerUp.copy(up);
+    audioListenerRight.copy(right);
 
     if (listener.positionX) {
         listener.positionX.value = position.x;
@@ -1052,21 +1062,20 @@ function getSpatialPool(audioElement) {
         }
 
         const source = ctx.createMediaElementSource(el);
-        const panner = ctx.createPanner();
-        panner.panningModel = 'HRTF';
-        panner.distanceModel = 'inverse';
-        panner.refDistance = 1;
-        panner.maxDistance = 1000;
-        panner.rolloffFactor = 0.2;
+        const panner = ctx.createStereoPanner();
+        const lowpass = ctx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = 8000;
 
         const gain = ctx.createGain();
         gain.gain.value = audioElement.volume || 1.0;
 
         source.connect(panner);
-        panner.connect(gain);
+        panner.connect(lowpass);
+        lowpass.connect(gain);
         gain.connect(ctx.destination);
 
-        pool.push({ el, panner, gain });
+        pool.push({ el, panner, lowpass, gain });
     }
 
     const poolData = { pool, cursor: 0 };
@@ -1112,15 +1121,23 @@ function playSpatialSound(audioElement, position, options = {}) {
         poolData.cursor = (poolData.cursor + 1) % pool.length;
     }
 
-    if (entry.panner.positionX) {
-        entry.panner.positionX.value = position.x;
-        entry.panner.positionY.value = position.y;
-        entry.panner.positionZ.value = position.z;
-    } else if (entry.panner.setPosition) {
-        entry.panner.setPosition(position.x, position.y, position.z);
-    }
+    const toSound = position.clone().sub(audioListenerPos);
+    const distance = Math.max(0.001, toSound.length());
+    const dir = toSound.clone().normalize();
+    const panRaw = audioListenerRight.dot(dir);
+    const frontDot = audioListenerForward.dot(dir);
+    const panScale = options.panScale || 1.2;
+    const pan = Math.max(-1, Math.min(1, panRaw * panScale));
 
-    entry.gain.gain.value = audioElement.volume || 1.0;
+    // Distance attenuation (gentle)
+    const distanceGain = 1 / (1 + (distance / (options.distanceScale || 25)));
+    const behindGain = frontDot < 0 ? (options.behindGain || 0.6) : 1.0;
+    entry.gain.gain.value = (audioElement.volume || 1.0) * distanceGain * behindGain;
+    entry.panner.pan.value = pan;
+
+    // Slight muffling when behind
+    entry.lowpass.frequency.value = frontDot < 0 ? (options.behindCutoff || 1200) : (options.frontCutoff || 8000);
+
     entry.el.currentTime = 0;
     entry.el.play().catch(() => {
         if (window.DEBUG_SPATIAL_AUDIO) console.log('[spatial] play failed', audioElement.id || audioElement.src);
