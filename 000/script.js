@@ -24,6 +24,7 @@ let gameSettings = {
     buttonPositions: {
         fire: { right: '20px', bottom: '120px' },
         crouch: { right: '20px', bottom: '55px' },
+        zoom: { right: '90px', bottom: '55px' },
         joystick: { left: '10%', bottom: '10%' },
         follow: { right: '20px', bottom: '190px' }
     }
@@ -788,17 +789,19 @@ const WEAPON_SG = 'shotgun';
 const WEAPON_MR = 'm1rifle';
 let currentWeapon = WEAPON_PISTOL;
 let ammoMG = 0;
-let ammoRR = 0;
-let ammoSR = 0;
-let ammoSG = 0;
-let ammoMR = 0;
-let playerMGReloadUntil = 0;
-let playerMRReloadUntil = 0;
+  let ammoRR = 0;
+  let ammoSR = 0;
+  let ammoSG = 0;
+  let ammoMR = 0;
+  let ammoMRClip = 0;
+  let playerMGReloadUntil = 0;
+  let playerMRReloadUntil = 0;
 const MAX_AMMO_MG = 50;
 const MAX_AMMO_RR = 3;
-const MAX_AMMO_SR = 5;
-const MAX_AMMO_SG = 10;
-const MAX_AMMO_MR = 8;
+  const MAX_AMMO_SR = 5;
+  const MAX_AMMO_SG = 10;
+  const MAX_AMMO_MR = 8;
+  const PICKUP_AMMO_MR = 24;
 const FIRE_RATE_PISTOL = 0.3;
 const FIRE_RATE_MG = 0.1;
 const FIRE_RATE_RR = 1.5;
@@ -822,6 +825,51 @@ function isInfiniteDefaultWeaponActive(weaponType) {
     return false;
 }
 
+function isDefaultM1Weapon() {
+    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    return selected === WEAPON_MR;
+}
+
+function getPlayerMRClipAmmo() {
+    return isDefaultM1Weapon() ? ammoMR : ammoMRClip;
+}
+
+function getPlayerMRDisplayAmmo() {
+    return isDefaultM1Weapon() ? getPlayerMRClipAmmo() : ammoMR;
+}
+
+function setPlayerMRClipAmmo(value) {
+    const clamped = Math.max(0, value);
+    if (isDefaultM1Weapon()) {
+        ammoMR = clamped;
+    } else {
+        ammoMRClip = clamped;
+    }
+}
+
+function isAIDefaultM1Weapon(ai) {
+    if (!ai) return false;
+    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    return selected === WEAPON_MR;
+}
+
+function getAIClipAmmo(ai) {
+    if (!ai) return 0;
+    if (isAIDefaultM1Weapon(ai)) return ai.ammoMR;
+    return (ai.userData && ai.userData.mrClipAmmo) ? ai.userData.mrClipAmmo : 0;
+}
+
+function setAIClipAmmo(ai, value) {
+    if (!ai) return;
+    const clamped = Math.max(0, value);
+    if (isAIDefaultM1Weapon(ai)) {
+        ai.ammoMR = clamped;
+        return;
+    }
+    if (!ai.userData) ai.userData = {};
+    ai.userData.mrClipAmmo = clamped;
+}
+
 function applyPlayerDefaultWeaponLoadout() {
     const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
     currentWeapon = selected;
@@ -829,7 +877,9 @@ function applyPlayerDefaultWeaponLoadout() {
     ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
     ammoSR = selected === WEAPON_SR ? MAX_AMMO_SR : 0;
     ammoSG = selected === WEAPON_SG ? MAX_AMMO_SG : 0;
-    ammoMR = selected === WEAPON_MR ? MAX_AMMO_MR : 0;
+    const isDefaultM1 = selected === WEAPON_MR;
+    ammoMR = isDefaultM1 ? MAX_AMMO_MR : 0;
+    ammoMRClip = isDefaultM1 ? MAX_AMMO_MR : 0;
 }
 
 function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
@@ -839,12 +889,15 @@ function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
 
 function applyAIDefaultWeaponLoadout(ai) {
     const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    if (!ai.userData) ai.userData = {};
     ai.currentWeapon = selected;
     ai.ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
     ai.ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
     ai.ammoSR = selected === WEAPON_SR ? MAX_AMMO_SR : 0;
     ai.ammoSG = selected === WEAPON_SG ? MAX_AMMO_SG : 0;
-    ai.ammoMR = selected === WEAPON_MR ? MAX_AMMO_MR : 0;
+    const isDefaultM1 = selected === WEAPON_MR;
+    ai.ammoMR = isDefaultM1 ? MAX_AMMO_MR : 0;
+    ai.userData.mrClipAmmo = isDefaultM1 ? MAX_AMMO_MR : 0;
 }
 
 function getPlayerFallbackWeapon() {
@@ -860,7 +913,9 @@ function switchPlayerToFallbackWeapon() {
     if (fallback === WEAPON_RR && ammoRR <= 0) ammoRR = MAX_AMMO_RR;
     if (fallback === WEAPON_SR && ammoSR <= 0) ammoSR = MAX_AMMO_SR;
     if (fallback === WEAPON_SG && ammoSG <= 0) ammoSG = MAX_AMMO_SG;
-    if (fallback === WEAPON_MR && ammoMR <= 0) ammoMR = MAX_AMMO_MR;
+    if (fallback === WEAPON_MR && getPlayerMRClipAmmo() <= 0 && playerMRReloadUntil <= 0) {
+        setPlayerMRClipAmmo(MAX_AMMO_MR);
+    }
 }
 
 function switchAIToFallbackWeapon(ai) {
@@ -932,6 +987,145 @@ function playSound(audioElement) {
     } catch (error) {
         // Sound error:
     }
+}
+
+let audioCtx;
+const audioBufferCache = new Map();
+const spatialAudioPools = new Map();
+const SPATIAL_POOL_SIZE = 6;
+
+function getAudioContext() {
+    if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        audioCtx = new Ctx();
+    }
+    return audioCtx;
+}
+
+function updateAudioListenerFromCamera(camera) {
+    const ctx = getAudioContext();
+    if (!ctx || !camera) return;
+
+    const listener = ctx.listener;
+    const position = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    const up = new THREE.Vector3();
+
+    camera.getWorldPosition(position);
+    camera.getWorldDirection(forward);
+    up.copy(camera.up).applyQuaternion(camera.quaternion).normalize();
+
+    if (listener.positionX) {
+        listener.positionX.value = position.x;
+        listener.positionY.value = position.y;
+        listener.positionZ.value = position.z;
+        listener.forwardX.value = forward.x;
+        listener.forwardY.value = forward.y;
+        listener.forwardZ.value = forward.z;
+        listener.upX.value = up.x;
+        listener.upY.value = up.y;
+        listener.upZ.value = up.z;
+    } else if (listener.setPosition && listener.setOrientation) {
+        listener.setPosition(position.x, position.y, position.z);
+        listener.setOrientation(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+    }
+}
+
+function getSpatialPool(audioElement) {
+    if (!audioElement) return null;
+    const key = audioElement.id || (audioElement.currentSrc || audioElement.src);
+    if (!key) return null;
+    if (spatialAudioPools.has(key)) return spatialAudioPools.get(key);
+
+    const ctx = getAudioContext();
+    if (!ctx) return null;
+
+    const pool = [];
+    for (let i = 0; i < SPATIAL_POOL_SIZE; i++) {
+        const el = audioElement.cloneNode(true);
+        el.preload = 'auto';
+        el.volume = 1.0;
+        el.load();
+        if (document.body) {
+            document.body.appendChild(el);
+        }
+
+        const source = ctx.createMediaElementSource(el);
+        const panner = ctx.createPanner();
+        panner.panningModel = 'HRTF';
+        panner.distanceModel = 'inverse';
+        panner.refDistance = 1;
+        panner.maxDistance = 1000;
+        panner.rolloffFactor = 0.2;
+
+        const gain = ctx.createGain();
+        gain.gain.value = audioElement.volume || 1.0;
+
+        source.connect(panner);
+        panner.connect(gain);
+        gain.connect(ctx.destination);
+
+        pool.push({ el, panner, gain });
+    }
+
+    const poolData = { pool, cursor: 0 };
+    spatialAudioPools.set(key, poolData);
+    return poolData;
+}
+
+function playSpatialSound(audioElement, position, options = {}) {
+    if (!audioElement || !position) return;
+
+    if (window.DEBUG_SPATIAL_AUDIO) {
+        console.log('[spatial] play', audioElement.id || audioElement.src, position);
+    }
+
+    const ctx = getAudioContext();
+    if (!ctx) {
+        if (window.DEBUG_SPATIAL_AUDIO) console.log('[spatial] no audio ctx');
+        playSound(audioElement);
+        return;
+    }
+    if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+    }
+    const poolData = getSpatialPool(audioElement);
+    if (!poolData || !poolData.pool.length) {
+        if (window.DEBUG_SPATIAL_AUDIO) console.log('[spatial] no pool');
+        playSound(audioElement);
+        return;
+    }
+
+    const pool = poolData.pool;
+    let entry = null;
+    for (let i = 0; i < pool.length; i++) {
+        const candidate = pool[(poolData.cursor + i) % pool.length];
+        if (candidate.el.paused || candidate.el.ended) {
+            entry = candidate;
+            poolData.cursor = (poolData.cursor + i + 1) % pool.length;
+            break;
+        }
+    }
+    if (!entry) {
+        entry = pool[poolData.cursor];
+        poolData.cursor = (poolData.cursor + 1) % pool.length;
+    }
+
+    if (entry.panner.positionX) {
+        entry.panner.positionX.value = position.x;
+        entry.panner.positionY.value = position.y;
+        entry.panner.positionZ.value = position.z;
+    } else if (entry.panner.setPosition) {
+        entry.panner.setPosition(position.x, position.y, position.z);
+    }
+
+    entry.gain.gain.value = audioElement.volume || 1.0;
+    entry.el.currentTime = 0;
+    entry.el.play().catch(() => {
+        if (window.DEBUG_SPATIAL_AUDIO) console.log('[spatial] play failed', audioElement.id || audioElement.src);
+        playSound(audioElement);
+    });
 }
 
 function playReloadSound() {
@@ -1152,10 +1346,13 @@ function loadSettings() {
             parsedSavedSettings.buttonPositions = {
                 fire: { right: '20px', bottom: '120px' },
                 crouch: { right: '20px', bottom: '55px' },
+                zoom: { right: '90px', bottom: '55px' },
                 joystick: { left: '10%', bottom: '10%' }
             };
         } else if (parsedSavedSettings.buttonPositions.joystick === undefined) {
             parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
+        } else if (parsedSavedSettings.buttonPositions.zoom === undefined) {
+            parsedSavedSettings.buttonPositions.zoom = { right: '90px', bottom: '55px' };
         }
 
         Object.assign(gameSettings, parsedSavedSettings);
@@ -1205,10 +1402,12 @@ function loadSettings() {
         if (gameSettings.buttonPositions) {
             const fireButton = document.getElementById('fire-button');
             const crouchButton = document.getElementById('crouch-button');
+            const zoomButton = document.getElementById('zoom-button');
             const joystickZone = document.getElementById('joystick-move');
             const followButton = document.getElementById('follow-button');
             const previewFireButton = document.getElementById('preview-fire-button');
             const previewCrouchButton = document.getElementById('preview-crouch-button');
+            const previewZoomButton = document.getElementById('preview-zoom-button');
             const previewJoystickZone = document.getElementById('preview-joystick-zone');
             const previewFollowButton = document.getElementById('preview-follow-button');
 
@@ -1229,6 +1428,7 @@ function loadSettings() {
             
             setupButton(fireButton, gameSettings.buttonPositions.fire, 'flex');
             setupButton(crouchButton, gameSettings.buttonPositions.crouch, 'flex');
+            setupButton(zoomButton, gameSettings.buttonPositions.zoom, 'flex');
             setupButton(joystickZone, gameSettings.buttonPositions.joystick, 'block');
             setupButton(followButton, gameSettings.buttonPositions.follow, 'flex');
 
@@ -1243,6 +1443,12 @@ function loadSettings() {
                 previewCrouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
                 previewCrouchButton.style.left = '';
                 previewCrouchButton.style.top = '';
+            }
+            if (previewZoomButton && gameSettings.buttonPositions.zoom) {
+                previewZoomButton.style.right = gameSettings.buttonPositions.zoom.right;
+                previewZoomButton.style.bottom = gameSettings.buttonPositions.zoom.bottom;
+                previewZoomButton.style.left = '';
+                previewZoomButton.style.top = '';
             }
             if (previewJoystickZone && gameSettings.buttonPositions.joystick) {
                 previewJoystickZone.style.left = gameSettings.buttonPositions.joystick.left;
@@ -1312,12 +1518,15 @@ function loadMapSettings(mapName) {
                         fire: { right: '20px', bottom: '120px' },
                         crouch: { right: '20px', bottom: '55px' },
                         joystick: { left: '10%', bottom: '10%' },
+                        zoom: { right: '90px', bottom: '55px' },
                         follow: { right: '20px', bottom: '190px' } // 追加
                     };
                 } else if (parsedSavedSettings.buttonPositions.joystick === undefined) {
                     parsedSavedSettings.buttonPositions.joystick = { left: '10%', bottom: '10%' };
                 } else if (parsedSavedSettings.buttonPositions.follow === undefined) { // 追加
                     parsedSavedSettings.buttonPositions.follow = { right: '20px', bottom: '190px' }; // 追加
+                } else if (parsedSavedSettings.buttonPositions.zoom === undefined) {
+                    parsedSavedSettings.buttonPositions.zoom = { right: '90px', bottom: '55px' };
                 }
                 
                 // gameSettingsに適用
@@ -1376,10 +1585,12 @@ function loadMapSettings(mapName) {
                 if (gameSettings.buttonPositions) {
                     const fireButton = document.getElementById('fire-button');
                     const crouchButton = document.getElementById('crouch-button');
+                    const zoomButton = document.getElementById('zoom-button');
                     const joystickZone = document.getElementById('joystick-move');
                     const followButton = document.getElementById('follow-button'); // 追加
                     const previewFireButton = document.getElementById('preview-fire-button');
                     const previewCrouchButton = document.getElementById('preview-crouch-button');
+                    const previewZoomButton = document.getElementById('preview-zoom-button');
                     const previewJoystickZone = document.getElementById('preview-joystick-zone');
                     const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
         
@@ -1413,6 +1624,19 @@ function loadMapSettings(mapName) {
                         } else {
                             crouchButton.style.display = 'none'; // PCなら非表示
                             // loadSettings(): crouchButton display set to none (PC)
+                        }
+                    }
+                    if (zoomButton) {
+                        if ('ontouchstart' in window) {
+                            if (gameSettings.buttonPositions.zoom) {
+                                zoomButton.style.right = gameSettings.buttonPositions.zoom.right;
+                                zoomButton.style.bottom = gameSettings.buttonPositions.zoom.bottom;
+                                zoomButton.style.left = '';
+                                zoomButton.style.top = '';
+                                zoomButton.style.display = 'flex';
+                            }
+                        } else {
+                            zoomButton.style.display = 'none';
                         }
                     }
                     if (joystickZone) {
@@ -1458,6 +1682,12 @@ function loadMapSettings(mapName) {
                         previewCrouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
                         previewCrouchButton.style.left = '';
                         previewCrouchButton.style.top = '';
+                    }
+                    if (previewZoomButton && gameSettings.buttonPositions.zoom) {
+                        previewZoomButton.style.right = gameSettings.buttonPositions.zoom.right;
+                        previewZoomButton.style.bottom = gameSettings.buttonPositions.zoom.bottom;
+                        previewZoomButton.style.left = '';
+                        previewZoomButton.style.top = '';
                     }
                     if (previewJoystickZone && gameSettings.buttonPositions.joystick) {
                         previewJoystickZone.style.left = gameSettings.buttonPositions.joystick.left;
@@ -1552,7 +1782,7 @@ function startTimer() {
             document.exitPointerLock();
 
             // UI要素を非表示にする
-            const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display'];
+            const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'zoom-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display'];
             uiToHide.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
@@ -3289,7 +3519,7 @@ function applyGunStyle(gunMesh, weaponType) {
         case WEAPON_RR: length = 2.6; thickness = 0.22; color = 0x6b4b1f; shape = 'cylinder'; break;
         case WEAPON_SR: length = 1.65; thickness = 0.09; color = 0xcccccc; break;
         case WEAPON_SG: length = 1.2; thickness = 0.12; color = 0x444444; break;
-        case WEAPON_MR: length = 1.4; thickness = 0.12; color = 0x444444; break;
+        case WEAPON_MR: length = 1.4; thickness = 0.12; color = 0x8b4513; break;
     }
     gunMesh.geometry.dispose();
     if (shape === 'cylinder') {
@@ -3336,12 +3566,12 @@ function applyGunStyle(gunMesh, weaponType) {
         scope.position.set(0, thickness * 0.9, length * 0.18);
         gunMesh.add(scope);
     } else if (weaponType === WEAPON_MR) {
-        // Add a longer barrel with reddish-brown color
+        // Add a slightly longer black barrel
         const barrel = new THREE.Mesh(
-            new THREE.BoxGeometry(thickness * 0.5, thickness * 0.5, length * 0.6),
-            new THREE.MeshLambertMaterial({ color: 0x8b4513 })
+            new THREE.BoxGeometry(thickness * 0.5, thickness * 0.5, length * 0.75),
+            new THREE.MeshLambertMaterial({ color: 0x111111 })
         );
-        barrel.position.set(0, 0, length * 0.25);
+        barrel.position.set(0, 0, length * 0.35);
         gunMesh.add(barrel);
     }
 }
@@ -5123,7 +5353,7 @@ function explodeBarrel(barrel, source = 'unknown', shooter = null) {
         });
     }
     destroyBarrel(barrel, explosionPos);
-    if (explosionSound) playSound(explosionSound);
+    if (explosionSound) playSpatialSound(explosionSound, explosionPos);
     createExplosionEffect(explosionPos);
     const radius = BARREL_EXPLOSION_RADIUS;
     const chainTargets = obstacles.filter(o => o && o.userData && o.userData.type === 'barrel' && !o.userData.exploding && o.position && o.position.distanceTo(explosionPos) < radius);
@@ -5226,6 +5456,12 @@ function createRocketTrail(position) {
         particle.geometry.dispose();
         disposeMaterial(particle.material); // 安全なマテリアル破棄を使用
     }).start();
+}
+
+function clearAIRocketInFlight(projectile) {
+    if (!projectile || !projectile.isRocket || projectile.source !== 'ai') return;
+    const shooter = projectile.shooter;
+    if (shooter && shooter.userData) shooter.userData.rocketInFlight = false;
 }
 
 function getPlayerSafeFireData(direction) {
@@ -5375,7 +5611,8 @@ function shoot() {
     }
     if (playerMRReloadUntil > 0 && now >= playerMRReloadUntil) {
         playerMRReloadUntil = 0;
-        ammoMR = MAX_AMMO_MR;
+        const nextClip = isDefaultM1Weapon() ? MAX_AMMO_MR : Math.min(MAX_AMMO_MR, ammoMR);
+        setPlayerMRClipAmmo(nextClip);
         hideReloadingText();
     }
     let canFire = false;
@@ -5405,7 +5642,7 @@ function shoot() {
                 canFire = false;
                 break;
             }
-            if (ammoMR > 0 || isInfiniteDefaultWeaponActive(WEAPON_MR)) {
+            if (getPlayerMRClipAmmo() > 0) {
                 canFire = true;
                 projectileColor = 0xffff00;
                 fireRate = FIRE_RATE_MR;
@@ -5459,11 +5696,26 @@ function shoot() {
         } else if (currentWeapon === WEAPON_SG) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_SG) && --ammoSG === 0) switchPlayerToFallbackWeapon();
         } else if (currentWeapon === WEAPON_MR) {
-            if (!isInfiniteDefaultWeaponActive(WEAPON_MR) && --ammoMR === 0) {
-                if (clipSound) playSound(clipSound);
-                ammoMR = 0;
-                playerMRReloadUntil = now + 2.0;
-                showReloadingText();
+            if (isDefaultM1Weapon()) {
+                const nextClip = getPlayerMRClipAmmo() - 1;
+                setPlayerMRClipAmmo(nextClip);
+                if (nextClip <= 0) {
+                    if (clipSound) playSound(clipSound);
+                    playerMRReloadUntil = now + 2.0;
+                    showReloadingText();
+                }
+            } else {
+                ammoMR = Math.max(0, ammoMR - 1);
+                ammoMRClip = Math.max(0, ammoMRClip - 1);
+                if (ammoMRClip <= 0) {
+                    if (clipSound) playSound(clipSound);
+                    if (ammoMR > 0) {
+                        playerMRReloadUntil = now + 2.0;
+                        showReloadingText();
+                    } else {
+                        switchPlayerToFallbackWeapon();
+                    }
+                }
             }
         }
     }
@@ -5477,7 +5729,8 @@ function aiShoot(ai, timeElapsed) {
     }
     if (ai && ai.userData && ai.userData.mrReloadUntil && timeElapsed >= ai.userData.mrReloadUntil) {
         ai.userData.mrReloadUntil = 0;
-        ai.ammoMR = MAX_AMMO_MR;
+        const nextClip = isAIDefaultM1Weapon(ai) ? MAX_AMMO_MR : Math.min(MAX_AMMO_MR, ai.ammoMR);
+        setAIClipAmmo(ai, nextClip);
     }
     let startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0));
     const aimOrigin = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.65 : BODY_HEIGHT * 0.9, 0));
@@ -5659,7 +5912,18 @@ function aiShoot(ai, timeElapsed) {
                 aiFireRate = FIRING_RATE * (0.5 + (1.0 - (ai.aggression || 0.5)) * 0.5);
             }
             break;
-        case WEAPON_RR: if (ai.ammoRR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR)) { canAIShoot = true; aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0); aiProjectileSize = 0.5; aiProjectileColor = 0xff8c00; } break;
+        case WEAPON_RR:
+            if (ai.userData && ai.userData.rocketInFlight) {
+                canAIShoot = false;
+                break;
+            }
+            if (ai.ammoRR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_RR)) {
+                canAIShoot = true;
+                aiFireRate = FIRING_RATE * (5.0 - ai.aggression * 3.0);
+                aiProjectileSize = 0.5;
+                aiProjectileColor = 0xff8c00;
+            }
+            break;
         case WEAPON_SR: if (ai.ammoSR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR)) { canAIShoot = true; aiFireRate = FIRE_RATE_SR * (1.0 + (1.0 - ai.aggression) * 0.5); aiProjectileColor = 0xffff00; aiProjectileSpeed = projectileSpeed * 2; } break;
         case WEAPON_SG: if (ai.ammoSG > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG)) { canAIShoot = true; aiFireRate = FIRE_RATE_SG; aiProjectileColor = 0xffa500; aiProjectileSize = 0.05; if (distanceToPlayer < SHOTGUN_RANGE * 1.5) { aiFireRate /= (1 + ai.aggression); } } break;
         case WEAPON_MR:
@@ -5667,7 +5931,7 @@ function aiShoot(ai, timeElapsed) {
                 canAIShoot = false;
                 break;
             }
-            if (ai.ammoMR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MR)) {
+            if (getAIClipAmmo(ai) > 0) {
                 canAIShoot = true;
                 aiFireRate = FIRE_RATE_MR;
                 aiProjectileColor = 0xffff00;
@@ -5694,7 +5958,10 @@ function aiShoot(ai, timeElapsed) {
         else if (ai.currentWeapon === WEAPON_SG) soundToPlay = aiSgSound;
         else if (ai.currentWeapon === WEAPON_MR) soundToPlay = aiM1GunSound;
         else soundToPlay = aiGunSound;
-        if (soundToPlay) playSound(soundToPlay);
+    if (soundToPlay) playSpatialSound(soundToPlay, startPosition);
+    if (window.DEBUG_SPATIAL_AUDIO && soundToPlay) {
+        console.log('[aiShoot] sound', soundToPlay.id || soundToPlay.src);
+    }
         const aiMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0));
         createMuzzleFlash(aiMuzzlePosition, 150, 3.0, 90, 0xffffff);
         createGroundFlash(aiMuzzlePosition, 0xffffff, 1.5, 150);
@@ -5724,6 +5991,9 @@ function aiShoot(ai, timeElapsed) {
             }
         } else {
             const aiWeaponType = ai.currentWeapon === WEAPON_MR ? WEAPON_MR : null;
+            if (ai.currentWeapon === WEAPON_RR && ai.userData) {
+                ai.userData.rocketInFlight = true;
+            }
             createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR, aiWeaponType, ai);
         }
         ai.lastAttackTime = timeElapsed;
@@ -5740,9 +6010,22 @@ function aiShoot(ai, timeElapsed) {
         } else if (ai.currentWeapon === WEAPON_SG) {
             if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG) && --ai.ammoSG === 0) switchAIToFallbackWeapon(ai);
         } else if (ai.currentWeapon === WEAPON_MR) {
-            if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MR) && --ai.ammoMR === 0) {
-                ai.ammoMR = 0;
-                if (ai.userData) ai.userData.mrReloadUntil = timeElapsed + 2.0;
+            if (isAIDefaultM1Weapon(ai)) {
+                const nextClip = getAIClipAmmo(ai) - 1;
+                setAIClipAmmo(ai, nextClip);
+                if (nextClip <= 0) {
+                    if (ai.userData) ai.userData.mrReloadUntil = timeElapsed + 2.0;
+                }
+            } else {
+                ai.ammoMR = Math.max(0, ai.ammoMR - 1);
+                setAIClipAmmo(ai, getAIClipAmmo(ai) - 1);
+                if (getAIClipAmmo(ai) <= 0) {
+                    if (ai.ammoMR > 0) {
+                        if (ai.userData) ai.userData.mrReloadUntil = timeElapsed + 2.0;
+                    } else {
+                        switchAIToFallbackWeapon(ai);
+                    }
+                }
             }
         }
     }
@@ -5759,7 +6042,20 @@ function aiCheckPickup(ai) {
                 case WEAPON_RR: ai.currentWeapon = WEAPON_RR; ai.ammoRR = MAX_AMMO_RR; break;
                 case WEAPON_SR: ai.currentWeapon = WEAPON_SR; ai.ammoSR = MAX_AMMO_SR; break;
                 case WEAPON_SG: ai.currentWeapon = WEAPON_SG; ai.ammoSG = MAX_AMMO_SG; break;
-                case WEAPON_MR: ai.currentWeapon = WEAPON_MR; ai.ammoMR = MAX_AMMO_MR; break;
+                case WEAPON_MR: {
+                    const isDefaultM1 = isAIDefaultM1Weapon(ai);
+                    const wasUsingM1 = ai.currentWeapon === WEAPON_MR;
+                    ai.currentWeapon = WEAPON_MR;
+                    if (!isDefaultM1) {
+                        ai.ammoMR += PICKUP_AMMO_MR;
+                        if (!wasUsingM1) {
+                            setAIClipAmmo(ai, Math.min(MAX_AMMO_MR, ai.ammoMR));
+                        } else if (getAIClipAmmo(ai) <= 0 && !(ai.userData && ai.userData.mrReloadUntil)) {
+                            setAIClipAmmo(ai, Math.min(MAX_AMMO_MR, ai.ammoMR));
+                        }
+                    }
+                    break;
+                }
             }
             scene.remove(pickup);
             weaponPickups.splice(i, 1);
@@ -6091,6 +6387,25 @@ if (crouchButton) {
     }, { passive: false });
 }
 
+// zoomButton のイベントリスナーを追加
+const zoomButtonElement = document.getElementById('zoom-button');
+if (zoomButtonElement) {
+    const toggleZoom = (event) => {
+        if (!isGameRunning) return;
+        if (currentWeapon === WEAPON_MR) {
+            setRifleZoom(!isRifleZoomed);
+        } else if (isScoping) {
+            cancelScope();
+        }
+        event.preventDefault();
+    };
+    if ('ontouchstart' in window) {
+        zoomButtonElement.addEventListener('touchstart', toggleZoom, { passive: false });
+    } else {
+        zoomButtonElement.addEventListener('click', toggleZoom);
+    }
+}
+
 // followButton のイベントリスナーを追加
 const followButtonElement = document.getElementById('follow-button');
 if (followButtonElement) {
@@ -6103,6 +6418,10 @@ if (followButtonElement) {
 
 function initializeAudio() {
     // ユーザーインタラクション後に音声を初期化
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+    }
     const allAudio = document.querySelectorAll('audio');
     allAudio.forEach(audio => {
         // 音声ファイルをプリロード
@@ -6117,6 +6436,24 @@ function initializeAudio() {
         }).catch(error => {
             audio.muted = false;
             debugLog('Audio initialization failed:', audio.id, error);
+        });
+    });
+
+    // Warm up spatial pools for AI guns and explosions
+    const spatialIds = ['aiGunSound', 'aimgGunSound', 'aiSrGunSound', 'aiSgSound', 'aiM1GunSound', 'explosionSound'];
+    spatialIds.forEach(id => {
+        const base = document.getElementById(id);
+        const poolData = getSpatialPool(base);
+        if (!poolData) return;
+        poolData.pool.forEach(entry => {
+            entry.el.muted = true;
+            entry.el.play().then(() => {
+                entry.el.pause();
+                entry.el.currentTime = 0;
+                entry.el.muted = false;
+            }).catch(() => {
+                entry.el.muted = false;
+            });
         });
     });
 }
@@ -6193,12 +6530,14 @@ function startGame() {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
         const pause = document.getElementById('pause-button');
         const followBtn = document.getElementById('follow-button'); 
 
         if (joy) { joy.style.display = 'block'; debugLog('startGame(): joystick-move display set to block'); }
         if (fire) { fire.style.display = 'flex'; debugLog('startGame(): fire-button display set to flex'); }
         if (crouch) { crouch.style.display = 'flex'; debugLog('startGame(): crouch-button display set to flex'); }
+        if (zoom) { zoom.style.display = 'flex'; debugLog('startGame(): zoom-button display set to flex'); }
         if (pause) { pause.style.display = 'block'; debugLog('startGame(): pause-button display set to block'); }
 
         if (followBtn) { 
@@ -6213,11 +6552,13 @@ function startGame() {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
         const followBtn = document.getElementById('follow-button'); 
 
         if (joy) { joy.style.display = 'none'; debugLog('startGame(): joystick-move display set to none'); }
         if (fire) { fire.style.display = 'none'; debugLog('startGame(): fire-button display set to none'); }
         if (crouch) { crouch.style.display = 'none'; debugLog('startGame(): crouch-button display set to none'); }
+        if (zoom) { zoom.style.display = 'none'; debugLog('startGame(): zoom-button display set to none'); }
         if (followBtn) { followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none'); }
     }
     try {
@@ -6580,23 +6921,30 @@ function restartGame() {
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
         const pause = document.getElementById('pause-button');
         if (joy) { joy.style.display = 'block'; debugLog('restartGame(): joystick-move display set to block'); }
         if (fire) { fire.style.display = 'flex'; debugLog('restartGame(): fire-button display set to flex'); }
         if (crouch) { crouch.style.display = 'flex'; debugLog('restartGame(): crouch-button display set to flex'); }
+        if (zoom) { zoom.style.display = 'flex'; debugLog('restartGame(): zoom-button display set to flex'); }
         if (pause) { pause.style.display = 'block'; debugLog('restartGame(): pause-button display set to block'); }
     } else {
         debugLog('restartGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
         const pause = document.getElementById('pause-button');
         if (joy) { joy.style.display = 'none'; debugLog('restartGame(): joystick-move display set to none'); }
         if (fire) { fire.style.display = 'none'; debugLog('restartGame(): fire-button display set to none'); }
         if (crouch) { crouch.style.display = 'none'; debugLog('restartGame(): crouch-button display set to none'); }
+        if (zoom) { zoom.style.display = 'none'; debugLog('restartGame(): zoom-button display set to none'); }
         if (pause) { pause.style.display = 'none'; debugLog('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
     }
-    for (let i = projectiles.length - 1; i >= 0; i--) scene.remove(projectiles[i].mesh);
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        clearAIRocketInFlight(projectiles[i]);
+        scene.remove(projectiles[i].mesh);
+    }
     projectiles.length = 0;
     for (let i = debris.length - 1; i >= 0; i--) {
         const mesh = debris[i].mesh;
@@ -6714,6 +7062,7 @@ function findSaferRespawnPosition(entity, hostilePositions, objectBodyHeight, mi
 function respawnAI(ai) {
     const aiHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
     ai.hp = aiHP;
+    if (ai.userData) ai.userData.rocketInFlight = false;
     const isTeammate = ai.team === 'player';
     const isTeamModeOrArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
 
@@ -6863,7 +7212,7 @@ function startPlayerDeathSequence(projectile) {
     }
 
     // UIを非表示
-    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button'];
+    const uiToHide = ['joystick-move', 'fire-button', 'crosshair', 'crouch-button', 'zoom-button', 'follow-button', 'player-hp-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'player-weapon-display', 'pause-button'];
     uiToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -6978,7 +7327,7 @@ function startPlayerDeathSequence(projectile) {
                 // UIを再表示
                 const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
                 if ('ontouchstart' in window) {
-                    uiToShow.push('joystick-move', 'fire-button', 'crouch-button');
+                    uiToShow.push('joystick-move', 'fire-button', 'crouch-button', 'zoom-button');
                 } else {
                     canvas.requestPointerLock();
                 }
@@ -6986,6 +7335,11 @@ function startPlayerDeathSequence(projectile) {
                     const el = document.getElementById(id);
                     if (el) el.style.display = 'block';
                 });
+                const followBtn = document.getElementById('follow-button');
+                if (followBtn) {
+                    const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                    followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+                }
             } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
                 // チームモード：残りHPを確認
                 const playerTeamAlive = checkTeamAlive('player');
@@ -7009,7 +7363,7 @@ function startPlayerDeathSequence(projectile) {
                     // UIを再表示
                     const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
                     if ('ontouchstart' in window) {
-                        uiToShow.push('joystick-move', 'fire-button', 'crouch-button');
+                        uiToShow.push('joystick-move', 'fire-button', 'crouch-button', 'zoom-button');
                     } else {
                         canvas.requestPointerLock();
                     }
@@ -7017,6 +7371,11 @@ function startPlayerDeathSequence(projectile) {
                         const el = document.getElementById(id);
                         if (el) el.style.display = 'block';
                     });
+                    const followBtn = document.getElementById('follow-button');
+                    if (followBtn) {
+                        const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                        followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+                    }
                 }
             } else {
                 // FFAモード：ゲームオーバー
@@ -7121,7 +7480,9 @@ function shouldPlayAIDeathKillCam(ai, killerSource) {
     if (mode === 'off') return false;
     if (mode === 'all') return true;
     if (mode === 'playerOnly') {
-        return killerSource === 'player' && ai && ai.team === 'enemy';
+        if (killerSource !== 'player' || !ai) return false;
+        if (gameSettings.gameMode === 'ffa') return true;
+        return ai.team === 'enemy';
     }
     return true;
 }
@@ -7631,7 +7992,7 @@ function showSettingsAndPause() {
 
     document.exitPointerLock();
 
-    const elementsToHide = ['joystick-move', 'fire-button', 'crouch-button', 'crosshair', 'scope-overlay', 'kill-count-display', 'player-hp-display', 'player-weapon-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'pause-button'];
+    const elementsToHide = ['joystick-move', 'fire-button', 'crouch-button', 'zoom-button', 'crosshair', 'scope-overlay', 'kill-count-display', 'player-hp-display', 'player-weapon-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'pause-button'];
     elementsToHide.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
@@ -7688,19 +8049,23 @@ function resumeGame() {
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
+            const zoom = document.getElementById('zoom-button');
             const pause = document.getElementById('pause-button');
             if (joy) { joy.style.display = 'block'; }
             if (fire) { fire.style.display = 'flex'; }
             if (crouch) { crouch.style.display = 'flex'; }
+            if (zoom) { zoom.style.display = 'flex'; }
             if (pause) { pause.style.display = 'block'; }
         } else {
             // resumeGame(): PC device detected.
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
+            const zoom = document.getElementById('zoom-button');
             if (joy) { joy.style.display = 'none'; }
             if (fire) { fire.style.display = 'none'; }
             if (crouch) { crouch.style.display = 'none'; }
+            if (zoom) { zoom.style.display = 'none'; }
             canvas.requestPointerLock();
         }
 
@@ -7765,7 +8130,8 @@ function animate() {
     }
     if (playerMRReloadUntil > 0 && timeElapsed >= playerMRReloadUntil) {
         playerMRReloadUntil = 0;
-        ammoMR = MAX_AMMO_MR;
+        const nextClip = isDefaultM1Weapon() ? MAX_AMMO_MR : Math.min(MAX_AMMO_MR, ammoMR);
+        setPlayerMRClipAmmo(nextClip);
         hideReloadingText();
     }
     
@@ -7868,7 +8234,7 @@ function animate() {
             case WEAPON_RR: weaponName = 'Rocket'; ammoCount = ammoRR; break;
             case WEAPON_SR: weaponName = 'Sniper'; ammoCount = ammoSR; break;
             case WEAPON_SG: weaponName = 'Shotgun'; ammoCount = ammoSG; break;
-            case WEAPON_MR: weaponName = 'M1 Rifle'; ammoCount = ammoMR; break;
+            case WEAPON_MR: weaponName = 'M1 Rifle'; ammoCount = getPlayerMRDisplayAmmo(); break;
             case WEAPON_PISTOL: weaponName = 'Pistol'; ammoCount = '∞'; break;
         }
         playerWeaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`; // playerWeaponDisplayを使用
@@ -8136,9 +8502,23 @@ function animate() {
                         else { currentWeapon = WEAPON_SG; ammoSG = MAX_AMMO_SG; } 
                         weaponName = 'SHOTGUN'; break;
                     case WEAPON_MR:
-                        if (currentWeapon === WEAPON_MR) { ammoMR = Math.min(ammoMR + MAX_AMMO_MR, MAX_AMMO_MR * 2); }
-                        else { currentWeapon = WEAPON_MR; ammoMR = MAX_AMMO_MR; }
-                        weaponName = 'M1 RIFLE'; break;
+                        {
+                            const isDefaultM1 = isDefaultM1Weapon();
+                            const wasUsingM1 = currentWeapon === WEAPON_MR;
+                            if (!wasUsingM1) currentWeapon = WEAPON_MR;
+
+                            if (!isDefaultM1) {
+                                ammoMR += PICKUP_AMMO_MR;
+                                if (!wasUsingM1) {
+                                    ammoMRClip = Math.min(MAX_AMMO_MR, ammoMR);
+                                } else if (ammoMRClip <= 0 && playerMRReloadUntil <= 0) {
+                                    ammoMRClip = Math.min(MAX_AMMO_MR, ammoMR);
+                                }
+                            }
+
+                            weaponName = 'M1 RIFLE';
+                            break;
+                        }
                 }
                 const setSound = document.getElementById('setSound');
                 if (setSound) playSound(setSound);
@@ -8213,7 +8593,8 @@ function animate() {
         }
         if (ai.userData && ai.userData.mrReloadUntil && timeElapsed >= ai.userData.mrReloadUntil) {
             ai.userData.mrReloadUntil = 0;
-            ai.ammoMR = MAX_AMMO_MR;
+            const nextClip = isAIDefaultM1Weapon(ai) ? MAX_AMMO_MR : Math.min(MAX_AMMO_MR, ai.ammoMR);
+            setAIClipAmmo(ai, nextClip);
         }
 
         if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.hp > 0) {
@@ -9267,11 +9648,12 @@ function animate() {
         let hitType = '';
         if (p.life !== Infinity) {
             p.life -= delta;
-            if (p.life <= 0) {
-                scene.remove(p.mesh);
-                projectiles.splice(i, 1);
-                continue;
-            }
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    clearAIRocketInFlight(p);
+                    projectiles.splice(i, 1);
+                    continue;
+                }
         }
         const moveVector = p.velocity.clone().multiplyScalar(delta);
         const moveDistance = moveVector.length();
@@ -9316,7 +9698,7 @@ function animate() {
                     hitType = 'ai';
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
-                    else if (p.weaponType === WEAPON_MR) damageAmount = 2;
+                    else if (p.weaponType === WEAPON_MR) damageAmount = 9;
                     else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
                     
                     if (ai.hp !== Infinity) {
@@ -9357,6 +9739,7 @@ function animate() {
                     }
                     if (p.weaponType === WEAPON_SG) {
                         scene.remove(p.mesh);
+                        clearAIRocketInFlight(p);
                         projectiles.splice(i, 1);
                     }
                 }
@@ -9380,7 +9763,7 @@ function animate() {
                         hitType = 'ai';
                         let damageAmount = 1;
                         if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
-                        else if (p.weaponType === WEAPON_MR) damageAmount = 2;
+                        else if (p.weaponType === WEAPON_MR) damageAmount = 9;
                         else if (p.isSniper || p.isRocket) damageAmount = ai.hp;
                         if (ai.hp !== Infinity) {
                             ai.hp -= damageAmount;
@@ -9420,6 +9803,7 @@ function animate() {
                         }
                         if (p.weaponType === WEAPON_SG) {
                             scene.remove(p.mesh);
+                            clearAIRocketInFlight(p);
                             projectiles.splice(i, 1);
                         }
                         break;
@@ -9472,7 +9856,7 @@ function animate() {
                     hitType = 'player';
                     let damageAmount = 1;
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
-                    else if (p.weaponType === WEAPON_MR) damageAmount = 2;
+                    else if (p.weaponType === WEAPON_MR) damageAmount = 9;
                     else if (p.isSniper || p.isRocket) damageAmount = playerHP;
                     if (playerHP !== Infinity) {
                         playerHP -= damageAmount;
@@ -9512,8 +9896,9 @@ function animate() {
                         startPlayerDeathSequence(p);
                     }
                     if (p.weaponType === WEAPON_SG) {
-                        projectiles.splice(i, 1);
                         scene.remove(p.mesh);
+                        clearAIRocketInFlight(p);
+                        projectiles.splice(i, 1);
                     }
                     break;
                 }
@@ -9530,8 +9915,8 @@ function animate() {
                 if (hitIsBarrel) {
                     explodeBarrel(hitObject, p.source, p.shooter || null);
                 } else if (p.isRocket) {
-                    if (explosionSound) playSound(explosionSound);
                     const explosionPos = p.mesh.position.clone();
+                    if (explosionSound) playSpatialSound(explosionSound, explosionPos);
                     createExplosionEffect(explosionPos);
                 const EXPLOSION_RADIUS_ACTUAL = ROCKET_EXPLOSION_RADIUS;
                 if (p.source === 'player') {
@@ -9610,6 +9995,7 @@ function animate() {
             }
             if (p.weaponType !== WEAPON_SG) {
                 scene.remove(p.mesh);
+                clearAIRocketInFlight(p);
                 projectiles.splice(i, 1);
             }
             continue;
@@ -9617,6 +10003,7 @@ function animate() {
         const projArenaR = Math.sqrt(p.mesh.position.x * p.mesh.position.x + p.mesh.position.z * p.mesh.position.z);
         if (projArenaR > ARENA_PLAY_AREA_RADIUS) {
             scene.remove(p.mesh);
+            clearAIRocketInFlight(p);
             projectiles.splice(i, 1);
         }
     }
@@ -9722,6 +10109,7 @@ function animate() {
         applySmoothNightMode();
     }
     
+    updateAudioListenerFromCamera(camera);
     renderer.render(scene, camera);
 }
 const startBtn = document.getElementById('start-game-btn');
@@ -9799,6 +10187,7 @@ backToSettingsBtn.addEventListener('click', () => {
 saveButtonPositionsBtn.addEventListener('click', () => {
     const previewFireButton = document.getElementById('preview-fire-button');
     const previewCrouchButton = document.getElementById('preview-crouch-button');
+    const previewZoomButton = document.getElementById('preview-zoom-button');
     const previewJoystickZone = document.getElementById('preview-joystick-zone');
     const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
 
@@ -9807,6 +10196,8 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const fireBottom = (parseInt(previewFireButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
     const crouchRight = (parseInt(previewCrouchButton.style.right, 10) / window.innerWidth) * 100 + '%';
     const crouchBottom = (parseInt(previewCrouchButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
+    const zoomRight = (parseInt(previewZoomButton.style.right, 10) / window.innerWidth) * 100 + '%';
+    const zoomBottom = (parseInt(previewZoomButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
     const joystickLeft = (parseInt(previewJoystickZone.style.left, 10) / window.innerWidth) * 100 + '%';
     const joystickBottom = (parseInt(previewJoystickZone.style.bottom, 10) / window.innerHeight) * 100 + '%';
     const followRight = (parseInt(previewFollowButton.style.right, 10) / window.innerWidth) * 100 + '%'; // 追加
@@ -9814,6 +10205,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
 
     gameSettings.buttonPositions.fire = { right: fireRight, bottom: fireBottom };
     gameSettings.buttonPositions.crouch = { right: crouchRight, bottom: crouchBottom };
+    gameSettings.buttonPositions.zoom = { right: zoomRight, bottom: zoomBottom };
     gameSettings.buttonPositions.joystick = { left: joystickLeft, bottom: joystickBottom };
     gameSettings.buttonPositions.follow = { right: followRight, bottom: followBottom }; // 追加
 
@@ -9822,6 +10214,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     // Apply to actual buttons immediately
     const fireButton = document.getElementById('fire-button');
     const crouchButton = document.getElementById('crouch-button');
+    const zoomButton = document.getElementById('zoom-button');
     const joystickZone = document.getElementById('joystick-move');
     const followButton = document.getElementById('follow-button'); // 追加
 
@@ -9838,6 +10231,12 @@ saveButtonPositionsBtn.addEventListener('click', () => {
             crouchButton.style.left = '';
             crouchButton.style.top = '';
         }
+        if(zoomButton) {
+            zoomButton.style.right = zoomRight;
+            zoomButton.style.bottom = zoomBottom;
+            zoomButton.style.left = '';
+            zoomButton.style.top = '';
+        }
         if(joystickZone) {
             joystickZone.style.left = joystickLeft;
             joystickZone.style.bottom = joystickBottom;
@@ -9853,6 +10252,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     } else {
         if(fireButton) fireButton.style.display = 'none';
         if(crouchButton) crouchButton.style.display = 'none';
+        if(zoomButton) zoomButton.style.display = 'none';
         if(joystickZone) joystickZone.style.display = 'none';
         if (followButton) followButton.style.display = 'none';
     }
@@ -9916,6 +10316,7 @@ function makeDraggable(element, isJoystick = false) {
 
 makeDraggable(document.getElementById('preview-fire-button'));
 makeDraggable(document.getElementById('preview-crouch-button'));
+makeDraggable(document.getElementById('preview-zoom-button'));
 makeDraggable(document.getElementById('preview-joystick-zone'), true);
 makeDraggable(document.getElementById('preview-follow-button')); // 追加
 
