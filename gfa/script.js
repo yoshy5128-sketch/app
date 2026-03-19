@@ -772,6 +772,7 @@ let playerTargetHeight = 2.0;
 let isCrouchingToggle = false;
 const GRAVITY = 9.8;
 let playerHP = 3;
+let lastPlayerDeathPos = null;
 let screenShakeDuration = 0;
 const SHAKE_DURATION_MAX = 0.4;
 const SHAKE_INTENSITY = 0.2;
@@ -1042,11 +1043,115 @@ function updateAudioListenerFromCamera(camera) {
     }
 }
 
+function mulberry32(seed) {
+    let t = seed >>> 0;
+    return function () {
+        t += 0x6D2B79F5;
+        let r = Math.imul(t ^ (t >>> 15), 1 | t);
+        r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+        return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function applyRagdollPose(parts, seed = Math.random()) {
+    if (!parts) return;
+    const rand = mulberry32(Math.floor(seed * 1e9));
+    const r = (min, max) => min + (max - min) * rand();
+
+    if (parts.body) parts.body.rotation.set(r(-0.5, 0.5), r(-0.6, 0.6), r(-0.7, 0.7));
+    if (parts.head) parts.head.rotation.set(r(-0.4, 0.4), r(-0.5, 0.5), r(-0.4, 0.4));
+    if (parts.leftArm) parts.leftArm.rotation.set(r(-1.2, 0.3), r(-0.6, 0.6), r(-1.2, 1.2));
+    if (parts.rightArm) parts.rightArm.rotation.set(r(-1.2, 0.3), r(-0.6, 0.6), r(-1.2, 1.2));
+    if (parts.leftElbow) parts.leftElbow.rotation.set(r(0.2, 1.4), 0, 0);
+    if (parts.rightElbow) parts.rightElbow.rotation.set(r(0.2, 1.4), 0, 0);
+    if (parts.leftHip) parts.leftHip.rotation.set(r(-0.6, 0.6), r(-0.4, 0.4), r(-0.6, 0.6));
+    if (parts.rightHip) parts.rightHip.rotation.set(r(-0.6, 0.6), r(-0.4, 0.4), r(-0.6, 0.6));
+    if (parts.leftKnee) parts.leftKnee.rotation.set(r(0.1, 1.5), 0, 0);
+    if (parts.rightKnee) parts.rightKnee.rotation.set(r(0.1, 1.5), 0, 0);
+}
+
+function getRooftopObstacleUnder(position, objectBodyHeight) {
+    let best = null;
+    let bestTop = -Infinity;
+    const horizontalBox = new THREE.Box2(
+        new THREE.Vector2(position.x - 0.2, position.z - 0.2),
+        new THREE.Vector2(position.x + 0.2, position.z + 0.2)
+    );
+    const feetY = position.y - objectBodyHeight / 2;
+    for (const obs of obstacles) {
+        if (!obs.userData || !obs.userData.isRooftop || obs.userData.isHouseRoof) continue;
+        const box = new THREE.Box3().setFromObject(obs);
+        const geom = obs.geometry || (obs.children && obs.children[0] ? obs.children[0].geometry : null);
+        const h = geom ? geom.parameters.height : 4;
+        const top = obs.position.y + h / 2;
+        const obstacleHorizontalBox = new THREE.Box2(
+            new THREE.Vector2(box.min.x, box.min.z),
+            new THREE.Vector2(box.max.x, box.max.z)
+        );
+        if (horizontalBox.intersectsBox(obstacleHorizontalBox) && feetY >= top - 0.1) {
+            if (top > bestTop) {
+                bestTop = top;
+                best = obs;
+            }
+        }
+    }
+    return best;
+}
+
+function getDeathTargetPosition(basePos, objectBodyHeight, forAI, rooftopObstacle = null) {
+    let target = basePos.clone();
+    if (rooftopObstacle) {
+        const geometry = rooftopObstacle.geometry || (rooftopObstacle.children && rooftopObstacle.children[0] ? rooftopObstacle.children[0].geometry : null);
+        const width = geometry && geometry.parameters && geometry.parameters.width ? geometry.parameters.width : 6;
+        const depth = geometry && geometry.parameters && geometry.parameters.depth ? geometry.parameters.depth : 6;
+        const halfW = width / 2;
+        const halfD = depth / 2;
+        const center = rooftopObstacle.position.clone();
+        const dir = new THREE.Vector3(target.x - center.x, 0, target.z - center.z);
+        if (dir.lengthSq() < 0.01) {
+            const angle = Math.random() * Math.PI * 2;
+            dir.set(Math.cos(angle), 0, Math.sin(angle));
+        }
+        dir.normalize();
+        const dropDistance = Math.max(halfW, halfD) + 1.5;
+        target.x = center.x + dir.x * dropDistance;
+        target.z = center.z + dir.z * dropDistance;
+    }
+
+    const safe = findSafePositionNear(target, 6, 1, 1.2, objectBodyHeight, 1.2);
+    const groundY = forAI ? getGroundSurfaceY(safe) : getGroundY(safe, objectBodyHeight);
+    const clearance = forAI ? 0.25 : 0.15; // keep bodies from sinking into the ground during killcam
+    safe.y = groundY + clearance;
+    return safe;
+}
+
+function isProbablyMobileDevice() {
+    if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean') {
+        return navigator.userAgentData.mobile;
+    }
+    const ua = navigator.userAgent || '';
+    return /Android|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini/i.test(ua);
+}
+
 function shouldShowTouchControls() {
+    // Only show touch controls on mobile devices
+    if (!isProbablyMobileDevice()) return false;
     if (window.matchMedia) {
         return window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(hover: none)').matches;
     }
     return 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
+}
+
+function enforceTouchUIVisibility() {
+    if (shouldShowTouchControls()) return;
+    const ids = ['joystick-move', 'fire-button', 'crouch-button', 'zoom-button', 'follow-button'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.style.display = 'none';
+            el.style.pointerEvents = 'none';
+        }
+    });
 }
 
 function getSpatialPool(audioElement) {
@@ -3208,6 +3313,14 @@ const AI_INITIAL_POSITIONS = [
 resetObstacles();
 let playerModel;
 let isPlayerDeathPlaying = false;
+let playerDeathTweenPos = null;
+let playerDeathTweenRotX = null;
+let playerDeathTweenRotZ = null;
+let playerDeathLookAt = null;
+let playerDeathCamOffset = null;
+let playerDeathCamSavedParent = null;
+let playerDeathCamSavedLocalPos = null;
+let playerDeathCamSavedLocalRot = null;
 playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
 resetCharacterPose(playerModel); // Reset to default pose
 // Show gun for gameplay
@@ -3217,7 +3330,7 @@ if (playerModel.userData.parts && playerModel.userData.parts.gun) {
 player.add(playerModel);
 playerModel.position.set(0, -playerTargetHeight, 0);
 playerModel.visible = false;
-const AI_SPEED = 15.0;
+const AI_SPEED = 12.0;
 const HIDE_DURATION = 3.0;
 const ATTACK_DURATION = 1.0;
 const FLANK_COOLDOWN = 10.0;
@@ -3732,6 +3845,22 @@ function alignGunGripToHands(parts, alpha = 1.0) {
         parts.gunGrip.position.copy(localMid);
     } else {
         parts.gunGrip.position.lerp(localMid, alpha);
+    }
+}
+
+function alignGunGripToRightHand(parts) {
+    if (!parts || !parts.leftHand || !parts.gunGrip || !parts.aimGroup) return;
+    const leftWorld = new THREE.Vector3();
+    parts.leftHand.getWorldPosition(leftWorld);
+    const localLeft = parts.aimGroup.worldToLocal(leftWorld);
+    parts.gunGrip.position.copy(localLeft);
+    parts.gunGrip.rotation.set(0, 0, 0);
+    // Let the other hand relax away from the gun for death pose
+    if (parts.rightArm) {
+        parts.rightArm.rotation.set(-0.4, -0.8, 0.2);
+    }
+    if (parts.rightElbow) {
+        parts.rightElbow.rotation.set(0.8, -0.2, -0.1);
     }
 }
 
@@ -6586,6 +6715,7 @@ function startGame() {
         if (zoom) { zoom.style.display = 'none'; debugLog('startGame(): zoom-button display set to none'); }
         if (followBtn) { followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none'); }
     }
+    enforceTouchUIVisibility();
     try {
         if (element.requestFullscreen) {
             element.requestFullscreen().catch(err => console.warn('Fullscreen API error:', err));
@@ -6966,6 +7096,7 @@ function restartGame() {
         if (zoom) { zoom.style.display = 'none'; debugLog('restartGame(): zoom-button display set to none'); }
         if (pause) { pause.style.display = 'none'; debugLog('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
     }
+    enforceTouchUIVisibility();
     for (let i = projectiles.length - 1; i >= 0; i--) {
         clearAIRocketInFlight(projectiles[i]);
         scene.remove(projectiles[i].mesh);
@@ -7103,6 +7234,7 @@ function respawnAI(ai) {
         ai.state = 'FOLLOWING';
         ai.userData.followActive = true;
         applyAIDefaultWeaponLoadout(ai);
+        resetCharacterVisualPose(ai, ai.currentWeapon);
         ai.targetWeaponPickup = null;
         ai.lastHiddenTime = clock.getElapsedTime();
         ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false; ai.isCrouching = false;
@@ -7136,6 +7268,7 @@ function respawnAI(ai) {
     ai.rotation.set(0, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 0);
     ai.state = 'HIDING';
     applyAIDefaultWeaponLoadout(ai);
+    resetCharacterVisualPose(ai, ai.currentWeapon);
     ai.targetWeaponPickup = null;
     ai.lastHiddenTime = clock.getElapsedTime();
     ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false; ai.isCrouching = false;
@@ -7183,10 +7316,23 @@ function respawnPlayer() {
     isScoping = false; // スコープ状態もリセット
     cancelScope(); // もしスコープ中だったら解除
 
+    if (playerDeathTweenPos) { playerDeathTweenPos.stop(); playerDeathTweenPos = null; }
+    if (playerDeathTweenRotX) { playerDeathTweenRotX.stop(); playerDeathTweenRotX = null; }
+    if (playerDeathTweenRotZ) { playerDeathTweenRotZ.stop(); playerDeathTweenRotZ = null; }
+
+    if (!player.userData) player.userData = {};
     const hostilePositions = getPlayerRespawnHostilePositions();
-    const safePos = findSaferRespawnPosition(player, hostilePositions, playerTargetHeight * 2, 10, null);
+    let safePos = findSaferRespawnPosition(player, hostilePositions, playerTargetHeight * 2, 10, null);
+    if (safePos && lastPlayerDeathPos) {
+        let retryCount = 0;
+        while (safePos.distanceTo(lastPlayerDeathPos) < 8 && retryCount < 4) {
+            safePos = findSaferRespawnPosition(player, hostilePositions, playerTargetHeight * 2, 10, null);
+            retryCount++;
+        }
+    }
     if (safePos) {
         player.position.copy(safePos);
+        lastPlayerDeathPos = null;
     } else {
         console.error("Could not find a safe spawn point after multiple attempts. Spawning at default (0, 0, 0).");
         const playerSpawnPos = new THREE.Vector3(0, 0, 0);
@@ -7203,6 +7349,11 @@ function respawnPlayer() {
 
     // playerModelの表示状態を確実に更新
     if (playerModel) {
+        resetCharacterPose(playerModel);
+        if (playerModel.userData && playerModel.userData.parts && playerModel.userData.parts.gun) {
+            playerModel.userData.parts.gun.visible = true;
+        }
+        playerModel.rotation.set(0, 0, 0);
         if (!playerModel.parent) { // もしplayerModelがシーンから削除されていたらplayerに追加
             player.add(playerModel);
         }
@@ -7225,6 +7376,7 @@ function startPlayerDeathSequence(projectile) {
     isPlayerDeathPlaying = true;
     isGameRunning = false; // 一時的にゲームを停止
     document.exitPointerLock();
+    lastPlayerDeathPos = player.position.clone();
 
     // 梯子昇降中の死亡でリスポーン後に浮くのを防ぐ
     isElevating = false;
@@ -7245,23 +7397,19 @@ function startPlayerDeathSequence(projectile) {
 
     // プレイヤーモデルは足元基準で配置
     playerModel.position.set(0, -playerTargetHeight, 0);
+    const playerBodyHeight = playerTargetHeight * 2;
+    const rooftopObstacle = getRooftopObstacleUnder(player.position.clone(), playerBodyHeight);
+    const deathTargetPos = getDeathTargetPosition(player.position.clone(), playerBodyHeight, false, rooftopObstacle);
+    const fallDuration = 1.0;
+
     // AIと同じ姿勢ロジックで、死亡時も棒立ちを避ける
     if (playerModel.userData && playerModel.userData.parts) {
         const parts = playerModel.userData.parts;
-        applyGunStyle(parts.gun, currentWeapon);
-        applyWeaponPose(parts, currentWeapon);
-        // Match live AI pose coordinates as-is (arms + gun), then lock gun between hands.
-        alignGunGripToHands(parts, 1.0);
-        // Death pose: keep natural human-like leg bend (avoid reverse-knee crouch).
-        parts.leftHip.rotation.x = 0.20;
-        parts.rightHip.rotation.x = 0.20;
-        parts.leftKnee.rotation.x = 0.35;
-        parts.rightKnee.rotation.x = 0.35;
-        parts.body.rotation.x = 0.06;
+        applyRagdollPose(parts);
+        alignGunGripToRightHand(parts);
     }
-
+    
     // 倒れるアニメーション
-    const fallDuration = 1.0;
     const fallRotationAxisAngle = Math.PI / 2;
     const impactDir = (projectile && projectile.velocity)
         ? projectile.velocity.clone().setY(0).normalize()
@@ -7279,15 +7427,28 @@ function startPlayerDeathSequence(projectile) {
     const modelForward = new THREE.Vector3(0, 0, 1).applyQuaternion(modelWorldQuat).setY(0).normalize();
     const hitFromFront = modelForward.dot(impactDir) < 0;
     const fallSign = hitFromFront ? -1 : 1;
-    finalRotation.x += fallSign * fallRotationAxisAngle;
-    new TWEEN.Tween(playerModel.rotation).to({ x: finalRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
+    finalRotation.x += fallSign * (fallRotationAxisAngle + (Math.random() * 0.4 - 0.2));
+    finalRotation.z += (Math.random() * 0.6 - 0.3);
+    playerDeathTweenRotX = new TWEEN.Tween(playerModel.rotation).to({ x: finalRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
+    playerDeathTweenRotZ = new TWEEN.Tween(playerModel.rotation).to({ z: finalRotation.z }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
+
+    // Ensure player ends on ground and not inside obstacles (incl. rooftop fall)
+    playerDeathTweenPos = new TWEEN.Tween(player.position).to(
+        { x: deathTargetPos.x, y: deathTargetPos.y, z: deathTargetPos.z },
+        fallDuration * 1000
+    ).easing(TWEEN.Easing.Quadratic.InOut).start();
 
     // プレイヤー死亡キルカメラ: 遮蔽物を避けて必ずプレイヤーが映る角度を選ぶ
-    const playerLookAt = player.position.clone().add(new THREE.Vector3(0, -playerTargetHeight + 1.1, 0));
+    playerDeathLookAt = getPlayerDeathLookAt();
+    const playerLookAt = playerDeathLookAt.clone();
     const preferredDir = projectile && projectile.velocity ? projectile.velocity.clone() : null;
-    const playerDeathCamPos = findClearKillCameraPosition(player.position.clone(), playerLookAt, obstacles, preferredDir);
-    camera.position.copy(playerDeathCamPos);
-    camera.lookAt(playerLookAt);
+    const playerDeathCamPos = findPlayerDeathCameraPosition(playerLookAt, obstacles, preferredDir);
+    cinematicCamera.position.copy(playerDeathCamPos);
+    cinematicCamera.lookAt(playerLookAt);
+    cinematicCamera.fov = 75;
+    cinematicCamera.aspect = window.innerWidth / window.innerHeight;
+    cinematicCamera.updateProjectionMatrix();
+    playerDeathCamOffset = playerDeathCamPos.clone().sub(playerLookAt);
 
     const redFlashOverlay = document.getElementById('red-flash-overlay');
     if (redFlashOverlay) {
@@ -7586,9 +7747,14 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     const fallRotationAxisAngle = Math.PI / 2;
     const finalAIRotation = ai.rotation.clone();
     finalAIRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
-    const finalAIYPosition = -FLOOR_HEIGHT + (BODY_HEIGHT / 2);
+    const rooftopObstacle = (ai.userData && ai.userData.onRooftop) ? ai.userData.rooftopObstacle : null;
+    const deathTargetPos = getDeathTargetPosition(ai.position.clone(), BODY_HEIGHT, true, rooftopObstacle);
+    if (ai.userData && ai.userData.parts) {
+        applyRagdollPose(ai.userData.parts);
+        alignGunGripToRightHand(ai.userData.parts);
+    }
     new TWEEN.Tween(ai.rotation).to({ x: finalAIRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
-    new TWEEN.Tween(ai.position).to({ y: finalAIYPosition }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.In).start();
+    new TWEEN.Tween(ai.position).to({ x: deathTargetPos.x, y: deathTargetPos.y, z: deathTargetPos.z }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.InOut).start();
     setTimeout(() => {
         isAIDeathPlaying = false;
         cinematicTargetAI = null;
@@ -7849,6 +8015,52 @@ function findClearKillCameraPosition(targetPosition, lookAtTarget, obstaclesArra
     return bestCandidate || targetPosition.clone().add(new THREE.Vector3(0, 12, 0.5));
 }
 
+function findPlayerDeathCameraPosition(lookAtTarget, obstaclesArray, preferredDirection = null) {
+    const candidates = [];
+    const up = new THREE.Vector3(0, 1, 0);
+    const baseDirs = [];
+    if (preferredDirection && preferredDirection.lengthSq() > 1e-6) {
+        baseDirs.push(preferredDirection.clone().normalize().multiplyScalar(-1));
+    }
+    baseDirs.push(new THREE.Vector3(0, 0, 1));
+    baseDirs.push(new THREE.Vector3(0, 0, -1));
+    baseDirs.push(new THREE.Vector3(1, 0, 0));
+    baseDirs.push(new THREE.Vector3(-1, 0, 0));
+    baseDirs.push(new THREE.Vector3(1, 0, 1).normalize());
+    baseDirs.push(new THREE.Vector3(-1, 0, 1).normalize());
+    baseDirs.push(new THREE.Vector3(1, 0, -1).normalize());
+    baseDirs.push(new THREE.Vector3(-1, 0, -1).normalize());
+
+    const distances = [7.5, 10.5, 13.5];
+    const heights = [3.8, 5.2, 6.8];
+    for (const dir of baseDirs) {
+        for (const d of distances) {
+            for (const h of heights) {
+                candidates.push(lookAtTarget.clone().add(dir.clone().multiplyScalar(d)).add(up.clone().multiplyScalar(h)));
+            }
+        }
+    }
+    candidates.push(lookAtTarget.clone().add(new THREE.Vector3(0, 10.5, 0.2)));
+
+    let bestCandidate = null;
+    let bestScore = -Infinity;
+    for (const candidate of candidates) {
+        const toLook = new THREE.Vector3().subVectors(lookAtTarget, candidate);
+        const distToLook = toLook.length();
+        if (distToLook < 0.01) continue;
+        raycaster.set(candidate, toLook.normalize());
+        const hits = raycaster.intersectObjects(obstaclesArray, true);
+        const clear = hits.length === 0 || hits[0].distance > distToLook - 0.15;
+        if (clear) return candidate;
+        const score = hits.length > 0 ? hits[0].distance : 0;
+        if (score > bestScore) {
+            bestScore = score;
+            bestCandidate = candidate;
+        }
+    }
+    return bestCandidate || lookAtTarget.clone().add(new THREE.Vector3(0, 12, 0.5));
+}
+
 // 指定された位置の真下にある最適な地面のY座標を返すヘルパー関数
 function getGroundY(position, objectBodyHeight) {
     let currentGroundY = -FLOOR_HEIGHT; // デフォルトはステージの最下部
@@ -8093,6 +8305,7 @@ function resumeGame() {
             if (zoom) { zoom.style.display = 'none'; }
             canvas.requestPointerLock();
         }
+        enforceTouchUIVisibility();
 
         isGameRunning = true;
     }
@@ -8104,6 +8317,20 @@ function animate() {
     
     if (window.justRestarted) {
         window.justRestarted = false;
+    }
+
+    enforceTouchUIVisibility();
+
+    if (isPlayerDeathPlaying) {
+        playerDeathLookAt = getPlayerDeathLookAt();
+        if (playerDeathCamOffset) {
+            cinematicCamera.position.copy(playerDeathLookAt.clone().add(playerDeathCamOffset));
+        }
+        cinematicCamera.lookAt(playerDeathLookAt);
+        cinematicCamera.updateProjectionMatrix();
+        TWEEN.update();
+        renderer.render(scene, cinematicCamera);
+        return;
     }
     
     if (!isGameRunning) {
@@ -8235,10 +8462,14 @@ function animate() {
     }
 
     if (isPlayerDeathPlaying) {
-        const playerLookAt = player.position.clone().add(new THREE.Vector3(0, -playerTargetHeight + 1.0, 0));
-        camera.lookAt(playerLookAt);
+        playerDeathLookAt = getPlayerDeathLookAt();
+        if (playerDeathCamOffset) {
+            cinematicCamera.position.copy(playerDeathLookAt.clone().add(playerDeathCamOffset));
+        }
+        cinematicCamera.lookAt(playerDeathLookAt);
+        cinematicCamera.updateProjectionMatrix();
         TWEEN.update();
-        renderer.render(scene, camera);
+        renderer.render(scene, cinematicCamera);
         return;
     }
 
@@ -10770,6 +11001,56 @@ function resetCharacterPose(character) {
     if (parts.gun) {
         parts.gun.visible = false;
     }
+}
+
+function resetCharacterVisualPose(character, weaponType) {
+    if (!character || !character.userData || !character.userData.parts) return;
+    const parts = character.userData.parts;
+    resetCharacterPose(character);
+    if (parts.head && typeof parts.baseHeadY === 'number') {
+        parts.head.position.y = parts.baseHeadY;
+    }
+    if (parts.gun) {
+        applyGunStyle(parts.gun, weaponType);
+    }
+    applyWeaponPose(parts, weaponType);
+    if (parts.gun) parts.gun.visible = true;
+}
+
+function getPlayerDeathLookAt() {
+    if (playerModel && playerModel.userData && playerModel.userData.parts) {
+        const parts = playerModel.userData.parts;
+        const ref = parts.body || parts.aimGroup || playerModel;
+        const pos = new THREE.Vector3();
+        ref.getWorldPosition(pos);
+        pos.y += 0.2;
+        return pos;
+    }
+    return player.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+}
+
+function attachDeathCameraToScene() {
+    if (!camera) return;
+    if (!playerDeathCamSavedParent) {
+        playerDeathCamSavedParent = camera.parent;
+        playerDeathCamSavedLocalPos = camera.position.clone();
+        playerDeathCamSavedLocalRot = camera.rotation.clone();
+    }
+    if (camera.parent !== scene) {
+        scene.add(camera);
+    }
+}
+
+function restoreDeathCameraParent() {
+    if (!camera || !playerDeathCamSavedParent) return;
+    if (camera.parent !== playerDeathCamSavedParent) {
+        playerDeathCamSavedParent.add(camera);
+    }
+    if (playerDeathCamSavedLocalPos) camera.position.copy(playerDeathCamSavedLocalPos);
+    if (playerDeathCamSavedLocalRot) camera.rotation.copy(playerDeathCamSavedLocalRot);
+    playerDeathCamSavedParent = null;
+    playerDeathCamSavedLocalPos = null;
+    playerDeathCamSavedLocalRot = null;
 }
 
 function loadCharacterSettingsToUI() {
