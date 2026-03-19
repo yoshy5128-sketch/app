@@ -1042,6 +1042,93 @@ function updateAudioListenerFromCamera(camera) {
     }
 }
 
+function mulberry32(seed) {
+    let t = seed >>> 0;
+    return function () {
+        t += 0x6D2B79F5;
+        let r = Math.imul(t ^ (t >>> 15), 1 | t);
+        r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+        return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function applyRagdollPose(parts, seed = Math.random()) {
+    if (!parts) return;
+    const rand = mulberry32(Math.floor(seed * 1e9));
+    const r = (min, max) => min + (max - min) * rand();
+
+    if (parts.body) parts.body.rotation.set(r(-0.5, 0.5), r(-0.6, 0.6), r(-0.7, 0.7));
+    if (parts.head) parts.head.rotation.set(r(-0.4, 0.4), r(-0.5, 0.5), r(-0.4, 0.4));
+    if (parts.leftArm) parts.leftArm.rotation.set(r(-1.2, 0.3), r(-0.6, 0.6), r(-1.2, 1.2));
+    if (parts.rightArm) parts.rightArm.rotation.set(r(-1.2, 0.3), r(-0.6, 0.6), r(-1.2, 1.2));
+    if (parts.leftElbow) parts.leftElbow.rotation.set(r(0.2, 1.4), 0, 0);
+    if (parts.rightElbow) parts.rightElbow.rotation.set(r(0.2, 1.4), 0, 0);
+    if (parts.leftHip) parts.leftHip.rotation.set(r(-0.6, 0.6), r(-0.4, 0.4), r(-0.6, 0.6));
+    if (parts.rightHip) parts.rightHip.rotation.set(r(-0.6, 0.6), r(-0.4, 0.4), r(-0.6, 0.6));
+    if (parts.leftKnee) parts.leftKnee.rotation.set(r(0.1, 1.5), 0, 0);
+    if (parts.rightKnee) parts.rightKnee.rotation.set(r(0.1, 1.5), 0, 0);
+}
+
+function getRooftopObstacleUnder(position, objectBodyHeight) {
+    let best = null;
+    let bestTop = -Infinity;
+    const horizontalBox = new THREE.Box2(
+        new THREE.Vector2(position.x - 0.2, position.z - 0.2),
+        new THREE.Vector2(position.x + 0.2, position.z + 0.2)
+    );
+    const feetY = position.y - objectBodyHeight / 2;
+    for (const obs of obstacles) {
+        if (!obs.userData || !obs.userData.isRooftop || obs.userData.isHouseRoof) continue;
+        const box = new THREE.Box3().setFromObject(obs);
+        const geom = obs.geometry || (obs.children && obs.children[0] ? obs.children[0].geometry : null);
+        const h = geom ? geom.parameters.height : 4;
+        const top = obs.position.y + h / 2;
+        const obstacleHorizontalBox = new THREE.Box2(
+            new THREE.Vector2(box.min.x, box.min.z),
+            new THREE.Vector2(box.max.x, box.max.z)
+        );
+        if (horizontalBox.intersectsBox(obstacleHorizontalBox) && feetY >= top - 0.1) {
+            if (top > bestTop) {
+                bestTop = top;
+                best = obs;
+            }
+        }
+    }
+    return best;
+}
+
+function getDeathTargetPosition(basePos, objectBodyHeight, forAI, rooftopObstacle = null) {
+    let target = basePos.clone();
+    if (rooftopObstacle) {
+        const geometry = rooftopObstacle.geometry || (rooftopObstacle.children && rooftopObstacle.children[0] ? rooftopObstacle.children[0].geometry : null);
+        const width = geometry && geometry.parameters && geometry.parameters.width ? geometry.parameters.width : 6;
+        const depth = geometry && geometry.parameters && geometry.parameters.depth ? geometry.parameters.depth : 6;
+        const halfW = width / 2;
+        const halfD = depth / 2;
+        const center = rooftopObstacle.position.clone();
+        const dir = new THREE.Vector3(target.x - center.x, 0, target.z - center.z);
+        if (dir.lengthSq() < 0.01) {
+            const angle = Math.random() * Math.PI * 2;
+            dir.set(Math.cos(angle), 0, Math.sin(angle));
+        }
+        dir.normalize();
+        const dropDistance = Math.max(halfW, halfD) + 1.5;
+        target.x = center.x + dir.x * dropDistance;
+        target.z = center.z + dir.z * dropDistance;
+    }
+
+    const safe = findSafePositionNear(target, 6, 1, 1.2, objectBodyHeight, 1.2);
+    safe.y = forAI ? getGroundSurfaceY(safe) : getGroundY(safe, objectBodyHeight);
+    return safe;
+}
+
+function shouldShowTouchControls() {
+    if (window.matchMedia) {
+        return window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(hover: none)').matches;
+    }
+    return 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
+}
+
 function getSpatialPool(audioElement) {
     if (!audioElement) return null;
     const key = audioElement.id || (audioElement.currentSrc || audioElement.src);
@@ -1431,7 +1518,7 @@ function loadSettings() {
 
             const setupButton = (btn, position, displayType = 'flex') => {
                 if (!btn) return;
-                if ('ontouchstart' in window) {
+                if (shouldShowTouchControls()) {
                     if (position) {
                         btn.style.right = position.right || '';
                         btn.style.bottom = position.bottom || '';
@@ -1615,7 +1702,7 @@ function loadMapSettings(mapName) {
 
 
                     if (fireButton) {
-                        if ('ontouchstart' in window) {
+                        if (shouldShowTouchControls()) {
                             if (gameSettings.buttonPositions.fire) {
                                 fireButton.style.right = gameSettings.buttonPositions.fire.right;
                                 fireButton.style.bottom = gameSettings.buttonPositions.fire.bottom;
@@ -1630,7 +1717,7 @@ function loadMapSettings(mapName) {
                         }
                     }
                     if (crouchButton) {
-                        if ('ontouchstart' in window) {
+                        if (shouldShowTouchControls()) {
                             if (gameSettings.buttonPositions.crouch) {
                                 crouchButton.style.right = gameSettings.buttonPositions.crouch.right;
                                 crouchButton.style.bottom = gameSettings.buttonPositions.crouch.bottom;
@@ -1645,7 +1732,7 @@ function loadMapSettings(mapName) {
                         }
                     }
                     if (zoomButton) {
-                        if ('ontouchstart' in window) {
+                        if (shouldShowTouchControls()) {
                             if (gameSettings.buttonPositions.zoom) {
                                 zoomButton.style.right = gameSettings.buttonPositions.zoom.right;
                                 zoomButton.style.bottom = gameSettings.buttonPositions.zoom.bottom;
@@ -1658,7 +1745,7 @@ function loadMapSettings(mapName) {
                         }
                     }
                     if (joystickZone) {
-                        if ('ontouchstart' in window) {
+                        if (shouldShowTouchControls()) {
                             if (gameSettings.buttonPositions.joystick) {
                                 joystickZone.style.left = gameSettings.buttonPositions.joystick.left;
                                 joystickZone.style.bottom = gameSettings.buttonPositions.joystick.bottom;
@@ -1673,7 +1760,7 @@ function loadMapSettings(mapName) {
                         }
                     }
                     if (followButton) { // 追加
-                        if ('ontouchstart' in window) {
+                        if (shouldShowTouchControls()) {
                             if (gameSettings.buttonPositions.follow) {
                                 followButton.style.right = gameSettings.buttonPositions.follow.right;
                                 followButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
@@ -6254,7 +6341,7 @@ function setFollowingPlayerMode(enabled) {
             followStatusDisplay.classList.remove('blinking');
         }
     }
-    if (followButton && ('ontouchstart' in window)) {
+    if (followButton && (shouldShowTouchControls())) {
         if (isFollowingPlayerMode) {
             followButton.classList.add('blinking');
             followButton.textContent = 'FOLLOWING';
@@ -6417,7 +6504,7 @@ if (zoomButtonElement) {
         }
         event.preventDefault();
     };
-    if ('ontouchstart' in window) {
+    if (shouldShowTouchControls()) {
         zoomButtonElement.addEventListener('touchstart', toggleZoom, { passive: false });
     } else {
         zoomButtonElement.addEventListener('click', toggleZoom);
@@ -6543,7 +6630,7 @@ function startGame() {
     }
     const element = document.documentElement;
 
-    if ('ontouchstart' in window) {
+    if (shouldShowTouchControls()) {
         debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -6934,7 +7021,7 @@ function restartGame() {
         if (teamKillsContainer) teamKillsContainer.style.display = 'none';
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
-    if ('ontouchstart' in window) {
+    if (shouldShowTouchControls()) {
         debugLog('restartGame(): Mobile device detected. Setting UI to block/flex.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -7081,6 +7168,10 @@ function respawnAI(ai) {
     const aiHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
     ai.hp = aiHP;
     if (ai.userData) ai.userData.rocketInFlight = false;
+    if (ai && ai.userData && ai.userData.parts) {
+        resetCharacterPose(ai);
+        if (ai.userData.parts.gun) ai.userData.parts.gun.visible = true;
+    }
     const isTeammate = ai.team === 'player';
     const isTeamModeOrArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
 
@@ -7196,6 +7287,11 @@ function respawnPlayer() {
 
     // playerModelの表示状態を確実に更新
     if (playerModel) {
+        resetCharacterPose(playerModel);
+        if (playerModel.userData && playerModel.userData.parts && playerModel.userData.parts.gun) {
+            playerModel.userData.parts.gun.visible = true;
+        }
+        playerModel.rotation.set(0, 0, 0);
         if (!playerModel.parent) { // もしplayerModelがシーンから削除されていたらplayerに追加
             player.add(playerModel);
         }
@@ -7238,23 +7334,18 @@ function startPlayerDeathSequence(projectile) {
 
     // プレイヤーモデルは足元基準で配置
     playerModel.position.set(0, -playerTargetHeight, 0);
+    const playerBodyHeight = playerTargetHeight * 2;
+    const rooftopObstacle = getRooftopObstacleUnder(player.position.clone(), playerBodyHeight);
+    const deathTargetPos = getDeathTargetPosition(player.position.clone(), playerBodyHeight, false, rooftopObstacle);
+    const fallDuration = 1.0;
+
     // AIと同じ姿勢ロジックで、死亡時も棒立ちを避ける
     if (playerModel.userData && playerModel.userData.parts) {
         const parts = playerModel.userData.parts;
-        applyGunStyle(parts.gun, currentWeapon);
-        applyWeaponPose(parts, currentWeapon);
-        // Match live AI pose coordinates as-is (arms + gun), then lock gun between hands.
-        alignGunGripToHands(parts, 1.0);
-        // Death pose: keep natural human-like leg bend (avoid reverse-knee crouch).
-        parts.leftHip.rotation.x = 0.20;
-        parts.rightHip.rotation.x = 0.20;
-        parts.leftKnee.rotation.x = 0.35;
-        parts.rightKnee.rotation.x = 0.35;
-        parts.body.rotation.x = 0.06;
+        applyRagdollPose(parts);
     }
-
+    
     // 倒れるアニメーション
-    const fallDuration = 1.0;
     const fallRotationAxisAngle = Math.PI / 2;
     const impactDir = (projectile && projectile.velocity)
         ? projectile.velocity.clone().setY(0).normalize()
@@ -7272,8 +7363,16 @@ function startPlayerDeathSequence(projectile) {
     const modelForward = new THREE.Vector3(0, 0, 1).applyQuaternion(modelWorldQuat).setY(0).normalize();
     const hitFromFront = modelForward.dot(impactDir) < 0;
     const fallSign = hitFromFront ? -1 : 1;
-    finalRotation.x += fallSign * fallRotationAxisAngle;
+    finalRotation.x += fallSign * (fallRotationAxisAngle + (Math.random() * 0.4 - 0.2));
+    finalRotation.z += (Math.random() * 0.6 - 0.3);
     new TWEEN.Tween(playerModel.rotation).to({ x: finalRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
+    new TWEEN.Tween(playerModel.rotation).to({ z: finalRotation.z }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
+
+    // Ensure player ends on ground and not inside obstacles (incl. rooftop fall)
+    new TWEEN.Tween(player.position).to(
+        { x: deathTargetPos.x, y: deathTargetPos.y, z: deathTargetPos.z },
+        fallDuration * 1000
+    ).easing(TWEEN.Easing.Quadratic.InOut).start();
 
     // プレイヤー死亡キルカメラ: 遮蔽物を避けて必ずプレイヤーが映る角度を選ぶ
     const playerLookAt = player.position.clone().add(new THREE.Vector3(0, -playerTargetHeight + 1.1, 0));
@@ -7344,7 +7443,7 @@ function startPlayerDeathSequence(projectile) {
                 if (player) player.traverse((object) => { object.visible = true; }); // プレイヤーをシーンに再追加
                 // UIを再表示
                 const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
-                if ('ontouchstart' in window) {
+                if (shouldShowTouchControls()) {
                     uiToShow.push('joystick-move', 'fire-button', 'crouch-button', 'zoom-button');
                 } else {
                     canvas.requestPointerLock();
@@ -7355,7 +7454,7 @@ function startPlayerDeathSequence(projectile) {
                 });
                 const followBtn = document.getElementById('follow-button');
                 if (followBtn) {
-                    const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                    const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
                     followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
                 }
             } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
@@ -7380,7 +7479,7 @@ function startPlayerDeathSequence(projectile) {
                     if (player) player.traverse((object) => { object.visible = true; });
                     // UIを再表示
                     const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
-                    if ('ontouchstart' in window) {
+                    if (shouldShowTouchControls()) {
                         uiToShow.push('joystick-move', 'fire-button', 'crouch-button', 'zoom-button');
                     } else {
                         canvas.requestPointerLock();
@@ -7391,7 +7490,7 @@ function startPlayerDeathSequence(projectile) {
                     });
                     const followBtn = document.getElementById('follow-button');
                     if (followBtn) {
-                        const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                        const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
                         followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
                     }
                 }
@@ -7579,9 +7678,11 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     const fallRotationAxisAngle = Math.PI / 2;
     const finalAIRotation = ai.rotation.clone();
     finalAIRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
-    const finalAIYPosition = -FLOOR_HEIGHT + (BODY_HEIGHT / 2);
+    const rooftopObstacle = (ai.userData && ai.userData.onRooftop) ? ai.userData.rooftopObstacle : null;
+    const deathTargetPos = getDeathTargetPosition(ai.position.clone(), BODY_HEIGHT, true, rooftopObstacle);
+    applyRagdollPose(ai.userData ? ai.userData.parts : null);
     new TWEEN.Tween(ai.rotation).to({ x: finalAIRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
-    new TWEEN.Tween(ai.position).to({ y: finalAIYPosition }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.In).start();
+    new TWEEN.Tween(ai.position).to({ x: deathTargetPos.x, y: deathTargetPos.y, z: deathTargetPos.z }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.InOut).start();
     setTimeout(() => {
         isAIDeathPlaying = false;
         cinematicTargetAI = null;
@@ -7591,7 +7692,7 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
             if (fire) fire.style.display = 'block';
             if (cross) cross.style.display = 'block';
             if (followBtn) {
-                const shouldShowFollow = ('ontouchstart' in window) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
                 followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
             }
             if (player) {
@@ -8062,7 +8163,7 @@ function resumeGame() {
             document.getElementById('kill-count-display').style.display = 'block';
         }
 
-        if ('ontouchstart' in window) {
+        if (shouldShowTouchControls()) {
             // resumeGame(): Mobile device detected. Setting UI to block/flex.
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
@@ -10169,7 +10270,7 @@ const rButtons = document.querySelectorAll('.restart-button');
 rButtons.forEach(button => button.addEventListener('click', () => {
     initializeAudio();
     restartGame();
-    if (!('ontouchstart' in window)) canvas.requestPointerLock();
+    if (!(shouldShowTouchControls())) canvas.requestPointerLock();
 })); // End of rButtons.forEach callback
     
     const settingsLinks = document.querySelectorAll('.settings-link');
@@ -10236,7 +10337,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const joystickZone = document.getElementById('joystick-move');
     const followButton = document.getElementById('follow-button'); // 追加
 
-    if ('ontouchstart' in window) {
+    if (shouldShowTouchControls()) {
         if(fireButton) {
             fireButton.style.right = fireRight;
             fireButton.style.bottom = fireBottom;
