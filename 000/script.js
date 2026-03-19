@@ -1131,13 +1131,13 @@ function playSpatialSound(audioElement, position, options = {}) {
 
     // Distance attenuation (gentle)
     const distanceGain = 1 / (1 + (distance / (options.distanceScale || 25)));
-    const behindGain = frontDot < 0 ? (options.behindGain || 0.92) : 1.0;
+    const behindGain = frontDot < 0 ? (options.behindGain || 0.97) : 1.0;
     const gainBoost = options.gainBoost || 1.0;
     entry.gain.gain.value = (audioElement.volume || 1.0) * distanceGain * behindGain * gainBoost;
     entry.panner.pan.value = pan;
 
     // Slight muffling when behind
-    entry.lowpass.frequency.value = frontDot < 0 ? (options.behindCutoff || 7000) : (options.frontCutoff || 14000);
+    entry.lowpass.frequency.value = frontDot < 0 ? (options.behindCutoff || 9000) : (options.frontCutoff || 14000);
 
     entry.el.currentTime = 0;
     entry.el.play().catch(() => {
@@ -5976,7 +5976,7 @@ function aiShoot(ai, timeElapsed) {
         else if (ai.currentWeapon === WEAPON_SG) soundToPlay = aiSgSound;
         else if (ai.currentWeapon === WEAPON_MR) soundToPlay = aiM1GunSound;
         else soundToPlay = aiGunSound;
-        if (soundToPlay) playSpatialSound(soundToPlay, startPosition, { gainBoost: 1.2 });
+        if (soundToPlay) playSpatialSound(soundToPlay, startPosition, { gainBoost: 1.3 });
     if (window.DEBUG_SPATIAL_AUDIO && soundToPlay) {
         console.log('[aiShoot] sound', soundToPlay.id || soundToPlay.src);
     }
