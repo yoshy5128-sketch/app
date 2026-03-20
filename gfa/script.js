@@ -1120,7 +1120,7 @@ function getDeathTargetPosition(basePos, objectBodyHeight, forAI, rooftopObstacl
 
     const safe = findSafePositionNear(target, 6, 1, 1.2, objectBodyHeight, 1.2);
     const groundY = forAI ? getGroundSurfaceY(safe) : getGroundY(safe, objectBodyHeight);
-    const clearance = forAI ? 0.25 : 0.15; // keep bodies from sinking into the ground during killcam
+    const clearance = forAI ? 0.4 : 0.25; // keep bodies from sinking into the ground during killcam
     safe.y = groundY + clearance;
     return safe;
 }
@@ -2022,14 +2022,24 @@ const ARENA_RADIUS = 60;
 const ARENA_EDGE_THICKNESS = 1;
 const FLOOR_HEIGHT = ARENA_EDGE_THICKNESS / 2;
 const ARENA_PLAY_AREA_RADIUS = ARENA_RADIUS - ARENA_EDGE_THICKNESS - 0.5;
+const ARENA_FLOOR_DEFAULT_COLOR = 0x555555;
 const floorGeometry = new THREE.CircleGeometry(ARENA_RADIUS, 64);
-const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+const floorMaterial = new THREE.MeshLambertMaterial({ color: ARENA_FLOOR_DEFAULT_COLOR });
 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
 floor.rotation.x = -Math.PI / 2;
 floor.position.y = -FLOOR_HEIGHT;
 floor.receiveShadow = true;
 floor.userData.isGround = true; // 地面を保護するフラグ
 scene.add(floor);
+
+function setArenaFloorColor(colorValue) {
+    const hex = typeof colorValue === 'number'
+        ? colorValue
+        : parseInt(String(colorValue).replace('#', '0x'));
+    if (Number.isNaN(hex)) return;
+    floor.material.color.setHex(hex);
+    floor.material.needsUpdate = true;
+}
 const edgeGeometry = new THREE.TorusGeometry(ARENA_RADIUS, ARENA_EDGE_THICKNESS, 8, 64);
 const edgeMaterial = new THREE.MeshLambertMaterial({ color: 0x880000 });
 const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
@@ -3275,14 +3285,22 @@ function resetObstacles() {
                 } else {
                     obstaclesToCreate = defaultObstaclesConfig;
                 }
+                if (selectedMapData.floorColor !== undefined) {
+                    setArenaFloorColor(selectedMapData.floorColor);
+                } else {
+                    setArenaFloorColor(ARENA_FLOOR_DEFAULT_COLOR);
+                }
             } catch (e) {
                 obstaclesToCreate = defaultObstaclesConfig;
+                setArenaFloorColor(ARENA_FLOOR_DEFAULT_COLOR);
             }
         } else {
             obstaclesToCreate = defaultObstaclesConfig;
+            setArenaFloorColor(ARENA_FLOOR_DEFAULT_COLOR);
         }
     } else {
         obstaclesToCreate = defaultObstaclesConfig;
+        setArenaFloorColor(ARENA_FLOOR_DEFAULT_COLOR);
         createSniperTower(35, -35);
         createSniperTower(-35, 35);
     }
@@ -3777,7 +3795,7 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
         parts.leftKnee.rotation.x = kneeBend;
         parts.rightKnee.rotation.x = kneeBend;
         parts.body.rotation.x = -0.22;
-        parts.head.position.y = parts.baseHeadY - 0.2;
+        parts.head.position.y = parts.baseHeadY - 0.05;
         
         // Add walking animation on top of crouch pose
         const swing = Math.sin(timeElapsed * walkSpeed) * hipAmplitude;
@@ -3798,7 +3816,7 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
         parts.leftKnee.rotation.x = kneeBend;
         parts.rightKnee.rotation.x = kneeBend;
         parts.body.rotation.x = -0.22;
-        parts.head.position.y = parts.baseHeadY - 0.2;
+        parts.head.position.y = parts.baseHeadY - 0.05;
     } else if (isMoving) {
         const walkSpeed = 10;
         const hipAmplitude = Math.PI / 4;
@@ -5840,10 +5858,17 @@ function shoot() {
         lastFireTime = now;
         if (currentWeapon === WEAPON_MG) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_MG) && --ammoMG === 0) {
-                // MGがデフォルト武器か拾った武器かに関わらずリロード
                 ammoMG = 0;
-                playerMGReloadUntil = now + 2.0;
-                showReloadingText();
+                if (gameSettings.defaultWeapon === WEAPON_MG) {
+                    // デフォルトMGのみリロード
+                    playerMGReloadUntil = now + 2.0;
+                    showReloadingText();
+                } else {
+                    // 拾ったMGは弾切れで即フォールバックへ
+                    playerMGReloadUntil = 0;
+                    hideReloadingText();
+                    switchPlayerToFallbackWeapon();
+                }
             }
         } else if (currentWeapon === WEAPON_RR) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_RR) && --ammoRR === 0) switchPlayerToFallbackWeapon();
@@ -6819,6 +6844,9 @@ function restartGame() {
                     shuffle(customSpawnPoints);
                     availableSpawnPoints = customSpawnPoints;
                 }
+                if (selectedMapData.floorColor !== undefined) {
+                    setArenaFloorColor(selectedMapData.floorColor);
+                }
             } catch (e) {
                 console.error("Could not parse spawn points from custom map data.", e);
             }
@@ -7405,6 +7433,9 @@ function startPlayerDeathSequence(projectile) {
     // AIと同じ姿勢ロジックで、死亡時も棒立ちを避ける
     if (playerModel.userData && playerModel.userData.parts) {
         const parts = playerModel.userData.parts;
+        if (parts.gun) {
+            applyGunStyle(parts.gun, currentWeapon);
+        }
         applyRagdollPose(parts);
         alignGunGripToRightHand(parts);
     }
@@ -7750,8 +7781,12 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     const rooftopObstacle = (ai.userData && ai.userData.onRooftop) ? ai.userData.rooftopObstacle : null;
     const deathTargetPos = getDeathTargetPosition(ai.position.clone(), BODY_HEIGHT, true, rooftopObstacle);
     if (ai.userData && ai.userData.parts) {
-        applyRagdollPose(ai.userData.parts);
-        alignGunGripToRightHand(ai.userData.parts);
+        const parts = ai.userData.parts;
+        if (parts.gun) {
+            applyGunStyle(parts.gun, ai.currentWeapon);
+        }
+        applyRagdollPose(parts);
+        alignGunGripToRightHand(parts);
     }
     new TWEEN.Tween(ai.rotation).to({ x: finalAIRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
     new TWEEN.Tween(ai.position).to({ x: deathTargetPos.x, y: deathTargetPos.y, z: deathTargetPos.z }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.InOut).start();
@@ -8377,8 +8412,10 @@ function animate() {
     // Player MG reload completion (needs to run even when not firing)
     if (playerMGReloadUntil > 0 && timeElapsed >= playerMGReloadUntil) {
         playerMGReloadUntil = 0;
-        ammoMG = MAX_AMMO_MG;
-        hideReloadingText();
+        if (gameSettings.defaultWeapon === WEAPON_MG) {
+            ammoMG = MAX_AMMO_MG;
+            hideReloadingText();
+        }
     }
     if (playerMRReloadUntil > 0 && timeElapsed >= playerMRReloadUntil) {
         playerMRReloadUntil = 0;

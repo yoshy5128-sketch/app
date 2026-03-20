@@ -583,6 +583,7 @@
         // 最近使用した色の管理
         const MAX_RECENT_COLORS = 8; 
         let recentColors = [];
+        let lastFloorColorValue = null;
         
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
@@ -1212,9 +1213,13 @@
                 : parseInt(String(colorValue).replace('#', '0x'));
             if (Number.isNaN(hex)) return;
             floor.material.color.setHex(hex);
+            floor.material.needsUpdate = true;
+            scene.background = new THREE.Color(hex);
+            renderer.setClearColor(hex);
             const floorColorInput = document.getElementById('floor-color');
             if (floorColorInput) {
                 floorColorInput.value = '#' + hex.toString(16).padStart(6, '0');
+                lastFloorColorValue = floorColorInput.value;
             }
         }
 
@@ -2105,11 +2110,16 @@
             
             // 地面のデフォルト値
             document.getElementById('floor-color').value = '#34495e';
+            lastFloorColorValue = document.getElementById('floor-color').value;
             updatePersistentObstacleSizeFromInputs();
         }
 
         function animate() {
             requestAnimationFrame(animate);
+            const floorColorInput = document.getElementById('floor-color');
+            if (floorColorInput && floorColorInput.value && floorColorInput.value !== lastFloorColorValue) {
+                setFloorColor(floorColorInput.value);
+            }
             renderer.render(scene, camera);
         }
         
