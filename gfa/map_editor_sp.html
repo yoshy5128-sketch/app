@@ -290,6 +290,7 @@
         const ARENA_EDGE_THICKNESS = 1;
         const FRUSTUM_SIZE = 200;
         const FLOOR_DEFAULT_COLOR = 0x34495e;
+        const EDITOR_BG_COLOR = 0x2c3e50;
         
         // --- GRID CONSTANTS (New) ---
         const GRID_SIZE = ARENA_RADIUS * 2; // 120
@@ -315,7 +316,7 @@
 
         // --- SCENE SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x2c3e50);
+        scene.background = new THREE.Color(EDITOR_BG_COLOR);
 
         const canvasContainer = document.getElementById('canvas-container');
         
@@ -330,6 +331,7 @@
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+        renderer.setClearColor(EDITOR_BG_COLOR);
         canvasContainer.appendChild(renderer.domElement);
         
         // --- LIGHTING ---
@@ -357,6 +359,16 @@
         const gridHelper = new THREE.GridHelper(GRID_SIZE, GRID_DIVISIONS, 0x4f6b80, 0x4f6b80);
         gridHelper.rotation.x = Math.PI / 2;
         scene.add(gridHelper);
+
+        const outerRingGeometry = new THREE.RingGeometry(ARENA_RADIUS, ARENA_RADIUS + GRID_SIZE, 128);
+        const outerRingMaterial = new THREE.MeshBasicMaterial({ color: EDITOR_BG_COLOR, side: THREE.DoubleSide });
+        outerRingMaterial.depthTest = false;
+        outerRingMaterial.depthWrite = false;
+        const outerRing = new THREE.Mesh(outerRingGeometry, outerRingMaterial);
+        outerRing.rotation.x = -Math.PI / 2;
+        outerRing.position.y = 0.02;
+        outerRing.renderOrder = 1;
+        scene.add(outerRing);
         
         // --- STATE ---
         let obstacles = [];
@@ -764,7 +776,10 @@
             const material = new THREE.MeshLambertMaterial({ 
                 color: color
             }); 
+            material.depthTest = false;
+            material.depthWrite = false;
             const obstacle = new THREE.Mesh(geometry, material);
+            obstacle.renderOrder = 10;
             
             const snappedX = snapToGrid(x);
             const snappedZ = snapToGrid(z);
@@ -1214,8 +1229,6 @@
             if (Number.isNaN(hex)) return;
             floor.material.color.setHex(hex);
             floor.material.needsUpdate = true;
-            scene.background = new THREE.Color(hex);
-            renderer.setClearColor(hex);
             const floorColorInput = document.getElementById('floor-color');
             if (floorColorInput) {
                 floorColorInput.value = '#' + hex.toString(16).padStart(6, '0');
@@ -1763,6 +1776,14 @@
             setSelected(null); // 選択解除
         }
 
+        function resolveSelectableObject(object) {
+            let targetObject = object;
+            while (targetObject && !targetObject.userData?.type && targetObject.parent) {
+                targetObject = targetObject.parent;
+            }
+            return targetObject;
+        }
+
         function onMouseDown(event) {
             if (touchMode !== 'none') return;
             
@@ -1772,12 +1793,22 @@
 
             if (event.button === 0) { // 左クリック
                 console.log('Left click detected');
-                const intersects = raycaster.intersectObjects(allClickable);
+                const intersects = raycaster.intersectObjects(allClickable, true);
                 console.log('Left click intersects:', intersects.length);
                 if (intersects.length > 0) {
-                    console.log('Object found, calling setSelected');
-                    isDragging = true;
-                    setSelected(intersects[0].object);
+                    const targetObject = resolveSelectableObject(intersects[0].object);
+                    const targetType = targetObject?.userData?.type;
+                    if (addingMode === 'obstacle' && targetType === 'house') {
+                        setSelected(null);
+                        const planeHit = new THREE.Vector3();
+                        if (raycaster.ray.intersectPlane(plane, planeHit)) {
+                            handleObjectAddition(planeHit);
+                        }
+                    } else {
+                        console.log('Object found, calling setSelected');
+                        isDragging = true;
+                        setSelected(targetObject);
+                    }
                 } else {
                     console.log('No object found, deselecting');
                     setSelected(null);
@@ -1937,12 +1968,20 @@
                 raycaster.setFromCamera(mouse, camera);
                 const allClickable = [...obstacles, ...spawnMeshes, ...lights];
                 
-                const intersects = raycaster.intersectObjects(allClickable);
+                const intersects = raycaster.intersectObjects(allClickable, true);
                 if (intersects.length > 0) {
-                    // isDraggingがtrueの場合、これはドラッグ終了なので選択状態は維持
-                    // isDraggingがfalseの場合、これは純粋なタップなので選択
-                    if (!isDragging) {
-                        setSelected(intersects[0].object);
+                    const targetObject = resolveSelectableObject(intersects[0].object);
+                    const targetType = targetObject?.userData?.type;
+                    if (addingMode === 'obstacle' && targetType === 'house') {
+                        setSelected(null);
+                        const planeHit = new THREE.Vector3();
+                        if (raycaster.ray.intersectPlane(plane, planeHit)) {
+                            handleObjectAddition(planeHit);
+                        }
+                    } else if (!isDragging) {
+                        // isDraggingがtrueの場合、これはドラッグ終了なので選択状態は維持
+                        // isDraggingがfalseの場合、これは純粋なタップなので選択
+                        setSelected(targetObject);
                     }
                 } else {
                     setSelected(null);
@@ -1981,6 +2020,29 @@
             camera.bottom = initialFrustumSize / -2;
             camera.updateProjectionMatrix();
             renderer.setSize(currentWidth, currentHeight);
+        }
+
+        function tryEnterEditorFullscreen(allowRequest) {
+            try {
+                const root = document.documentElement;
+                if (allowRequest && !document.fullscreenElement) {
+                    const requestFullscreen = root.requestFullscreen || root.webkitRequestFullscreen || root.msRequestFullscreen;
+                    if (requestFullscreen) {
+                        const result = requestFullscreen.call(root);
+                        if (result && typeof result.catch === 'function') result.catch(() => {});
+                    }
+                }
+            } catch (e) {
+                console.warn('Fullscreen request failed:', e);
+            }
+
+            try {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('landscape').catch(() => {});
+                }
+            } catch (e) {
+                console.warn('Orientation lock failed:', e);
+            }
         }
         
         // --- Event Listeners Setup ---
@@ -2037,6 +2099,8 @@
             renderRecentColors();
             updateSavedMapsSelect();
             setAddingMode('obstacle'); // 初期モードを設定
+            tryEnterEditorFullscreen(false);
+            window.addEventListener('pointerdown', () => tryEnterEditorFullscreen(true), { once: true });
             
             // デフォルト値を設定
             setDefaultPropertyValues();
