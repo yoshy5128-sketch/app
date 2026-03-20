@@ -805,7 +805,7 @@ const MAX_AMMO_RR = 3;
   const PICKUP_AMMO_MR = 24;
 const FIRE_RATE_PISTOL = 0.3;
 const FIRE_RATE_MG = 0.1;
-const FIRE_RATE_RR = 1.5;
+const FIRE_RATE_RR = 0.8;
 const FIRE_RATE_SR = 2.0;
 const FIRE_RATE_SG = 0.8;
 const FIRE_RATE_MR = 0.3;
@@ -940,7 +940,7 @@ function showReloadingText() {
         document.body.appendChild(el);
     }
     el.style.position = 'fixed';
-    el.style.top = '50%';
+    el.style.top = '30%';
     el.style.left = '50%';
     el.style.transform = 'translate(-50%, -50%)';
     el.style.color = '#FFD700';

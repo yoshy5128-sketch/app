@@ -2101,6 +2101,7 @@
             setAddingMode('obstacle'); // 初期モードを設定
             tryEnterEditorFullscreen(false);
             window.addEventListener('pointerdown', () => tryEnterEditorFullscreen(true), { once: true });
+            window.addEventListener('touchstart', () => tryEnterEditorFullscreen(true), { once: true, passive: true });
             
             // デフォルト値を設定
             setDefaultPropertyValues();
