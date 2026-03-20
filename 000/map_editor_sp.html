@@ -1212,6 +1212,7 @@
                 : parseInt(String(colorValue).replace('#', '0x'));
             if (Number.isNaN(hex)) return;
             floor.material.color.setHex(hex);
+            floor.material.needsUpdate = true;
             const floorColorInput = document.getElementById('floor-color');
             if (floorColorInput) {
                 floorColorInput.value = '#' + hex.toString(16).padStart(6, '0');
