@@ -488,6 +488,7 @@ let characterEditorAnimationId = null;
                     nightModeIntensityValueSpan.textContent = gameSettings.nightModeLightIntensity;
                 }
                 saveSettings();
+                applyBillBattleLightIntensityScale();
             });
         }
         // Initialize unified map selector
@@ -847,7 +848,7 @@ const FIRE_RATE_RR = 0.8;
 const FIRE_RATE_SR = 1.0;
 
 const GAME_MODE_BILLBATTLE = 'billbattle';
-const BUILD_ID = '2026-03-22-warehouse-v30';
+const BUILD_ID = '2026-03-22-warehouse-v31';
 let BILL_BATTLE_SIZE = 100;
 let BILL_BATTLE_HALF = BILL_BATTLE_SIZE / 2;
 const BILL_BATTLE_SIZE_OPTIONS = [50, 60, 70, 80, 90, 100];
@@ -3158,6 +3159,36 @@ function setBillBattleLightState(entry, isOn) {
     }
 }
 
+function getBillBattleLightIntensityScale() {
+    let slider = (gameSettings && typeof gameSettings.nightModeLightIntensity === 'number')
+        ? gameSettings.nightModeLightIntensity
+        : 1;
+    if (!Number.isFinite(slider)) slider = 1;
+    const clamped = Math.max(0, Math.min(2, slider));
+    const normalized = clamped / 2;
+    const mobileScale = isProbablyMobileDevice() ? 0.55 : 1.0;
+    return normalized * mobileScale;
+}
+
+function applyBillBattleLightIntensityScale() {
+    if (!isBillBattleMode()) return;
+    const scale = getBillBattleLightIntensityScale();
+    for (const entry of billBattleLights) {
+        if (!entry || !entry.userData) continue;
+        const rawIntensity = entry.userData.baseIntensityRaw
+            ?? entry.userData.baseIntensity
+            ?? (entry.light ? entry.light.intensity : 2.4);
+        const rawEmissive = entry.userData.baseEmissiveRaw
+            ?? entry.userData.baseEmissive
+            ?? 0.6;
+        entry.userData.baseIntensityRaw = rawIntensity;
+        entry.userData.baseEmissiveRaw = rawEmissive;
+        entry.userData.baseIntensity = rawIntensity * scale;
+        entry.userData.baseEmissive = rawEmissive * scale;
+        setBillBattleLightState(entry, !!entry.userData.isLit);
+    }
+}
+
 function updateBillBattleLightFlicker(timeElapsed) {
     if (!isBillBattleMode()) return;
     if (gameSettings.billBattleLighting !== 'random') return;
@@ -3183,6 +3214,11 @@ function createBillBattleCeilingLights() {
     const rowSpan = BILL_BATTLE_HALF - 6;
     const rows = [-rowSpan, 0, rowSpan];
     const lightingMode = (gameSettings.billBattleLighting || 'all');
+    const lightIntensityScale = getBillBattleLightIntensityScale();
+    const baseIntensityRaw = 2.4;
+    const baseEmissiveRaw = 0.6;
+    const baseIntensity = baseIntensityRaw * lightIntensityScale;
+    const baseEmissive = baseEmissiveRaw * lightIntensityScale;
     const totalLights = rows.length * count;
     billBattleTotalLightCount = totalLights;
     let remainingLights = totalLights;
@@ -3200,7 +3236,7 @@ function createBillBattleCeilingLights() {
             const lightMat = new THREE.MeshLambertMaterial({
                 color: BILL_BATTLE_LIGHT_COLOR,
                 emissive: new THREE.Color(0xffffff),
-                emissiveIntensity: 0.6
+                emissiveIntensity: baseEmissive
             });
             const lightMesh = new THREE.Mesh(lightGeom, lightMat);
             lightMesh.position.set(x, lightY, z);
@@ -3211,13 +3247,15 @@ function createBillBattleCeilingLights() {
             scene.add(lightMesh);
             obstacles.push(lightMesh);
 
-            const pointLight = new THREE.PointLight(0xffffff, 2.4, 30, 2);
+            const pointLight = new THREE.PointLight(0xffffff, baseIntensity, 30, 2);
             pointLight.position.set(x, lightY - 0.6, z);
             scene.add(pointLight);
             lightMesh.userData.lightRef = pointLight;
             const entry = { mesh: lightMesh, light: pointLight, userData: {} };
-            entry.userData.baseIntensity = pointLight.intensity;
-            entry.userData.baseEmissive = 0.6;
+            entry.userData.baseIntensityRaw = baseIntensityRaw;
+            entry.userData.baseEmissiveRaw = baseEmissiveRaw;
+            entry.userData.baseIntensity = baseIntensity;
+            entry.userData.baseEmissive = baseEmissive;
             let isLit = true;
             if (lightingMode === 'random') {
                 const chance = remainingLit / Math.max(1, remainingLights);
