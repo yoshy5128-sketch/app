@@ -848,7 +848,7 @@ const FIRE_RATE_RR = 0.8;
 const FIRE_RATE_SR = 1.0;
 
 const GAME_MODE_BILLBATTLE = 'billbattle';
-const BUILD_ID = '2026-03-22-warehouse-v31';
+const BUILD_ID = '2026-03-22-warehouse-v32';
 let BILL_BATTLE_SIZE = 100;
 let BILL_BATTLE_HALF = BILL_BATTLE_SIZE / 2;
 const BILL_BATTLE_SIZE_OPTIONS = [50, 60, 70, 80, 90, 100];
@@ -5938,6 +5938,52 @@ function findSmartCoverPosition(ai, threatPos) {
     return best;
 }
 
+function triggerAISuppressionEvade(ai, timeElapsed, shooter) {
+    if (!ai || !ai.userData) return;
+    const threatPos = (shooter && shooter.position)
+        ? shooter.position.clone()
+        : (ai.lastKnownThreatPos || getClosestOpponentPosition(ai));
+    let target = threatPos ? findSmartCoverPosition(ai, threatPos) : null;
+    if (!target) {
+        const baseDir = threatPos
+            ? ai.position.clone().sub(threatPos).setY(0)
+            : new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5);
+        if (baseDir.lengthSq() < 1e-6) baseDir.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+        baseDir.normalize();
+        const lateral = new THREE.Vector3(-baseDir.z, 0, baseDir.x);
+        if (Math.random() < 0.5) lateral.multiplyScalar(-1);
+        target = ai.position.clone().add(lateral.multiplyScalar(5.5));
+        if (isBillBattleMode()) target = clampBillBattleInside(target);
+        target.y = getGroundSurfaceY(target);
+    }
+    ai.userData.suppressionEvadeUntil = timeElapsed + 1.0;
+    ai.userData.suppressionEvadeTarget = target.clone();
+    ai.state = 'EVADING';
+    ai.targetPosition.copy(target);
+    ai.isCrouching = false;
+    ai.scale.y = 1.0;
+    ai.crouchUntilTime = null;
+}
+
+function registerAISuppressionHit(ai, timeElapsed, shooter) {
+    if (!ai || !ai.userData) return;
+    if (!isProbablyMobileDevice()) return;
+    const windowSeconds = 0.35;
+    const hitThreshold = 4;
+    const windowStart = ai.userData.suppressionHitWindowStart || -999;
+    if ((timeElapsed - windowStart) > windowSeconds) {
+        ai.userData.suppressionHitWindowStart = timeElapsed;
+        ai.userData.suppressionHitCount = 1;
+    } else {
+        ai.userData.suppressionHitCount = (ai.userData.suppressionHitCount || 0) + 1;
+    }
+    if (ai.userData.suppressionHitCount >= hitThreshold) {
+        ai.userData.suppressionHitCount = 0;
+        ai.userData.suppressionHitWindowStart = timeElapsed;
+        triggerAISuppressionEvade(ai, timeElapsed, shooter);
+    }
+}
+
 function findNewHidingSpot(ai) {
     const currentAIPos = ai.position.clone();
     let bestSpot = null;
@@ -10442,6 +10488,20 @@ function animate() {
             ai.userData.rooftopPhase = 'none';
         }
         const currentAISpeed = ai.isCrouching ? AI_SPEED / 2 : AI_SPEED;
+        if (ai.userData && ai.userData.suppressionEvadeUntil && timeElapsed >= ai.userData.suppressionEvadeUntil) {
+            ai.userData.suppressionEvadeUntil = 0;
+            ai.userData.suppressionEvadeTarget = null;
+        }
+        const suppressionActive = ai.userData && ai.userData.suppressionEvadeUntil
+            && timeElapsed < ai.userData.suppressionEvadeUntil;
+        if (suppressionActive && ai.userData.suppressionEvadeTarget
+            && ai.state !== 'CLIMBING' && ai.state !== 'DESCENDING') {
+            ai.state = 'EVADING';
+            ai.targetPosition.copy(ai.userData.suppressionEvadeTarget);
+            ai.isCrouching = false;
+            ai.scale.y = 1.0;
+            ai.crouchUntilTime = null;
+        }
         const separation_vec = new THREE.Vector3(0, 0, 0);
 
         // ais.forEachループ内で一度だけ定義
@@ -11538,11 +11598,11 @@ function animate() {
                       if (!entry || !entry.mesh || !entry.mesh.parent) continue;
                       const lightPos = entry.mesh.position;
                       const dist = distancePointToSegment(lightPos, prevProjectilePos, p.mesh.position);
-                      if (dist < 3.0) {
-                          hitSomething = true;
-                          hitObject = entry.mesh;
-                          hitType = 'obstacle';
-                          break;
+                    if (dist < 1.0) {
+                        hitSomething = true;
+                        hitObject = entry.mesh;
+                        hitType = 'obstacle';
+                        break;
                       }
                   }
               }
@@ -11595,8 +11655,11 @@ function animate() {
                               }
                               ai.hp -= damageAmount;
                               createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
-                              ai.lastUnderFireTime = timeElapsed;
-                            if (p.shooter) ai.lastKnownThreatPos = p.shooter.position.clone();
+                                ai.lastUnderFireTime = timeElapsed;
+                              if (p.shooter) ai.lastKnownThreatPos = p.shooter.position.clone();
+                              registerAISuppressionHit(ai, timeElapsed, p.shooter);
+                              registerAISuppressionHit(ai, timeElapsed, p.shooter);
+                              registerAISuppressionHit(ai, timeElapsed, p.shooter);
 
                             // 戦術的しゃがみ：被弾時に障害物近くならしゃがんで隠れる
                             if (ai.state !== 'CLIMBING' && ai.state !== 'DESCENDING' && !ai.isElevating) {
