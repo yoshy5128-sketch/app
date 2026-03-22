@@ -220,15 +220,35 @@
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="game-mode" value="arcade"> Arcade Mode (AIを倒したキル数を競う - AIのみ無限復活)
             </label>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="game-mode" value="billbattle"> INDOOR COMBAT (室内バトル)
+            </label>
             <label style="display: block;">
                 <input type="radio" name="game-mode" value="team"> Team Deathmatch (2V2 プレイヤー&AI1体 VS AI2体)
             </label>
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="game-mode" value="ffa"> Free For All (全員が敵同士 - 全員無限復活)
             </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (2V2 チーム戦でキル数を競う - 全員無限復活)
-            </label>
+              <label style="display: block; margin-bottom: 5px;">
+                  <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (2V2 チーム戦でキル数を競う - 全員無限復活)
+              </label>
+              <div id="billbattle-options" style="margin-top: 10px; padding-left: 10px;">
+                  <label style="display: block; margin-bottom: 4px;">INDOOR COMBAT Size:</label>
+                  <select id="billbattle-size" style="margin-bottom: 8px;">
+                      <option value="100">100 (Default)</option>
+                      <option value="90">90</option>
+                      <option value="80">80</option>
+                      <option value="70">70</option>
+                      <option value="60">60</option>
+                      <option value="50">50</option>
+                      <option value="random">SIZE RANDOM</option>
+                  </select>
+                  <label style="display: block; margin-bottom: 4px;">INDOOR COMBAT Lighting:</label>
+                  <select id="billbattle-lighting">
+                      <option value="all">ALL ON</option>
+                      <option value="random">RANDOM</option>
+                  </select>
+              </div>
 
             <h2 style="margin-top: 20px;">Kill Camera</h2>
             <label style="display: block; margin-bottom: 5px;">
@@ -581,7 +601,9 @@
         <div id="ai2-hp-display" style="color: cyan; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 2 HP: 3</div>
         <div id="ai3-hp-display" style="color: orange; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 3 HP: 3</div>
     </div>
+    <div id="floor-start-display" style="position: fixed; top: 35%; left: 50%; transform: translateX(-50%); color: white; font-size: 3em; font-weight: bold; background-color: rgba(0, 0, 0, 0.6); padding: 12px 20px; border-radius: 10px; z-index: 1200; display: none; text-shadow: 0 0 10px #fff;"></div>
     <div id="red-flash-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0); pointer-events: none; opacity: 0;"></div>
+    <div id="fade-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0); pointer-events: none; opacity: 0; z-index: 1190;"></div>
 <div id="weapon-get-display" style="position: fixed; top: 80%; left: 50%; transform: translateX(-50%); color: white; font-size: 2em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 10px 20px; border-radius: 10px; z-index: 1100; display: none; text-shadow: 0 0 10px #0ff;"></div>
     <div id="pause-button" style="position: fixed; top: 10px; left: 180px; color: white; font-size: 2em; z-index: 101; cursor: pointer; display: none; background-color: rgba(0,0,0,0.5); border-radius: 50%; width: 40px; height: 40px; text-align: center; line-height: 40px; -webkit-user-select: none; user-select: none;">★</div>
 
@@ -590,15 +612,17 @@
 
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=20260322f"></script>
     <script>
+        // Disable and clear ServiceWorker caches to avoid stale script.js during development
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').then(registration => {
-              console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            }, err => {
-              console.log('ServiceWorker registration failed: ', err);
+            navigator.serviceWorker.getRegistrations().then(regs => {
+              regs.forEach(reg => reg.unregister());
             });
+            if (window.caches && caches.keys) {
+              caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
+            }
           });
         }
     </script>
