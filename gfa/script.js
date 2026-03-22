@@ -848,7 +848,7 @@ const FIRE_RATE_RR = 0.8;
 const FIRE_RATE_SR = 1.0;
 
 const GAME_MODE_BILLBATTLE = 'billbattle';
-const BUILD_ID = '2026-03-22-warehouse-v32';
+const BUILD_ID = '2026-03-22-warehouse-v33';
 let BILL_BATTLE_SIZE = 100;
 let BILL_BATTLE_HALF = BILL_BATTLE_SIZE / 2;
 const BILL_BATTLE_SIZE_OPTIONS = [50, 60, 70, 80, 90, 100];
@@ -5945,16 +5945,34 @@ function triggerAISuppressionEvade(ai, timeElapsed, shooter) {
         : (ai.lastKnownThreatPos || getClosestOpponentPosition(ai));
     let target = threatPos ? findSmartCoverPosition(ai, threatPos) : null;
     if (!target) {
-        const baseDir = threatPos
-            ? ai.position.clone().sub(threatPos).setY(0)
-            : new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5);
-        if (baseDir.lengthSq() < 1e-6) baseDir.set(Math.random() - 0.5, 0, Math.random() - 0.5);
-        baseDir.normalize();
-        const lateral = new THREE.Vector3(-baseDir.z, 0, baseDir.x);
-        if (Math.random() < 0.5) lateral.multiplyScalar(-1);
-        target = ai.position.clone().add(lateral.multiplyScalar(5.5));
+        if (threatPos) {
+            const toThreat = threatPos.clone().sub(ai.position).setY(0);
+            if (toThreat.lengthSq() < 1e-6) {
+                toThreat.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+            }
+            toThreat.normalize();
+            const lateral = new THREE.Vector3(-toThreat.z, 0, toThreat.x);
+            const zigzag = (Math.random() < 0.5 ? -1 : 1);
+            const forwardStep = Math.max(2.8, Math.min(4.2, ai.position.distanceTo(threatPos) * 0.35));
+            const lateralStep = 2.2 * zigzag;
+            target = ai.position.clone()
+                .add(toThreat.multiplyScalar(forwardStep))
+                .add(lateral.multiplyScalar(lateralStep));
+            ai.userData.suppressionZigzag = true;
+            ai.userData.suppressionZigzagDir = zigzag;
+            ai.userData.suppressionZigzagNextAt = timeElapsed + 0.25;
+        } else {
+            const baseDir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5);
+            if (baseDir.lengthSq() < 1e-6) baseDir.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+            baseDir.normalize();
+            const lateral = new THREE.Vector3(-baseDir.z, 0, baseDir.x);
+            if (Math.random() < 0.5) lateral.multiplyScalar(-1);
+            target = ai.position.clone().add(lateral.multiplyScalar(5.5));
+        }
         if (isBillBattleMode()) target = clampBillBattleInside(target);
         target.y = getGroundSurfaceY(target);
+    } else {
+        ai.userData.suppressionZigzag = false;
     }
     ai.userData.suppressionEvadeUntil = timeElapsed + 1.0;
     ai.userData.suppressionEvadeTarget = target.clone();
@@ -5963,6 +5981,28 @@ function triggerAISuppressionEvade(ai, timeElapsed, shooter) {
     ai.isCrouching = false;
     ai.scale.y = 1.0;
     ai.crouchUntilTime = null;
+}
+
+function updateAISuppressionZigzag(ai, timeElapsed) {
+    if (!ai || !ai.userData || !ai.userData.suppressionZigzag) return;
+    if (timeElapsed < (ai.userData.suppressionZigzagNextAt || 0)) return;
+    const threatPos = ai.lastKnownThreatPos || getClosestOpponentPosition(ai);
+    if (!threatPos) return;
+    const toThreat = threatPos.clone().sub(ai.position).setY(0);
+    if (toThreat.lengthSq() < 1e-6) return;
+    toThreat.normalize();
+    ai.userData.suppressionZigzagDir = (ai.userData.suppressionZigzagDir || 1) * -1;
+    const lateral = new THREE.Vector3(-toThreat.z, 0, toThreat.x);
+    const forwardStep = Math.max(2.2, Math.min(3.6, ai.position.distanceTo(threatPos) * 0.3));
+    const lateralStep = 2.0 * ai.userData.suppressionZigzagDir;
+    let target = ai.position.clone()
+        .add(toThreat.multiplyScalar(forwardStep))
+        .add(lateral.multiplyScalar(lateralStep));
+    if (isBillBattleMode()) target = clampBillBattleInside(target);
+    target.y = getGroundSurfaceY(target);
+    ai.userData.suppressionEvadeTarget = target.clone();
+    ai.targetPosition.copy(target);
+    ai.userData.suppressionZigzagNextAt = timeElapsed + 0.28;
 }
 
 function registerAISuppressionHit(ai, timeElapsed, shooter) {
@@ -10491,6 +10531,7 @@ function animate() {
         if (ai.userData && ai.userData.suppressionEvadeUntil && timeElapsed >= ai.userData.suppressionEvadeUntil) {
             ai.userData.suppressionEvadeUntil = 0;
             ai.userData.suppressionEvadeTarget = null;
+            ai.userData.suppressionZigzag = false;
         }
         const suppressionActive = ai.userData && ai.userData.suppressionEvadeUntil
             && timeElapsed < ai.userData.suppressionEvadeUntil;
@@ -10501,6 +10542,7 @@ function animate() {
             ai.isCrouching = false;
             ai.scale.y = 1.0;
             ai.crouchUntilTime = null;
+            updateAISuppressionZigzag(ai, timeElapsed);
         }
         const separation_vec = new THREE.Vector3(0, 0, 0);
 
