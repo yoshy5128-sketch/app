@@ -943,6 +943,7 @@ const BILL_BATTLE_AI_RESPAWN_DELAY = 15.0;
 const BILL_BATTLE_ALLOW_RESPAWN = false;
 const BILL_BATTLE_USE_FIXED_SPAWNS = false;
 const BILL_BATTLE_USE_ELEVATOR = false;
+const BILL_BATTLE_PLAYER_HEIGHT = 2.35;
 const FIRE_RATE_SG = 0.8;
 const FIRE_RATE_MR = 0.3;
 const MR_PROJECTILE_SPEED_MULT = 1.6;
@@ -1231,7 +1232,7 @@ function playSound(audioElement) {
 let audioCtx;
 const audioBufferCache = new Map();
 const spatialAudioPools = new Map();
-const SPATIAL_POOL_SIZE = 6;
+const SPATIAL_POOL_SIZE = 10;
 let audioListenerPos = new THREE.Vector3();
 let audioListenerForward = new THREE.Vector3();
 let audioListenerRight = new THREE.Vector3();
@@ -5722,6 +5723,7 @@ function getAIRooftopClimbChance(ai) {
         switch (ai.currentWeapon) {
             case WEAPON_SR: return 0.6;
             case WEAPON_MG: return 0.35;
+            case WEAPON_MR: return 0.28;
             case WEAPON_RR: return 0.3;
             case WEAPON_PISTOL: return 0.12;
             case WEAPON_SG: return 0.0;
@@ -5731,6 +5733,7 @@ function getAIRooftopClimbChance(ai) {
     switch (ai.currentWeapon) {
         case WEAPON_SR: return 0.45;
         case WEAPON_MG: return 0.25;
+        case WEAPON_MR: return 0.2;
         case WEAPON_RR: return 0.22;
         case WEAPON_PISTOL: return 0.1;
         case WEAPON_SG: return 0.0;
@@ -8245,7 +8248,7 @@ function restartGame() {
         enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
         // Reset crouch/height to normal on indoor combat start
         isCrouchingToggle = false;
-        playerTargetHeight = 2.0;
+        playerTargetHeight = BILL_BATTLE_PLAYER_HEIGHT;
         player.position.y = playerTargetHeight;
         if (playerModel) {
             playerModel.position.set(0, -playerTargetHeight, 0);
@@ -8796,7 +8799,7 @@ function respawnPlayer() {
               enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
               // Ensure normal standing height on indoor combat respawn
               isCrouchingToggle = false;
-              playerTargetHeight = 2.0;
+              playerTargetHeight = BILL_BATTLE_PLAYER_HEIGHT;
               player.position.y = playerTargetHeight;
               if (playerModel) {
                   playerModel.position.set(0, -playerTargetHeight, 0);
@@ -10103,9 +10106,9 @@ function animate() {
     // Crouching state change adjustment
     const oldPlayerTargetHeight = playerTargetHeight;
     // プレイヤー当たり判定/拾得判定が崩れない高さに固定
-    const playerStandingHeight = 2.0;
-    const playerCrouchHeight = 0.9;
-    playerTargetHeight = isCrouchingToggle ? playerCrouchHeight : playerStandingHeight;
+      const baseStandingHeight = isBillBattleMode() ? BILL_BATTLE_PLAYER_HEIGHT : 2.2;
+      const baseCrouchHeight = 0.9;
+      playerTargetHeight = isCrouchingToggle ? baseCrouchHeight : baseStandingHeight;
     // しゃがむ/立つときに高さを即座に反映させる
     if (playerTargetHeight < oldPlayerTargetHeight) { // Crouching down
         player.position.y -= oldPlayerTargetHeight - playerTargetHeight;
@@ -10448,7 +10451,8 @@ function animate() {
         const pickupBoundingBox = new THREE.Box3().setFromObject(pickup);
         const playerPos = player.position;
         const playerCollisionBox = new THREE.Box3();
-        playerCollisionBox.min.set(playerPos.x - 0.5, playerPos.y - 2.0, playerPos.z - 0.5);
+        const pickupReach = Math.max(2.0, playerTargetHeight + 0.2);
+        playerCollisionBox.min.set(playerPos.x - 0.5, playerPos.y - pickupReach, playerPos.z - 0.5);
         playerCollisionBox.max.set(playerPos.x + 0.5, playerPos.y + 0.5, playerPos.z + 0.5);
         if (playerCollisionBox.intersectsBox(pickupBoundingBox)) {
             if (pickup.userData.type === 'weaponPickup') {
@@ -10641,7 +10645,7 @@ function animate() {
             }
         }
 
-        if (ai.state === 'MOVING_TO_LADDER' || ai.state === 'CLIMBING' || ai.state === 'ROOFTOP_COMBAT' || ai.state === 'DESCENDING') {
+        if (isBillBattleMode() && (ai.state === 'MOVING_TO_LADDER' || ai.state === 'CLIMBING' || ai.state === 'ROOFTOP_COMBAT' || ai.state === 'DESCENDING')) {
             ai.state = 'MOVING';
         }
         if (!ENABLE_AI_ROOFTOP_LOGIC && (ai.userData.rooftopPhase || 'none') !== 'none') {
