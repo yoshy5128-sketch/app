@@ -289,7 +289,11 @@ let characterEditorAnimationId = null;
         srGunSound = document.getElementById('srGunSound');
         m1GunSound = document.getElementById('m1GunSound');
         aiM1GunSound = document.getElementById('aiM1GunSound');
+        aiM1GunSound2 = document.getElementById('aiM1GunSound2');
+        aiM1GunSound3 = document.getElementById('aiM1GunSound3');
         aimgGunSound = document.getElementById('aimgGunSound');
+        ai1mGunSound = document.getElementById('ai1mGunSound');
+        ai2mGunSound = document.getElementById('ai2mGunSound');
         aiGunSound = document.getElementById('aiGunSound');
         explosionSound = document.getElementById('explosionSound');
         relAudio = document.getElementById('rel-audio');
@@ -861,6 +865,76 @@ const BILL_BATTLE_WALL_COLOR = 0xcccccc;
 const BILL_BATTLE_CEILING_COLOR = 0xcccccc;
 const BILL_BATTLE_OBSTACLE_COLOR = 0x9e9e9e;
   const BILL_BATTLE_LIGHT_COLOR = 0xf2f2ff;
+let billBattleRoomStyle = null;
+
+function getBillBattleCeilingClearHeight() {
+    // Obstacle height that visually reaches the ceiling underside.
+    return BILL_BATTLE_WALL_HEIGHT - (BILL_BATTLE_CEILING_THICKNESS * 1.5) + FLOOR_HEIGHT;
+}
+
+function createBillBattleRoomStyle() {
+    const rand = (min, max) => min + Math.random() * (max - min);
+    const gray = (minL, maxL) => {
+        const l = rand(minL, maxL);
+        return new THREE.Color(l, l, l);
+    };
+    const wallTop = gray(0.56, 0.72);
+    const floor = gray(0.30, 0.42);
+    const wallBottomColor = 0x5a5a5a; // dark gray only
+    return {
+        wallTopColor: wallTop.getHex(),
+        floorColor: floor.getHex(),
+        wallBottomColor
+    };
+}
+
+function applyBillBattleWallTwoTone(mesh) {
+    if (!mesh || !mesh.geometry || !mesh.geometry.parameters) return;
+    const style = billBattleRoomStyle || {};
+    const topHex = style.wallTopColor ?? BILL_BATTLE_WALL_COLOR;
+    const bottomHex = style.wallBottomColor ?? 0xf1e6c9;
+    const params = mesh.geometry.parameters;
+    const width = params.width ?? 1;
+    const height = params.height ?? 1;
+    const depth = params.depth ?? 1;
+    const halfH = height / 2;
+
+    // Clear previous visuals to avoid stacking.
+    if (mesh.userData && mesh.userData.twoToneBuilt) {
+        const toRemove = [];
+        for (const child of mesh.children) {
+            if (child && child.userData && child.userData.isBillBattleWallVisual) {
+                toRemove.push(child);
+            }
+        }
+        for (const child of toRemove) {
+            mesh.remove(child);
+            if (child.geometry) child.geometry.dispose();
+            disposeMaterial(child.material);
+        }
+    }
+
+    const bottomGeom = new THREE.BoxGeometry(width, halfH, depth);
+    const topGeom = new THREE.BoxGeometry(width, halfH, depth);
+    const bottomMat = new THREE.MeshLambertMaterial({ color: bottomHex });
+    const topMat = new THREE.MeshLambertMaterial({ color: topHex });
+    const bottomMesh = new THREE.Mesh(bottomGeom, bottomMat);
+    const topMesh = new THREE.Mesh(topGeom, topMat);
+    bottomMesh.position.set(0, -halfH / 2, 0);
+    topMesh.position.set(0, halfH / 2, 0);
+    bottomMesh.userData = { isBillBattleWallVisual: true, blocksProjectiles: false };
+    topMesh.userData = { isBillBattleWallVisual: true, blocksProjectiles: false };
+    mesh.add(bottomMesh);
+    mesh.add(topMesh);
+
+    // Keep collider mesh but make it invisible.
+    mesh.material = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false });
+    mesh.material.needsUpdate = true;
+    mesh.userData = mesh.userData || {};
+    mesh.userData.twoToneBuilt = true;
+    mesh.userData.wallTopColor = topHex;
+    mesh.userData.wallBottomColor = bottomHex;
+}
 const BILL_BATTLE_ENTRANCE_WIDTH = 8;
 const BILL_BATTLE_ELEVATOR_WIDTH = 6;
 const BILL_BATTLE_ELEVATOR_DOOR_DEPTH = 0.5;
@@ -954,8 +1028,9 @@ function getMedikitHealAmount() {
       const setDisabled = (el, disabled) => {
           if (!el) return;
           el.disabled = disabled;
-          if (el.parentNode && el.parentNode.style) {
-              el.parentNode.style.opacity = disabled ? 0.5 : 1.0;
+          const container = el.closest && el.closest('label') ? el.closest('label') : el;
+          if (container && container.style) {
+              container.style.opacity = disabled ? 0.5 : 1.0;
           }
       };
     const playerHpSelect = document.getElementById('player-hp');
@@ -966,6 +1041,8 @@ function getMedikitHealAmount() {
     const timeLapseCheckbox = document.getElementById('time-lapse-mode');
     const billBattleSizeSelect = document.getElementById('billbattle-size');
     const billBattleLightingSelect = document.getElementById('billbattle-lighting');
+    const medikitCountSelect = document.getElementById('medikit-count');
+    const medikitSetting = document.getElementById('medikit-setting');
 
     if (playerHpSelect) {
         for (const opt of playerHpSelect.options) {
@@ -981,6 +1058,11 @@ function getMedikitHealAmount() {
     setDisabled(timeLapseCheckbox, isBill);
     setDisabled(billBattleSizeSelect, !isBill);
     setDisabled(billBattleLightingSelect, !isBill);
+    const medikitEnabled = gameSettings.gameMode === 'arcade' || isBill;
+    setDisabled(medikitCountSelect, !medikitEnabled);
+    if (medikitSetting && medikitSetting.style) {
+        medikitSetting.style.opacity = medikitEnabled ? 1.0 : 0.5;
+    }
       if (!isBill) {
           hideBillBattleKillDisplay();
       }
@@ -1144,6 +1226,7 @@ function playSound(audioElement) {
         // Sound error:
     }
 }
+
 
 let audioCtx;
 const audioBufferCache = new Map();
@@ -2085,7 +2168,11 @@ let rrGunSound;
 let srGunSound;
 let m1GunSound;
 let aiM1GunSound;
+let aiM1GunSound2;
+let aiM1GunSound3;
 let aimgGunSound;
+let ai1mGunSound;
+let ai2mGunSound;
 let aiGunSound;
 let explosionSound;
 let startScreen;
@@ -3087,12 +3174,14 @@ function getBillBattleElevatorZ() {
   }
 
   function createBillBattleWall(x, z, width, height, depth) {
-      const wall = createBillBattleSolidBox(x, z, width, height, depth, BILL_BATTLE_WALL_COLOR, 9999);
+      const wallColor = (billBattleRoomStyle && billBattleRoomStyle.wallTopColor) ? billBattleRoomStyle.wallTopColor : BILL_BATTLE_WALL_COLOR;
+      const wall = createBillBattleSolidBox(x, z, width, height, depth, wallColor, 9999);
       if (wall && wall.userData) {
           wall.userData.isWall = true;
           wall.userData.isBillBattleWall = true;
           wall.userData.blocksProjectiles = true;
       }
+      applyBillBattleWallTwoTone(wall);
       return wall;
   }
 
@@ -3215,8 +3304,8 @@ function createBillBattleCeilingLights() {
     const rows = [-rowSpan, 0, rowSpan];
     const lightingMode = (gameSettings.billBattleLighting || 'all');
     const lightIntensityScale = getBillBattleLightIntensityScale();
-    const baseIntensityRaw = 2.4;
-    const baseEmissiveRaw = 0.6;
+    const baseIntensityRaw = 1.9;
+    const baseEmissiveRaw = 0.45;
     const baseIntensity = baseIntensityRaw * lightIntensityScale;
     const baseEmissive = baseEmissiveRaw * lightIntensityScale;
     const totalLights = rows.length * count;
@@ -3232,7 +3321,7 @@ function createBillBattleCeilingLights() {
     for (const x of rows) {
         for (let i = 0; i < count; i++) {
             const z = zStart + step * i;
-            const lightGeom = new THREE.BoxGeometry(1.8, 0.35, 6.5);
+            const lightGeom = new THREE.BoxGeometry(0.9, 0.35, 6.5);
             const lightMat = new THREE.MeshLambertMaterial({
                 color: BILL_BATTLE_LIGHT_COLOR,
                 emissive: new THREE.Color(0xffffff),
@@ -3499,6 +3588,7 @@ function ensureBillBattleAIIntegrity(ai) {
   function isBillBattleBoxBlocked(box) {
       for (const obs of obstacles) {
           if (!obs || !obs.position || !obs.parent) continue;
+          if (obs.userData && (obs.userData.isBillBattleCeiling || obs.userData.type === 'ceiling')) continue;
           const obsBox = new THREE.Box3().setFromObject(obs);
           if (box.intersectsBox(obsBox)) return true;
       }
@@ -3695,9 +3785,13 @@ function getBillBattlePlayerSpawn() {
         const barrelHeight = 2.4;
         const barrelChanceWall = 0.35 * sizeFactor;
         const barrelChanceBlock = 0.4 * sizeFactor;
+        const ceilingReachHeight = getBillBattleCeilingClearHeight();
+        const wallTallThreshold = 3.6;
+        const blockTallThreshold = 3.2;
 
         for (let i = 0; i < wallCount; i++) {
-            const height = 2 + Math.random() * 3;
+            let height = 2 + Math.random() * 3;
+            if (height >= wallTallThreshold) height = ceilingReachHeight;
             const length = 5 + Math.random() * 5;
             const thickness = 0.5;
           const isHorizontal = Math.random() > 0.5;
@@ -3720,7 +3814,8 @@ function getBillBattlePlayerSpawn() {
         }
 
       for (let i = 0; i < blockCount; i++) {
-          const height = 2 + Math.random() * 3;
+          let height = 2 + Math.random() * 3;
+          if (height >= blockTallThreshold) height = ceilingReachHeight;
           const size = 2;
           const pos = getBillBattleRandomPosition(size, height, size, false);
           createBillBattleSolidBox(pos.x, pos.z, size, height, size, BILL_BATTLE_OBSTACLE_COLOR, 2);
@@ -3778,7 +3873,11 @@ function getBillBattlePlayerSpawn() {
         billBattleCurrentSize = null;
     }
     applyBillBattleSizeSettings(true);
-    setArenaFloorColor(ARENA_FLOOR_DEFAULT_COLOR);
+    billBattleRoomStyle = createBillBattleRoomStyle();
+    const floorColor = (billBattleRoomStyle && billBattleRoomStyle.floorColor !== undefined)
+        ? billBattleRoomStyle.floorColor
+        : ARENA_FLOOR_DEFAULT_COLOR;
+    setArenaFloorColor(floorColor);
     applyNightMode(false);
     if (ambientLight) billBattleBaseAmbient = ambientLight.intensity;
     if (directionalLight) billBattleBaseDirectional = directionalLight.intensity;
@@ -7347,11 +7446,24 @@ function aiShoot(ai, timeElapsed) {
             return;
         }
         let soundToPlay;
-        if (ai.currentWeapon === WEAPON_MG) soundToPlay = aimgGunSound;
+        if (ai.currentWeapon === WEAPON_MG) {
+            const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+            if (isTeamModeOrTeamArcade && ai.team === 'enemy' && ai.userData && ai.userData.mgSound) {
+                soundToPlay = ai.userData.mgSound;
+            } else {
+                soundToPlay = aimgGunSound;
+            }
+        }
         else if (ai.currentWeapon === WEAPON_RR) soundToPlay = rrGunSound;
         else if (ai.currentWeapon === WEAPON_SR) soundToPlay = aiSrGunSound;
         else if (ai.currentWeapon === WEAPON_SG) soundToPlay = aiSgSound;
-        else if (ai.currentWeapon === WEAPON_MR) soundToPlay = aiM1GunSound;
+        else if (ai.currentWeapon === WEAPON_MR) {
+            if (ai.userData && ai.userData.m1Sound) {
+                soundToPlay = ai.userData.m1Sound;
+            } else {
+                soundToPlay = aiM1GunSound;
+            }
+        }
         else soundToPlay = aiGunSound;
         if (soundToPlay) playSpatialSound(soundToPlay, startPosition, { gainBoost: 1.3 });
     if (window.DEBUG_SPATIAL_AUDIO && soundToPlay) {
@@ -7835,7 +7947,7 @@ function initializeAudio() {
     });
 
     // Warm up spatial pools for AI guns and explosions
-    const spatialIds = ['aiGunSound', 'aimgGunSound', 'aiSrGunSound', 'aiSgSound', 'aiM1GunSound', 'explosionSound'];
+        const spatialIds = ['aiGunSound', 'aimgGunSound', 'ai1mGunSound', 'ai2mGunSound', 'aiSrGunSound', 'aiSgSound', 'aiM1GunSound', 'aiM1GunSound2', 'aiM1GunSound3', 'explosionSound'];
     spatialIds.forEach(id => {
         const base = document.getElementById(id);
         const poolData = getSpatialPool(base);
@@ -8204,6 +8316,24 @@ function restartGame() {
             ai.userData.parts.gun.visible = true;
         }
         ai.team = aiTeam; // チームプロパティを設定 (null for non-team modes)
+        if (!ai.userData) ai.userData = {};
+        if (isTeamMode || isTeamArcadeMode) {
+            if (aiTeam === 'enemy') {
+                ai.userData.mgSound = (i === 1) ? ai1mGunSound : ai2mGunSound;
+                ai.userData.m1Sound = aiM1GunSound;
+            } else {
+                ai.userData.mgSound = null;
+                ai.userData.m1Sound = aiM1GunSound2;
+            }
+        } else {
+            const mgList = [aimgGunSound, ai1mGunSound, ai2mGunSound];
+            const m1List = [aiM1GunSound, aiM1GunSound2, aiM1GunSound3];
+            ai.userData.mgSound = mgList[i % mgList.length];
+            ai.userData.m1Sound = m1List[i % m1List.length];
+            if (isBillBattleMode() && finalAICount === 1) {
+                ai.userData.m1Sound = aiM1GunSound3;
+            }
+        }
         ai.kills = 0; // キル数を初期化
         let aiSpawnPos;
         if ((isTeamMode || isTeamArcadeMode) && aiTeam === 'player') {
@@ -11856,6 +11986,9 @@ function animate() {
                     else if (p.isSniper || p.isRocket) damageAmount = playerHP;
                     if (playerHP !== Infinity) {
                         playerHP -= damageAmount;
+                        if (playerHP <= 0 && isScoping) {
+                            cancelScope();
+                        }
                         screenShakeDuration = SHAKE_DURATION_MAX;
                         if (redFlashOverlay) {
                             // 死亡アニメーション用のクラスを一旦クリアし、初期状態をリセット
