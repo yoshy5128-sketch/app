@@ -7447,8 +7447,7 @@ function aiShoot(ai, timeElapsed) {
         }
         let soundToPlay;
         if (ai.currentWeapon === WEAPON_MG) {
-            const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
-            if (isTeamModeOrTeamArcade && ai.team === 'enemy' && ai.userData && ai.userData.mgSound) {
+            if (ai.userData && ai.userData.mgSound) {
                 soundToPlay = ai.userData.mgSound;
             } else {
                 soundToPlay = aimgGunSound;
