@@ -5946,17 +5946,17 @@ function triggerAISuppressionEvade(ai, timeElapsed, shooter) {
     let target = threatPos ? findSmartCoverPosition(ai, threatPos) : null;
     if (!target) {
         if (threatPos) {
-            const toThreat = threatPos.clone().sub(ai.position).setY(0);
-            if (toThreat.lengthSq() < 1e-6) {
-                toThreat.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+            const away = ai.position.clone().sub(threatPos).setY(0);
+            if (away.lengthSq() < 1e-6) {
+                away.set(Math.random() - 0.5, 0, Math.random() - 0.5);
             }
-            toThreat.normalize();
-            const lateral = new THREE.Vector3(-toThreat.z, 0, toThreat.x);
+            away.normalize();
+            const lateral = new THREE.Vector3(-away.z, 0, away.x);
             const zigzag = (Math.random() < 0.5 ? -1 : 1);
             const forwardStep = Math.max(2.8, Math.min(4.2, ai.position.distanceTo(threatPos) * 0.35));
             const lateralStep = 2.2 * zigzag;
             target = ai.position.clone()
-                .add(toThreat.multiplyScalar(forwardStep))
+                .add(away.multiplyScalar(forwardStep))
                 .add(lateral.multiplyScalar(lateralStep));
             ai.userData.suppressionZigzag = true;
             ai.userData.suppressionZigzagDir = zigzag;
@@ -5988,15 +5988,15 @@ function updateAISuppressionZigzag(ai, timeElapsed) {
     if (timeElapsed < (ai.userData.suppressionZigzagNextAt || 0)) return;
     const threatPos = ai.lastKnownThreatPos || getClosestOpponentPosition(ai);
     if (!threatPos) return;
-    const toThreat = threatPos.clone().sub(ai.position).setY(0);
-    if (toThreat.lengthSq() < 1e-6) return;
-    toThreat.normalize();
+    const away = ai.position.clone().sub(threatPos).setY(0);
+    if (away.lengthSq() < 1e-6) return;
+    away.normalize();
     ai.userData.suppressionZigzagDir = (ai.userData.suppressionZigzagDir || 1) * -1;
-    const lateral = new THREE.Vector3(-toThreat.z, 0, toThreat.x);
+    const lateral = new THREE.Vector3(-away.z, 0, away.x);
     const forwardStep = Math.max(2.2, Math.min(3.6, ai.position.distanceTo(threatPos) * 0.3));
     const lateralStep = 2.0 * ai.userData.suppressionZigzagDir;
     let target = ai.position.clone()
-        .add(toThreat.multiplyScalar(forwardStep))
+        .add(away.multiplyScalar(forwardStep))
         .add(lateral.multiplyScalar(lateralStep));
     if (isBillBattleMode()) target = clampBillBattleInside(target);
     target.y = getGroundSurfaceY(target);
@@ -6007,7 +6007,6 @@ function updateAISuppressionZigzag(ai, timeElapsed) {
 
 function registerAISuppressionHit(ai, timeElapsed, shooter) {
     if (!ai || !ai.userData) return;
-    if (!isProbablyMobileDevice()) return;
     const windowSeconds = 0.35;
     const hitThreshold = 4;
     const windowStart = ai.userData.suppressionHitWindowStart || -999;
@@ -11699,8 +11698,6 @@ function animate() {
                               createRedSmokeEffect(ai.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
                                 ai.lastUnderFireTime = timeElapsed;
                               if (p.shooter) ai.lastKnownThreatPos = p.shooter.position.clone();
-                              registerAISuppressionHit(ai, timeElapsed, p.shooter);
-                              registerAISuppressionHit(ai, timeElapsed, p.shooter);
                               registerAISuppressionHit(ai, timeElapsed, p.shooter);
 
                             // 戦術的しゃがみ：被弾時に障害物近くならしゃがんで隠れる
