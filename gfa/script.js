@@ -1204,35 +1204,35 @@ function hideReloadingText() {
     if (el) el.style.display = 'none';
 }
 
-function playSound(audioElement) {
-    if (!audioElement) return;
-    
-    try {
-        // 既存の再生中の同じ音声を停止
-        const allSameAudio = document.querySelectorAll(`audio[id="${audioElement.id}"]`);
-        allSameAudio.forEach(audio => {
-            if (!audio.paused && audio !== audioElement) {
-                audio.pause();
-                audio.currentTime = 0;
-            }
-        });
-        
-        // 新しいインスタンスを作成して再生
-        const soundClone = audioElement.cloneNode(true);
-        soundClone.volume = audioElement.volume || 1.0;
-        soundClone.play().catch(error => {
-            // Sound play failed:
-        });
-    } catch (error) {
-        // Sound error:
+function playSound(sound, options = {}) {
+    const id = getSoundId(sound);
+    if (!id) return;
+    if (audioMetaById.size === 0) registerAudioElements();
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
     }
+    let buffer = audioBufferCache.get(id);
+    if (!buffer) {
+        ensureSoundBuffer(id);
+        return;
+    }
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const gain = ctx.createGain();
+    const gainBoost = options.gainBoost || 1.0;
+    gain.gain.value = getSoundBaseGain(id) * gainBoost;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    source.start(0);
 }
 
 
 let audioCtx;
-const audioBufferCache = new Map();
-const spatialAudioPools = new Map();
-const SPATIAL_POOL_SIZE = 10;
+const audioBufferCache = new Map(); // id -> AudioBuffer
+const audioMetaById = new Map(); // id -> { url, baseGain }
+const audioLoadPromises = new Map(); // id -> Promise<AudioBuffer>
 let audioListenerPos = new THREE.Vector3();
 let audioListenerForward = new THREE.Vector3();
 let audioListenerRight = new THREE.Vector3();
@@ -1401,83 +1401,71 @@ function enforceTouchUIVisibility() {
     });
 }
 
-function getSpatialPool(audioElement) {
-    if (!audioElement) return null;
-    const key = audioElement.id || (audioElement.currentSrc || audioElement.src);
-    if (!key) return null;
-    if (spatialAudioPools.has(key)) return spatialAudioPools.get(key);
-
-    const ctx = getAudioContext();
-    if (!ctx) return null;
-
-    const pool = [];
-    for (let i = 0; i < SPATIAL_POOL_SIZE; i++) {
-        const el = audioElement.cloneNode(true);
-        el.preload = 'auto';
-        el.volume = 1.0;
-        el.load();
-        if (document.body) {
-            document.body.appendChild(el);
-        }
-
-        const source = ctx.createMediaElementSource(el);
-        const panner = ctx.createStereoPanner();
-        const lowpass = ctx.createBiquadFilter();
-        lowpass.type = 'lowpass';
-        lowpass.frequency.value = 8000;
-
-        const gain = ctx.createGain();
-        gain.gain.value = audioElement.volume || 1.0;
-
-        source.connect(panner);
-        panner.connect(lowpass);
-        lowpass.connect(gain);
-        gain.connect(ctx.destination);
-
-        pool.push({ el, panner, lowpass, gain });
-    }
-
-    const poolData = { pool, cursor: 0 };
-    spatialAudioPools.set(key, poolData);
-    return poolData;
+function registerAudioElements() {
+    const allAudio = document.querySelectorAll('audio');
+    allAudio.forEach(el => {
+        if (!el.id) return;
+        const url = el.currentSrc || el.src;
+        if (!url) return;
+        const volumeAttr = el.getAttribute('volume');
+        let baseGain = volumeAttr ? parseFloat(volumeAttr) : el.volume;
+        if (!Number.isFinite(baseGain)) baseGain = 1.0;
+        audioMetaById.set(el.id, { url, baseGain });
+    });
 }
 
-function playSpatialSound(audioElement, position, options = {}) {
-    if (!audioElement || !position) return;
+function getSoundId(sound) {
+    if (!sound) return null;
+    if (typeof sound === 'string') return sound;
+    if (sound.id) return sound.id;
+    return null;
+}
 
-    if (window.DEBUG_SPATIAL_AUDIO) {
-        console.log('[spatial] play', audioElement.id || audioElement.src, position);
-    }
+function getSoundBaseGain(id) {
+    const meta = audioMetaById.get(id);
+    return meta ? meta.baseGain : 1.0;
+}
+
+function ensureSoundBuffer(id) {
+    if (!id) return null;
+    if (audioBufferCache.has(id)) return audioBufferCache.get(id);
+    const meta = audioMetaById.get(id);
+    if (!meta || !meta.url) return null;
+    if (audioLoadPromises.has(id)) return null;
+    const ctx = getAudioContext();
+    if (!ctx) return null;
+    const p = fetch(meta.url)
+        .then(resp => resp.arrayBuffer())
+        .then(buf => ctx.decodeAudioData(buf))
+        .then(decoded => {
+            audioBufferCache.set(id, decoded);
+            return decoded;
+        })
+        .catch(err => {
+            debugLog('Audio buffer load failed:', id, err);
+            return null;
+        });
+    audioLoadPromises.set(id, p);
+    return null;
+}
+
+function playSpatialSound(sound, position, options = {}) {
+    if (!sound || !position) return;
+
+    const id = getSoundId(sound);
+    if (!id) return;
+    if (audioMetaById.size === 0) registerAudioElements();
 
     const ctx = getAudioContext();
-    if (!ctx) {
-        if (window.DEBUG_SPATIAL_AUDIO) console.log('[spatial] no audio ctx');
-        playSound(audioElement);
-        return;
-    }
+    if (!ctx) return;
     if (ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
     }
-    const poolData = getSpatialPool(audioElement);
-    if (!poolData || !poolData.pool.length) {
-        if (window.DEBUG_SPATIAL_AUDIO) console.log('[spatial] no pool');
-        playSound(audioElement);
-        return;
-    }
 
-    const pool = poolData.pool;
-    let entry = null;
-    for (let i = 0; i < pool.length; i++) {
-        const candidate = pool[(poolData.cursor + i) % pool.length];
-        if (candidate.el.paused || candidate.el.ended) {
-            entry = candidate;
-            poolData.cursor = (poolData.cursor + i + 1) % pool.length;
-            break;
-        }
-    }
-    if (!entry) {
-        entry = pool[poolData.cursor];
-        poolData.cursor = (poolData.cursor + 1) % pool.length;
+    let buffer = audioBufferCache.get(id);
+    if (!buffer) {
+        ensureSoundBuffer(id);
+        return;
     }
 
     const toSound = position.clone().sub(audioListenerPos);
@@ -1488,21 +1476,28 @@ function playSpatialSound(audioElement, position, options = {}) {
     const panScale = options.panScale || 1.2;
     const pan = Math.max(-1, Math.min(1, panRaw * panScale));
 
-    // Distance attenuation (gentle)
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = pan;
+
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = frontDot < 0 ? (options.behindCutoff || 9000) : (options.frontCutoff || 14000);
+
     const distanceGain = 1 / (1 + (distance / (options.distanceScale || 25)));
     const behindGain = frontDot < 0 ? (options.behindGain || 0.97) : 1.0;
     const gainBoost = options.gainBoost || 1.0;
-    entry.gain.gain.value = (audioElement.volume || 1.0) * distanceGain * behindGain * gainBoost;
-    entry.panner.pan.value = pan;
+    const gain = ctx.createGain();
+    gain.gain.value = getSoundBaseGain(id) * distanceGain * behindGain * gainBoost;
 
-    // Slight muffling when behind
-    entry.lowpass.frequency.value = frontDot < 0 ? (options.behindCutoff || 9000) : (options.frontCutoff || 14000);
+    source.connect(panner);
+    panner.connect(lowpass);
+    lowpass.connect(gain);
+    gain.connect(ctx.destination);
 
-    entry.el.currentTime = 0;
-    entry.el.play().catch(() => {
-        if (window.DEBUG_SPATIAL_AUDIO) console.log('[spatial] play failed', audioElement.id || audioElement.src);
-        playSound(audioElement);
-    });
+    source.start(0);
 }
 
 function playReloadSound() {
@@ -7467,7 +7462,7 @@ function aiShoot(ai, timeElapsed) {
             }
         }
         else soundToPlay = aiGunSound;
-        if (soundToPlay) playSpatialSound(soundToPlay, startPosition, { gainBoost: 1.3 });
+        if (soundToPlay) playSpatialSound(soundToPlay, startPosition, { gainBoost: 0.9 });
     if (window.DEBUG_SPATIAL_AUDIO && soundToPlay) {
         console.log('[aiShoot] sound', soundToPlay.id || soundToPlay.src);
     }
@@ -7928,43 +7923,14 @@ if (followButtonElement) {
 function initializeAudio() {
     // ユーザーインタラクション後に音声を初期化
     const ctx = getAudioContext();
-    if (ctx && ctx.state === 'suspended') {
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
     }
-    const allAudio = document.querySelectorAll('audio');
-    allAudio.forEach(audio => {
-        // 音声ファイルをプリロード
-        audio.load();
-        // 一時的にミュートにして再生を試みる（ブラウザポリシー対応）
-        audio.muted = true;
-        audio.play().then(() => {
-            audio.pause();
-            audio.currentTime = 0;
-            audio.muted = false;
-            debugLog('Audio initialized:', audio.id);
-        }).catch(error => {
-            audio.muted = false;
-            debugLog('Audio initialization failed:', audio.id, error);
-        });
-    });
-
-    // Warm up spatial pools for AI guns and explosions
-        const spatialIds = ['aiGunSound', 'aimgGunSound', 'ai1mGunSound', 'ai2mGunSound', 'aiSrGunSound', 'aiSgSound', 'aiM1GunSound', 'aiM1GunSound2', 'aiM1GunSound3', 'explosionSound'];
-    spatialIds.forEach(id => {
-        const base = document.getElementById(id);
-        const poolData = getSpatialPool(base);
-        if (!poolData) return;
-        poolData.pool.forEach(entry => {
-            entry.el.muted = true;
-            entry.el.play().then(() => {
-                entry.el.pause();
-                entry.el.currentTime = 0;
-                entry.el.muted = false;
-            }).catch(() => {
-                entry.el.muted = false;
-            });
-        });
-    });
+    registerAudioElements();
+    for (const id of audioMetaById.keys()) {
+        ensureSoundBuffer(id);
+    }
 }
 
 function startGame() {
@@ -10708,6 +10674,15 @@ function animate() {
                 }
             }
 
+            const cachedOpponentInfo = ai.userData ? ai.userData.cachedVisibleOpponentInfo : null;
+            if (!foundVisibleEnemy && cachedOpponentInfo && cachedOpponentInfo.target && cachedOpponentInfo.target.team === 'enemy') {
+                const followTargetPos = cachedOpponentInfo.targetPos || (cachedOpponentInfo.target && cachedOpponentInfo.target.position);
+                if (followTargetPos) {
+                    foundVisibleEnemy = true;
+                    targetToLookAt = followTargetPos.clone();
+                }
+            }
+
             if (foundVisibleEnemy) {
                 ai.userData.followCombatUntil = timeElapsed + 2.2;
                 ai.state = 'ATTACKING';
@@ -11214,10 +11189,17 @@ function animate() {
                 break;
             case 'FOLLOWING': // 新しい追従状態
                 // 常にプレイヤーへの追従移動ロジックを実行する
+                if (!player || !ai.targetPosition) {
+                    break;
+                }
+                if (!Number.isFinite(ai.targetPosition.x) || !Number.isFinite(ai.targetPosition.y) || !Number.isFinite(ai.targetPosition.z)) {
+                    ai.targetPosition.copy(player.position);
+                    break;
+                }
                 const oldAIPosition_follow = ai.position.clone();
                 const toFollowTarget = new THREE.Vector3().subVectors(ai.targetPosition, ai.position);
                 const followDistance = toFollowTarget.length();
-                if (followDistance < 0.35) {
+                if (!Number.isFinite(followDistance) || followDistance < 0.35) {
                     break;
                 }
                 let moveDirection_follow = toFollowTarget.multiplyScalar(1 / followDistance);
