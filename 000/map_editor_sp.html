@@ -477,6 +477,11 @@
                 roofMaterial
             );
             roof.position.y = height;
+            if (roof.material) {
+                roof.material.map = null;
+                roof.material.color.setHex(color);
+                roof.material.needsUpdate = true;
+            }
             house.add(roof);
 
             // userDataを設定
@@ -534,7 +539,10 @@
                 color: TOWER_COLOR
             });
             
+            towerMaterial.depthTest = false;
+            towerMaterial.depthWrite = false;
             const tower = new THREE.Mesh(towerGeometry, towerMaterial);
+            tower.renderOrder = 5;
             tower.position.set(snappedX, towerYPos, snappedZ);
             tower.userData = { 
                 type: 'tower',
@@ -557,6 +565,10 @@
             
             const ladderMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
             const rungMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
+            ladderMaterial.depthTest = false;
+            ladderMaterial.depthWrite = false;
+            rungMaterial.depthTest = false;
+            rungMaterial.depthWrite = false;
             
             // 梯子の側面
             const sideGeometry = new THREE.BoxGeometry(RUNG_THICKNESS * 2, TOWER_HEIGHT, RUNG_THICKNESS * 2);
@@ -582,11 +594,15 @@
             // 屋上の特徴を追加
             const rooftopY = TOWER_HEIGHT / 2;
             
+            const rooftopFeatureMat = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+            rooftopFeatureMat.depthTest = false;
+            rooftopFeatureMat.depthWrite = false;
             const rooftopFeature = new THREE.Mesh(
                 new THREE.BoxGeometry(2, 1, 2),
-                new THREE.MeshLambertMaterial({ color: 0xff0000 })
+                rooftopFeatureMat
             );
             rooftopFeature.position.set(0, rooftopY + 0.5, 0);
+            rooftopFeature.renderOrder = 5;
             tower.add(rooftopFeature);
             
             return tower;
@@ -722,7 +738,10 @@
             // エディタ上で電灯を視覚的に表現するメッシュを作成
             const lightSphereGeo = new THREE.SphereGeometry(0.5, 16, 8);
             const lightSphereMat = new THREE.MeshBasicMaterial({ color: color, wireframe: true });
+            lightSphereMat.depthTest = false;
+            lightSphereMat.depthWrite = false;
             const lightRepresentation = new THREE.Mesh(lightSphereGeo, lightSphereMat);
+            lightRepresentation.renderOrder = 6;
             lightRepresentation.position.copy(light.position);
 
             // メッシュにPointLightへの参照とプロパティを userData として保存
@@ -747,7 +766,10 @@
             SPAWN_POINTS_DATA.forEach((pos) => {
                 const spawnGeo = new THREE.CylinderGeometry(2, 2, 0.5, 32);
                 const spawnMat = new THREE.MeshBasicMaterial({ color: pos.color, transparent: true, opacity: 0.5 });
+                spawnMat.depthTest = false;
+                spawnMat.depthWrite = false;
                 const spawnMesh = new THREE.Mesh(spawnGeo, spawnMat);
+                spawnMesh.renderOrder = 7;
                 
                 const snappedX = snapToGrid(pos.x);
                 const snappedZ = snapToGrid(pos.z);
@@ -811,7 +833,10 @@
             color = color || parseInt(document.getElementById('barrel-color').value.replace('#', '0x'));
             const geometry = new THREE.CylinderGeometry(radius, radius, height, 20);
             const material = new THREE.MeshLambertMaterial({ color: color });
+            material.depthTest = false;
+            material.depthWrite = false;
             const barrel = new THREE.Mesh(geometry, material);
+            barrel.renderOrder = 6;
             
             const snappedX = snapToGrid(x);
             const snappedZ = snapToGrid(z);
@@ -1150,7 +1175,19 @@
                 material
             );
             roof.position.y = height + thickness;
+            if (roof.material) {
+                roof.material.map = null;
+                roof.material.color.setHex(color);
+                roof.material.needsUpdate = true;
+            }
             house.add(roof);
+
+            // Keep house markers below other markers on the map.
+            house.traverse(child => {
+                if (child.isMesh) {
+                    child.renderOrder = -10;
+                }
+            });
         }
 
         function onColorChange(event) {
@@ -1784,6 +1821,19 @@
             return targetObject;
         }
 
+        function pickPreferredIntersect(intersects) {
+            const priority = ['spawn', 'barrel', 'light', 'tower', 'obstacle', 'house'];
+            const candidates = [];
+            for (const hit of intersects) {
+                const resolved = resolveSelectableObject(hit.object);
+                if (!resolved || !resolved.userData?.type) continue;
+                candidates.push({ hit, object: resolved, type: resolved.userData.type });
+            }
+            if (candidates.length === 0) return null;
+            candidates.sort((a, b) => priority.indexOf(a.type) - priority.indexOf(b.type));
+            return candidates[0];
+        }
+
         function onMouseDown(event) {
             if (touchMode !== 'none') return;
             
@@ -1796,9 +1846,10 @@
                 const intersects = raycaster.intersectObjects(allClickable, true);
                 console.log('Left click intersects:', intersects.length);
                 if (intersects.length > 0) {
-                    const targetObject = resolveSelectableObject(intersects[0].object);
+                    const picked = pickPreferredIntersect(intersects);
+                    const targetObject = picked ? picked.object : resolveSelectableObject(intersects[0].object);
                     const targetType = targetObject?.userData?.type;
-                    if (addingMode === 'obstacle' && targetType === 'house') {
+                    if (addingMode !== 'house' && targetType === 'house') {
                         setSelected(null);
                         const planeHit = new THREE.Vector3();
                         if (raycaster.ray.intersectPlane(plane, planeHit)) {
@@ -1818,11 +1869,19 @@
                     }
                 }
             } else if (event.button === 2) { // 右クリック (削除とパン)
-                const intersects = raycaster.intersectObjects([...obstacles, ...lights], true); // recursive=trueを追加
+                const allClickable = [...obstacles, ...spawnMeshes, ...lights];
+                const intersects = raycaster.intersectObjects(allClickable, true); // recursive=trueを追加
                 console.log('Right click - intersects:', intersects.length);
                 console.log('obstacles:', obstacles.length, 'lights:', lights.length);
                 if (intersects.length > 0) {
-                    deleteObject(intersects[0].object); // ロジックを一元化
+                    const picked = pickPreferredIntersect(intersects);
+                    if (picked) {
+                        if (picked.type === 'spawn') {
+                            setSelected(picked.object);
+                        } else {
+                            deleteObject(picked.object); // ロジックを一元化
+                        }
+                    }
                 } else {
                     isPanning = true;
                     panStart.set(event.clientX, event.clientY);
@@ -1861,9 +1920,17 @@
 
                 touchDownTimer = setTimeout(() => {
                     touchMode = 'long-press';
-                    const intersects = raycaster.intersectObjects([...obstacles, ...lights], true); // recursive=trueを追加
+                    const allClickable = [...obstacles, ...spawnMeshes, ...lights];
+                    const intersects = raycaster.intersectObjects(allClickable, true); // recursive=trueを追加
                     if (intersects.length > 0) {
-                        deleteObject(intersects[0].object);
+                        const picked = pickPreferredIntersect(intersects);
+                        if (picked) {
+                            if (picked.type === 'spawn') {
+                                setSelected(picked.object);
+                            } else {
+                                deleteObject(picked.object);
+                            }
+                        }
                     }
                 }, LONG_PRESS_THRESHOLD);
 
@@ -1970,9 +2037,10 @@
                 
                 const intersects = raycaster.intersectObjects(allClickable, true);
                 if (intersects.length > 0) {
-                    const targetObject = resolveSelectableObject(intersects[0].object);
+                    const picked = pickPreferredIntersect(intersects);
+                    const targetObject = picked ? picked.object : resolveSelectableObject(intersects[0].object);
                     const targetType = targetObject?.userData?.type;
-                    if (addingMode === 'obstacle' && targetType === 'house') {
+                    if (addingMode !== 'house' && targetType === 'house') {
                         setSelected(null);
                         const planeHit = new THREE.Vector3();
                         if (raycaster.ray.intersectPlane(plane, planeHit)) {
@@ -2101,6 +2169,7 @@
             setAddingMode('obstacle'); // 初期モードを設定
             tryEnterEditorFullscreen(false);
             window.addEventListener('pointerdown', () => tryEnterEditorFullscreen(true), { once: true });
+            window.addEventListener('touchstart', () => tryEnterEditorFullscreen(true), { once: true, passive: true });
             
             // デフォルト値を設定
             setDefaultPropertyValues();
