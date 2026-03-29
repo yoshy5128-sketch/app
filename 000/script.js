@@ -7206,6 +7206,10 @@ function setRifleZoom(enabled) {
     new TWEEN.Tween(camera).to({ fov: targetFov }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
 }
 
+function canUseRifleZoom(weaponType) {
+    return weaponType === WEAPON_MR || weaponType === WEAPON_PISTOL || weaponType === WEAPON_MG || weaponType === WEAPON_RR;
+}
+
 function handleFireRelease() {
     if (!isGameRunning) return;
     if (isScoping) {
@@ -7759,33 +7763,49 @@ function aiCheckPickup(ai) {
 
 const moveSpeed = 10.0;
 const lookSpeed = 0.006;
-let keyboardMoveVector = new THREE.Vector2(0, 0);
-let joystickMoveVector = new THREE.Vector2(0, 0);
-if (document.getElementById('joystick-move')) {
-    const joystickZone = document.getElementById('joystick-move');
-    const moveManager = nipplejs.create({
-        zone: joystickZone,
-        mode: 'dynamic',
-        position: { left: '50%', top: '50%' },
-        color: 'blue',
-        size: 150,
-        restOpacity: 0.7
-    });
-
-    moveManager.on('start', function () {
-        if (!isGameRunning) return;
-        joystickMoveVector.set(0, 0);
-    });
-
-    moveManager.on('move', function (evt, data) {
-        if (!isGameRunning) return;
-        joystickMoveVector.set(data.vector.x, data.vector.y);
-    });
-
-    moveManager.on('end', function () {
-        joystickMoveVector.set(0, 0);
-    });
-}
+  let keyboardMoveVector = new THREE.Vector2(0, 0);
+  let joystickMoveVector = new THREE.Vector2(0, 0);
+  let moveManager = null;
+  
+  function initJoystick() {
+      const joystickZone = document.getElementById('joystick-move');
+      if (!joystickZone || typeof nipplejs === 'undefined') return;
+      if (moveManager) {
+          moveManager.destroy();
+          moveManager = null;
+      }
+      joystickMoveVector.set(0, 0);
+      moveManager = nipplejs.create({
+          zone: joystickZone,
+          mode: 'dynamic',
+          position: { left: '50%', top: '50%' },
+          color: 'blue',
+          size: 150,
+          restOpacity: 0.7
+      });
+  
+      moveManager.on('start', function () {
+          if (!isGameRunning) return;
+          joystickMoveVector.set(0, 0);
+      });
+  
+      moveManager.on('move', function (evt, data) {
+          if (!isGameRunning) return;
+          joystickMoveVector.set(data.vector.x, data.vector.y);
+      });
+  
+      moveManager.on('end', function () {
+          joystickMoveVector.set(0, 0);
+      });
+  }
+  
+  initJoystick();
+  window.addEventListener('resize', () => {
+      if (shouldShowTouchControls()) initJoystick();
+  });
+  window.addEventListener('orientationchange', () => {
+      if (shouldShowTouchControls()) initJoystick();
+  });
 const keySet = new Set();
 
 function getNearestLivingEnemyPosition(originPosition) {
@@ -7980,7 +8000,7 @@ document.addEventListener('mousedown', (event) => {
     if (event.button === 0) { // Left click
         handleFirePress();
     } else if (event.button === 2) { // Right click
-        if (currentWeapon === WEAPON_MR) {
+        if (canUseRifleZoom(currentWeapon)) {
             setRifleZoom(!isRifleZoomed);
         } else if (isScoping) {
             cancelScope();
@@ -8069,8 +8089,8 @@ if (crouchButton) {
 const zoomButtonElement = document.getElementById('zoom-button');
 if (zoomButtonElement) {
     const toggleZoom = (event) => {
-        if (!isGameRunning) return;
-        if (currentWeapon === WEAPON_MR) {
+    if (!isGameRunning) return;
+        if (canUseRifleZoom(currentWeapon)) {
             setRifleZoom(!isRifleZoomed);
         } else if (isScoping) {
             cancelScope();
@@ -8181,14 +8201,14 @@ function startGame() {
     }
     const element = document.documentElement;
 
-    if (shouldShowTouchControls()) {
-        debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
-        const joy = document.getElementById('joystick-move');
-        const fire = document.getElementById('fire-button');
-        const crouch = document.getElementById('crouch-button');
-        const zoom = document.getElementById('zoom-button');
-        const pause = document.getElementById('pause-button');
-        const followBtn = document.getElementById('follow-button'); 
+      if (shouldShowTouchControls()) {
+          debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
+          const joy = document.getElementById('joystick-move');
+          const fire = document.getElementById('fire-button');
+          const crouch = document.getElementById('crouch-button');
+          const zoom = document.getElementById('zoom-button');
+          const pause = document.getElementById('pause-button');
+          const followBtn = document.getElementById('follow-button'); 
 
         if (joy) { joy.style.display = 'block'; debugLog('startGame(): joystick-move display set to block'); }
         if (fire) { fire.style.display = 'flex'; debugLog('startGame(): fire-button display set to flex'); }
@@ -8196,14 +8216,15 @@ function startGame() {
         if (zoom) { zoom.style.display = 'flex'; debugLog('startGame(): zoom-button display set to flex'); }
         if (pause) { pause.style.display = 'block'; debugLog('startGame(): pause-button display set to block'); }
 
-        if (followBtn) { 
-            if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
-                followBtn.style.display = 'flex'; debugLog('startGame(): follow-button display set to flex (team mode)');
-            } else {
-                followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none (non-team mode)');
-            }
-        }
-    } else {
+          if (followBtn) { 
+              if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                  followBtn.style.display = 'flex'; debugLog('startGame(): follow-button display set to flex (team mode)');
+              } else {
+                  followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none (non-team mode)');
+              }
+          }
+          initJoystick();
+      } else {
         debugLog('startGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -8669,19 +8690,20 @@ function restartGame() {
         if (teamKillsContainer) teamKillsContainer.style.display = 'none';
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
-    if (shouldShowTouchControls()) {
-        debugLog('restartGame(): Mobile device detected. Setting UI to block/flex.');
-        const joy = document.getElementById('joystick-move');
-        const fire = document.getElementById('fire-button');
-        const crouch = document.getElementById('crouch-button');
-        const zoom = document.getElementById('zoom-button');
-        const pause = document.getElementById('pause-button');
+      if (shouldShowTouchControls()) {
+          debugLog('restartGame(): Mobile device detected. Setting UI to block/flex.');
+          const joy = document.getElementById('joystick-move');
+          const fire = document.getElementById('fire-button');
+          const crouch = document.getElementById('crouch-button');
+          const zoom = document.getElementById('zoom-button');
+          const pause = document.getElementById('pause-button');
         if (joy) { joy.style.display = 'block'; debugLog('restartGame(): joystick-move display set to block'); }
         if (fire) { fire.style.display = 'flex'; debugLog('restartGame(): fire-button display set to flex'); }
-        if (crouch) { crouch.style.display = 'flex'; debugLog('restartGame(): crouch-button display set to flex'); }
-        if (zoom) { zoom.style.display = 'flex'; debugLog('restartGame(): zoom-button display set to flex'); }
-        if (pause) { pause.style.display = 'block'; debugLog('restartGame(): pause-button display set to block'); }
-    } else {
+          if (crouch) { crouch.style.display = 'flex'; debugLog('restartGame(): crouch-button display set to flex'); }
+          if (zoom) { zoom.style.display = 'flex'; debugLog('restartGame(): zoom-button display set to flex'); }
+          if (pause) { pause.style.display = 'block'; debugLog('restartGame(): pause-button display set to block'); }
+          initJoystick();
+      } else {
         debugLog('restartGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -9418,14 +9440,16 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
       ai.targetWeaponPickup = null; // Clear target weapon pickup when AI dies
       cinematicTargetAI = ai;
       if (player) player.visible = false; // AI死亡時はプレイヤーを非表示
-    const joy = document.getElementById('joystick-move');
-    const fire = document.getElementById('fire-button');
-    const cross = document.getElementById('crosshair');
-    const followBtn = document.getElementById('follow-button');
-    if (joy) joy.style.display = 'none';
-    if (fire) fire.style.display = 'none';
-    if (cross) cross.style.display = 'none';
-    if (followBtn) followBtn.style.display = 'none';
+      const joy = document.getElementById('joystick-move');
+      const fire = document.getElementById('fire-button');
+      const cross = document.getElementById('crosshair');
+      const followBtn = document.getElementById('follow-button');
+      const zoomBtn = document.getElementById('zoom-button');
+      if (joy) joy.style.display = 'none';
+      if (fire) fire.style.display = 'none';
+      if (cross) cross.style.display = 'none';
+      if (followBtn) followBtn.style.display = 'none';
+      if (zoomBtn) zoomBtn.style.display = 'none';
     createRedSmokeEffect(ai.position);
     const aiDeathLocation = ai.position.clone();
     const aiLookAt = aiDeathLocation.clone().add(new THREE.Vector3(0, 1.2, 0));
@@ -10333,6 +10357,10 @@ function animate() {
     }
     if (isAIDeathPlaying) {
         updateKillCamPhysics(delta);
+        const followBtn = document.getElementById('follow-button');
+        const zoomBtn = document.getElementById('zoom-button');
+        if (followBtn) followBtn.style.display = 'none';
+        if (zoomBtn) zoomBtn.style.display = 'none';
         if (aiDeathFocusObject.children.length > 0) {
             const focusPos = new THREE.Vector3();
             let partsInFocus = 0;
@@ -10405,7 +10433,7 @@ function animate() {
         }
         playerWeaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`; // playerWeaponDisplayを使用
     }
-    if (isRifleZoomed && currentWeapon !== WEAPON_MR) {
+    if (isRifleZoomed && !canUseRifleZoom(currentWeapon)) {
         setRifleZoom(false);
     }
     if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
@@ -12655,6 +12683,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
             joystickZone.style.right = '';
             joystickZone.style.top = '';
         }
+        if (shouldShowTouchControls()) initJoystick();
         if (followButton) {
             followButton.style.right = followRight;
             followButton.style.bottom = followBottom;
