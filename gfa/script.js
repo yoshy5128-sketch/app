@@ -1514,7 +1514,7 @@ let lastFireTime = -FIRE_RATE_PISTOL;
 let isMouseButtonDown = false;
 let isScoping = false;
 let isRifleZoomed = false;
-const MR_ZOOM_FOV = 55;
+  const MR_ZOOM_FOV = 50;
 let isElevating = false;
 let elevatingTargetY = 0;
 let elevatingTargetObstacle = null;
@@ -3888,6 +3888,7 @@ function getBillBattlePlayerSpawn() {
       if (BILL_BATTLE_USE_ELEVATOR) {
           createBillBattleElevatorDoors();
       }
+      ensurePauseButtonVisible();
     const billBattleCount = getBillBattleAICount();
     billBattleTotalKills = billBattleCount * Math.pow(2, Math.max(0, billBattleFloor - 1));
     billBattleKillsRemaining = billBattleTotalKills;
@@ -4515,6 +4516,14 @@ let playerDeathCamOffset = null;
 let playerDeathCamSavedParent = null;
 let playerDeathCamSavedLocalPos = null;
 let playerDeathCamSavedLocalRot = null;
+let killCamPhysics = {
+    active: false,
+    actor: null,
+    parts: null,
+    velocity: new THREE.Vector3(),
+    clearance: 0.25,
+    lastBounceAt: 0
+};
 playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
 resetCharacterPose(playerModel); // Reset to default pose
 // Show gun for gameplay
@@ -4825,7 +4834,11 @@ function createCharacterModel(color, customization = null) {
         baseLeftArmRot: leftArm.rotation.clone(),
         baseRightArmRot: rightArm.rotation.clone(),
         baseLeftElbowRot: leftElbow.rotation.clone(),
-        baseRightElbowRot: rightElbow.rotation.clone()
+        baseRightElbowRot: rightElbow.rotation.clone(),
+        baseLeftHipPos: leftHip.position.clone(),
+        baseRightHipPos: rightHip.position.clone(),
+        baseLeftFootPos: leftFoot.position.clone(),
+        baseRightFootPos: rightFoot.position.clone()
     };
     characterModel.userData.footOffset = legSegmentHeight * 0.5;
     return characterModel;
@@ -4919,6 +4932,127 @@ function normalizeAngle(angle) {
     return a;
 }
 
+function startKillCamPhysics(actor, parts, initialVelocity, clearance) {
+    if (!actor) return;
+    killCamPhysics.active = true;
+    killCamPhysics.actor = actor;
+    killCamPhysics.parts = parts || null;
+    killCamPhysics.velocity.copy(initialVelocity || new THREE.Vector3());
+    killCamPhysics.clearance = Number.isFinite(clearance) ? clearance : 0.25;
+    killCamPhysics.lastBounceAt = 0;
+}
+
+function stopKillCamPhysics() {
+    killCamPhysics.active = false;
+    killCamPhysics.actor = null;
+    killCamPhysics.parts = null;
+    killCamPhysics.velocity.set(0, 0, 0);
+    killCamPhysics.clearance = 0.25;
+    killCamPhysics.lastBounceAt = 0;
+}
+
+function ensurePauseButtonVisible() {
+    const pauseBtn = document.getElementById('pause-button');
+    if (pauseBtn && shouldShowTouchControls()) {
+        pauseBtn.style.display = 'block';
+    }
+}
+
+function restoreRightButtonsDefault() {
+    if (!shouldShowTouchControls()) return;
+    const fire = document.getElementById('fire-button');
+    const crouch = document.getElementById('crouch-button');
+    const zoom = document.getElementById('zoom-button');
+    const followBtn = document.getElementById('follow-button');
+    if (fire) fire.style.display = 'flex';
+    if (crouch) crouch.style.display = 'flex';
+    if (zoom) zoom.style.display = 'flex';
+    const shouldShowFollow = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+    if (followBtn) followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+    if (isRifleZoomed) setRifleZoom(false);
+    cancelScope();
+}
+
+function applyKillCamRagdollImpulse(parts) {
+    if (!parts) return;
+    applyRagdollPose(parts);
+    alignGunGripToRightHand(parts);
+}
+
+function resolveKillCamObstacleBounce(actor, velocity, obstacle) {
+    if (!actor || !velocity || !obstacle) return false;
+    if (obstacle.userData && obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof) return false;
+    if (obstacle.userData && obstacle.userData.isLadder) return false;
+    const actorBox = new THREE.Box3().setFromObject(actor);
+    const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+    if (!actorBox.intersectsBox(obstacleBox)) return false;
+
+    const overlapX = Math.min(actorBox.max.x - obstacleBox.min.x, obstacleBox.max.x - actorBox.min.x);
+    const overlapZ = Math.min(actorBox.max.z - obstacleBox.min.z, obstacleBox.max.z - actorBox.min.z);
+    if (!Number.isFinite(overlapX) || !Number.isFinite(overlapZ)) return false;
+    const bounce = 0.5;
+    if (overlapX < overlapZ) {
+        const dir = (actor.position.x < obstacle.position.x) ? -1 : 1;
+        actor.position.x += dir * overlapX;
+        velocity.x = -velocity.x * bounce;
+        velocity.z *= 0.85;
+    } else {
+        const dir = (actor.position.z < obstacle.position.z) ? -1 : 1;
+        actor.position.z += dir * overlapZ;
+        velocity.z = -velocity.z * bounce;
+        velocity.x *= 0.85;
+    }
+    return true;
+}
+
+function updateKillCamPhysics(delta) {
+    if (!killCamPhysics.active || !killCamPhysics.actor) return;
+    const actor = killCamPhysics.actor;
+    const velocity = killCamPhysics.velocity;
+    const parts = killCamPhysics.parts;
+    const bounce = 0.45;
+
+    velocity.y -= GRAVITY * delta;
+    actor.position.add(velocity.clone().multiplyScalar(delta));
+
+    const groundY = (actor === player)
+        ? getGroundY(actor.position, playerTargetHeight * 2)
+        : getGroundSurfaceY(actor.position);
+    const minY = groundY + killCamPhysics.clearance;
+    if (actor.position.y < minY) {
+        actor.position.y = minY;
+        if (velocity.y < 0) velocity.y = Math.abs(velocity.y) * bounce;
+        velocity.x *= 0.85;
+        velocity.z *= 0.85;
+    }
+
+    const actorR = Math.sqrt(actor.position.x * actor.position.x + actor.position.z * actor.position.z);
+    const arenaLimit = ARENA_PLAY_AREA_RADIUS - 0.5;
+    if (actorR > arenaLimit) {
+        const nx = actor.position.x / actorR;
+        const nz = actor.position.z / actorR;
+        actor.position.x = nx * arenaLimit;
+        actor.position.z = nz * arenaLimit;
+        const dot = velocity.x * nx + velocity.z * nz;
+        if (dot > 0) {
+            velocity.x = (velocity.x - 2 * dot * nx) * bounce;
+            velocity.z = (velocity.z - 2 * dot * nz) * bounce;
+        }
+        applyKillCamRagdollImpulse(parts);
+    }
+
+    for (const obstacle of obstacles) {
+        if (!obstacle || obstacle === actor) continue;
+        if (resolveKillCamObstacleBounce(actor, velocity, obstacle)) {
+            applyKillCamRagdollImpulse(parts);
+        }
+    }
+
+    if (Math.abs(velocity.x) + Math.abs(velocity.z) < 0.02 && Math.abs(velocity.y) < 0.02) {
+        velocity.set(0, 0, 0);
+    }
+}
+
 function applyAimConstraints(parts, ownerYaw, targetWorldPos) {
     if (!parts || !parts.aimGroup) return;
     const ownerPos = new THREE.Vector3();
@@ -4955,9 +5089,58 @@ function clampArmJoints(parts) {
     }
 }
 
-function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
+function resetLegBasePositions(parts) {
+    if (!parts) return;
+    if (parts.leftHip && parts.baseLeftHipPos) parts.leftHip.position.copy(parts.baseLeftHipPos);
+    if (parts.rightHip && parts.baseRightHipPos) parts.rightHip.position.copy(parts.baseRightHipPos);
+    if (parts.leftFoot && parts.baseLeftFootPos) parts.leftFoot.position.copy(parts.baseLeftFootPos);
+    if (parts.rightFoot && parts.baseRightFootPos) parts.rightFoot.position.copy(parts.baseRightFootPos);
+}
+
+function applyIdleLegStance(parts) {
+    if (!parts) return;
+    resetLegBasePositions(parts);
+    const baseLeftHipX = (parts.baseLeftHipPos && Number.isFinite(parts.baseLeftHipPos.x)) ? parts.baseLeftHipPos.x : -0.18;
+    const baseRightHipX = (parts.baseRightHipPos && Number.isFinite(parts.baseRightHipPos.x)) ? parts.baseRightHipPos.x : 0.18;
+    const baseLeftHipZ = (parts.baseLeftHipPos && Number.isFinite(parts.baseLeftHipPos.z)) ? parts.baseLeftHipPos.z : 0;
+    const baseRightHipZ = (parts.baseRightHipPos && Number.isFinite(parts.baseRightHipPos.z)) ? parts.baseRightHipPos.z : 0;
+    const baseLeftFootZ = (parts.baseLeftFootPos && Number.isFinite(parts.baseLeftFootPos.z)) ? parts.baseLeftFootPos.z : 0;
+    const baseRightFootZ = (parts.baseRightFootPos && Number.isFinite(parts.baseRightFootPos.z)) ? parts.baseRightFootPos.z : 0;
+    const baseX = Math.max(Math.abs(baseLeftHipX), Math.abs(baseRightHipX), 0.12);
+    const open = Math.max(0.01, baseX * 0.15);
+    const stagger = Math.max(0.02, baseX * 0.25);
+
+    if (parts.leftHip) {
+        parts.leftHip.position.x = baseLeftHipX - open;
+        parts.leftHip.position.z = baseLeftHipZ + stagger * 0.6;
+    }
+    if (parts.rightHip) {
+        parts.rightHip.position.x = baseRightHipX + open;
+        parts.rightHip.position.z = baseRightHipZ - stagger * 0.6;
+    }
+    if (parts.leftFoot) parts.leftFoot.position.z = baseLeftFootZ + stagger;
+    if (parts.rightFoot) parts.rightFoot.position.z = baseRightFootZ - stagger;
+}
+
+function applyLowerBodyTurn(parts, lowerYaw) {
+    if (!parts) return;
+    const maxYaw = Math.PI / 4;
+    const clamped = Math.max(-maxYaw, Math.min(maxYaw, lowerYaw || 0));
+    if (parts.leftHip) parts.leftHip.rotation.y = clamped;
+    if (parts.rightHip) parts.rightHip.rotation.y = clamped;
+    if (parts.waist) parts.waist.rotation.y = clamped;
+}
+
+function resetLowerBodyYaw(parts) {
+    if (!parts) return;
+    applyLowerBodyTurn(parts, 0);
+}
+
+function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving, lowerBodyYaw = 0) {
     if (!parts) return;
     if (isCrouching && isMoving) {
+        resetLegBasePositions(parts);
+        resetLowerBodyYaw(parts);
         // Crouch walking animation
         const hipBend = Math.PI / 4.2;
         const kneeBend = Math.PI / 2.6;
@@ -4984,6 +5167,8 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
         const headBobOffset = Math.sin(timeElapsed * walkSpeed) * 0.02;
         parts.head.position.y += headBobOffset;
     } else if (isCrouching) {
+        resetLegBasePositions(parts);
+        resetLowerBodyYaw(parts);
         const hipBend = Math.PI / 4.2;
         const kneeBend = Math.PI / 2.6;
         // Bend legs toward the forward-hand direction (human-like crouch)
@@ -4994,6 +5179,7 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
         parts.body.rotation.x = -0.22;
         parts.head.position.y = parts.baseHeadY - 0.05;
     } else if (isMoving) {
+        resetLegBasePositions(parts);
         const walkSpeed = 10;
         const hipAmplitude = Math.PI / 4;
         const kneeAmplitude = Math.PI / 3;
@@ -5005,6 +5191,7 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
         parts.body.rotation.x = -0.15;
         const headBobOffset = Math.sin(timeElapsed * walkSpeed) * 0.05;
         parts.head.position.y = parts.baseHeadY + headBobOffset;
+        applyLowerBodyTurn(parts, lowerBodyYaw);
     } else {
         parts.leftHip.rotation.x = 0;
         parts.rightHip.rotation.x = 0;
@@ -5012,6 +5199,8 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving) {
         parts.rightKnee.rotation.x = 0;
         parts.body.rotation.x = 0;
         parts.head.position.y = parts.baseHeadY;
+        applyLowerBodyTurn(parts, 0);
+        applyIdleLegStance(parts);
     }
 }
 
@@ -7032,6 +7221,10 @@ function setRifleZoom(enabled) {
     new TWEEN.Tween(camera).to({ fov: targetFov }, 100).easing(TWEEN.Easing.Quadratic.Out).onUpdate(() => camera.updateProjectionMatrix()).start();
 }
 
+function canUseRifleZoom(weaponType) {
+    return weaponType === WEAPON_MR || weaponType === WEAPON_PISTOL || weaponType === WEAPON_MG || weaponType === WEAPON_RR;
+}
+
 function handleFireRelease() {
     if (!isGameRunning) return;
     if (isScoping) {
@@ -7585,33 +7778,49 @@ function aiCheckPickup(ai) {
 
 const moveSpeed = 10.0;
 const lookSpeed = 0.006;
-let keyboardMoveVector = new THREE.Vector2(0, 0);
-let joystickMoveVector = new THREE.Vector2(0, 0);
-if (document.getElementById('joystick-move')) {
-    const joystickZone = document.getElementById('joystick-move');
-    const moveManager = nipplejs.create({
-        zone: joystickZone,
-        mode: 'dynamic',
-        position: { left: '50%', top: '50%' },
-        color: 'blue',
-        size: 150,
-        restOpacity: 0.7
-    });
-
-    moveManager.on('start', function () {
-        if (!isGameRunning) return;
-        joystickMoveVector.set(0, 0);
-    });
-
-    moveManager.on('move', function (evt, data) {
-        if (!isGameRunning) return;
-        joystickMoveVector.set(data.vector.x, data.vector.y);
-    });
-
-    moveManager.on('end', function () {
-        joystickMoveVector.set(0, 0);
-    });
-}
+  let keyboardMoveVector = new THREE.Vector2(0, 0);
+  let joystickMoveVector = new THREE.Vector2(0, 0);
+  let moveManager = null;
+  
+  function initJoystick() {
+      const joystickZone = document.getElementById('joystick-move');
+      if (!joystickZone || typeof nipplejs === 'undefined') return;
+      if (moveManager) {
+          moveManager.destroy();
+          moveManager = null;
+      }
+      joystickMoveVector.set(0, 0);
+      moveManager = nipplejs.create({
+          zone: joystickZone,
+          mode: 'dynamic',
+          position: { left: '50%', top: '50%' },
+          color: 'blue',
+          size: 150,
+          restOpacity: 0.7
+      });
+  
+      moveManager.on('start', function () {
+          if (!isGameRunning) return;
+          joystickMoveVector.set(0, 0);
+      });
+  
+      moveManager.on('move', function (evt, data) {
+          if (!isGameRunning) return;
+          joystickMoveVector.set(data.vector.x, data.vector.y);
+      });
+  
+      moveManager.on('end', function () {
+          joystickMoveVector.set(0, 0);
+      });
+  }
+  
+  initJoystick();
+  window.addEventListener('resize', () => {
+      if (shouldShowTouchControls()) initJoystick();
+  });
+  window.addEventListener('orientationchange', () => {
+      if (shouldShowTouchControls()) initJoystick();
+  });
 const keySet = new Set();
 
 function getNearestLivingEnemyPosition(originPosition) {
@@ -7806,7 +8015,7 @@ document.addEventListener('mousedown', (event) => {
     if (event.button === 0) { // Left click
         handleFirePress();
     } else if (event.button === 2) { // Right click
-        if (currentWeapon === WEAPON_MR) {
+        if (canUseRifleZoom(currentWeapon)) {
             setRifleZoom(!isRifleZoomed);
         } else if (isScoping) {
             cancelScope();
@@ -7895,8 +8104,8 @@ if (crouchButton) {
 const zoomButtonElement = document.getElementById('zoom-button');
 if (zoomButtonElement) {
     const toggleZoom = (event) => {
-        if (!isGameRunning) return;
-        if (currentWeapon === WEAPON_MR) {
+    if (!isGameRunning) return;
+        if (canUseRifleZoom(currentWeapon)) {
             setRifleZoom(!isRifleZoomed);
         } else if (isScoping) {
             cancelScope();
@@ -8007,14 +8216,14 @@ function startGame() {
     }
     const element = document.documentElement;
 
-    if (shouldShowTouchControls()) {
-        debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
-        const joy = document.getElementById('joystick-move');
-        const fire = document.getElementById('fire-button');
-        const crouch = document.getElementById('crouch-button');
-        const zoom = document.getElementById('zoom-button');
-        const pause = document.getElementById('pause-button');
-        const followBtn = document.getElementById('follow-button'); 
+      if (shouldShowTouchControls()) {
+          debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
+          const joy = document.getElementById('joystick-move');
+          const fire = document.getElementById('fire-button');
+          const crouch = document.getElementById('crouch-button');
+          const zoom = document.getElementById('zoom-button');
+          const pause = document.getElementById('pause-button');
+          const followBtn = document.getElementById('follow-button'); 
 
         if (joy) { joy.style.display = 'block'; debugLog('startGame(): joystick-move display set to block'); }
         if (fire) { fire.style.display = 'flex'; debugLog('startGame(): fire-button display set to flex'); }
@@ -8022,14 +8231,15 @@ function startGame() {
         if (zoom) { zoom.style.display = 'flex'; debugLog('startGame(): zoom-button display set to flex'); }
         if (pause) { pause.style.display = 'block'; debugLog('startGame(): pause-button display set to block'); }
 
-        if (followBtn) { 
-            if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
-                followBtn.style.display = 'flex'; debugLog('startGame(): follow-button display set to flex (team mode)');
-            } else {
-                followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none (non-team mode)');
-            }
-        }
-    } else {
+          if (followBtn) { 
+              if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                  followBtn.style.display = 'flex'; debugLog('startGame(): follow-button display set to flex (team mode)');
+              } else {
+                  followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none (non-team mode)');
+              }
+          }
+          initJoystick();
+      } else {
         debugLog('startGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -8218,6 +8428,35 @@ function restartGame() {
         player.position.y = playerTargetHeight;
         if (playerModel) {
             playerModel.position.set(0, -playerTargetHeight, 0);
+        }
+    }
+    // If spawn overlaps obstacles/explosives, relocate to a safe spot to avoid input lock.
+    if (checkCollision(player, obstacles)) {
+        const pushDistance = 0.2;
+        const resolved = resolvePlayerCollision(player, obstacles, pushDistance);
+        if (!resolved || checkCollision(player, obstacles)) {
+            let safePos = null;
+            if (isBillBattleMode()) {
+                for (let i = 0; i < 8; i++) {
+                    const candidate = getBillBattlePlayerSpawn();
+                    if (!candidate || !Number.isFinite(candidate.x)) continue;
+                    player.position.copy(candidate);
+                    if (!checkCollision(player, obstacles)) {
+                        safePos = candidate;
+                        break;
+                    }
+                }
+            }
+            if (!safePos) {
+                safePos = findSaferRespawnPosition(player, [], playerTargetHeight * 2, 0, null);
+            }
+            if (safePos) {
+                player.position.copy(safePos);
+                if (isBillBattleMode()) {
+                    enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
+                    player.position.y = playerTargetHeight;
+                }
+            }
         }
     }
 
@@ -8466,19 +8705,20 @@ function restartGame() {
         if (teamKillsContainer) teamKillsContainer.style.display = 'none';
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
-    if (shouldShowTouchControls()) {
-        debugLog('restartGame(): Mobile device detected. Setting UI to block/flex.');
-        const joy = document.getElementById('joystick-move');
-        const fire = document.getElementById('fire-button');
-        const crouch = document.getElementById('crouch-button');
-        const zoom = document.getElementById('zoom-button');
-        const pause = document.getElementById('pause-button');
+      if (shouldShowTouchControls()) {
+          debugLog('restartGame(): Mobile device detected. Setting UI to block/flex.');
+          const joy = document.getElementById('joystick-move');
+          const fire = document.getElementById('fire-button');
+          const crouch = document.getElementById('crouch-button');
+          const zoom = document.getElementById('zoom-button');
+          const pause = document.getElementById('pause-button');
         if (joy) { joy.style.display = 'block'; debugLog('restartGame(): joystick-move display set to block'); }
         if (fire) { fire.style.display = 'flex'; debugLog('restartGame(): fire-button display set to flex'); }
-        if (crouch) { crouch.style.display = 'flex'; debugLog('restartGame(): crouch-button display set to flex'); }
-        if (zoom) { zoom.style.display = 'flex'; debugLog('restartGame(): zoom-button display set to flex'); }
-        if (pause) { pause.style.display = 'block'; debugLog('restartGame(): pause-button display set to block'); }
-    } else {
+          if (crouch) { crouch.style.display = 'flex'; debugLog('restartGame(): crouch-button display set to flex'); }
+          if (zoom) { zoom.style.display = 'flex'; debugLog('restartGame(): zoom-button display set to flex'); }
+          if (pause) { pause.style.display = 'block'; debugLog('restartGame(): pause-button display set to block'); }
+          initJoystick();
+      } else {
         debugLog('restartGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
@@ -8772,7 +9012,8 @@ function respawnPlayer() {
               }
           }
           lastPlayerDeathPos = null;
-    } else {
+          restoreRightButtonsDefault();
+      } else {
         console.error("Could not find a safe spawn point after multiple attempts. Spawning at default (0, 0, 0).");
         const playerSpawnPos = new THREE.Vector3(0, 0, 0);
         player.position.copy(playerSpawnPos);
@@ -8885,11 +9126,15 @@ function startPlayerDeathSequence(projectile) {
     playerDeathTweenRotX = new TWEEN.Tween(playerModel.rotation).to({ x: finalRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
     playerDeathTweenRotZ = new TWEEN.Tween(playerModel.rotation).to({ z: finalRotation.z }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
 
-    // Ensure player ends on ground and not inside obstacles (incl. rooftop fall)
-    playerDeathTweenPos = new TWEEN.Tween(player.position).to(
-        { x: deathTargetPos.x, y: deathTargetPos.y, z: deathTargetPos.z },
-        fallDuration * 1000
-    ).easing(TWEEN.Easing.Quadratic.InOut).start();
+    if (checkCollision(player, obstacles)) {
+        player.position.copy(deathTargetPos);
+    }
+    const impactKick = impactDir.clone().setY(0.4);
+    if (impactKick.lengthSq() < 1e-6) impactKick.set(0.2, 0.4, 0.1);
+    impactKick.normalize().multiplyScalar(6.5);
+    const initialVelocity = impactKick.clone();
+    initialVelocity.y += 2.8;
+    startKillCamPhysics(player, playerModel && playerModel.userData ? playerModel.userData.parts : null, initialVelocity, 0.25);
 
     // プレイヤー死亡キルカメラ: 遮蔽物を避けて必ずプレイヤーが映る角度を選ぶ
     playerDeathLookAt = getPlayerDeathLookAt();
@@ -8940,17 +9185,19 @@ function startPlayerDeathSequence(projectile) {
     }
 
             // 3秒後にリスポーンまたはゲームオーバー画面へ
-        setTimeout(() => { // このsetTimeoutは全体の演出時間に合わせて調整
-            isPlayerDeathPlaying = false;
-            syncKillCamLighting();
-            // プレイヤーモデルの回転をリセット
-            if (playerModel) {
-                playerModel.rotation.set(0, 0, 0); 
-                // playerModelがplayerの子として正しく配置されるようにリセット
-                playerModel.position.set(0, -playerTargetHeight, 0); 
-            }
-    
-            // カメラをリセット (通常のプレイヤー視点に戻す)
+          setTimeout(() => { // このsetTimeoutは全体の演出時間に合わせて調整
+              isPlayerDeathPlaying = false;
+              syncKillCamLighting();
+              stopKillCamPhysics();
+              // プレイヤーモデルの回転をリセット
+              if (playerModel) {
+                  playerModel.rotation.set(0, 0, 0); 
+                  // playerModelがplayerの子として正しく配置されるようにリセット
+                  playerModel.position.set(0, -playerTargetHeight, 0); 
+              }
+              restoreRightButtonsDefault();
+  
+              // カメラをリセット (通常のプレイヤー視点に戻す)
             camera.position.set(0, 0, 0); // 相対位置としてリセット
             camera.rotation.set(0, 0, 0); // 相対角度としてリセット
             
@@ -9167,6 +9414,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         ai.hp = reviveHP;
         ai.visible = true;
         ai.userData.isDying = false;
+        restoreRightButtonsDefault();
         return;
     }
     ai.targetWeaponPickup = null;
@@ -9175,6 +9423,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         ai.userData.isDying = false;
         billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
         updateBillBattleKillDisplay();
+        restoreRightButtonsDefault();
         return;
     }
     if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
@@ -9210,14 +9459,18 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
       ai.targetWeaponPickup = null; // Clear target weapon pickup when AI dies
       cinematicTargetAI = ai;
       if (player) player.visible = false; // AI死亡時はプレイヤーを非表示
-    const joy = document.getElementById('joystick-move');
-    const fire = document.getElementById('fire-button');
-    const cross = document.getElementById('crosshair');
-    const followBtn = document.getElementById('follow-button');
-    if (joy) joy.style.display = 'none';
-    if (fire) fire.style.display = 'none';
-    if (cross) cross.style.display = 'none';
-    if (followBtn) followBtn.style.display = 'none';
+      const joy = document.getElementById('joystick-move');
+      const fire = document.getElementById('fire-button');
+      const cross = document.getElementById('crosshair');
+      const followBtn = document.getElementById('follow-button');
+      const zoomBtn = document.getElementById('zoom-button');
+      const crouchBtn = document.getElementById('crouch-button');
+      if (joy) joy.style.display = 'none';
+      if (fire) fire.style.display = 'none';
+      if (cross) cross.style.display = 'none';
+      if (followBtn) followBtn.style.display = 'none';
+      if (zoomBtn) zoomBtn.style.display = 'none';
+      if (crouchBtn) crouchBtn.style.display = 'none';
     createRedSmokeEffect(ai.position);
     const aiDeathLocation = ai.position.clone();
     const aiLookAt = aiDeathLocation.clone().add(new THREE.Vector3(0, 1.2, 0));
@@ -9243,13 +9496,24 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
         alignGunGripToRightHand(parts);
     }
     new TWEEN.Tween(ai.rotation).to({ x: finalAIRotation.x }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
-    new TWEEN.Tween(ai.position).to({ x: deathTargetPos.x, y: deathTargetPos.y, z: deathTargetPos.z }, fallDuration * 1000).easing(TWEEN.Easing.Quadratic.InOut).start();
+    if (checkCollision(ai, obstacles)) {
+        ai.position.copy(deathTargetPos);
+    }
+    const aiKick = (impactVelocity && impactVelocity.lengthSq() > 1e-6)
+        ? impactVelocity.clone().setY(0.4)
+        : new THREE.Vector3(0.2, 0.4, 0.1);
+    aiKick.normalize().multiplyScalar(6.0);
+    const aiInitialVelocity = aiKick.clone();
+    aiInitialVelocity.y += 2.4;
+    startKillCamPhysics(ai, ai.userData ? ai.userData.parts : null, aiInitialVelocity, 0.4);
         setTimeout(() => {
             isAIDeathPlaying = false;
             syncKillCamLighting();
             cinematicTargetAI = null;
+            stopKillCamPhysics();
+            restoreRightButtonsDefault();
             finalizeAIDeathWithoutKillCam(ai, killerSource);
-          if (player) player.visible = true;
+            if (player) player.visible = true;
           if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
               if (joy) joy.style.display = 'block';
               if (fire) fire.style.display = 'block';
@@ -9271,6 +9535,7 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
 function showGameOver() {
     forceResetTouchState();
     isGameRunning = false;
+    setFollowingPlayerMode(false);
     gameOverScreen.style.display = 'flex';
     document.exitPointerLock();
 }
@@ -9546,6 +9811,13 @@ function showFloorStartMessage(floorNumber) {
     const el = document.getElementById('floor-start-display');
     if (!el) return;
     el.textContent = 'BATTLE START!';
+    if (isProbablyMobileDevice()) {
+        el.style.fontSize = '1.2em';
+        el.style.padding = '6px 10px';
+    } else {
+        el.style.fontSize = '3em';
+        el.style.padding = '12px 20px';
+    }
     el.style.display = 'block';
     setTimeout(() => {
         el.style.display = 'none';
@@ -9988,6 +10260,7 @@ function animate() {
     enforceTouchUIVisibility();
 
     if (isPlayerDeathPlaying) {
+        updateKillCamPhysics(delta);
         playerDeathLookAt = getPlayerDeathLookAt();
         if (playerDeathCamOffset) {
             cinematicCamera.position.copy(playerDeathLookAt.clone().add(playerDeathCamOffset));
@@ -10106,6 +10379,13 @@ function animate() {
         }
     }
     if (isAIDeathPlaying) {
+        updateKillCamPhysics(delta);
+        const followBtn = document.getElementById('follow-button');
+        const zoomBtn = document.getElementById('zoom-button');
+        const crouchBtn = document.getElementById('crouch-button');
+        if (followBtn) followBtn.style.display = 'none';
+        if (zoomBtn) zoomBtn.style.display = 'none';
+        if (crouchBtn) crouchBtn.style.display = 'none';
         if (aiDeathFocusObject.children.length > 0) {
             const focusPos = new THREE.Vector3();
             let partsInFocus = 0;
@@ -10144,6 +10424,7 @@ function animate() {
     }
 
     if (isPlayerDeathPlaying) {
+        updateKillCamPhysics(delta);
         playerDeathLookAt = getPlayerDeathLookAt();
         if (playerDeathCamOffset) {
             cinematicCamera.position.copy(playerDeathLookAt.clone().add(playerDeathCamOffset));
@@ -10177,7 +10458,7 @@ function animate() {
         }
         playerWeaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`; // playerWeaponDisplayを使用
     }
-    if (isRifleZoomed && currentWeapon !== WEAPON_MR) {
+    if (isRifleZoomed && !canUseRifleZoom(currentWeapon)) {
         setRifleZoom(false);
     }
     if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
@@ -11688,8 +11969,36 @@ function animate() {
             alignGunGripToHands(parts, 0.8);
 
             // Leg Animation
-            const actuallyMoving = ai.position.distanceTo(ai.lastPosition) > 0.001; // 実際に動いているかを判定
-            applyCrouchPose(parts, ai.isCrouching, timeElapsed, actuallyMoving);
+            const moveDirWorld = ai.position.clone().sub(ai.lastPosition);
+            const moveSpeed = moveDirWorld.length();
+            const actuallyMoving = moveSpeed > 0.001; // 実際に動いているかを判定
+            let lowerBodyYaw = 0;
+            if (!ai.userData) ai.userData = {};
+            if (moveSpeed > 0.02) {
+                const moveYaw = Math.atan2(moveDirWorld.x, moveDirWorld.z);
+                const relYaw = normalizeAngle(moveYaw - ai.rotation.y);
+                const maxYaw = Math.PI / 4;
+                const targetYaw = Math.max(-maxYaw, Math.min(maxYaw, relYaw));
+                const lastYaw = ai.userData.lowerBodyMoveYaw;
+                if (!Number.isFinite(lastYaw) || Math.abs(normalizeAngle(moveYaw - lastYaw)) > 0.35) {
+                    ai.userData.lowerBodyMoveYaw = moveYaw;
+                    ai.userData.lowerBodyMoveSince = timeElapsed;
+                }
+                if (!Number.isFinite(ai.userData.lowerBodyMoveSince)) ai.userData.lowerBodyMoveSince = timeElapsed;
+                const moveElapsed = timeElapsed - ai.userData.lowerBodyMoveSince;
+                if (moveElapsed > 0.15) {
+                    const prevYaw = Number.isFinite(ai.userData.lowerBodyYaw) ? ai.userData.lowerBodyYaw : 0;
+                    const lerp = Math.min(1, 10 * delta);
+                    ai.userData.lowerBodyYaw = prevYaw + (targetYaw - prevYaw) * lerp;
+                    lowerBodyYaw = ai.userData.lowerBodyYaw;
+                } else {
+                    ai.userData.lowerBodyYaw = 0;
+                }
+            } else {
+                ai.userData.lowerBodyMoveSince = 0;
+                ai.userData.lowerBodyYaw = 0;
+            }
+            applyCrouchPose(parts, ai.isCrouching, timeElapsed, actuallyMoving, lowerBodyYaw);
         }
         // 最終的な衝突チェック（薄い壁のすり抜け対策）
         if (checkCollision(ai, obstacles)) {
@@ -12399,6 +12708,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
             joystickZone.style.right = '';
             joystickZone.style.top = '';
         }
+        if (shouldShowTouchControls()) initJoystick();
         if (followButton) {
             followButton.style.right = followRight;
             followButton.style.bottom = followBottom;
@@ -12897,6 +13207,7 @@ function resetCharacterPose(character) {
     if (parts.rightKnee) {
         parts.rightKnee.rotation.set(0, 0, 0);
     }
+    applyIdleLegStance(parts);
     // Hide gun only for preview characters
     if (parts.gun) {
         parts.gun.visible = false;
