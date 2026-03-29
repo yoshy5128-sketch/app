@@ -9414,6 +9414,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         ai.hp = reviveHP;
         ai.visible = true;
         ai.userData.isDying = false;
+        restoreRightButtonsDefault();
         return;
     }
     ai.targetWeaponPickup = null;
@@ -9422,6 +9423,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         ai.userData.isDying = false;
         billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
         updateBillBattleKillDisplay();
+        restoreRightButtonsDefault();
         return;
     }
     if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
