@@ -4958,6 +4958,21 @@ function ensurePauseButtonVisible() {
     }
 }
 
+function restoreRightButtonsDefault() {
+    if (!shouldShowTouchControls()) return;
+    const fire = document.getElementById('fire-button');
+    const crouch = document.getElementById('crouch-button');
+    const zoom = document.getElementById('zoom-button');
+    const followBtn = document.getElementById('follow-button');
+    if (fire) fire.style.display = 'flex';
+    if (crouch) crouch.style.display = 'flex';
+    if (zoom) zoom.style.display = 'flex';
+    const shouldShowFollow = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+    if (followBtn) followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+    if (isRifleZoomed) setRifleZoom(false);
+    cancelScope();
+}
+
 function applyKillCamRagdollImpulse(parts) {
     if (!parts) return;
     applyRagdollPose(parts);
@@ -8997,7 +9012,8 @@ function respawnPlayer() {
               }
           }
           lastPlayerDeathPos = null;
-    } else {
+          restoreRightButtonsDefault();
+      } else {
         console.error("Could not find a safe spawn point after multiple attempts. Spawning at default (0, 0, 0).");
         const playerSpawnPos = new THREE.Vector3(0, 0, 0);
         player.position.copy(playerSpawnPos);
@@ -9169,18 +9185,19 @@ function startPlayerDeathSequence(projectile) {
     }
 
             // 3秒後にリスポーンまたはゲームオーバー画面へ
-        setTimeout(() => { // このsetTimeoutは全体の演出時間に合わせて調整
-            isPlayerDeathPlaying = false;
-            syncKillCamLighting();
-            stopKillCamPhysics();
-            // プレイヤーモデルの回転をリセット
-            if (playerModel) {
-                playerModel.rotation.set(0, 0, 0); 
-                // playerModelがplayerの子として正しく配置されるようにリセット
-                playerModel.position.set(0, -playerTargetHeight, 0); 
-            }
-    
-            // カメラをリセット (通常のプレイヤー視点に戻す)
+          setTimeout(() => { // このsetTimeoutは全体の演出時間に合わせて調整
+              isPlayerDeathPlaying = false;
+              syncKillCamLighting();
+              stopKillCamPhysics();
+              // プレイヤーモデルの回転をリセット
+              if (playerModel) {
+                  playerModel.rotation.set(0, 0, 0); 
+                  // playerModelがplayerの子として正しく配置されるようにリセット
+                  playerModel.position.set(0, -playerTargetHeight, 0); 
+              }
+              restoreRightButtonsDefault();
+  
+              // カメラをリセット (通常のプレイヤー視点に戻す)
             camera.position.set(0, 0, 0); // 相対位置としてリセット
             camera.rotation.set(0, 0, 0); // 相対角度としてリセット
             
@@ -9492,8 +9509,9 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
             syncKillCamLighting();
             cinematicTargetAI = null;
             stopKillCamPhysics();
+            restoreRightButtonsDefault();
             finalizeAIDeathWithoutKillCam(ai, killerSource);
-          if (player) player.visible = true;
+            if (player) player.visible = true;
           if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
               if (joy) joy.style.display = 'block';
               if (fire) fire.style.display = 'block';
@@ -9515,6 +9533,7 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
 function showGameOver() {
     forceResetTouchState();
     isGameRunning = false;
+    setFollowingPlayerMode(false);
     gameOverScreen.style.display = 'flex';
     document.exitPointerLock();
 }
