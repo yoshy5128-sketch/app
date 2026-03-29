@@ -1514,7 +1514,7 @@ let lastFireTime = -FIRE_RATE_PISTOL;
 let isMouseButtonDown = false;
 let isScoping = false;
 let isRifleZoomed = false;
-const MR_ZOOM_FOV = 55;
+  const MR_ZOOM_FOV = 50;
 let isElevating = false;
 let elevatingTargetY = 0;
 let elevatingTargetObstacle = null;
@@ -9445,11 +9445,13 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
       const cross = document.getElementById('crosshair');
       const followBtn = document.getElementById('follow-button');
       const zoomBtn = document.getElementById('zoom-button');
+      const crouchBtn = document.getElementById('crouch-button');
       if (joy) joy.style.display = 'none';
       if (fire) fire.style.display = 'none';
       if (cross) cross.style.display = 'none';
       if (followBtn) followBtn.style.display = 'none';
       if (zoomBtn) zoomBtn.style.display = 'none';
+      if (crouchBtn) crouchBtn.style.display = 'none';
     createRedSmokeEffect(ai.position);
     const aiDeathLocation = ai.position.clone();
     const aiLookAt = aiDeathLocation.clone().add(new THREE.Vector3(0, 1.2, 0));
@@ -10359,8 +10361,10 @@ function animate() {
         updateKillCamPhysics(delta);
         const followBtn = document.getElementById('follow-button');
         const zoomBtn = document.getElementById('zoom-button');
+        const crouchBtn = document.getElementById('crouch-button');
         if (followBtn) followBtn.style.display = 'none';
         if (zoomBtn) zoomBtn.style.display = 'none';
+        if (crouchBtn) crouchBtn.style.display = 'none';
         if (aiDeathFocusObject.children.length > 0) {
             const focusPos = new THREE.Vector3();
             let partsInFocus = 0;
