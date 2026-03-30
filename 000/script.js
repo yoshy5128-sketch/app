@@ -13,6 +13,7 @@ let gameSettings = {
     mapType: 'default',
     aiCount: 3,
     autoAim: true,
+    aiShotLevel: 'ama',
     nightModeEnabled: false,
     nightModeLightIntensity: 3.0,
     timeLapseMode: false,
@@ -346,6 +347,7 @@ let characterEditorAnimationId = null;
         const mrCountSelect = document.getElementById('mr-count');
         const aiCountRadios = document.querySelectorAll('input[name="ai-count"]');
         const autoAimRadios = document.querySelectorAll('input[name="auto-aim"]');
+        const aiShotRadios = document.querySelectorAll('input[name="ai-shot"]');
         const nightModeRadios = document.querySelectorAll('input[name="night-mode"]');
         const gameModeRadios = document.querySelectorAll('input[name="game-mode"]');
         const killCamModeRadios = document.querySelectorAll('input[name="killcam-mode"]');
@@ -444,6 +446,14 @@ let characterEditorAnimationId = null;
             radio.addEventListener('change', () => {
                 if (radio.checked) {
                     gameSettings.autoAim = radio.value === 'true';
+                    saveSettings();
+                }
+            });
+        });
+        aiShotRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.aiShotLevel = radio.value;
                     saveSettings();
                 }
             });
@@ -1716,6 +1726,10 @@ fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.
 function saveSettings() {
     gameSettings.autoAim = document.querySelector('input[name="auto-aim"]:checked').value;
     gameSettings.killCamMode = document.querySelector('input[name="killcam-mode"]:checked').value;
+    const aiShotRadio = document.querySelector('input[name="ai-shot"]:checked');
+    if (aiShotRadio) {
+        gameSettings.aiShotLevel = aiShotRadio.value;
+    }
     const barrelRespawnRadio = document.querySelector('input[name="barrel-respawn"]:checked');
     if (barrelRespawnRadio) {
         gameSettings.barrelRespawn = barrelRespawnRadio.value === 'true';
@@ -1746,6 +1760,9 @@ function loadSettings() {
         }
         if (parsedSavedSettings.killCamMode === undefined) {
             parsedSavedSettings.killCamMode = 'playerOnly';
+        }
+        if (parsedSavedSettings.aiShotLevel === undefined) {
+            parsedSavedSettings.aiShotLevel = 'ama';
         }
         if (parsedSavedSettings.nightModeLightIntensity === undefined) {
             parsedSavedSettings.nightModeLightIntensity = 2.0;
@@ -1795,6 +1812,9 @@ function loadSettings() {
         updateSettingsAvailabilityForMode();
         document.querySelectorAll('input[name="killcam-mode"]').forEach(radio => {
             radio.checked = (radio.value === gameSettings.killCamMode);
+        });
+        document.querySelectorAll('input[name="ai-shot"]').forEach(radio => {
+            radio.checked = (radio.value === gameSettings.aiShotLevel);
         });
         document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
             radio.checked = (radio.value === String(gameSettings.barrelRespawn));
@@ -1941,6 +1961,9 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.killCamMode === undefined) {
             parsedSavedSettings.killCamMode = 'playerOnly';
         }
+        if (parsedSavedSettings.aiShotLevel === undefined) {
+            parsedSavedSettings.aiShotLevel = 'ama';
+        }
         if (parsedSavedSettings.nightModeLightIntensity === undefined) {
             parsedSavedSettings.nightModeLightIntensity = 0.8;
         }
@@ -2000,6 +2023,9 @@ function loadMapSettings(mapName) {
                 updateUnifiedMapSelector();
                 document.querySelectorAll('input[name="auto-aim"]').forEach(radio => {
                     radio.checked = (radio.value === String(gameSettings.autoAim));
+                });
+                document.querySelectorAll('input[name="ai-shot"]').forEach(radio => {
+                    radio.checked = (radio.value === gameSettings.aiShotLevel);
                 });
                 document.querySelectorAll('input[name="night-mode"]').forEach(radio => {
                     radio.checked = (radio.value === String(gameSettings.nightModeEnabled));
@@ -7387,6 +7413,26 @@ function shoot() {
     }
 }
 
+
+function applyAIAimSpread(direction, maxAngleRad) {
+    if (!maxAngleRad || maxAngleRad <= 0) return direction.clone().normalize();
+    const dir = direction.clone().normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    let right = new THREE.Vector3().crossVectors(dir, up);
+    if (right.lengthSq() < 1e-6) {
+        right = new THREE.Vector3(1, 0, 0).cross(dir);
+    }
+    right.normalize();
+    const forward = dir;
+    const binormal = new THREE.Vector3().crossVectors(forward, right).normalize();
+    const angle = Math.random() * maxAngleRad;
+    const azimuth = Math.random() * Math.PI * 2;
+    const spread = forward.clone().multiplyScalar(Math.cos(angle))
+        .add(right.clone().multiplyScalar(Math.sin(angle) * Math.cos(azimuth)))
+        .add(binormal.clone().multiplyScalar(Math.sin(angle) * Math.sin(azimuth)));
+    return spread.normalize();
+}
+
 function aiShoot(ai, timeElapsed) {
     if (!isGameRunning) return;
     if (isBillBattleMode() && !billBattleAttackActivated) return;
@@ -7580,6 +7626,15 @@ function aiShoot(ai, timeElapsed) {
         if (muzzleToTargetAngle > THREE.MathUtils.degToRad(45)) return;
     }
     direction.normalize();
+    if (gameSettings.aiShotLevel === 'ama') {
+        let spreadDeg = 0;
+        if (ai.currentWeapon === WEAPON_SR) spreadDeg = 2.0;
+        else if (ai.currentWeapon === WEAPON_MR) spreadDeg = 2.5;
+        else if (ai.currentWeapon === WEAPON_RR) spreadDeg = 3.5;
+        if (spreadDeg > 0) {
+            direction = applyAIAimSpread(direction, THREE.MathUtils.degToRad(spreadDeg));
+        }
+    }
     let canAIShoot = false;
     let aiProjectileColor = 0xffff00;
     let aiProjectileSize = 0.1;
