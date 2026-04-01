@@ -1551,20 +1551,10 @@ let billBattleAttackActivated = false;
   let billBattleBaseDirectional = null;
 
   function ensureBuildStamp() {
-      let el = document.getElementById('build-stamp');
-      if (!el) {
-          el = document.createElement('div');
-          el.id = 'build-stamp';
-          el.style.position = 'fixed';
-          el.style.left = '8px';
-          el.style.bottom = '8px';
-          el.style.fontSize = '12px';
-          el.style.color = 'rgba(255,255,255,0.6)';
-          el.style.zIndex = '1000';
-          el.style.pointerEvents = 'none';
-          document.body.appendChild(el);
+      const el = document.getElementById('build-stamp');
+      if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
       }
-      el.textContent = `BUILD ${BUILD_ID}`;
   }
 let isIgnoringTowerCollision = false;
 let ignoreTowerTimer = 0;
@@ -6487,6 +6477,7 @@ function findAndTargetWeapon(ai) {
 }
 
 const projectiles = [];
+const rocketTrails = [];
 const debris = [];
 const projectileSpeed = 50;
 const MAX_PROJECTILES = 180;
@@ -6504,6 +6495,9 @@ function createProjectile(startPos, direction, color, size = 0.1, isRocket = fal
     bulletGeometry = new THREE.CylinderGeometry(bulletRadius, bulletRadius, bulletLength, 8);
     const bulletMaterial = new THREE.MeshBasicMaterial({ color: color });
     const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    bullet.userData.isProjectile = true;
+    bullet.userData.source = source;
+    bullet.userData.shooter = shooter || null;
     bullet.position.copy(startPos).add(direction.clone().multiplyScalar(0.5));
     const axis = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion();
@@ -7122,18 +7116,27 @@ function createRedSmokeEffect(position) {
     }
 }
 
-function createRocketTrail(position) {
+function createRocketTrail(position, source = null, shooter = null) {
     const trailGeometry = new THREE.SphereGeometry(0.1, 4, 4);
     const trailMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
     const particle = new THREE.Mesh(trailGeometry, trailMaterial);
     particle.position.copy(position);
+    particle.userData.source = source;
+    particle.userData.shooter = shooter;
     scene.add(particle);
+    rocketTrails.push({ mesh: particle, source: source, shooter: shooter });
     const duration = 0.8 + Math.random() * 0.5;
     new TWEEN.Tween(particle.scale).to({ x: 0.01, y: 0.01, z: 0.01 }, duration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
     new TWEEN.Tween(trailMaterial).to({ opacity: 0 }, duration * 1000).easing(TWEEN.Easing.Linear.None).onComplete(() => {
         scene.remove(particle);
         particle.geometry.dispose();
         disposeMaterial(particle.material); // 安全なマテリアル破棄を使用
+        for (let i = rocketTrails.length - 1; i >= 0; i--) {
+            if (rocketTrails[i].mesh === particle) {
+                rocketTrails.splice(i, 1);
+                break;
+            }
+        }
     }).start();
 }
 
@@ -7141,6 +7144,84 @@ function clearAIRocketInFlight(projectile) {
     if (!projectile || !projectile.isRocket || projectile.source !== 'ai') return;
     const shooter = projectile.shooter;
     if (shooter && shooter.userData) shooter.userData.rocketInFlight = false;
+}
+
+function removeAIProjectiles(ai, removeAllAI = false) {
+    if (!ai && !removeAllAI) return;
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        if (p.source !== 'ai') continue;
+        if (!removeAllAI && p.shooter !== ai) continue;
+        clearAIRocketInFlight(p);
+        if (p.mesh) {
+            if (p.mesh.parent) {
+                p.mesh.parent.remove(p.mesh);
+            } else {
+                scene.remove(p.mesh);
+            }
+            if (p.mesh.geometry) p.mesh.geometry.dispose();
+            if (p.mesh.material) disposeMaterial(p.mesh.material);
+        }
+        projectiles.splice(i, 1);
+    }
+    for (let i = rocketTrails.length - 1; i >= 0; i--) {
+        const trail = rocketTrails[i];
+        if (trail.source !== 'ai') continue;
+        if (!removeAllAI && trail.shooter !== ai) continue;
+        const mesh = trail.mesh;
+        if (mesh) {
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            } else {
+                scene.remove(mesh);
+            }
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) disposeMaterial(mesh.material);
+        }
+        rocketTrails.splice(i, 1);
+    }
+    // Safety net: remove any stray projectile meshes that aren't tracked anymore.
+    const toRemove = [];
+    scene.traverse((obj) => {
+        if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isProjectile) return;
+        if (!removeAllAI && obj.userData.shooter !== ai) return;
+        if (removeAllAI && obj.userData.source !== 'ai') return;
+        toRemove.push(obj);
+    });
+    for (const mesh of toRemove) {
+        if (mesh.parent) {
+            mesh.parent.remove(mesh);
+        } else {
+            scene.remove(mesh);
+        }
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) disposeMaterial(mesh.material);
+    }
+}
+
+let lastProjectileCleanupTime = 0;
+function cleanupOrphanProjectiles(timeElapsed) {
+    if (timeElapsed - lastProjectileCleanupTime < 1.0) return;
+    lastProjectileCleanupTime = timeElapsed;
+    const liveMeshes = new Set();
+    for (const p of projectiles) {
+        if (p && p.mesh) liveMeshes.add(p.mesh);
+    }
+    const toRemove = [];
+    scene.traverse((obj) => {
+        if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isProjectile) return;
+        if (liveMeshes.has(obj)) return;
+        toRemove.push(obj);
+    });
+    for (const mesh of toRemove) {
+        if (mesh.parent) {
+            mesh.parent.remove(mesh);
+        } else {
+            scene.remove(mesh);
+        }
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) disposeMaterial(mesh.material);
+    }
 }
 
 function getPlayerSafeFireData(direction) {
@@ -8792,6 +8873,19 @@ function restartGame() {
         scene.remove(projectiles[i].mesh);
     }
     projectiles.length = 0;
+    for (let i = rocketTrails.length - 1; i >= 0; i--) {
+        const trail = rocketTrails[i];
+        if (trail.mesh) {
+            if (trail.mesh.parent) {
+                trail.mesh.parent.remove(trail.mesh);
+            } else {
+                scene.remove(trail.mesh);
+            }
+            if (trail.mesh.geometry) trail.mesh.geometry.dispose();
+            if (trail.mesh.material) disposeMaterial(trail.mesh.material);
+        }
+    }
+    rocketTrails.length = 0;
     for (let i = debris.length - 1; i >= 0; i--) {
         const mesh = debris[i].mesh;
         if (mesh.parent) {
@@ -9492,6 +9586,9 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     if (!ai) return;
     if (!ai.userData) ai.userData = {};
     ai.userData.isDying = true;
+    if (gameSettings.aiShotLevel === 'ama') {
+        removeAIProjectiles(ai, true);
+    }
     if (isBillBattleMode() && killerSource !== 'player') {
         finalizeAIDeathWithoutKillCam(ai, killerSource);
         return;
@@ -10365,6 +10462,7 @@ function animate() {
     updateBillBattleAttackDelay(timeElapsed);
     updateBillBattleElevator(timeElapsed);
     updateBillBattleLightFlicker(timeElapsed);
+    cleanupOrphanProjectiles(timeElapsed);
     const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
 
     // 定期的に浮遊屋根パーツをクリーンアップ（ビルバトルは除外）
@@ -12128,7 +12226,7 @@ function animate() {
               }
           }
           if (p.isRocket) {
-              createRocketTrail(p.mesh.position.clone());
+              createRocketTrail(p.mesh.position.clone(), p.source, p.shooter);
           }
           const bulletSphere = new THREE.Sphere(p.mesh.position, p.isRocket ? 0.5 : 0.1);
           // Obstacle hit is already handled by the segment raycast above.
