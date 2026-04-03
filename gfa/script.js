@@ -8,12 +8,15 @@ let gameSettings = {
     srCount: 1,
     sgCount: 1,
     mrCount: 1,
-    defaultWeapon: 'pistol',
+    defaultWeapon: 'machinegun',
+    defaultWeaponPlayer: 'machinegun',
+    defaultWeaponAI: 'machinegun',
     medikitCount: 0,
     mapType: 'default',
     aiCount: 3,
     autoAim: true,
-    aiShotLevel: 'ama',
+    aiShotLevel: 'Amature',
+    bgmMute: false,
     nightModeEnabled: false,
     nightModeLightIntensity: 3.0,
     timeLapseMode: false,
@@ -297,6 +300,7 @@ let characterEditorAnimationId = null;
         ai2mGunSound = document.getElementById('ai2mGunSound');
         aiGunSound = document.getElementById('aiGunSound');
         explosionSound = document.getElementById('explosionSound');
+        bgmAudio = document.getElementById('bgm-opm');
         relAudio = document.getElementById('rel-audio');
         startScreen = document.getElementById('start-screen');
         gameOverScreen = document.getElementById('game-over-screen');
@@ -364,7 +368,7 @@ let characterEditorAnimationId = null;
                 gameDurationDiv.id = 'game-duration-setting';
                 gameDurationDiv.style.marginTop = '10px';
                 gameDurationDiv.innerHTML = `
-                    <label style="display: block;">プレイ時間 (チームデスマッチ):</label>
+                    <label style="display: block;">プレイ時間 (チームデスマッチのみ有効):</label>
                     <label style="display: inline-block; margin-right: 10px;">
                         <input type="radio" name="game-duration" value="180" checked> 3分
                     </label>
@@ -410,24 +414,48 @@ let characterEditorAnimationId = null;
         if (billBattleSizeSelect) billBattleSizeSelect.addEventListener('change', () => { gameSettings.billBattleSize = billBattleSizeSelect.value; saveSettings(); });
         if (billBattleLightingSelect) billBattleLightingSelect.addEventListener('change', () => { gameSettings.billBattleLighting = billBattleLightingSelect.value; saveSettings(); });
         const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
+        const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
+        const syncDefaultWeaponChecks = () => {
+            const target = defaultWeaponTargetSelect ? defaultWeaponTargetSelect.value : 'player';
+            const selected = target === 'ai'
+                ? (gameSettings.defaultWeaponAI || WEAPON_MG)
+                : (gameSettings.defaultWeaponPlayer || WEAPON_MG);
+            defaultWeaponChecks.forEach(check => {
+                check.checked = (selected === check.value);
+            });
+        };
         if (defaultWeaponChecks.length > 0) {
             defaultWeaponChecks.forEach(check => {
-                check.checked = (gameSettings.defaultWeapon === check.value);
                 check.addEventListener('change', () => {
                     if (check.checked) {
                         defaultWeaponChecks.forEach(other => {
                             if (other !== check) other.checked = false;
                         });
-                        gameSettings.defaultWeapon = check.value;
+                        if (defaultWeaponTargetSelect && defaultWeaponTargetSelect.value === 'ai') {
+                            gameSettings.defaultWeaponAI = check.value;
+                        } else {
+                            gameSettings.defaultWeaponPlayer = check.value;
+                        }
                     } else {
                         const anyChecked = Array.from(defaultWeaponChecks).some(c => c.checked);
-                        gameSettings.defaultWeapon = anyChecked
+                        const fallback = anyChecked
                             ? Array.from(defaultWeaponChecks).find(c => c.checked).value
-                            : WEAPON_PISTOL;
+                            : WEAPON_MG;
+                        if (defaultWeaponTargetSelect && defaultWeaponTargetSelect.value === 'ai') {
+                            gameSettings.defaultWeaponAI = fallback;
+                        } else {
+                            gameSettings.defaultWeaponPlayer = fallback;
+                        }
                     }
                     saveSettings();
                 });
             });
+            if (defaultWeaponTargetSelect) {
+                defaultWeaponTargetSelect.addEventListener('change', () => {
+                    syncDefaultWeaponChecks();
+                });
+            }
+            syncDefaultWeaponChecks();
         }
         const medikitCountSelect = document.getElementById('medikit-count');
         if (medikitCountSelect) medikitCountSelect.addEventListener('change', () => {
@@ -639,9 +667,29 @@ let characterEditorAnimationId = null;
             e.preventDefault();
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('readme-screen').style.display = 'flex';
+            updateMenuBGM();
         });
         readmeLinkDiv.appendChild(readmeLink);
+        const bgmMuteDiv = document.createElement('div');
+        bgmMuteDiv.style.marginTop = '8px';
+        bgmMuteDiv.style.textAlign = 'center';
+        const bgmLabel = document.createElement('label');
+        bgmLabel.style.color = 'white';
+        bgmLabel.style.fontSize = '0.9em';
+        const bgmMuteCheckbox = document.createElement('input');
+        bgmMuteCheckbox.type = 'checkbox';
+        bgmMuteCheckbox.id = 'bgm-mute-checkbox';
+        bgmMuteCheckbox.checked = !!gameSettings.bgmMute;
+        bgmMuteCheckbox.addEventListener('change', () => {
+            gameSettings.bgmMute = !!bgmMuteCheckbox.checked;
+            saveSettings();
+            updateMenuBGM();
+        });
+        bgmLabel.appendChild(bgmMuteCheckbox);
+        bgmLabel.appendChild(document.createTextNode(' BGM Mute'));
+        bgmMuteDiv.appendChild(bgmLabel);
         gunFightSettingsTitle.after(readmeLinkDiv);
+        readmeLinkDiv.after(bgmMuteDiv);
     }
 
     // ReadMeページの追加
@@ -664,22 +712,27 @@ let characterEditorAnimationId = null;
         align-items: center;
     `;
     readmeScreen.innerHTML = `
-        <div style="max-width: 800px; width: 100%; text-align: left;">
+        <div style="max-width: 500px; width: 100%; text-align: left; margin: 0 auto; padding: 0 10px; box-sizing: border-box;">
             <h1 style="text-align: center; color: lightgreen;">GunFightArenaへようこそ</h1>
-            <p>1V3から2V2のチームデスマッチまで、存分にGunFightが楽しめるシンプルかつ超エキサイティングなFPS！それがこのGunFightArenaだ！</p>
-            <p>まずはプレイヤーと敵AIのHP（体力）を決めて、ProjectileSpeed（弾の速さ）を決めよう！×2の最速が一番エキサイティングだぞ！</p>
-            <p>WeaponCountは、アリーナ内に配置できる各武器の数だ。武器は取った後も復活するぞ！但し、武器は1種類しか持つことができない。弾が尽きたら自動的にハンドガンに切り替わる。<br>Medikitは、HPが1回復する。アリーナに配置する数を決めよう！但し、1V3のアーケードモードのみで配置可だ。</p>
-            <p>AICountで敵AIの数を決めよう！チームデスマッチでは、AIが1体味方になるが、その際にも必ず3AIsを選ぶようにしよう！</p>
-            <p>FieldStateで、障害物が破壊された状態からのリスタートが選べるぞ！Keepの場合はどんどん隠れる場所がなくなっていくぞ！</p>
-            <p>MapTypeでは、アプリ内蔵のデフォルトマップか、シンプルだが毎回障害物の配置が異なるランダムマップか、自作のオリジナルカスタムマップかをそれぞれ選べるぞ！</p>
-            <p>強力なMap Editerで自作のオリジナルマップをゼロから作成可能！マップを簡単にカスタマイズして、より一層熱いバトルが楽しめる！</p>
-            <p>LoadCustomMapで自作のマップデータ（.json)を読み込もう！一度読み込んだら、次回からはここからマップを呼び出せるぞ！</p>
-            <p>GameModeで、さまざまなルールの熱いバトルを楽しもう！尚、プレイ時間はチームデスマッチとフリーフォーオールで有効だ！</p>
-            <p>NightModeとは、まさに暗闇での夜戦モード！緊張感たっぷりのスリリングなバトルが楽しめる。LightIntensityでアリーナの明るさを調整可能！</p>
-            <p>ButtonSettingでスマートフォンのボタン位置調整が可能！スマホでは、ゲーム中に★マークを押してポーズONで調整できる。自分に合ったボタンポジションでバトルに挑もう！</p>
-            <p>チームデスマッチでは、味方AIからのFollow（フォロー）が受けられる。Followボタンを押すと、味方AIがプレイヤーに追従し、敵を発見した際には、攻撃もしてくれるぞ！もし敵と遭遇した際には再度ボタンを押して味方AIをフリーにさせて、積極的に攻撃をさせよう！チームワークで敵の背後に回り込んで仕留めるといった戦術も可能だ！但し、フレンドリーファイアにはくれぐれも注意！</p>
-<p>■スマホでの操作：画面左半分＝前後左右移動　画面右半分＝始点移動　各種ボタン＝攻撃、しゃがみ、フォロー　★ボタン＝ポーズ&設定画面　×＝狙撃解除（スコープ画面内）</p>
-<p>■PCでの操作：W=前進　S＝後進　A=左移動　D＝右移動　P=ポーズ&設定画面　F=AIフォロー　C＝しゃがむ　マウス＝視点移動　左クリック＝武器発射　右クリック＝狙撃解除</p>
+            <p>FreeForAllをはじめ、1V3から2V2のTeamDeathmatchまで、存分にGunFightが楽しめるシンプルかつ超エキサイティングなFPS。それがこのGunFightArenaだ！</p>
+            <p>
+・プレイヤーと敵AIのHPを自由に変更できる。無敵モード可。<br>
+・プレイヤーのデフォルト武器と敵AIのデフォルト武器をそれぞれ選択可。<br>
+・ProjectileSpeedで弾の速さを可変できる。<br>
+・Character Editerでキャラの容姿をカスタマイズ可能。<br>
+・WeaponCountでアリーナ内に配置できる各武器の数を可変できる。武器は取った後も復活。但し、装備できる武器は1種類のみ。別の武器を拾うことでチェンジ。<br>
+・Medikitは、アーケード・モードとインドア・コンバットモードのみで有効。HPが回復する。配置する数を可変できる。<br>
+・AICountで敵AIの数を変更可能。チームデスマッチでは、AIが1体味方になる。<br>
+・強力なMap Editerで自作のオリジナルマップをゼロから作成可。自作のマップデータを.jsonとして保存＆読み込み可。<br>
+・NightModeは、暗闇での夜戦モード。LightIntensityでアリーナの明るさを調整可能。<br>
+・ButtonSettingでスマートフォンのボタン位置調整が可能。ゲーム中に★マークを押し、ポーズONで調整可。<br>
+・チームデスマッチでは、Followモードあり。味方AIがプレイヤーを常に追従して援護、攻撃をする。<br>
+・INDOOR COMBATは室内接近戦。部屋のサイズを可変できる。AIはすべて敵。<br>
+・爆発物（ドラム缶）を破壊することで近くの敵をキル可能。爆発物同士は誘爆する。<br>
+・障害物や建物も規定数の爆破回数で破壊可能。
+            </p>
+            <p>■スマホでの操作：<br>画面左半分＝前後左右移動　画面右半分＝始点移動　各種ボタン＝攻撃、しゃがみ、フォロー　★ボタン＝ポーズ&設定画面　×＝狙撃解除（スコープ画面内左）</p>
+            <p>■PCでの操作：<br>W=前進　S＝後進　A=左移動　D＝右移動　P=ポーズ&設定画面　F=AIフォロー　C＝しゃがむ　マウス＝視点移動　左クリック＝武器発射　右クリック＝狙撃解除　Esc/★ボタン＝ポーズ&設定画面</p>
             <div style="text-align: center; margin-top: 30px;">
                 <button id="readme-back-button" style="padding: 15px 30px; font-size: 1.2em; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">戻る</button>
             </div>
@@ -692,6 +745,7 @@ let characterEditorAnimationId = null;
         readmeBackButton.addEventListener('click', () => {
             document.getElementById('readme-screen').style.display = 'none';
             document.getElementById('start-screen').style.display = 'flex';
+            updateMenuBGM();
         });
     }
     }); // Close first DOMContentLoaded event listener
@@ -974,7 +1028,7 @@ function isInfiniteDefaultWeaponActive(weaponType) {
 }
 
 function isDefaultM1Weapon() {
-    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    const selected = gameSettings.defaultWeaponPlayer || WEAPON_MG;
     return selected === WEAPON_MR;
 }
 
@@ -1098,7 +1152,7 @@ function setPlayerMRClipAmmo(value) {
 
 function isAIDefaultM1Weapon(ai) {
     if (!ai) return false;
-    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    const selected = gameSettings.defaultWeaponAI || WEAPON_MG;
     return selected === WEAPON_MR;
 }
 
@@ -1120,7 +1174,7 @@ function setAIClipAmmo(ai, value) {
 }
 
 function applyPlayerDefaultWeaponLoadout() {
-    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    const selected = gameSettings.defaultWeaponPlayer || WEAPON_MG;
     currentWeapon = selected;
     ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
     ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
@@ -1137,7 +1191,7 @@ function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
 }
 
 function applyAIDefaultWeaponLoadout(ai) {
-    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    const selected = gameSettings.defaultWeaponAI || WEAPON_MG;
     if (!ai.userData) ai.userData = {};
     ai.currentWeapon = selected;
     ai.ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
@@ -1150,8 +1204,8 @@ function applyAIDefaultWeaponLoadout(ai) {
 }
 
 function getPlayerFallbackWeapon() {
-    return gameSettings.defaultWeapon && gameSettings.defaultWeapon !== WEAPON_PISTOL
-        ? gameSettings.defaultWeapon
+    return gameSettings.defaultWeaponPlayer && gameSettings.defaultWeaponPlayer !== WEAPON_PISTOL
+        ? gameSettings.defaultWeaponPlayer
         : WEAPON_PISTOL;
 }
 
@@ -1169,8 +1223,8 @@ function switchPlayerToFallbackWeapon() {
 
 function switchAIToFallbackWeapon(ai) {
     if (!ai) return;
-    const fallback = gameSettings.defaultWeapon && gameSettings.defaultWeapon !== WEAPON_PISTOL
-        ? gameSettings.defaultWeapon
+    const fallback = gameSettings.defaultWeaponAI && gameSettings.defaultWeaponAI !== WEAPON_PISTOL
+        ? gameSettings.defaultWeaponAI
         : WEAPON_PISTOL;
     ai.currentWeapon = fallback;
     if (fallback === WEAPON_MG && ai.ammoMG <= 0) ai.ammoMG = MAX_AMMO_MG;
@@ -1735,6 +1789,8 @@ function saveSettings() {
     if (billBattleLightingSelect) {
         gameSettings.billBattleLighting = billBattleLightingSelect.value;
     }
+    // Keep legacy field aligned
+    gameSettings.defaultWeapon = gameSettings.defaultWeaponPlayer || WEAPON_MG;
     applyBillBattleModeConstraints();
     updateSettingsAvailabilityForMode();
     localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
@@ -1754,6 +1810,12 @@ function loadSettings() {
         if (parsedSavedSettings.aiShotLevel === undefined) {
             parsedSavedSettings.aiShotLevel = 'ama';
         }
+        if (parsedSavedSettings.bgmMute === undefined) {
+            parsedSavedSettings.bgmMute = false;
+        }
+        if (parsedSavedSettings.bgmMute === undefined) {
+            parsedSavedSettings.bgmMute = false;
+        }
         if (parsedSavedSettings.nightModeLightIntensity === undefined) {
             parsedSavedSettings.nightModeLightIntensity = 2.0;
         }
@@ -1772,8 +1834,11 @@ function loadSettings() {
         if (parsedSavedSettings.billBattleLighting === undefined) {
             parsedSavedSettings.billBattleLighting = 'all';
         }
-        if (parsedSavedSettings.defaultWeapon === undefined) {
-            parsedSavedSettings.defaultWeapon = 'pistol';
+        if (parsedSavedSettings.defaultWeaponPlayer === undefined) {
+            parsedSavedSettings.defaultWeaponPlayer = parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
+        if (parsedSavedSettings.defaultWeaponAI === undefined) {
+            parsedSavedSettings.defaultWeaponAI = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
         if (parsedSavedSettings.mrCount === undefined) {
             parsedSavedSettings.mrCount = gameSettings.mrCount;
@@ -1809,8 +1874,12 @@ function loadSettings() {
         document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
             radio.checked = (radio.value === String(gameSettings.barrelRespawn));
         });
+        const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
+        if (defaultWeaponTargetSelect) {
+            defaultWeaponTargetSelect.value = 'player';
+        }
         document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
-            check.checked = (gameSettings.defaultWeapon === check.value);
+            check.checked = (gameSettings.defaultWeaponPlayer === check.value);
         });
         const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
         const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
@@ -1960,8 +2029,11 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 0;
         }
-        if (parsedSavedSettings.defaultWeapon === undefined) {
-            parsedSavedSettings.defaultWeapon = 'pistol';
+        if (parsedSavedSettings.defaultWeaponPlayer === undefined) {
+            parsedSavedSettings.defaultWeaponPlayer = parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
+        if (parsedSavedSettings.defaultWeaponAI === undefined) {
+            parsedSavedSettings.defaultWeaponAI = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
                 if (parsedSavedSettings.buttonPositions === undefined) {
                     parsedSavedSettings.buttonPositions = {
@@ -1998,8 +2070,12 @@ function loadMapSettings(mapName) {
                 document.getElementById('sr-count').value = gameSettings.srCount;
                 if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
                 if (document.getElementById('mr-count')) document.getElementById('mr-count').value = gameSettings.mrCount;
+                const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
+                if (defaultWeaponTargetSelect) {
+                    defaultWeaponTargetSelect.value = 'player';
+                }
                 document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
-                    check.checked = (gameSettings.defaultWeapon === check.value);
+                    check.checked = (gameSettings.defaultWeaponPlayer === check.value);
                 });
                 if (document.getElementById('medikit-count')) document.getElementById('medikit-count').value = gameSettings.medikitCount;
                 document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
@@ -2187,6 +2263,7 @@ let ai1mGunSound;
 let ai2mGunSound;
 let aiGunSound;
 let explosionSound;
+let bgmAudio;
 let startScreen;
 let relAudio;
 let gameOverScreen;
@@ -6479,6 +6556,7 @@ function findAndTargetWeapon(ai) {
 const projectiles = [];
 const rocketTrails = [];
 const debris = [];
+const pendingExplosionClears = [];
 const projectileSpeed = 50;
 const MAX_PROJECTILES = 180;
 const ROCKET_EXPLOSION_RADIUS = 5;
@@ -6489,6 +6567,7 @@ function createProjectile(startPos, direction, color, size = 0.1, isRocket = fal
         return;
     }
     const finalSpeed = speed * (gameSettings.projectileSpeedMultiplier || 1.0);
+    const now = clock ? clock.getElapsedTime() : 0;
     let bulletGeometry;
     const bulletLength = size * 5;
     const bulletRadius = size / 2;
@@ -6506,7 +6585,19 @@ function createProjectile(startPos, direction, color, size = 0.1, isRocket = fal
     scene.add(bullet);
     const velocity = direction.clone().normalize().multiplyScalar(finalSpeed);
     const projectileLife = (weaponType === WEAPON_SG) ? SHOTGUN_RANGE / finalSpeed : Infinity;
-    projectiles.push({ mesh: bullet, velocity: velocity, isRocket: isRocket, source: source, isSniper: isSniper, weaponType: weaponType, life: projectileLife, shooter: shooter });
+    projectiles.push({
+        mesh: bullet,
+        velocity: velocity,
+        isRocket: isRocket,
+        source: source,
+        isSniper: isSniper,
+        weaponType: weaponType,
+        life: projectileLife,
+        shooter: shooter,
+        spawnTime: now,
+        lastPos: bullet.position.clone(),
+        stuckTime: 0
+    });
 }
 
 function createExplosionEffect(position) {
@@ -7120,6 +7211,7 @@ function createRocketTrail(position, source = null, shooter = null) {
     const trailGeometry = new THREE.SphereGeometry(0.1, 4, 4);
     const trailMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
     const particle = new THREE.Mesh(trailGeometry, trailMaterial);
+    particle.userData.isRocketTrail = true;
     particle.position.copy(position);
     particle.userData.source = source;
     particle.userData.shooter = shooter;
@@ -7200,6 +7292,96 @@ function removeAIProjectiles(ai, removeAllAI = false) {
 }
 
 let lastProjectileCleanupTime = 0;
+function clearProjectileArtifacts() {
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        clearAIRocketInFlight(p);
+        if (p && p.mesh) {
+            if (p.mesh.parent) {
+                p.mesh.parent.remove(p.mesh);
+            } else {
+                scene.remove(p.mesh);
+            }
+            if (p.mesh.geometry) p.mesh.geometry.dispose();
+            if (p.mesh.material) disposeMaterial(p.mesh.material);
+        }
+    }
+    projectiles.length = 0;
+    for (let i = rocketTrails.length - 1; i >= 0; i--) {
+        const trail = rocketTrails[i];
+        const mesh = trail && trail.mesh;
+        if (mesh) {
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            } else {
+                scene.remove(mesh);
+            }
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) disposeMaterial(mesh.material);
+        }
+    }
+    rocketTrails.length = 0;
+    // Safety net: remove any stray projectile/rocket trail meshes that aren't tracked anymore.
+    const toRemove = [];
+    scene.traverse((obj) => {
+        if (!obj || !obj.isMesh || !obj.userData) return;
+        if (!obj.userData.isProjectile && !obj.userData.isRocketTrail) return;
+        toRemove.push(obj);
+    });
+    for (const mesh of toRemove) {
+        if (mesh.parent) {
+            mesh.parent.remove(mesh);
+        } else {
+            scene.remove(mesh);
+        }
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) disposeMaterial(mesh.material);
+    }
+}
+
+function queueExplosionClear(position, radius) {
+    if (!position || !Number.isFinite(radius)) return;
+    pendingExplosionClears.push({ pos: position.clone(), radius: radius });
+}
+
+function applyExplosionClears() {
+    if (pendingExplosionClears.length === 0) return;
+    for (const entry of pendingExplosionClears) {
+        const r = entry.radius + 0.5;
+        const r2 = r * r;
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            const p = projectiles[i];
+            if (!p || !p.mesh) continue;
+            if (p.mesh.position.distanceToSquared(entry.pos) > r2) continue;
+            clearAIRocketInFlight(p);
+            if (p.mesh.parent) {
+                p.mesh.parent.remove(p.mesh);
+            } else {
+                scene.remove(p.mesh);
+            }
+            if (p.mesh.geometry) p.mesh.geometry.dispose();
+            if (p.mesh.material) disposeMaterial(p.mesh.material);
+            projectiles.splice(i, 1);
+        }
+        const toRemove = [];
+        scene.traverse((obj) => {
+            if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isProjectile) return;
+            if (obj.position.distanceToSquared(entry.pos) > r2) return;
+            toRemove.push(obj);
+        });
+        for (const mesh of toRemove) {
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            } else {
+                scene.remove(mesh);
+            }
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) disposeMaterial(mesh.material);
+        }
+    }
+    pendingExplosionClears.length = 0;
+}
+
 function cleanupOrphanProjectiles(timeElapsed) {
     if (timeElapsed - lastProjectileCleanupTime < 1.0) return;
     lastProjectileCleanupTime = timeElapsed;
@@ -7390,7 +7572,7 @@ function shoot() {
     switch (currentWeapon) {
         case WEAPON_PISTOL: canFire = true; fireRate = FIRE_RATE_PISTOL; break;
         case WEAPON_MG:
-            if (gameSettings.defaultWeapon === WEAPON_MG && now < playerMGReloadUntil) {
+            if (gameSettings.defaultWeaponPlayer === WEAPON_MG && now < playerMGReloadUntil) {
                 canFire = false;
                 break;
             }
@@ -7453,7 +7635,7 @@ function shoot() {
         if (currentWeapon === WEAPON_MG) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_MG) && --ammoMG === 0) {
                 ammoMG = 0;
-                if (gameSettings.defaultWeapon === WEAPON_MG) {
+                if (gameSettings.defaultWeaponPlayer === WEAPON_MG) {
                     // デフォルトMGのみリロード
                     playerMGReloadUntil = now + 2.0;
                     showReloadingText();
@@ -8276,10 +8458,46 @@ function initializeAudio() {
     for (const id of audioMetaById.keys()) {
         ensureSoundBuffer(id);
     }
+    updateMenuBGM();
+}
+
+function isSettingsScreenVisible() {
+    const start = document.getElementById('start-screen');
+    const readme = document.getElementById('readme-screen');
+    const buttonSettings = document.getElementById('button-settings-screen');
+    return (start && start.style.display !== 'none')
+        || (readme && readme.style.display !== 'none')
+        || (buttonSettings && buttonSettings.style.display !== 'none');
+}
+
+function playMenuBGM() {
+    if (!bgmAudio || gameSettings.bgmMute) return;
+    bgmAudio.loop = true;
+    bgmAudio.volume = 1.0;
+    bgmAudio.play().catch(() => {});
+}
+
+function stopMenuBGM() {
+    if (!bgmAudio) return;
+    bgmAudio.pause();
+    bgmAudio.currentTime = 0;
+}
+
+function updateMenuBGM() {
+    if (gameSettings.bgmMute) {
+        stopMenuBGM();
+        return;
+    }
+    if (isSettingsScreenVisible()) {
+        playMenuBGM();
+    } else {
+        stopMenuBGM();
+    }
 }
 
 function startGame() {
     debugLog('startGame() called');
+    stopMenuBGM();
     applySettingsScreenLighting(false);
     ensureBuildStamp();
       applyBillBattleModeConstraints();
@@ -8868,24 +9086,7 @@ function restartGame() {
         if (pause) { pause.style.display = 'none'; debugLog('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
     }
     enforceTouchUIVisibility();
-    for (let i = projectiles.length - 1; i >= 0; i--) {
-        clearAIRocketInFlight(projectiles[i]);
-        scene.remove(projectiles[i].mesh);
-    }
-    projectiles.length = 0;
-    for (let i = rocketTrails.length - 1; i >= 0; i--) {
-        const trail = rocketTrails[i];
-        if (trail.mesh) {
-            if (trail.mesh.parent) {
-                trail.mesh.parent.remove(trail.mesh);
-            } else {
-                scene.remove(trail.mesh);
-            }
-            if (trail.mesh.geometry) trail.mesh.geometry.dispose();
-            if (trail.mesh.material) disposeMaterial(trail.mesh.material);
-        }
-    }
-    rocketTrails.length = 0;
+    clearProjectileArtifacts();
     for (let i = debris.length - 1; i >= 0; i--) {
         const mesh = debris[i].mesh;
         if (mesh.parent) {
@@ -9688,6 +9889,8 @@ function showGameOver() {
     forceResetTouchState();
     isGameRunning = false;
     setFollowingPlayerMode(false);
+    stopMenuBGM();
+    clearProjectileArtifacts();
     gameOverScreen.style.display = 'flex';
     document.exitPointerLock();
 }
@@ -9695,6 +9898,8 @@ function showGameOver() {
 function showWinScreen() {
     forceResetTouchState();
     isGameRunning = false;
+    stopMenuBGM();
+    clearProjectileArtifacts();
     winScreen.style.display = 'flex';
     document.exitPointerLock();
     const winBtn = winScreen ? winScreen.querySelector('.restart-button') : null;
@@ -10483,7 +10688,7 @@ function animate() {
     // Player MG reload completion (needs to run even when not firing)
     if (playerMGReloadUntil > 0 && timeElapsed >= playerMGReloadUntil) {
         playerMGReloadUntil = 0;
-        if (gameSettings.defaultWeapon === WEAPON_MG) {
+        if (gameSettings.defaultWeaponPlayer === WEAPON_MG) {
             ammoMG = MAX_AMMO_MG;
             hideReloadingText();
         }
@@ -12490,11 +12695,13 @@ function animate() {
                 const hitIsBarrel = hitType === 'obstacle' && hitObject && hitObject.userData && hitObject.userData.type === 'barrel';
                 if (hitIsBarrel) {
                     explodeBarrel(hitObject, p.source, p.shooter || null);
+                    queueExplosionClear(hitObject.position, BARREL_EXPLOSION_RADIUS);
                 } else if (p.isRocket) {
                     const explosionPos = p.mesh.position.clone();
                     if (explosionSound) playSpatialSound(explosionSound, explosionPos);
                     createExplosionEffect(explosionPos);
                     applyExplosionEffectsToBillLights(explosionPos, ROCKET_EXPLOSION_RADIUS);
+                    queueExplosionClear(explosionPos, ROCKET_EXPLOSION_RADIUS);
                     const EXPLOSION_RADIUS_ACTUAL = ROCKET_EXPLOSION_RADIUS;
                 const allowActorDamage = canApplyBillBattleDamage();
                 if (allowActorDamage && p.source === 'player') {
@@ -12584,6 +12791,32 @@ function animate() {
             }
             continue;
         }
+        if (!p.lastPos) {
+            p.lastPos = p.mesh.position.clone();
+            p.stuckTime = 0;
+        } else {
+            const movedDist = p.mesh.position.distanceTo(p.lastPos);
+            if (movedDist < 0.001) {
+                p.stuckTime = (p.stuckTime || 0) + delta;
+            } else {
+                p.stuckTime = 0;
+            }
+            p.lastPos.copy(p.mesh.position);
+            if (p.stuckTime > 0.3) {
+                clearAIRocketInFlight(p);
+                if (p.mesh) {
+                    if (p.mesh.parent) {
+                        p.mesh.parent.remove(p.mesh);
+                    } else {
+                        scene.remove(p.mesh);
+                    }
+                    if (p.mesh.geometry) p.mesh.geometry.dispose();
+                    if (p.mesh.material) disposeMaterial(p.mesh.material);
+                }
+                projectiles.splice(i, 1);
+                continue;
+            }
+        }
         const projArenaR = Math.sqrt(p.mesh.position.x * p.mesh.position.x + p.mesh.position.z * p.mesh.position.z);
         if (projArenaR > ARENA_PLAY_AREA_RADIUS) {
             scene.remove(p.mesh);
@@ -12591,6 +12824,7 @@ function animate() {
             projectiles.splice(i, 1);
         }
     }
+    applyExplosionClears();
     const aiHPDisplays = [aiHPDisplay, ai2HPDisplay, ai3HPDisplay]; // グローバル変数を使用
     for (let i = 0; i < aiHPDisplays.length; i++) {
         const display = aiHPDisplays[i];
@@ -12779,9 +13013,23 @@ settingsLinks.forEach(link => {
         const screenToHideId = link.dataset.screenToHide;
         document.getElementById(screenToHideId).style.display = 'none';
         startScreen.style.display = 'flex';
+        updateMenuBGM();
     });
 });
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+let hasInitializedMenuAudio = false;
+const tryInitMenuAudio = () => {
+    if (hasInitializedMenuAudio) return;
+    hasInitializedMenuAudio = true;
+    initializeAudio();
+    updateMenuBGM();
+    document.removeEventListener('pointerdown', tryInitMenuAudio);
+    document.removeEventListener('touchstart', tryInitMenuAudio);
+    document.removeEventListener('keydown', tryInitMenuAudio);
+};
+document.addEventListener('pointerdown', tryInitMenuAudio, { passive: true });
+document.addEventListener('touchstart', tryInitMenuAudio, { passive: true });
+document.addEventListener('keydown', tryInitMenuAudio);
 
 // --- Button Settings Logic ---
 const buttonSettingsScreen = document.getElementById('button-settings-screen');
@@ -12795,11 +13043,13 @@ openButtonSettingsBtn.addEventListener('click', () => {
     startScreenElement.style.display = 'none';
     buttonSettingsScreen.style.display = 'block';
     feedbackDiv.style.display = 'none'; // Hide feedback on open
+    updateMenuBGM();
 });
 
 backToSettingsBtn.addEventListener('click', () => {
     buttonSettingsScreen.style.display = 'none';
     startScreenElement.style.display = 'block';
+    updateMenuBGM();
 });
 
 saveButtonPositionsBtn.addEventListener('click', () => {
