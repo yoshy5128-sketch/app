@@ -11,7 +11,7 @@ let gameSettings = {
     defaultWeapon: 'machinegun',
     defaultWeaponPlayer: 'machinegun',
     defaultWeaponAI: 'machinegun',
-    medikitCount: 0,
+    medikitCount: 5,
     mapType: 'default',
     aiCount: 3,
     autoAim: true,
@@ -1108,6 +1108,7 @@ function getMedikitHealAmount() {
     const billBattleLightingSelect = document.getElementById('billbattle-lighting');
     const medikitCountSelect = document.getElementById('medikit-count');
     const medikitSetting = document.getElementById('medikit-setting');
+    const gameDurationRadios = document.querySelectorAll('input[name="game-duration"]');
 
     if (playerHpSelect) {
         for (const opt of playerHpSelect.options) {
@@ -1123,6 +1124,13 @@ function getMedikitHealAmount() {
     setDisabled(timeLapseCheckbox, isBill);
     setDisabled(billBattleSizeSelect, !isBill);
     setDisabled(billBattleLightingSelect, !isBill);
+    gameDurationRadios.forEach(radio => {
+        radio.disabled = isBill;
+        const container = radio.closest && radio.closest('label') ? radio.closest('label') : radio;
+        if (container && container.style) {
+            container.style.opacity = isBill ? 0.5 : 1.0;
+        }
+    });
     const medikitEnabled = gameSettings.gameMode === 'arcade' || isBill;
     setDisabled(medikitCountSelect, !medikitEnabled);
     if (medikitSetting && medikitSetting.style) {
@@ -1820,7 +1828,7 @@ function loadSettings() {
             parsedSavedSettings.nightModeLightIntensity = 2.0;
         }
         if (parsedSavedSettings.medikitCount === undefined) {
-            parsedSavedSettings.medikitCount = 0;
+            parsedSavedSettings.medikitCount = 5;
         }
         if (parsedSavedSettings.billBattleSize === undefined) {
             parsedSavedSettings.billBattleSize = '100';
@@ -2027,7 +2035,7 @@ function loadMapSettings(mapName) {
             parsedSavedSettings.nightModeLightIntensity = 0.8;
         }
         if (parsedSavedSettings.medikitCount === undefined) {
-            parsedSavedSettings.medikitCount = 0;
+            parsedSavedSettings.medikitCount = 5;
         }
         if (parsedSavedSettings.defaultWeaponPlayer === undefined) {
             parsedSavedSettings.defaultWeaponPlayer = parsedSavedSettings.defaultWeapon || WEAPON_MG;
