@@ -1,23 +1,33 @@
-const PLAYER_INITIAL_POSITION = new THREE.Vector3(0, 2.0, -20);
-let gameSettings = {
-    playerHP: 20,
-    aiHP: 20,
+  const PLAYER_INITIAL_POSITION = new THREE.Vector3(0, 2.0, -20);
+  const BGM_TRACKS = [
+      'bgm/0001.mp3',
+      'bgm/0002.mp3',
+      'bgm/0003.mp3',
+      'bgm/0004.mp3'
+  ];
+  let gameSettings = {
+      playerHP: 20,
+      aiHP: 20,
     projectileSpeedMultiplier: 2.0,
     mgCount: 1,
     rrCount: 1,
     srCount: 1,
     sgCount: 1,
     mrCount: 1,
-    defaultWeapon: 'machinegun',
-    defaultWeaponPlayer: 'machinegun',
-    defaultWeaponAI: 'machinegun',
-    medikitCount: 5,
-    mapType: 'default',
-    aiCount: 3,
-    autoAim: true,
-    aiShotLevel: 'Amature',
-    bgmMute: false,
-    nightModeEnabled: false,
+      defaultWeapon: 'machinegun',
+      defaultWeaponPlayer: 'machinegun',
+      defaultWeaponAI: 'machinegun',
+        medikitCount: 5,
+      settingsVersion: 3,
+      mapType: 'default',
+      aiCount: 3,
+      autoAim: true,
+      aiShotLevel: 'Amature',
+      bgmMute: false,
+      bgmVolume: 0.7,
+      bgmMode: 'order',
+      bgmEnabledTracks: BGM_TRACKS.slice(),
+      nightModeEnabled: false,
     nightModeLightIntensity: 3.0,
     timeLapseMode: false,
     customMapName: 'Default Custom Map',
@@ -688,6 +698,30 @@ let characterEditorAnimationId = null;
         bgmLabel.appendChild(bgmMuteCheckbox);
         bgmLabel.appendChild(document.createTextNode(' BGM Mute'));
         bgmMuteDiv.appendChild(bgmLabel);
+        const bgmSettingsBtn = document.createElement('button');
+        bgmSettingsBtn.id = 'bgm-setting-btn';
+        bgmSettingsBtn.textContent = 'BGM Setting';
+        bgmSettingsBtn.style.marginTop = '8px';
+        bgmSettingsBtn.style.padding = '6px 12px';
+        bgmSettingsBtn.style.fontSize = '0.9em';
+        bgmSettingsBtn.style.backgroundColor = '#444';
+        bgmSettingsBtn.style.color = 'white';
+        bgmSettingsBtn.style.border = 'none';
+        bgmSettingsBtn.style.borderRadius = '4px';
+        bgmSettingsBtn.style.cursor = 'pointer';
+        bgmSettingsBtn.addEventListener('click', () => {
+            const bgmSettingsScreen = document.getElementById('bgm-settings-screen');
+            const startScreenEl = document.getElementById('start-screen');
+            if (bgmSettingsScreen && startScreenEl) {
+                startScreenEl.style.display = 'none';
+                bgmSettingsScreen.style.display = 'flex';
+                if (typeof refreshBgmSettingsUI === 'function') {
+                    refreshBgmSettingsUI();
+                }
+                updateMenuBGM();
+            }
+        });
+        bgmMuteDiv.appendChild(bgmSettingsBtn);
         gunFightSettingsTitle.after(readmeLinkDiv);
         readmeLinkDiv.after(bgmMuteDiv);
     }
@@ -1830,6 +1864,35 @@ function loadSettings() {
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 5;
         }
+        const savedVersionRaw = Number(parsedSavedSettings.settingsVersion);
+        const savedVersion = Number.isFinite(savedVersionRaw) ? savedVersionRaw : 0;
+        if (savedVersion < SETTINGS_VERSION && parsedSavedSettings.medikitCount === 0) {
+            parsedSavedSettings.medikitCount = 5;
+        }
+        if (parsedSavedSettings.bgmVolume === undefined) {
+            parsedSavedSettings.bgmVolume = 0.7;
+        }
+        parsedSavedSettings.bgmVolume = normalizeBgmVolume(parsedSavedSettings.bgmVolume);
+        if (parsedSavedSettings.bgmMode === undefined) {
+            parsedSavedSettings.bgmMode = 'order';
+        }
+        if (parsedSavedSettings.bgmMode !== 'order' && parsedSavedSettings.bgmMode !== 'random') {
+            parsedSavedSettings.bgmMode = 'order';
+        }
+        if (!Array.isArray(parsedSavedSettings.bgmEnabledTracks)) {
+            parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
+        } else {
+            const enabledSet = new Set(parsedSavedSettings.bgmEnabledTracks);
+            const filteredTracks = BGM_TRACKS.filter(track => enabledSet.has(track));
+            if (parsedSavedSettings.bgmEnabledTracks.length === 0) {
+                parsedSavedSettings.bgmEnabledTracks = [];
+            } else if (filteredTracks.length === 0) {
+                parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
+            } else {
+                parsedSavedSettings.bgmEnabledTracks = filteredTracks;
+            }
+        }
+        parsedSavedSettings.settingsVersion = SETTINGS_VERSION;
         if (parsedSavedSettings.billBattleSize === undefined) {
             parsedSavedSettings.billBattleSize = '100';
         }
@@ -2037,6 +2100,35 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 5;
         }
+        const savedVersionRaw = Number(parsedSavedSettings.settingsVersion);
+        const savedVersion = Number.isFinite(savedVersionRaw) ? savedVersionRaw : 0;
+        if (savedVersion < SETTINGS_VERSION && parsedSavedSettings.medikitCount === 0) {
+            parsedSavedSettings.medikitCount = 5;
+        }
+        if (parsedSavedSettings.bgmVolume === undefined) {
+            parsedSavedSettings.bgmVolume = 0.7;
+        }
+        parsedSavedSettings.bgmVolume = normalizeBgmVolume(parsedSavedSettings.bgmVolume);
+        if (parsedSavedSettings.bgmMode === undefined) {
+            parsedSavedSettings.bgmMode = 'order';
+        }
+        if (parsedSavedSettings.bgmMode !== 'order' && parsedSavedSettings.bgmMode !== 'random') {
+            parsedSavedSettings.bgmMode = 'order';
+        }
+        if (!Array.isArray(parsedSavedSettings.bgmEnabledTracks)) {
+            parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
+        } else {
+            const enabledSet = new Set(parsedSavedSettings.bgmEnabledTracks);
+            const filteredTracks = BGM_TRACKS.filter(track => enabledSet.has(track));
+            if (parsedSavedSettings.bgmEnabledTracks.length === 0) {
+                parsedSavedSettings.bgmEnabledTracks = [];
+            } else if (filteredTracks.length === 0) {
+                parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
+            } else {
+                parsedSavedSettings.bgmEnabledTracks = filteredTracks;
+            }
+        }
+        parsedSavedSettings.settingsVersion = SETTINGS_VERSION;
         if (parsedSavedSettings.defaultWeaponPlayer === undefined) {
             parsedSavedSettings.defaultWeaponPlayer = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
@@ -8473,39 +8565,146 @@ function isSettingsScreenVisible() {
     const start = document.getElementById('start-screen');
     const readme = document.getElementById('readme-screen');
     const buttonSettings = document.getElementById('button-settings-screen');
+    const bgmSettings = document.getElementById('bgm-settings-screen');
     return (start && start.style.display !== 'none')
         || (readme && readme.style.display !== 'none')
-        || (buttonSettings && buttonSettings.style.display !== 'none');
+        || (buttonSettings && buttonSettings.style.display !== 'none')
+        || (bgmSettings && bgmSettings.style.display !== 'none');
+}
+
+let currentBgmTrack = null;
+let bgmOrderIndex = 0;
+const MENU_BGM_TRACK = 'opm.mp3';
+
+function normalizeBgmVolume(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 0.7;
+    return Math.min(1, Math.max(0, num));
+}
+
+function getEnabledBgmTracks() {
+    if (!Array.isArray(gameSettings.bgmEnabledTracks)) {
+        return BGM_TRACKS.slice();
+    }
+    const enabledSet = new Set(gameSettings.bgmEnabledTracks);
+    const filtered = BGM_TRACKS.filter(track => enabledSet.has(track));
+    if (gameSettings.bgmEnabledTracks.length === 0) {
+        return [];
+    }
+    if (filtered.length === 0) {
+        return BGM_TRACKS.slice();
+    }
+    return filtered;
+}
+
+function pickNextBgmTrack() {
+    const enabledTracks = getEnabledBgmTracks();
+    if (enabledTracks.length === 0) return null;
+    if (gameSettings.bgmMode === 'random') {
+        let choice = enabledTracks[Math.floor(Math.random() * enabledTracks.length)];
+        if (enabledTracks.length > 1 && choice === currentBgmTrack) {
+            for (let i = 0; i < 5; i++) {
+                const candidate = enabledTracks[Math.floor(Math.random() * enabledTracks.length)];
+                if (candidate !== currentBgmTrack) {
+                    choice = candidate;
+                    break;
+                }
+            }
+        }
+        return choice;
+    }
+    const index = bgmOrderIndex % enabledTracks.length;
+    const choice = enabledTracks[index];
+    bgmOrderIndex = (index + 1) % enabledTracks.length;
+    return choice;
+}
+
+function applyBgmVolume() {
+    if (!bgmAudio) return;
+    bgmAudio.volume = normalizeBgmVolume(gameSettings.bgmVolume);
+}
+
+function playGameBGM(forceNewTrack = false) {
+    if (!bgmAudio || gameSettings.bgmMute) return;
+    const enabledTracks = getEnabledBgmTracks();
+    if (enabledTracks.length === 0) {
+        stopGameBGM(true);
+        return;
+    }
+    if (forceNewTrack || !currentBgmTrack || !enabledTracks.includes(currentBgmTrack)) {
+        currentBgmTrack = pickNextBgmTrack();
+        if (!currentBgmTrack) {
+            stopGameBGM(true);
+            return;
+        }
+        if (bgmAudio.getAttribute('src') !== currentBgmTrack) {
+            bgmAudio.src = currentBgmTrack;
+            bgmAudio.load();
+        }
+        bgmAudio.currentTime = 0;
+    }
+    bgmAudio.loop = true;
+    applyBgmVolume();
+    bgmAudio.play().catch(() => {});
+}
+
+function stopGameBGM(resetTime = false) {
+    if (!bgmAudio) return;
+    bgmAudio.pause();
+    if (resetTime) {
+        bgmAudio.currentTime = 0;
+    }
 }
 
 function playMenuBGM() {
     if (!bgmAudio || gameSettings.bgmMute) return;
+    if (bgmAudio.getAttribute('src') !== MENU_BGM_TRACK) {
+        bgmAudio.src = MENU_BGM_TRACK;
+        bgmAudio.load();
+    }
     bgmAudio.loop = true;
-    bgmAudio.volume = 1.0;
+    applyBgmVolume();
     bgmAudio.play().catch(() => {});
 }
 
-function stopMenuBGM() {
+function stopMenuBGM(resetTime = false) {
     if (!bgmAudio) return;
     bgmAudio.pause();
-    bgmAudio.currentTime = 0;
+    if (resetTime) {
+        bgmAudio.currentTime = 0;
+    }
+}
+
+function startStageBGM() {
+    if (!isGameRunning || isSettingsScreenVisible()) {
+        stopGameBGM(false);
+        return;
+    }
+    playGameBGM(true);
 }
 
 function updateMenuBGM() {
     if (gameSettings.bgmMute) {
-        stopMenuBGM();
+        stopMenuBGM(false);
+        stopGameBGM(false);
         return;
     }
     if (isSettingsScreenVisible()) {
+        stopGameBGM(false);
         playMenuBGM();
-    } else {
-        stopMenuBGM();
+        return;
     }
+    stopMenuBGM(false);
+    if (!isGameRunning) {
+        stopGameBGM(false);
+        return;
+    }
+    playGameBGM(false);
 }
 
 function startGame() {
     debugLog('startGame() called');
-    stopMenuBGM();
+    stopGameBGM(true);
     applySettingsScreenLighting(false);
     ensureBuildStamp();
       applyBillBattleModeConstraints();
@@ -9121,6 +9320,7 @@ function restartGame() {
     isElevating = false; // 昇降状態もリセット
     isGameRunning = true;
     isPaused = false; // ゲームが一時停止状態ではないことを明確にする
+    startStageBGM();
     document.exitPointerLock(); // 念のためポインターロックを解除し、再取得の機会を与える
     
     // 既存のplayerModelがplayerに追加されている場合、まず削除する
@@ -9897,7 +10097,6 @@ function showGameOver() {
     forceResetTouchState();
     isGameRunning = false;
     setFollowingPlayerMode(false);
-    stopMenuBGM();
     clearProjectileArtifacts();
     gameOverScreen.style.display = 'flex';
     document.exitPointerLock();
@@ -9906,7 +10105,6 @@ function showGameOver() {
 function showWinScreen() {
     forceResetTouchState();
     isGameRunning = false;
-    stopMenuBGM();
     clearProjectileArtifacts();
     winScreen.style.display = 'flex';
     document.exitPointerLock();
@@ -10544,6 +10742,7 @@ function showSettingsAndPause() {
     
     // Update unified map selector to show current map
     updateUnifiedMapSelector();
+    updateMenuBGM();
 }
 
 function resumeGame() {
@@ -10612,6 +10811,7 @@ function resumeGame() {
 
         isGameRunning = true;
     }
+    updateMenuBGM();
 }
 
 function animate() {
@@ -13035,6 +13235,7 @@ const tryInitMenuAudio = () => {
     document.removeEventListener('touchstart', tryInitMenuAudio);
     document.removeEventListener('keydown', tryInitMenuAudio);
 };
+const SETTINGS_VERSION = 3;
 document.addEventListener('pointerdown', tryInitMenuAudio, { passive: true });
 document.addEventListener('touchstart', tryInitMenuAudio, { passive: true });
 document.addEventListener('keydown', tryInitMenuAudio);
@@ -13059,6 +13260,94 @@ backToSettingsBtn.addEventListener('click', () => {
     startScreenElement.style.display = 'block';
     updateMenuBGM();
 });
+
+// --- BGM Settings Logic ---
+const bgmSettingsScreen = document.getElementById('bgm-settings-screen');
+const bgmSettingsBackBtn = document.getElementById('bgm-settings-back-btn');
+const bgmVolumeSlider = document.getElementById('bgm-volume');
+const bgmVolumeValue = document.getElementById('bgm-volume-value');
+const bgmModeOrder = document.getElementById('bgm-mode-order');
+const bgmModeRandom = document.getElementById('bgm-mode-random');
+const bgmTrackList = document.getElementById('bgm-track-list');
+
+function refreshBgmSettingsUI() {
+    if (bgmVolumeSlider) {
+        const volume = normalizeBgmVolume(gameSettings.bgmVolume);
+        bgmVolumeSlider.value = Math.round(volume * 100);
+        if (bgmVolumeValue) bgmVolumeValue.textContent = `${Math.round(volume * 100)}%`;
+    }
+    if (bgmModeOrder && bgmModeRandom) {
+        bgmModeOrder.checked = gameSettings.bgmMode !== 'random';
+        bgmModeRandom.checked = gameSettings.bgmMode === 'random';
+    }
+    if (bgmTrackList) {
+        bgmTrackList.innerHTML = '';
+        const enabled = new Set(getEnabledBgmTracks());
+        BGM_TRACKS.forEach(track => {
+            const label = document.createElement('label');
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '8px';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = enabled.has(track);
+            checkbox.addEventListener('change', () => {
+                const current = new Set(gameSettings.bgmEnabledTracks || []);
+                if (checkbox.checked) {
+                    current.add(track);
+                } else {
+                    current.delete(track);
+                }
+                gameSettings.bgmEnabledTracks = BGM_TRACKS.filter(track => current.has(track));
+                bgmOrderIndex = 0;
+                saveSettings();
+                updateMenuBGM();
+            });
+            const nameSpan = document.createElement('span');
+            const parts = track.split('/');
+            nameSpan.textContent = parts[parts.length - 1];
+            label.appendChild(checkbox);
+            label.appendChild(nameSpan);
+            bgmTrackList.appendChild(label);
+        });
+    }
+}
+
+if (bgmSettingsBackBtn) {
+    bgmSettingsBackBtn.addEventListener('click', () => {
+        if (bgmSettingsScreen) bgmSettingsScreen.style.display = 'none';
+        startScreenElement.style.display = 'flex';
+        updateMenuBGM();
+    });
+}
+
+if (bgmVolumeSlider) {
+    bgmVolumeSlider.addEventListener('input', () => {
+        const volume = normalizeBgmVolume(Number(bgmVolumeSlider.value) / 100);
+        gameSettings.bgmVolume = volume;
+        if (bgmVolumeValue) bgmVolumeValue.textContent = `${Math.round(volume * 100)}%`;
+        applyBgmVolume();
+        saveSettings();
+    });
+}
+
+if (bgmModeOrder) {
+    bgmModeOrder.addEventListener('change', () => {
+        if (bgmModeOrder.checked) {
+            gameSettings.bgmMode = 'order';
+            saveSettings();
+        }
+    });
+}
+
+if (bgmModeRandom) {
+    bgmModeRandom.addEventListener('change', () => {
+        if (bgmModeRandom.checked) {
+            gameSettings.bgmMode = 'random';
+            saveSettings();
+        }
+    });
+}
 
 saveButtonPositionsBtn.addEventListener('click', () => {
     const previewFireButton = document.getElementById('preview-fire-button');
