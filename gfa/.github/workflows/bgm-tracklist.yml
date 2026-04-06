@@ -3,8 +3,11 @@ name: Update BGM tracklist
 on:
   push:
     paths:
-      - "bgm/**.mp3"
+      - "gfa/bgm/**.mp3"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -13,11 +16,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Generate tracklist.json
         run: |
-          ls bgm/*.mp3 2>/dev/null | sed 's|^|bgm/|; s|^bgm/bgm/|bgm/|' | sort > /tmp/list.txt
           python - <<'PY'
           import json, pathlib
-          lst = pathlib.Path("/tmp/list.txt").read_text().splitlines()
-          pathlib.Path("bgm/tracklist.json").write_text(json.dumps(lst, ensure_ascii=False, indent=2))
+          bgm_dir = pathlib.Path("gfa/bgm")
+          tracks = [f"bgm/{p.name}" for p in sorted(bgm_dir.glob("*.mp3"))]
+          bgm_dir.mkdir(parents=True, exist_ok=True)
+          (bgm_dir / "tracklist.json").write_text(json.dumps(tracks, ensure_ascii=False, indent=2))
           PY
       - name: Commit changes
         run: |
