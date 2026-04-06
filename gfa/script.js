@@ -715,7 +715,9 @@ let characterEditorAnimationId = null;
             if (bgmSettingsScreen && startScreenEl) {
                 startScreenEl.style.display = 'none';
                 bgmSettingsScreen.style.display = 'flex';
-                if (typeof refreshBgmSettingsUI === 'function') {
+                if (typeof reloadBgmTracks === 'function') {
+                    reloadBgmTracks();
+                } else if (typeof refreshBgmSettingsUI === 'function') {
                     refreshBgmSettingsUI();
                 }
                 updateMenuBGM();
@@ -13273,6 +13275,14 @@ const bgmTrackList = document.getElementById('bgm-track-list');
 const bgmPreviewAudio = new Audio();
 bgmPreviewAudio.preload = 'none';
 let currentBgmPreviewRow = null;
+bgmPreviewAudio.addEventListener('ended', () => {
+    if (currentBgmPreviewRow) {
+        currentBgmPreviewRow.style.backgroundColor = '';
+        currentBgmPreviewRow.style.borderRadius = '';
+        currentBgmPreviewRow = null;
+    }
+    updateMenuBGM();
+});
 
 function stopBgmPreview() {
     if (!bgmPreviewAudio) return;
@@ -13490,6 +13500,8 @@ function refreshBgmSettingsUI() {
                     bgmPreviewAudio.pause();
                     bgmPreviewAudio.currentTime = 0;
                     bgmPreviewAudio.src = track;
+                    bgmPreviewAudio.load();
+                    bgmPreviewAudio.muted = false;
                     bgmPreviewAudio.volume = normalizeBgmVolume(gameSettings.bgmVolume);
                     stopMenuBGM(false);
                     if (currentBgmPreviewRow && currentBgmPreviewRow !== label) {
@@ -13499,7 +13511,9 @@ function refreshBgmSettingsUI() {
                     currentBgmPreviewRow = label;
                     label.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
                     label.style.borderRadius = '6px';
-                    bgmPreviewAudio.play().catch(() => {});
+                    bgmPreviewAudio.play().catch(err => {
+                        console.warn('BGM preview play failed:', err);
+                    });
                 }
             });
             const stopBtn = document.createElement('button');
