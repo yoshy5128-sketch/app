@@ -13270,6 +13270,15 @@ const bgmVolumeValue = document.getElementById('bgm-volume-value');
 const bgmModeOrder = document.getElementById('bgm-mode-order');
 const bgmModeRandom = document.getElementById('bgm-mode-random');
 const bgmTrackList = document.getElementById('bgm-track-list');
+const bgmPreviewAudio = new Audio();
+bgmPreviewAudio.preload = 'none';
+
+function stopBgmPreview() {
+    if (!bgmPreviewAudio) return;
+    bgmPreviewAudio.pause();
+    bgmPreviewAudio.currentTime = 0;
+    updateMenuBGM();
+}
 
 function normalizeBgmTrackPath(path) {
     if (!path) return null;
@@ -13295,7 +13304,7 @@ async function fetchBgmTrackList() {
     const jsonCandidates = ['bgm/tracklist.json', 'bgm/manifest.json', 'bgm/tracks.json'];
     for (const url of jsonCandidates) {
         try {
-            const resp = await fetch(url, { cache: 'no-store' });
+            const resp = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
             if (!resp.ok) continue;
             const data = await resp.json();
             const rawTracks = Array.isArray(data) ? data : (Array.isArray(data.tracks) ? data.tracks : []);
@@ -13310,7 +13319,46 @@ async function fetchBgmTrackList() {
         }
     }
     try {
-        const resp = await fetch('bgm/', { cache: 'no-store' });
+        const host = window.location.hostname;
+        if (host && host.endsWith('github.io')) {
+            const owner = host.split('.')[0];
+            const pathParts = window.location.pathname.split('/').filter(Boolean);
+            const repo = pathParts.length > 0 ? pathParts[0] : `${owner}.github.io`;
+            const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/bgm`;
+            const resp = await fetch(`${apiUrl}?t=${Date.now()}`, { cache: 'no-store' });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (Array.isArray(data)) {
+                    const fromApi = data
+                        .filter(item => item && item.type === 'file' && typeof item.name === 'string' && item.name.toLowerCase().endsWith('.mp3'))
+                        .map(item => `bgm/${item.name}`);
+                    if (fromApi.length > 0) return fromApi;
+                }
+            }
+            const branchCandidates = ['gh-pages', 'main', 'master'];
+            for (const branch of branchCandidates) {
+                const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/bgm/tracklist.json`;
+                try {
+                    const rawResp = await fetch(`${rawUrl}?t=${Date.now()}`, { cache: 'no-store' });
+                    if (!rawResp.ok) continue;
+                    const data = await rawResp.json();
+                    const rawTracks = Array.isArray(data) ? data : (Array.isArray(data.tracks) ? data.tracks : []);
+                    if (rawTracks.length > 0) {
+                        const normalized = rawTracks
+                            .map(normalizeBgmTrackPath)
+                            .filter(Boolean);
+                        if (normalized.length > 0) return normalized;
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+        }
+    } catch {
+        // ignore
+    }
+    try {
+        const resp = await fetch(`bgm/?t=${Date.now()}`, { cache: 'no-store' });
         if (!resp.ok) return [];
         const html = await resp.text();
         const matches = [];
@@ -13393,6 +13441,7 @@ function refreshBgmSettingsUI() {
             label.style.display = 'flex';
             label.style.alignItems = 'center';
             label.style.gap = '8px';
+            label.style.justifyContent = 'space-between';
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.checked = enabled.has(track);
@@ -13411,8 +13460,51 @@ function refreshBgmSettingsUI() {
             const nameSpan = document.createElement('span');
             const parts = track.split('/');
             nameSpan.textContent = parts[parts.length - 1];
-            label.appendChild(checkbox);
-            label.appendChild(nameSpan);
+            const leftWrap = document.createElement('div');
+            leftWrap.style.display = 'flex';
+            leftWrap.style.alignItems = 'center';
+            leftWrap.style.gap = '8px';
+            leftWrap.appendChild(checkbox);
+            leftWrap.appendChild(nameSpan);
+            const rightWrap = document.createElement('div');
+            rightWrap.style.display = 'flex';
+            rightWrap.style.alignItems = 'center';
+            rightWrap.style.gap = '6px';
+            const playBtn = document.createElement('button');
+            playBtn.textContent = 'Play';
+            playBtn.style.padding = '4px 10px';
+            playBtn.style.fontSize = '0.9em';
+            playBtn.style.backgroundColor = '#2f6fed';
+            playBtn.style.color = 'white';
+            playBtn.style.border = 'none';
+            playBtn.style.borderRadius = '4px';
+            playBtn.style.cursor = 'pointer';
+            playBtn.addEventListener('click', () => {
+                if (bgmPreviewAudio) {
+                    bgmPreviewAudio.pause();
+                    bgmPreviewAudio.currentTime = 0;
+                    bgmPreviewAudio.src = track;
+                    bgmPreviewAudio.volume = normalizeBgmVolume(gameSettings.bgmVolume);
+                    stopMenuBGM(false);
+                    bgmPreviewAudio.play().catch(() => {});
+                }
+            });
+            const stopBtn = document.createElement('button');
+            stopBtn.textContent = 'Stop';
+            stopBtn.style.padding = '4px 10px';
+            stopBtn.style.fontSize = '0.9em';
+            stopBtn.style.backgroundColor = '#555';
+            stopBtn.style.color = 'white';
+            stopBtn.style.border = 'none';
+            stopBtn.style.borderRadius = '4px';
+            stopBtn.style.cursor = 'pointer';
+            stopBtn.addEventListener('click', () => {
+                stopBgmPreview();
+            });
+            rightWrap.appendChild(playBtn);
+            rightWrap.appendChild(stopBtn);
+            label.appendChild(leftWrap);
+            label.appendChild(rightWrap);
             bgmTrackList.appendChild(label);
         });
     }
@@ -13420,6 +13512,7 @@ function refreshBgmSettingsUI() {
 
 if (bgmSettingsBackBtn) {
     bgmSettingsBackBtn.addEventListener('click', () => {
+        stopBgmPreview();
         if (bgmSettingsScreen) bgmSettingsScreen.style.display = 'none';
         startScreenElement.style.display = 'flex';
         updateMenuBGM();
