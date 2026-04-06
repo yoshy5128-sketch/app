@@ -13272,11 +13272,17 @@ const bgmModeRandom = document.getElementById('bgm-mode-random');
 const bgmTrackList = document.getElementById('bgm-track-list');
 const bgmPreviewAudio = new Audio();
 bgmPreviewAudio.preload = 'none';
+let currentBgmPreviewRow = null;
 
 function stopBgmPreview() {
     if (!bgmPreviewAudio) return;
     bgmPreviewAudio.pause();
     bgmPreviewAudio.currentTime = 0;
+    if (currentBgmPreviewRow) {
+        currentBgmPreviewRow.style.backgroundColor = '';
+        currentBgmPreviewRow.style.borderRadius = '';
+        currentBgmPreviewRow = null;
+    }
     updateMenuBGM();
 }
 
@@ -13486,6 +13492,13 @@ function refreshBgmSettingsUI() {
                     bgmPreviewAudio.src = track;
                     bgmPreviewAudio.volume = normalizeBgmVolume(gameSettings.bgmVolume);
                     stopMenuBGM(false);
+                    if (currentBgmPreviewRow && currentBgmPreviewRow !== label) {
+                        currentBgmPreviewRow.style.backgroundColor = '';
+                        currentBgmPreviewRow.style.borderRadius = '';
+                    }
+                    currentBgmPreviewRow = label;
+                    label.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
+                    label.style.borderRadius = '6px';
                     bgmPreviewAudio.play().catch(() => {});
                 }
             });
