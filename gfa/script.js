@@ -1,5 +1,5 @@
   const PLAYER_INITIAL_POSITION = new THREE.Vector3(0, 2.0, -20);
-  const BGM_TRACKS = [
+  let BGM_TRACKS = [
       'bgm/0001.mp3',
       'bgm/0002.mp3',
       'bgm/0003.mp3',
@@ -13264,11 +13264,116 @@ backToSettingsBtn.addEventListener('click', () => {
 // --- BGM Settings Logic ---
 const bgmSettingsScreen = document.getElementById('bgm-settings-screen');
 const bgmSettingsBackBtn = document.getElementById('bgm-settings-back-btn');
+const bgmReloadBtn = document.getElementById('bgm-reload-btn');
 const bgmVolumeSlider = document.getElementById('bgm-volume');
 const bgmVolumeValue = document.getElementById('bgm-volume-value');
 const bgmModeOrder = document.getElementById('bgm-mode-order');
 const bgmModeRandom = document.getElementById('bgm-mode-random');
 const bgmTrackList = document.getElementById('bgm-track-list');
+
+function normalizeBgmTrackPath(path) {
+    if (!path) return null;
+    let clean = String(path).replace(/\\/g, '/');
+    clean = clean.split('?')[0].split('#')[0].replace(/^\.\//, '');
+    if (/^https?:\/\//i.test(clean)) {
+        try {
+            const url = new URL(clean, window.location.href);
+            clean = url.pathname;
+        } catch {
+            return null;
+        }
+    }
+    if (clean.startsWith('/')) clean = clean.slice(1);
+    if (!clean.toLowerCase().endsWith('.mp3')) return null;
+    if (!clean.toLowerCase().startsWith('bgm/')) {
+        clean = `bgm/${clean}`;
+    }
+    return clean;
+}
+
+async function fetchBgmTrackList() {
+    const jsonCandidates = ['bgm/tracklist.json', 'bgm/manifest.json', 'bgm/tracks.json'];
+    for (const url of jsonCandidates) {
+        try {
+            const resp = await fetch(url, { cache: 'no-store' });
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            const rawTracks = Array.isArray(data) ? data : (Array.isArray(data.tracks) ? data.tracks : []);
+            if (rawTracks.length > 0) {
+                const normalized = rawTracks
+                    .map(normalizeBgmTrackPath)
+                    .filter(Boolean);
+                if (normalized.length > 0) return normalized;
+            }
+        } catch {
+            // ignore
+        }
+    }
+    try {
+        const resp = await fetch('bgm/', { cache: 'no-store' });
+        if (!resp.ok) return [];
+        const html = await resp.text();
+        const matches = [];
+        const regex = /href=["']([^"']+\.mp3[^"']*)["']/gi;
+        let match;
+        while ((match = regex.exec(html)) !== null) {
+            matches.push(match[1]);
+        }
+        const normalized = matches
+            .map(normalizeBgmTrackPath)
+            .filter(Boolean);
+        return normalized;
+    } catch {
+        return [];
+    }
+}
+
+function applyBgmTrackList(newTracks) {
+    if (!Array.isArray(newTracks) || newTracks.length === 0) return false;
+    const unique = [];
+    const seen = new Set();
+    for (const track of newTracks) {
+        if (!seen.has(track)) {
+            seen.add(track);
+            unique.push(track);
+        }
+    }
+    unique.sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
+    const prevTrackSet = new Set(BGM_TRACKS);
+    const prevEnabledSet = new Set(gameSettings.bgmEnabledTracks || []);
+    const nextEnabled = [];
+    for (const track of unique) {
+        if (prevEnabledSet.size === 0) {
+            continue;
+        }
+        if (prevEnabledSet.has(track)) {
+            nextEnabled.push(track);
+            continue;
+        }
+        if (!prevTrackSet.has(track)) {
+            nextEnabled.push(track);
+        }
+    }
+    BGM_TRACKS = unique;
+    gameSettings.bgmEnabledTracks = nextEnabled;
+    bgmOrderIndex = 0;
+    if (currentBgmTrack && !seen.has(currentBgmTrack)) {
+        currentBgmTrack = null;
+    }
+    saveSettings();
+    refreshBgmSettingsUI();
+    updateMenuBGM();
+    return true;
+}
+
+async function reloadBgmTracks() {
+    const tracks = await fetchBgmTrackList();
+    if (tracks.length > 0) {
+        applyBgmTrackList(tracks);
+    } else {
+        refreshBgmSettingsUI();
+    }
+}
 
 function refreshBgmSettingsUI() {
     if (bgmVolumeSlider) {
@@ -13318,6 +13423,12 @@ if (bgmSettingsBackBtn) {
         if (bgmSettingsScreen) bgmSettingsScreen.style.display = 'none';
         startScreenElement.style.display = 'flex';
         updateMenuBGM();
+    });
+}
+
+if (bgmReloadBtn) {
+    bgmReloadBtn.addEventListener('click', () => {
+        reloadBgmTracks();
     });
 }
 
