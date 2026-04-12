@@ -7631,7 +7631,8 @@ function aiShoot(ai, timeElapsed) {
             return;
         }
     }
-
+    
+    // Calculate direction to target BEFORE rotation
     const toTarget = new THREE.Vector3().subVectors(targetPosition, startPosition).normalize();
     let direction = toTarget.clone();
     const distanceToPlayer = distanceToTarget;
@@ -7640,12 +7641,12 @@ function aiShoot(ai, timeElapsed) {
     let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
     ai.rotation.y = desiredYaw;
     
-    // Update body rotation too
+    // Update body rotation to match
     if (ai.userData && ai.userData.parts && ai.userData.parts.body) {
         ai.userData.parts.body.rotation.y = 0;
     }
     
-    // After rotation, get FRESH muzzle direction
+    // After rotation, get FRESH muzzle direction (CRITICAL - must get after rotation!)
     let freshMuzzleInfo = null;
     if (ai.userData && ai.userData.parts) {
         freshMuzzleInfo = getGunMuzzleInfo(ai.userData.parts);
@@ -7655,37 +7656,12 @@ function aiShoot(ai, timeElapsed) {
         muzzleDirection = freshMuzzleInfo.direction.clone().normalize();
     }
     
-    // Now check with the new muzzle direction
-    if (muzzleDirection) {
-        // If muzzle is not pointing at target, don't fire
-        const muzzleToTargetAngle = muzzleDirection.angleTo(toTarget);
-        if (muzzleToTargetAngle > THREE.MathUtils.degToRad(45)) return;
-    }
+    // No muzzle angle check - allow AI to shoot once rotated to face target
+    // The rotation above handles aiming
     
-    // Use the muzzle direction as the actual firing direction (for visual consistency)
-    if (muzzleDirection) {
-        direction = muzzleDirection.clone();
-    } else {
-        // Fallback: use AI's forward direction directly based on rotation
-        const forward = new THREE.Vector3(0, 0, -1);
-        forward.applyQuaternion(ai.quaternion);
-        direction = forward;
-    }
-    
+    // Use direction TOWARD TARGET for actual bullet trajectory (for accuracy)
+    // This ensures bullets go where we aim
     direction.normalize();
-    console.log('Firing direction:', direction.x.toFixed(2), direction.y.toFixed(2), direction.z.toFixed(2));
-    console.log('Muzzle direction:', muzzleDirection ? (muzzleDirection.x.toFixed(2) + ' ' + muzzleDirection.y.toFixed(2) + ' ' + muzzleDirection.z.toFixed(2)) : 'null');
-    
-    // Skip spread for now to test
-    // if (gameSettings.aiShotLevel === 'ama') {
-    //     let spreadDeg = 0;
-    //     if (ai.currentWeapon === WEAPON_SR) spreadDeg = 2.0;
-    //     else if (ai.currentWeapon === WEAPON_MR) spreadDeg = 2.5;
-    //     else if (ai.currentWeapon === WEAPON_RR) spreadDeg = 3.5;
-    //     if (spreadDeg > 0) {
-    //         direction = applyAIAimSpread(direction, THREE.MathUtils.degToRad(spreadDeg));
-    //     }
-    // }
     
     let canAIShoot = false;
     let aiProjectileColor = 0xffff00;
@@ -8977,7 +8953,7 @@ function restartGame() {
     const isTeamArcadeMode = gameSettings.gameMode === 'teamArcade';
 
     if (isTeamMode || isTeamArcadeMode) { // 変更
-        finalAICount = 3; // チームモードおよびチームアーケードモードでは常に3体（1体味方 + 2体敵）
+        finalAICount = 3; // 2V2: プレイヤー(人間のプレイヤーまたは代わり)+1体味方のAI+2体敵=3体
     }
     
     // Spectator mode always uses 4 AIs
@@ -9002,8 +8978,9 @@ function restartGame() {
         }
 
         if (isTeamMode || isTeamArcadeMode) { // 変更
+            // 2V2: i=0が味方のAI、i=1,2が敵
             if (i === 0) {
-                aiTeam = 'player'; // 最初の1体は味方
+                aiTeam = 'player'; // 最初の1体は味方AI
                 aiColor = teamColors.player;
             } else {
                 aiTeam = 'enemy'; // 残り2体は敵
