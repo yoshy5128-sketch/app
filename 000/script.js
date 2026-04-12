@@ -8690,78 +8690,66 @@ function startGame() {
         if (teamKillsContainer) teamKillsContainer.style.display = 'none';
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
-const element = document.documentElement;
+    const element = document.documentElement;
 
-      if (shouldShowTouchControls()) {
-          debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
-          
-          if (isSpectatorMode) {
-              // Spectator mode on mobile
-              const specAIButtons = document.getElementById('spectator-ai-buttons');
-              const specZoomControl = document.getElementById('spectator-zoom-control');
-              const specViewToggle = document.getElementById('spec-view-toggle-btn');
-              
-              if (specAIButtons) specAIButtons.style.display = 'block';
-              if (specZoomControl) specZoomControl.style.display = 'block';
-              if (specViewToggle) specViewToggle.style.display = 'block';
-              
-              initSpectatorJoystick();
-          } else {
-              // Normal game mode
-              const joy = document.getElementById('joystick-move');
-              const fire = document.getElementById('fire-button');
-              const crouch = document.getElementById('crouch-button');
-              const zoom = document.getElementById('zoom-button');
-              const pause = document.getElementById('pause-button');
-              const followBtn = document.getElementById('follow-button');
+    if (shouldShowTouchControls()) {
+        debugLog('startGame(): Mobile device detected.');
 
-              if (joy) joy.style.display = 'block';
-              if (fire) fire.style.display = 'flex';
-              if (crouch) crouch.style.display = 'flex';
-              if (zoom) zoom.style.display = 'flex';
-              if (pause) pause.style.display = 'block';
-              if (followBtn) {
-                  if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
-                      followBtn.style.display = 'flex';
-                  } else {
-                      followBtn.style.display = 'none';
-                  }
-              }
-              
-              initJoystick();
-          }
-      } else {
-          // PC device
-          debugLog('startGame(): PC device detected. Setting UI to none.');
-          const joy = document.getElementById('joystick-move');
-          const fire = document.getElementById('fire-button');
-          const crouch = document.getElementById('crouch-button');
-          const zoom = document.getElementById('zoom-button');
-          const followBtn = document.getElementById('follow-button');
+        if (isSpectatorMode) {
+            // Spectator mode on mobile
+            const specAIButtons = document.getElementById('spectator-ai-buttons');
+            const specZoomControl = document.getElementById('spectator-zoom-control');
+            const specViewToggle = document.getElementById('spec-view-toggle-btn');
 
-          if (joy) joy.style.display = 'none';
-          if (fire) fire.style.display = 'none';
-          if (crouch) crouch.style.display = 'none';
-          if (zoom) zoom.style.display = 'none';
-          if (followBtn) followBtn.style.display = 'none';
-      }
+            if (specAIButtons) specAIButtons.style.display = 'block';
+            if (specZoomControl) specZoomControl.style.display = 'block';
+            if (specViewToggle) specViewToggle.style.display = 'block';
+
+            initSpectatorJoystick();
+        } else {
+            // Normal game mode
+            const joy = document.getElementById('joystick-move');
+            const fire = document.getElementById('fire-button');
+            const crouch = document.getElementById('crouch-button');
+            const zoom = document.getElementById('zoom-button');
+            const pause = document.getElementById('pause-button');
+            const followBtn = document.getElementById('follow-button');
+
+            if (joy) joy.style.display = 'block';
+            if (fire) fire.style.display = 'flex';
+            if (crouch) crouch.style.display = 'flex';
+            if (zoom) zoom.style.display = 'flex';
+            if (pause) pause.style.display = 'block';
+            if (followBtn) {
+                if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                    followBtn.style.display = 'flex';
+                } else {
+                    followBtn.style.display = 'none';
+                }
+            }
+
+            initJoystick();
+        }
+    } else {
+        // PC device
+        const joy = document.getElementById('joystick-move');
+        const fire = document.getElementById('fire-button');
+        const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
+        const followBtn = document.getElementById('follow-button');
+
+        if (joy) joy.style.display = 'none';
+        if (fire) fire.style.display = 'none';
+        if (crouch) crouch.style.display = 'none';
+        if (zoom) zoom.style.display = 'none';
+if (followBtn) followBtn.style.display = 'none';
+    }
     enforceTouchUIVisibility();
     try {
         if (element.requestFullscreen) {
-            element.requestFullscreen().catch(err => console.warn('Fullscreen API error:', err));
-        } else if (element.webkitRequestFullscreen) {
-            element.webkitRequestFullscreen().catch(err => console.warn('Fullscreen API error (webkit):', err));
+            element.requestFullscreen().catch(function(err) { console.warn('Fullscreen error:', err); });
         }
-    } catch (e) {
-        console.warn('Error trying to enter fullscreen:', e);
-    }
-    try {
-        if (screen.orientation && screen.orientation.lock) {
-            screen.orientation.lock('landscape').catch(e => console.warn('Orientation lock failed:', e));
-        }
-    } catch (e) {
-        console.warn('Error trying to lock orientation:', e);
-    }
+    } catch(e) { console.warn('Fullscreen error:', e); }
     if (typeof resetObstacles === 'function') resetObstacles();
     // 強制的に表示設定 (デバッグ目的)
     if (playerHPDisplay) playerHPDisplay.style.display = 'block';
