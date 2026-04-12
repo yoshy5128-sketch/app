@@ -8323,6 +8323,16 @@ function setupSpectatorButtons() {
             spectatorZoomLevel = parseFloat(e.target.value);
         });
     }
+    
+    // View mode toggle button for mobile
+    const viewToggleBtn = document.getElementById('spec-view-toggle-btn');
+    if (viewToggleBtn) {
+        viewToggleBtn.addEventListener('click', () => toggleSpectatorViewMode());
+        viewToggleBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            toggleSpectatorViewMode();
+        });
+    }
 }
 
 // Add to DOMContentLoaded
@@ -10721,30 +10731,46 @@ function resumeGame() {
             document.getElementById('kill-count-display').style.display = 'block';
         }
 
-        if (shouldShowTouchControls()) {
-            // resumeGame(): Mobile device detected. Setting UI to block/flex.
-            const joy = document.getElementById('joystick-move');
-            const fire = document.getElementById('fire-button');
-            const crouch = document.getElementById('crouch-button');
-            const zoom = document.getElementById('zoom-button');
-            const pause = document.getElementById('pause-button');
-            if (joy) { joy.style.display = 'block'; }
-            if (fire) { fire.style.display = 'flex'; }
-            if (crouch) { crouch.style.display = 'flex'; }
-            if (zoom) { zoom.style.display = 'flex'; }
-            if (pause) { pause.style.display = 'block'; }
-        } else {
-            // resumeGame(): PC device detected.
-            const joy = document.getElementById('joystick-move');
-            const fire = document.getElementById('fire-button');
-            const crouch = document.getElementById('crouch-button');
-            const zoom = document.getElementById('zoom-button');
-            if (joy) { joy.style.display = 'none'; }
-            if (fire) { fire.style.display = 'none'; }
-            if (crouch) { crouch.style.display = 'none'; }
-            if (zoom) { zoom.style.display = 'none'; }
-            canvas.requestPointerLock();
-        }
+if (shouldShowTouchControls()) {
+          debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
+          
+          if (isSpectatorMode) {
+              // Spectator mode on mobile - show spectator controls, hide regular controls
+              const specAIButtons = document.getElementById('spectator-ai-buttons');
+              const specZoomControl = document.getElementById('spectator-zoom-control');
+              const specViewToggle = document.getElementById('spec-view-toggle-btn');
+              
+              if (specAIButtons) specAIButtons.style.display = 'block';
+              if (specZoomControl) specZoomControl.style.display = 'block';
+              if (specViewToggle) specViewToggle.style.display = 'block';
+              
+              // Initialize spectator joystick for mobile
+              initSpectatorJoystick();
+          } else {
+              // Normal mode - hide spectator controls, show game controls
+              const specAIButtons = document.getElementById('spectator-ai-buttons');
+              const specZoomControl = document.getElementById('spectator-zoom-control');
+              const specViewToggle = document.getElementById('spec-view-toggle-btn');
+              
+              if (specAIButtons) specAIButtons.style.display = 'none';
+              if (specZoomControl) specZoomControl.style.display = 'none';
+              if (specViewToggle) specViewToggle.style.display = 'none';
+              
+              const joy = document.getElementById('joystick-move');
+              const fire = document.getElementById('fire-button');
+              const crouch = document.getElementById('crouch-button');
+              const zoom = document.getElementById('zoom-button');
+              const pause = document.getElementById('pause-button');
+              
+              if (joy) joy.style.display = 'block';
+              if (fire) fire.style.display = 'flex';
+              if (crouch) crouch.style.display = 'flex';
+              if (zoom) zoom.style.display = 'flex';
+              if (pause) pause.style.display = 'block';
+              
+              initJoystick();
+          }
+      } else {
         enforceTouchUIVisibility();
 
         isGameRunning = true;
