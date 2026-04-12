@@ -8690,45 +8690,61 @@ function startGame() {
         if (teamKillsContainer) teamKillsContainer.style.display = 'none';
         if (aiHpContainer) aiHpContainer.style.display = 'block'; // AI HPは常に表示する
     }
-    const element = document.documentElement;
+const element = document.documentElement;
 
       if (shouldShowTouchControls()) {
           debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
+          
+          if (isSpectatorMode) {
+              // Spectator mode on mobile
+              const specAIButtons = document.getElementById('spectator-ai-buttons');
+              const specZoomControl = document.getElementById('spectator-zoom-control');
+              const specViewToggle = document.getElementById('spec-view-toggle-btn');
+              
+              if (specAIButtons) specAIButtons.style.display = 'block';
+              if (specZoomControl) specZoomControl.style.display = 'block';
+              if (specViewToggle) specViewToggle.style.display = 'block';
+              
+              initSpectatorJoystick();
+          } else {
+              // Normal game mode
+              const joy = document.getElementById('joystick-move');
+              const fire = document.getElementById('fire-button');
+              const crouch = document.getElementById('crouch-button');
+              const zoom = document.getElementById('zoom-button');
+              const pause = document.getElementById('pause-button');
+              const followBtn = document.getElementById('follow-button');
+
+              if (joy) joy.style.display = 'block';
+              if (fire) fire.style.display = 'flex';
+              if (crouch) crouch.style.display = 'flex';
+              if (zoom) zoom.style.display = 'flex';
+              if (pause) pause.style.display = 'block';
+              if (followBtn) {
+                  if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                      followBtn.style.display = 'flex';
+                  } else {
+                      followBtn.style.display = 'none';
+                  }
+              }
+              
+              initJoystick();
+          }
+      } else {
+          // PC device
+          debugLog('startGame(): PC device detected. Setting UI to none.');
           const joy = document.getElementById('joystick-move');
           const fire = document.getElementById('fire-button');
           const crouch = document.getElementById('crouch-button');
           const zoom = document.getElementById('zoom-button');
-          const pause = document.getElementById('pause-button');
-          const followBtn = document.getElementById('follow-button'); 
+          const followBtn = document.getElementById('follow-button');
 
-        if (joy) { joy.style.display = 'block'; debugLog('startGame(): joystick-move display set to block'); }
-        if (fire) { fire.style.display = 'flex'; debugLog('startGame(): fire-button display set to flex'); }
-        if (crouch) { crouch.style.display = 'flex'; debugLog('startGame(): crouch-button display set to flex'); }
-        if (zoom) { zoom.style.display = 'flex'; debugLog('startGame(): zoom-button display set to flex'); }
-        if (pause) { pause.style.display = 'block'; debugLog('startGame(): pause-button display set to block'); }
-
-          if (followBtn) { 
-              if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
-                  followBtn.style.display = 'flex'; debugLog('startGame(): follow-button display set to flex (team mode)');
-              } else {
-                  followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none (non-team mode)');
-              }
-          }
-          initJoystick();
-      } else {
-        debugLog('startGame(): PC device detected. Setting UI to none.');
-        const joy = document.getElementById('joystick-move');
-        const fire = document.getElementById('fire-button');
-        const crouch = document.getElementById('crouch-button');
-        const zoom = document.getElementById('zoom-button');
-        const followBtn = document.getElementById('follow-button'); 
-
-        if (joy) { joy.style.display = 'none'; debugLog('startGame(): joystick-move display set to none'); }
-        if (fire) { fire.style.display = 'none'; debugLog('startGame(): fire-button display set to none'); }
-        if (crouch) { crouch.style.display = 'none'; debugLog('startGame(): crouch-button display set to none'); }
-        if (zoom) { zoom.style.display = 'none'; debugLog('startGame(): zoom-button display set to none'); }
-        if (followBtn) { followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none'); }
-    }
+          if (joy) joy.style.display = 'none';
+          if (fire) fire.style.display = 'none';
+          if (crouch) crouch.style.display = 'none';
+          if (zoom) zoom.style.display = 'none';
+          if (followBtn) followBtn.style.display = 'none';
+      }
     enforceTouchUIVisibility();
     try {
         if (element.requestFullscreen) {
