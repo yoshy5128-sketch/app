@@ -231,6 +231,14 @@
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="game-mode" value="billbattle"> INDOOR COMBAT (室内バトル)
             </label>
+
+            <h2 style="margin-top: 20px;">Spectator Mode</h2>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="spectator-mode" value="off" checked> OFF (通常モード)
+            </label>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="spectator-mode" value="on"> ON (AI同士の戦いを見守る)
+            </label>
             <div id="billbattle-options" style="margin-top: 10px; padding-left: 10px;">
                 <label style="display: block; margin-bottom: 4px;">INDOOR COMBAT Size:</label>
                 <select id="billbattle-size" style="margin-bottom: 8px;">
@@ -344,6 +352,19 @@
     <div id="zoom-button" style="position: fixed; right: 90px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(0, 200, 150, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(0, 200, 150, 0.5);">Zoom</div>
     <!-- Add this new follow button for smartphones -->
     <div id="follow-button" style="position: fixed; right: 20px; bottom: 190px; width: 60px; height: 60px; z-index: 10; background-color: rgba(0, 150, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);">FOLLOW</div>
+    
+    <!-- Spectator Mode UI -->
+    <div id="spectator-ai-buttons" style="display: none; position: fixed; z-index: 10;">
+        <button id="spec-ai1-btn" style="position: absolute; right: 160px; bottom: 250px; width: 50px; height: 50px; background-color: rgba(255, 51, 51, 0.8); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold;">1</button>
+        <button id="spec-ai2-btn" style="position: absolute; right: 105px; bottom: 250px; width: 50px; height: 50px; background-color: rgba(51, 51, 255, 0.8); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold;">2</button>
+        <button id="spec-ai3-btn" style="position: absolute; right: 50px; bottom: 250px; width: 50px; height: 50px; background-color: rgba(0, 255, 0, 0.8); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold;">3</button>
+        <button id="spec-ai4-btn" style="position: absolute; right: -5px; bottom: 250px; width: 50px; height: 50px; background-color: rgba(255, 136, 0, 0.8); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold;">4</button>
+    </div>
+    <div id="spectator-zoom-control" style="display: none; position: fixed; right: 20px; bottom: 310px; z-index: 10; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 5px;">
+        <label style="color: white; font-size: 12px;">Zoom</label>
+        <input type="range" id="spectator-zoom-slider" min="0.5" max="3" step="0.1" value="1" style="width: 80px;">
+    </div>
+    <div id="spectator-view-mode" style="display: none; position: fixed; top: 80px; left: 50%; transform: translateX(-50%); color: lime; font-size: 1.2em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 5px 15px; border-radius: 5px; z-index: 20;"></div>
     
     <div id="crosshair">
         <div class="cross-line" id="line-h"></div>
@@ -616,6 +637,7 @@
         <div id="ai-hp-display" style="color: limegreen; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none;">AI 1 HP: 3</div>
         <div id="ai2-hp-display" style="color: cyan; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 2 HP: 3</div>
         <div id="ai3-hp-display" style="color: orange; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 3 HP: 3</div>
+        <div id="ai4-hp-display" style="color: #ff00ff; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 4 HP: 3</div>
     </div>
     <div id="floor-start-display" style="position: fixed; top: 35%; left: 50%; transform: translateX(-50%); color: white; font-size: 3em; font-weight: bold; background-color: rgba(0, 0, 0, 0.6); padding: 12px 20px; border-radius: 10px; z-index: 1200; display: none; text-shadow: 0 0 10px #fff;"></div>
     <div id="red-flash-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0); pointer-events: none; opacity: 0;"></div>
@@ -628,7 +650,7 @@
 
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
-    <script src="script.js?v=20260324o"></script>
+    <script src="script.js?v=20260412q"></script></script>
     <script>
         // Disable and clear ServiceWorker caches to avoid stale script.js during development
         if ('serviceWorker' in navigator) {

@@ -1,5 +1,6 @@
 const PLAYER_INITIAL_POSITION = new THREE.Vector3(0, 2.0, -20);
 let gameSettings = {
+    spectatorMode: false,
     playerHP: 20,
     aiHP: 20,
     projectileSpeedMultiplier: 2.0,
@@ -35,6 +36,22 @@ let gameSettings = {
 let originalSettings = {};
 let isPaused = false;
 let forceSettingsLighting = false;
+
+// Spectator Mode variables
+let spectatorModeEnabled = false;
+let spectatorCurrentAI = null;
+let spectatorViewMode = 'first'; // 'first', 'third', 'drone'
+let spectatorDronePosition = new THREE.Vector3(0, 50, 0);
+let spectatorDroneTarget = new THREE.Vector3(0, 0, 0);
+let spectatorZoomLevel = 1.0;
+let spectatorMouseDown = false;
+let spectatorLastMouseX = 0;
+let spectatorLastMouseY = 0;
+let spectatorYaw = 0;
+let spectatorPitch = 0;
+// Alias for compatibility
+let isSpectatorMode = false;
+
 const DEBUG_LOG = false;
 function debugLog(...args) {
     if (DEBUG_LOG) debugLog(...args);
@@ -310,6 +327,7 @@ let characterEditorAnimationId = null;
         aiHPDisplay = document.getElementById('ai-hp-display');
         ai2HPDisplay = document.getElementById('ai2-hp-display');
         ai3HPDisplay = document.getElementById('ai3-hp-display');
+        ai4HPDisplay = document.getElementById('ai4-hp-display');
         redFlashOverlay = document.getElementById('red-flash-overlay');
         followStatusDisplay = document.getElementById('follow-status-display'); // 追加
         followButton = document.getElementById('follow-button'); // 追加
@@ -472,6 +490,15 @@ let characterEditorAnimationId = null;
                     gameSettings.gameMode = radio.value;
                     applyBillBattleModeConstraints();
                     updateSettingsAvailabilityForMode();
+                    saveSettings();
+                }
+            });
+        });
+        const spectatorModeRadios = document.querySelectorAll('input[name="spectator-mode"]');
+        spectatorModeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.checked) {
+                    gameSettings.spectatorMode = radio.value === 'on';
                     saveSettings();
                 }
             });
@@ -1734,6 +1761,10 @@ function saveSettings() {
     if (barrelRespawnRadio) {
         gameSettings.barrelRespawn = barrelRespawnRadio.value === 'true';
     }
+    const spectatorModeRadio = document.querySelector('input[name="spectator-mode"]:checked');
+    if (spectatorModeRadio) {
+        gameSettings.spectatorMode = spectatorModeRadio.value === 'on';
+    }
     gameSettings.nightModeEnabled = document.getElementById('night-mode').checked;
     gameSettings.nightModeIntensity = document.getElementById('night-mode-intensity').value;
     gameSettings.timeLapseMode = document.getElementById('time-lapse-mode').checked;
@@ -1769,6 +1800,9 @@ function loadSettings() {
         }
         if (parsedSavedSettings.medikitCount === undefined) {
             parsedSavedSettings.medikitCount = 0;
+        }
+        if (parsedSavedSettings.spectatorMode === undefined) {
+            parsedSavedSettings.spectatorMode = false;
         }
         if (parsedSavedSettings.billBattleSize === undefined) {
             parsedSavedSettings.billBattleSize = '100';
@@ -2210,6 +2244,7 @@ let playerWeaponDisplay; // 追加
 let aiHPDisplay;
 let ai2HPDisplay; // 追加
 let ai3HPDisplay; // 追加
+let ai4HPDisplay; // 追加 for spectator mode
 let redFlashOverlay;
 let followStatusDisplay; // 追加
 let followButton; // 追加
@@ -7596,45 +7631,62 @@ function aiShoot(ai, timeElapsed) {
             return;
         }
     }
-    // Re-aim right before firing so muzzle direction matches the intended target.
-    let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
-    if (ai.userData && ai.userData.parts) {
-        ai.rotation.y = desiredYaw;
-        applyAimConstraints(ai.userData.parts, ai.rotation.y, targetPosition);
-        const freshMuzzleInfo = getGunMuzzleInfo(ai.userData.parts);
-        if (freshMuzzleInfo) {
-            startPosition = freshMuzzleInfo.position.clone();
-            muzzleDirection = freshMuzzleInfo.direction.clone().normalize();
-        }
-    }
-    // Recheck LOS after final pose/muzzle update (prevents wall-through on AI-vs-AI).
-    if (!checkLineOfSight(startPosition, targetPosition, obstacles)) {
-        if (ai.isCrouching && checkLineOfSight(peekOrigin, targetPosition, obstacles)) {
-            startPosition = peekOrigin.clone();
-            muzzleDirection = null;
-        } else {
-            return;
-        }
-    }
 
     const toTarget = new THREE.Vector3().subVectors(targetPosition, startPosition).normalize();
     let direction = toTarget.clone();
     const distanceToPlayer = distanceToTarget;
-    // 物理整合性優先: 銃口方向とターゲット方向が極端にズレる場合のみ発砲しない
+    
+    // RE-ROTATE AI TO FACE TARGET BEFORE ANYTHING ELSE
+    let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
+    ai.rotation.y = desiredYaw;
+    
+    // Update body rotation too
+    if (ai.userData && ai.userData.parts && ai.userData.parts.body) {
+        ai.userData.parts.body.rotation.y = 0;
+    }
+    
+    // After rotation, get FRESH muzzle direction
+    let freshMuzzleInfo = null;
+    if (ai.userData && ai.userData.parts) {
+        freshMuzzleInfo = getGunMuzzleInfo(ai.userData.parts);
+    }
+    if (freshMuzzleInfo) {
+        startPosition = freshMuzzleInfo.position.clone();
+        muzzleDirection = freshMuzzleInfo.direction.clone().normalize();
+    }
+    
+    // Now check with the new muzzle direction
     if (muzzleDirection) {
+        // If muzzle is not pointing at target, don't fire
         const muzzleToTargetAngle = muzzleDirection.angleTo(toTarget);
         if (muzzleToTargetAngle > THREE.MathUtils.degToRad(45)) return;
     }
-    direction.normalize();
-    if (gameSettings.aiShotLevel === 'ama') {
-        let spreadDeg = 0;
-        if (ai.currentWeapon === WEAPON_SR) spreadDeg = 2.0;
-        else if (ai.currentWeapon === WEAPON_MR) spreadDeg = 2.5;
-        else if (ai.currentWeapon === WEAPON_RR) spreadDeg = 3.5;
-        if (spreadDeg > 0) {
-            direction = applyAIAimSpread(direction, THREE.MathUtils.degToRad(spreadDeg));
-        }
+    
+    // Use the muzzle direction as the actual firing direction (for visual consistency)
+    if (muzzleDirection) {
+        direction = muzzleDirection.clone();
+    } else {
+        // Fallback: use AI's forward direction directly based on rotation
+        const forward = new THREE.Vector3(0, 0, -1);
+        forward.applyQuaternion(ai.quaternion);
+        direction = forward;
     }
+    
+    direction.normalize();
+    console.log('Firing direction:', direction.x.toFixed(2), direction.y.toFixed(2), direction.z.toFixed(2));
+    console.log('Muzzle direction:', muzzleDirection ? (muzzleDirection.x.toFixed(2) + ' ' + muzzleDirection.y.toFixed(2) + ' ' + muzzleDirection.z.toFixed(2)) : 'null');
+    
+    // Skip spread for now to test
+    // if (gameSettings.aiShotLevel === 'ama') {
+    //     let spreadDeg = 0;
+    //     if (ai.currentWeapon === WEAPON_SR) spreadDeg = 2.0;
+    //     else if (ai.currentWeapon === WEAPON_MR) spreadDeg = 2.5;
+    //     else if (ai.currentWeapon === WEAPON_RR) spreadDeg = 3.5;
+    //     if (spreadDeg > 0) {
+    //         direction = applyAIAimSpread(direction, THREE.MathUtils.degToRad(spreadDeg));
+    //     }
+    // }
+    
     let canAIShoot = false;
     let aiProjectileColor = 0xffff00;
     let aiProjectileSize = 0.1;
@@ -8029,9 +8081,299 @@ function toggleFollowingPlayerMode() {
     setFollowingPlayerMode(!isFollowingPlayerMode);
 }
 
+// Spectator mode functions
+function selectSpectatorAI(index) {
+    if (!spectatorModeEnabled || index < 0 || index >= ais.length) return;
+    
+    spectatorCurrentAI = ais[index];
+    
+    // Update button styles to show which AI is selected
+    for (let i = 1; i <= 4; i++) {
+        const btn = document.getElementById('spec-ai' + i + '-btn');
+        if (btn) {
+            if (i - 1 === index) {
+                btn.style.borderColor = '#ffff00';
+                btn.style.borderWidth = '3px';
+            } else {
+                btn.style.borderColor = '#fff';
+                btn.style.borderWidth = '2px';
+            }
+        }
+    }
+    
+    // Reset view mode to first person when switching AI
+    spectatorViewMode = 'first';
+    updateSpectatorViewModeText();
+}
+
+function toggleSpectatorViewMode() {
+    if (!spectatorModeEnabled) return;
+    
+    if (spectatorViewMode === 'first') {
+        spectatorViewMode = 'third';
+    } else if (spectatorViewMode === 'third') {
+        spectatorViewMode = 'drone';
+    } else {
+        spectatorViewMode = 'first';
+    }
+    updateSpectatorViewModeText();
+}
+
+function updateSpectatorViewModeText() {
+    const viewModeText = document.getElementById('spectator-view-mode');
+    if (!viewModeText) return;
+    
+    let aiNum = 'None';
+    if (spectatorCurrentAI) {
+        const idx = ais.indexOf(spectatorCurrentAI);
+        if (idx >= 0) aiNum = 'AI ' + (idx + 1);
+    }
+    
+    let modeText = '';
+    if (spectatorViewMode === 'first') modeText = 'First Person';
+    else if (spectatorViewMode === 'third') modeText = 'Third Person';
+    else if (spectatorViewMode === 'drone') modeText = 'Drone View';
+    
+    viewModeText.textContent = 'View: ' + aiNum + ' - ' + modeText;
+}
+
+function updateSpectatorCamera(delta) {
+    if (!isSpectatorMode) return;
+    
+    console.log('updateSpectatorCamera called, isSpectatorMode:', isSpectatorMode, 'spectatorViewMode:', spectatorViewMode);
+    
+    // If no current AI selected, try to select first available AI
+    if (!spectatorCurrentAI || !ais.includes(spectatorCurrentAI)) {
+        const aliveAI = ais.find(a => a && a.hp > 0);
+        if (aliveAI) {
+            selectSpectatorAI(ais.indexOf(aliveAI));
+        } else {
+            // No AI available, skip camera update
+            return;
+        }
+    }
+    
+    const ai = spectatorCurrentAI;
+    if (ai.hp <= 0) {
+        // Find next alive AI
+        const aliveAI = ais.find(a => a && a.hp > 0);
+        if (aliveAI) {
+            selectSpectatorAI(ais.indexOf(aliveAI));
+        }
+        return;
+    }
+    
+    console.log('AI selected:', spectatorCurrentAI ? 'yes' : 'no', 'view:', spectatorViewMode);
+    
+    if (spectatorViewMode === 'first') {
+        // First person view - from AI's eyes (flipped 180 degrees)
+        const headPos = getAIHeadPos(ai);
+        console.log('First person - headPos:', headPos);
+        
+        // Move camera slightly backward from AI's head position
+        const backwardOffset = new THREE.Vector3(0, 0, 1.5); // Backward offset
+        backwardOffset.applyQuaternion(ai.quaternion);
+        
+        // Update camera position to AI's head position + backward offset
+        camera.position.copy(headPos).add(backwardOffset);
+        
+        // Copy AI's rotation and flip 180 degrees (PI radians)
+        camera.rotation.copy(ai.rotation);
+        camera.rotation.y += Math.PI;
+        
+    } else if (spectatorViewMode === 'third') {
+        // Third person view - follow behind the AI with orbit control
+        const aiPos = ai.position.clone();
+        
+        // Calculate camera position based on orbit angles (mouse/joystick control)
+        const distance = 8;
+        const heightOffset = 3;
+        
+        // Convert spherical coordinates to Cartesian - orbit around AI
+        const offsetX = distance * Math.sin(spectatorYaw) * Math.cos(spectatorPitch);
+        const offsetY = distance * Math.sin(spectatorPitch) + heightOffset;
+        const offsetZ = distance * Math.cos(spectatorYaw) * Math.cos(spectatorPitch);
+        
+        const cameraPos = new THREE.Vector3(
+            aiPos.x + offsetX,
+            aiPos.y + offsetY,
+            aiPos.z + offsetZ
+        );
+        
+        camera.position.copy(cameraPos);
+        
+        // Look at AI (so AI appears in front of camera)
+        const lookTarget = aiPos.clone();
+        lookTarget.y += 1.5;
+        camera.lookAt(lookTarget);
+        
+    } else if (spectatorViewMode === 'drone') {
+        // Drone view - free movement
+        // Handle drone movement based on keys
+        const speed = 30 * delta;
+        
+        if (keySet.has('KeyW')) {
+            const forward = new THREE.Vector3(0, 0, -1);
+            forward.applyQuaternion(camera.quaternion);
+            spectatorDronePosition.add(forward.multiplyScalar(speed));
+        }
+        if (keySet.has('KeyS')) {
+            const back = new THREE.Vector3(0, 0, 1);
+            back.applyQuaternion(camera.quaternion);
+            spectatorDronePosition.add(back.multiplyScalar(speed));
+        }
+        if (keySet.has('KeyA')) {
+            const left = new THREE.Vector3(-1, 0, 0);
+            left.applyQuaternion(camera.quaternion);
+            spectatorDronePosition.add(left.multiplyScalar(speed));
+        }
+        if (keySet.has('KeyD')) {
+            const right = new THREE.Vector3(1, 0, 0);
+            right.applyQuaternion(camera.quaternion);
+            spectatorDronePosition.add(right.multiplyScalar(speed));
+        }
+        if (keySet.has('Space')) {
+            spectatorDronePosition.y += speed;
+        }
+        if (keySet.has('ShiftLeft') || keySet.has('ShiftRight')) {
+            spectatorDronePosition.y -= speed;
+        }
+        
+        // Clamp drone position
+        spectatorDronePosition.y = Math.max(5, Math.min(100, spectatorDronePosition.y));
+        
+        camera.position.copy(spectatorDronePosition);
+        
+        // Point camera towards drone target (center of field initially)
+        camera.lookAt(spectatorDroneTarget);
+    }
+    
+    // Apply zoom
+    camera.fov = 75 / spectatorZoomLevel;
+    camera.updateProjectionMatrix();
+}
+
+// Spectator mode mouse control for third person look
+function onSpectatorMouseMove(event) {
+    if (!isSpectatorMode || spectatorViewMode !== 'third') return;
+    
+    const movementX = event.movementX || 0;
+    const movementY = event.movementY || 0;
+    
+    spectatorYaw -= movementX * 0.005;
+    spectatorPitch -= movementY * 0.005;
+    spectatorPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, spectatorPitch));
+}
+
+function initSpectatorJoystick() {
+    // Create spectator joystick for mobile if needed
+    const existingJoystick = document.getElementById('spectator-joystick');
+    if (existingJoystick) return;
+    
+    const joystickContainer = document.createElement('div');
+    joystickContainer.id = 'spectator-joystick';
+    joystickContainer.style.cssText = 'position: fixed; left: 10%; bottom: 10%; width: 120px; height: 120px; z-index: 15;';
+    document.body.appendChild(joystickContainer);
+    
+    if (typeof nipplejs !== 'undefined') {
+        const joystick = nipplejs.create({
+            zone: joystickContainer,
+            mode: 'static',
+            position: { left: '50%', top: '50%' },
+            color: 'rgba(255, 255, 0, 0.5)'
+        });
+        
+        joystick.on('move', (evt, data) => {
+            if (!isSpectatorMode) return;
+            
+            if (spectatorViewMode === 'third') {
+                // Third person: joystick controls orbit
+                const sensitivity = 0.05;
+                if (data.vector.x < -0.2 || data.vector.x > 0.2) {
+                    spectatorYaw -= data.vector.x * sensitivity;
+                }
+                if (data.vector.y < -0.2 || data.vector.y > 0.2) {
+                    spectatorPitch -= data.vector.y * sensitivity;
+                    spectatorPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, spectatorPitch));
+                }
+            } else if (spectatorViewMode === 'drone') {
+                // Drone: joystick controls movement
+                const forward = new THREE.Vector3(0, 0, -1);
+                const right = new THREE.Vector3(1, 0, 0);
+                
+                forward.applyQuaternion(camera.quaternion);
+                right.applyQuaternion(camera.quaternion);
+                
+                const speed = 20;
+                if (data.vector.y < -0.2) {
+                    spectatorDronePosition.add(forward.multiplyScalar(-data.vector.y * speed));
+                }
+                if (data.vector.y > 0.2) {
+                    spectatorDronePosition.add(forward.multiplyScalar(-data.vector.y * speed));
+                }
+                if (data.vector.x < -0.2) {
+                    spectatorDronePosition.add(right.multiplyScalar(data.vector.x * speed));
+                }
+                if (data.vector.x > 0.2) {
+                    spectatorDronePosition.add(right.multiplyScalar(data.vector.x * speed));
+                }
+            }
+        });
+    }
+}
+
+// Setup spectator button event listeners
+function setupSpectatorButtons() {
+    const aiButtons = [
+        document.getElementById('spec-ai1-btn'),
+        document.getElementById('spec-ai2-btn'),
+        document.getElementById('spec-ai3-btn'),
+        document.getElementById('spec-ai4-btn')
+    ];
+    
+    aiButtons.forEach((btn, index) => {
+        if (btn) {
+            btn.addEventListener('click', () => selectSpectatorAI(index));
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                selectSpectatorAI(index);
+            });
+        }
+    });
+    
+    const zoomSlider = document.getElementById('spectator-zoom-slider');
+    if (zoomSlider) {
+        zoomSlider.addEventListener('input', (e) => {
+            spectatorZoomLevel = parseFloat(e.target.value);
+        });
+    }
+}
+
+// Add to DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+    setupSpectatorButtons();
+});
+
 document.addEventListener('keydown', (event) => {
     if (!isGameRunning) return;
     keySet.add(event.code);
+    
+    // Spectator mode keyboard controls
+    if (spectatorModeEnabled) {
+        if (event.code === 'Digit1') {
+            selectSpectatorAI(0);
+        } else if (event.code === 'Digit2') {
+            selectSpectatorAI(1);
+        } else if (event.code === 'Digit3') {
+            selectSpectatorAI(2);
+        } else if (event.code === 'Digit4') {
+            selectSpectatorAI(3);
+        } else if (event.code === 'KeyC') {
+            toggleSpectatorViewMode();
+        }
+        return; // Skip normal player controls in spectator mode
+    }
+    
     // デバッグ: キー入力をログ
     if (event.code === 'KeyW' || event.code === 'KeyA' || event.code === 'KeyS' || event.code === 'KeyD') {
         debugLog('Key pressed:', event.code, 'isGameRunning:', isGameRunning, 'justRestarted:', window.justRestarted);
@@ -8058,6 +8400,13 @@ document.addEventListener('pointerlockchange', () => {
 
 function onMouseMove(event) {
     if (!isGameRunning) return;
+    
+    // Spectator mode third person view mouse control (without pointer lock)
+    if (isSpectatorMode && spectatorViewMode === 'third') {
+        onSpectatorMouseMove(event);
+        return;
+    }
+    
     const movementX = event.movementX || 0;
     const movementY = event.movementY || 0;
     player.rotateY(-movementX * lookSpeed);
@@ -8067,6 +8416,9 @@ function onMouseMove(event) {
 
 document.addEventListener('mousedown', (event) => {
     if (!isGameRunning) return;
+    // Spectator mode - block shooting and zooming
+    if (isSpectatorMode) return;
+    
     if (event.button === 0) { // Left click
         handleFirePress();
     } else if (event.button === 2) { // Right click
@@ -8077,7 +8429,11 @@ document.addEventListener('mousedown', (event) => {
         }
     }
 });
-document.addEventListener('mouseup', (event) => { if (!isGameRunning) return; if (event.button === 0) { handleFireRelease(); } });
+document.addEventListener('mouseup', (event) => { 
+    if (!isGameRunning) return;
+    if (isSpectatorMode) return;
+    if (event.button === 0) { handleFireRelease(); } 
+});
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 
 
@@ -8199,6 +8555,7 @@ function initializeAudio() {
 
 function startGame() {
     debugLog('startGame() called');
+    console.log('startGame called, gameSettings.spectatorMode:', gameSettings.spectatorMode);
     applySettingsScreenLighting(false);
     ensureBuildStamp();
       applyBillBattleModeConstraints();
@@ -8217,6 +8574,81 @@ function startGame() {
     
     const startSc = document.getElementById('start-screen');
     if (startSc) startSc.style.display = 'none';
+    
+    // Spectator mode initialization
+    spectatorModeEnabled = gameSettings.spectatorMode || false;
+    // Also sync legacy boolean used elsewhere
+    isSpectatorMode = spectatorModeEnabled;
+    if (spectatorModeEnabled) {
+        spectatorModeEnabled = true;
+        spectatorCurrentAI = null;
+        spectatorViewMode = 'first';
+        spectatorZoomLevel = 1.0;
+        spectatorDronePosition.set(0, 50, 0);
+        spectatorDroneTarget.set(0, 0, 0);
+        spectatorYaw = 0;
+        spectatorPitch = -Math.PI / 6;
+        
+        // Hide player controls and show spectator UI
+        const joy = document.getElementById('joystick-move');
+        const fire = document.getElementById('fire-button');
+        const crouch = document.getElementById('crouch-button');
+        const zoom = document.getElementById('zoom-button');
+        const followBtn = document.getElementById('follow-button');
+        const crosshair = document.getElementById('crosshair');
+        const playerHPDisplay = document.getElementById('player-hp-display');
+        const playerWeaponDisplay = document.getElementById('player-weapon-display');
+        
+        if (joy) joy.style.display = 'none';
+        if (fire) fire.style.display = 'none';
+        if (crouch) crouch.style.display = 'none';
+        if (zoom) zoom.style.display = 'none';
+        if (followBtn) followBtn.style.display = 'none';
+        if (crosshair) crosshair.style.display = 'none';
+        if (playerHPDisplay) playerHPDisplay.style.display = 'none';
+        if (playerWeaponDisplay) playerWeaponDisplay.style.display = 'none';
+        
+        // Show spectator UI
+        const specAIButtons = document.getElementById('spectator-ai-buttons');
+        const specZoomControl = document.getElementById('spectator-zoom-control');
+        const specViewMode = document.getElementById('spectator-view-mode');
+        
+        if (specAIButtons) specAIButtons.style.display = 'block';
+        if (specZoomControl) specZoomControl.style.display = 'block';
+        if (specViewMode) {
+            specViewMode.style.display = 'block';
+            specViewMode.textContent = 'View: AI 1 - First Person';
+        }
+        
+        // For mobile, also show spectator UI
+        if (shouldShowTouchControls()) {
+            if (specAIButtons) specAIButtons.style.display = 'block';
+            if (specZoomControl) specZoomControl.style.display = 'block';
+            // Initialize spectator joystick for mobile
+            initSpectatorJoystick();
+        }
+        
+        // Hide player and setup camera for spectator
+        player.visible = false;
+        player.position.set(0, -1000, 0); // Move player away
+        
+        // Detach camera from player for spectator mode
+        player.remove(camera);
+        scene.add(camera);
+        camera.position.set(0, 50, 20); // Initial position for camera
+        
+        // Set AI count to 4 for spectator mode
+        gameSettings.aiCount = 4;
+    } else {
+        // Re-attach camera to player for normal mode
+        if (camera.parent !== player) {
+            scene.remove(camera);
+            player.add(camera);
+            camera.position.set(0, 0, 0);
+            camera.position.z = 5;
+        }
+    }
+    
     if (renderer && renderer.domElement) {
         renderer.domElement.style.display = 'block';
     }
@@ -8240,7 +8672,10 @@ function startGame() {
     }
     const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display']; // 共通UI
 
-    if (gameSettings.gameMode === 'arcade') {
+    if (isSpectatorMode) {
+        // Spectator mode shows all AI HP displays
+        gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'ai4-hp-display', 'spectator-ai-buttons', 'spectator-zoom-control', 'spectator-view-mode');
+    } else if (gameSettings.gameMode === 'arcade') {
         gameUI.push('kill-count-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // アーケードモードのAI HP表示も追加
     } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
         gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // チームモードのAI HP表示
@@ -8356,6 +8791,7 @@ function shuffle(array) {
 
 function restartGame() {
     debugLog('restartGame() called');
+    console.log('restartGame called, isSpectatorMode:', isSpectatorMode, 'ai count:', ais.length);
     applySettingsScreenLighting(false);
     ensureBuildStamp();
       applyBillBattleModeConstraints();
@@ -8465,24 +8901,33 @@ function restartGame() {
         if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.style.display = 'none';
     }
     // --- ここまで ---
-    let playerSpawnPos;
-    if (isBillBattleMode()) {
-        playerSpawnPos = getBillBattlePlayerSpawn();
-    } else if (availableSpawnPoints.length > 0) {
-        playerSpawnPos = availableSpawnPoints.pop();
+    
+    // Spectator mode - skip player setup but keep game running
+    if (!isSpectatorMode) {
+        let playerSpawnPos;
+        if (isBillBattleMode()) {
+            playerSpawnPos = getBillBattlePlayerSpawn();
+        } else if (availableSpawnPoints.length > 0) {
+            playerSpawnPos = availableSpawnPoints.pop();
+        } else {
+            const playerSpawn = customSpawnPoints ? customSpawnPoints.find(p => p.name === 'Player') : null;
+            playerSpawnPos = playerSpawn ? new THREE.Vector3(playerSpawn.x, 2.0, playerSpawn.z) : PLAYER_INITIAL_POSITION;
+        }
+        player.position.copy(playerSpawnPos);
+        if (isBillBattleMode()) {
+            enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
+            // Reset crouch/height to normal on indoor combat start
+            isCrouchingToggle = false;
+            playerTargetHeight = BILL_BATTLE_PLAYER_HEIGHT;
+            player.position.y = playerTargetHeight;
+            if (playerModel) {
+                playerModel.position.set(0, -playerTargetHeight, 0);
+            }
+        }
     } else {
-        const playerSpawn = customSpawnPoints ? customSpawnPoints.find(p => p.name === 'Player') : null;
-        playerSpawnPos = playerSpawn ? new THREE.Vector3(playerSpawn.x, 2.0, playerSpawn.z) : PLAYER_INITIAL_POSITION;
-    }
-    player.position.copy(playerSpawnPos);
-    if (isBillBattleMode()) {
-        enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
-        // Reset crouch/height to normal on indoor combat start
-        isCrouchingToggle = false;
-        playerTargetHeight = BILL_BATTLE_PLAYER_HEIGHT;
-        player.position.y = playerTargetHeight;
-        if (playerModel) {
-            playerModel.position.set(0, -playerTargetHeight, 0);
+        // Initialize first AI for spectator
+        if (ais.length > 0) {
+            selectSpectatorAI(0);
         }
     }
     // If spawn overlaps obstacles/explosives, relocate to a safe spot to avoid input lock.
@@ -8534,11 +8979,17 @@ function restartGame() {
     if (isTeamMode || isTeamArcadeMode) { // 変更
         finalAICount = 3; // チームモードおよびチームアーケードモードでは常に3体（1体味方 + 2体敵）
     }
+    
+    // Spectator mode always uses 4 AIs
+    if (isSpectatorMode) {
+        finalAICount = 4;
+    }
+    
     for (const ai of ais) {
         cleanupAI(ai); // Use cleanupAI to properly remove AI and its resources
     }
     ais.length = 0;
-    const aiColors = [0x00ff00, 0x00ffff, 0x0FFa500];
+    const aiColors = [0x00ff00, 0x00ffff, 0xffa500, 0xff00ff]; // Added magenta for 4th AI
     const teamColors = {
         player: 0x00ffff, // 味方AIはシアン
         enemy: [0x00ff00, 0xffff00] // 敵AIは緑と黄
@@ -8662,6 +9113,7 @@ function restartGame() {
     const ai1HPDisplay = document.getElementById('ai-hp-display');
     const ai2HPDisplay = document.getElementById('ai2-hp-display');
     const ai3HPDisplay = document.getElementById('ai3-hp-display');
+    const ai4HPDisplay = document.getElementById('ai4-hp-display');
     ais.forEach((ai, index) => {
         ai.hp = aiHP;
         // 味方AIは積極的に攻撃するため、初期状態をATTACKINGにする
@@ -8724,6 +9176,7 @@ function restartGame() {
             if (index === 0) { if (ai1HPDisplay) ai1HPDisplay.textContent = `AI 1 HP: ${aiHPText}`; if (ai1HPDisplay) ai1HPDisplay.style.color = 'limegreen'; }
             else if (index === 1) { if (ai2HPDisplay) ai2HPDisplay.textContent = `AI 2 HP: ${aiHPText}`; if (ai2HPDisplay) ai2HPDisplay.style.color = 'cyan'; }
             else if (index === 2) { if (ai3HPDisplay) ai3HPDisplay.textContent = `AI 3 HP: ${aiHPText}`; if (ai3HPDisplay) ai3HPDisplay.style.color = 'orange'; }
+            else if (index === 3) { if (ai4HPDisplay) ai4HPDisplay.textContent = `AI 4 HP: ${aiHPText}`; if (ai4HPDisplay) ai4HPDisplay.style.color = '#ff00ff'; }
         }
     });
 
@@ -8820,19 +9273,30 @@ function restartGame() {
     isPaused = false; // ゲームが一時停止状態ではないことを明確にする
     document.exitPointerLock(); // 念のためポインターロックを解除し、再取得の機会を与える
     
-    // 既存のplayerModelがplayerに追加されている場合、まず削除する
-    if (playerModel && playerModel.parent) {
-        player.remove(playerModel);
+    // Spectator mode - skip player model creation
+    if (!isSpectatorMode) {
+        // 既存のplayerModelがplayerに追加されている場合、まず削除する
+        if (playerModel && playerModel.parent) {
+            player.remove(playerModel);
+        }
+        playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
+        player.add(playerModel);
+        playerModel.position.set(0, -playerTargetHeight, 0);
+        if (playerModel) { // 念のためnullチェック
+            playerModel.visible = false; // プレイヤーモデルは非表示に保つ
+        }
+        // playerBodyとplayerHeadをplayerModelのuserDataから取得
+        playerBody = playerModel.userData.parts.body;
+        playerHead = playerModel.userData.parts.head;
+    } else {
+        // Spectator mode - remove player model if exists
+        if (playerModel && playerModel.parent) {
+            player.remove(playerModel);
+            playerModel = null;
+        }
+        playerBody = null;
+        playerHead = null;
     }
-    playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
-    player.add(playerModel);
-    playerModel.position.set(0, -playerTargetHeight, 0);
-    if (playerModel) { // 念のためnullチェック
-        playerModel.visible = false; // プレイヤーモデルは非表示に保つ
-    }
-    // playerBodyとplayerHeadをplayerModelのuserDataから取得
-    playerBody = playerModel.userData.parts.body;
-    playerHead = playerModel.userData.parts.head;
 }
 
 function startAIDeathSequence(impactVelocity, ai) {
@@ -9116,6 +9580,9 @@ function forceResetTouchState() {
 }
 
 function startPlayerDeathSequence(projectile) {
+    // Spectator mode - no player death sequence
+    if (isSpectatorMode) return;
+    
     if (isPlayerDeathPlaying || playerHP > 0) return;
     forceResetTouchState(); // Reset input states
     isPlayerDeathPlaying = true;
@@ -9420,6 +9887,9 @@ function createWindows(obstacleMesh, buildingWidth, buildingHeight, buildingDept
 }
 
 function shouldPlayAIDeathKillCam(ai, killerSource) {
+    // Spectator mode - always skip kill cam
+    if (isSpectatorMode) return false;
+    
     const mode = gameSettings.killCamMode || 'playerOnly';
     if (mode === 'off') return false;
     if (mode === 'all') return true;
@@ -10516,7 +10986,8 @@ function animate() {
     if (isRifleZoomed && !canUseRifleZoom(currentWeapon)) {
         setRifleZoom(false);
     }
-    if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
+    // Spectator mode - block shooting
+    if (!isSpectatorMode && isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
         shoot();
     }
     updateCrosshairForWeapon();
@@ -10542,6 +11013,12 @@ function animate() {
     let finalMoveVector = joystickMoveVector.length() > 0 ? joystickMoveVector.clone() : keyboardMoveVector.clone();
 
     if (finalMoveVector.length() > 0) finalMoveVector.normalize();
+    // Spectator mode - block player movement
+    if (isSpectatorMode) {
+        finalMoveVector.set(0, 0);
+        keyboardMoveVector.set(0, 0);
+        joystickMoveVector.set(0, 0);
+    }
     // リスポーン直後の移動を強制的に停止させる
     if (window.justRestarted || isPlayerDeathPlaying || isElevating) {
         debugLog('Movement blocked - justRestarted:', window.justRestarted, 'isPlayerDeathPlaying:', isPlayerDeathPlaying, 'isElevating:', isElevating);
@@ -12493,7 +12970,7 @@ function animate() {
             projectiles.splice(i, 1);
         }
     }
-    const aiHPDisplays = [aiHPDisplay, ai2HPDisplay, ai3HPDisplay]; // グローバル変数を使用
+    const aiHPDisplays = [aiHPDisplay, ai2HPDisplay, ai3HPDisplay, ai4HPDisplay]; // グローバル変数を使用
     for (let i = 0; i < aiHPDisplays.length; i++) {
         const display = aiHPDisplays[i];
         if (!display) continue;
@@ -12501,7 +12978,14 @@ function animate() {
 
         if (ai && ai.hp > 0) {
             display.style.display = 'block';
-            if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
+            if (isSpectatorMode) {
+                // Spectator mode shows all AI info
+                display.textContent = `AI ${i + 1} HP: ${ai.hp === Infinity ? '∞' : ai.hp} | Kills: ${ai.kills || 0}`;
+                if (i === 0) display.style.color = 'limegreen';
+                else if (i === 1) display.style.color = 'cyan';
+                else if (i === 2) display.style.color = 'orange';
+                else if (i === 3) display.style.color = '#ff00ff';
+            } else if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
                 if (i === 0) {
                     display.textContent = `Teammate HP: ${ai.hp === Infinity ? '∞' : ai.hp}`;
                     display.style.color = 'cyan';
@@ -12526,7 +13010,13 @@ function animate() {
             display.classList.remove('dead-ai-hp'); // 生きている場合はクラスを削除
         } else if (ai && ai.hp <= 0) { // AIが存在し、HPが0以下の場合
             display.style.display = 'block';
-            if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
+            if (isSpectatorMode) {
+                display.textContent = `AI ${i + 1} HP: 0 | Kills: ${ai.kills || 0}`;
+                if (i === 0) display.style.color = 'limegreen';
+                else if (i === 1) display.style.color = 'cyan';
+                else if (i === 2) display.style.color = 'orange';
+                else if (i === 3) display.style.color = '#ff00ff';
+            } else if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
                 if (i === 0) {
                     display.textContent = `Teammate HP: 0`;
                     display.style.color = 'cyan';
@@ -12547,6 +13037,7 @@ function animate() {
                 if (i === 0) display.style.color = 'limegreen';
                 else if (i === 1) display.style.color = 'cyan';
                 else if (i === 2) display.style.color = 'orange';
+                else if (i === 3) display.style.color = '#ff00ff';
             }
             display.classList.add('dead-ai-hp'); // 死んでいる場合はクラスを追加
         } else { // AIが存在しない場合 (AIの総数よりiが大きい場合)
@@ -12566,8 +13057,14 @@ function animate() {
         }
     } else {
         const allAIsDefeated = ais.every(ai => ai.hp <= 0);
+        // In spectator mode, when all AIs are dead, end the game
         if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && (gameSettings.gameMode === 'battle' || gameSettings.gameMode === 'ffa') && !isBillBattleMode()) {
-            showWinScreen();
+            if (isSpectatorMode) {
+                // Spectator mode - show win when all AIs defeated
+                showWinScreen();
+            } else {
+                showWinScreen();
+            }
         }
     }
     if (playerHPDisplay) { 
@@ -12587,7 +13084,11 @@ function animate() {
     } else {
         if (killCountDisplay) killCountDisplay.style.display = 'none';
     }
-    if (screenShakeDuration > 0) {
+    
+    // Update spectator camera
+    if (isSpectatorMode) {
+        updateSpectatorCamera(delta);
+    } else if (screenShakeDuration > 0) {
         screenShakeDuration -= delta;
         const shakeFactor = screenShakeDuration / SHAKE_DURATION_MAX;
         camera.position.x = (Math.random() - 0.5) * SHAKE_INTENSITY * shakeFactor;
@@ -12652,12 +13153,18 @@ if (startBtn) {
         if (durationRadio) {
             gameSettings.gameDuration = parseInt(durationRadio.value, 10);
         }
+        const spectatorModeRadio = document.querySelector('input[name="spectator-mode"]:checked');
+        if (spectatorModeRadio) {
+            gameSettings.spectatorMode = spectatorModeRadio.value === 'on';
+        }
         saveSettings();
         initializeAudio();
         startGame();
         restartGame();
     });
 }
+console.log('Script loaded, gameSettings:', gameSettings);
+
 const rButtons = document.querySelectorAll('.restart-button');
 rButtons.forEach(button => button.addEventListener('click', () => {
     initializeAudio();
