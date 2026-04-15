@@ -12733,11 +12733,24 @@ function animate() {
               const moveDir = moveVector.clone().normalize();
               raycaster.set(prevProjectilePos, moveDir);
               raycaster.far = moveDistance;
-              const hit = getFirstProjectileHit(raycaster, obstacles);
+              const obstacleHit = getFirstProjectileHit(raycaster, obstacles);
+              // Raycast floor as well to prevent tunneling at high projectile speeds.
+              // Keep AI non-rocket floor resolution deferred to after player hit tests,
+              // but rockets must always collide with the floor.
+              const shouldRaycastFloorNow = p.isRocket || p.source !== 'ai';
+              const floorHit = shouldRaycastFloorNow
+                  ? (raycaster.intersectObject(floor, false)[0] || null)
+                  : null;
+              let hit = obstacleHit;
+              let hitKind = 'obstacle';
+              if (floorHit && (!hit || floorHit.distance < hit.distance)) {
+                  hit = floorHit;
+                  hitKind = 'floor';
+              }
               if (hit) {
                   hitSomething = true;
                   hitObject = hit.object;
-                  hitType = 'obstacle';
+                  hitType = hitKind;
                   p.mesh.position.copy(hit.point);
                   if (isBillBattleMode() && hitObject && hitObject.userData && hitObject.userData.isBillBattleCeiling && billBattleLights.length > 0) {
                       const hitDist = prevProjectilePos.distanceTo(hit.point);
@@ -12800,7 +12813,21 @@ function animate() {
             if (!(isBillBattleMode() && !billBattlePlayerEntered)) {
                 for (let j = ais.length - 1; j >= 0; j--) {
                     const ai = ais[j];
-                    if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
+                    const aiBox = getObjectAABBForCollision(ai).expandByScalar(bulletSphere.radius);
+                    let hitAI = aiBox.intersectsSphere(bulletSphere);
+                    if (!hitAI) {
+                        const segDir = new THREE.Vector3().subVectors(p.mesh.position, prevProjectilePos);
+                        const segLen = segDir.length();
+                        if (segLen > 1e-6) {
+                            segDir.normalize();
+                            const segRay = new THREE.Ray(prevProjectilePos.clone(), segDir);
+                            const hitPoint = segRay.intersectBox(aiBox, new THREE.Vector3());
+                            if (hitPoint) {
+                                hitAI = prevProjectilePos.distanceTo(hitPoint) <= segLen;
+                            }
+                        }
+                    }
+                    if (hitAI) {
                         if (ai.hp <= 0) continue;
                         if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player') {
                             continue;
@@ -12877,7 +12904,21 @@ function animate() {
                     
                     if (gameSettings.gameMode !== 'ffa' && ai.team === shooterTeam) continue;
                     
-                    if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
+                    const aiBox = getObjectAABBForCollision(ai).expandByScalar(bulletSphere.radius);
+                    let hitAI = aiBox.intersectsSphere(bulletSphere);
+                    if (!hitAI) {
+                        const segDir = new THREE.Vector3().subVectors(p.mesh.position, prevProjectilePos);
+                        const segLen = segDir.length();
+                        if (segLen > 1e-6) {
+                            segDir.normalize();
+                            const segRay = new THREE.Ray(prevProjectilePos.clone(), segDir);
+                            const hitPoint = segRay.intersectBox(aiBox, new THREE.Vector3());
+                            if (hitPoint) {
+                                hitAI = prevProjectilePos.distanceTo(hitPoint) <= segLen;
+                            }
+                        }
+                    }
+                    if (hitAI) {
                         hitSomething = true;
                         hitObject = ai;
                         hitType = 'ai';
