@@ -17,9 +17,6 @@
       defaultWeapon: 'machinegun',
       defaultWeaponPlayer: 'machinegun',
       defaultWeaponAI: 'machinegun',
-      defaultWeaponAI1: 'machinegun',
-      defaultWeaponAI2: 'machinegun',
-      defaultWeaponAI3: 'machinegun',
         medikitCount: 5,
       settingsVersion: 3,
       mapType: 'default',
@@ -426,24 +423,6 @@ let characterEditorAnimationId = null;
         if (mrCountSelect) mrCountSelect.addEventListener('change', () => { gameSettings.mrCount = parseInt(mrCountSelect.value, 10); saveSettings(); });
         if (billBattleSizeSelect) billBattleSizeSelect.addEventListener('change', () => { gameSettings.billBattleSize = billBattleSizeSelect.value; saveSettings(); });
         if (billBattleLightingSelect) billBattleLightingSelect.addEventListener('change', () => { gameSettings.billBattleLighting = billBattleLightingSelect.value; saveSettings(); });
-
-        const defaultWeaponPlayerSelect = document.getElementById('default-weapon-player');
-        const defaultWeaponAI1Select = document.getElementById('default-weapon-ai1');
-        const defaultWeaponAI2Select = document.getElementById('default-weapon-ai2');
-        const defaultWeaponAI3Select = document.getElementById('default-weapon-ai3');
-        const bindDefaultWeaponSelect = (el, key) => {
-            if (!el) return;
-            el.value = gameSettings[key] || WEAPON_MG;
-            el.addEventListener('change', () => {
-                gameSettings[key] = el.value || WEAPON_MG;
-                saveSettings();
-            });
-        };
-        bindDefaultWeaponSelect(defaultWeaponPlayerSelect, 'defaultWeaponPlayer');
-        bindDefaultWeaponSelect(defaultWeaponAI1Select, 'defaultWeaponAI1');
-        bindDefaultWeaponSelect(defaultWeaponAI2Select, 'defaultWeaponAI2');
-        bindDefaultWeaponSelect(defaultWeaponAI3Select, 'defaultWeaponAI3');
-
         const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
         const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
         const syncDefaultWeaponChecks = () => {
@@ -464,9 +443,6 @@ let characterEditorAnimationId = null;
                         });
                         if (defaultWeaponTargetSelect && defaultWeaponTargetSelect.value === 'ai') {
                             gameSettings.defaultWeaponAI = check.value;
-                            gameSettings.defaultWeaponAI1 = check.value;
-                            gameSettings.defaultWeaponAI2 = check.value;
-                            gameSettings.defaultWeaponAI3 = check.value;
                         } else {
                             gameSettings.defaultWeaponPlayer = check.value;
                         }
@@ -477,9 +453,6 @@ let characterEditorAnimationId = null;
                             : WEAPON_MG;
                         if (defaultWeaponTargetSelect && defaultWeaponTargetSelect.value === 'ai') {
                             gameSettings.defaultWeaponAI = fallback;
-                            gameSettings.defaultWeaponAI1 = fallback;
-                            gameSettings.defaultWeaponAI2 = fallback;
-                            gameSettings.defaultWeaponAI3 = fallback;
                         } else {
                             gameSettings.defaultWeaponPlayer = fallback;
                         }
@@ -925,12 +898,6 @@ let playerTargetHeight = 2.0;
 let isCrouchingToggle = false;
 const GRAVITY = 9.8;
 let playerHP = 3;
-let playerSpawnProtectionUntil = 0;
-const PLAYER_SPAWN_PROTECTION_SECONDS = 2.0;
-
-function isPlayerSpawnProtected(timeElapsed) {
-    return playerHP > 0 && Number.isFinite(timeElapsed) && timeElapsed < playerSpawnProtectionUntil;
-}
 let lastPlayerDeathPos = null;
 let screenShakeDuration = 0;
 const SHAKE_DURATION_MAX = 0.4;
@@ -1268,12 +1235,7 @@ function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
 }
 
 function applyAIDefaultWeaponLoadout(ai) {
-    const idx = ais.indexOf(ai);
-    let selected = WEAPON_MG;
-    if (idx === 0) selected = gameSettings.defaultWeaponAI1 || gameSettings.defaultWeaponAI || WEAPON_MG;
-    else if (idx === 1) selected = gameSettings.defaultWeaponAI2 || gameSettings.defaultWeaponAI || WEAPON_MG;
-    else if (idx === 2) selected = gameSettings.defaultWeaponAI3 || gameSettings.defaultWeaponAI || WEAPON_MG;
-    else selected = gameSettings.defaultWeaponAI || WEAPON_MG;
+    const selected = gameSettings.defaultWeaponAI || WEAPON_MG;
     if (!ai.userData) ai.userData = {};
     ai.currentWeapon = selected;
     ai.ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
@@ -1305,15 +1267,9 @@ function switchPlayerToFallbackWeapon() {
 
 function switchAIToFallbackWeapon(ai) {
     if (!ai) return;
-    const idx = ais.indexOf(ai);
-    const aiDefault = idx === 0
-        ? (gameSettings.defaultWeaponAI1 || gameSettings.defaultWeaponAI || WEAPON_MG)
-        : (idx === 1
-            ? (gameSettings.defaultWeaponAI2 || gameSettings.defaultWeaponAI || WEAPON_MG)
-            : (idx === 2
-                ? (gameSettings.defaultWeaponAI3 || gameSettings.defaultWeaponAI || WEAPON_MG)
-                : (gameSettings.defaultWeaponAI || WEAPON_MG)));
-    const fallback = aiDefault && aiDefault !== WEAPON_PISTOL ? aiDefault : WEAPON_PISTOL;
+    const fallback = gameSettings.defaultWeaponAI && gameSettings.defaultWeaponAI !== WEAPON_PISTOL
+        ? gameSettings.defaultWeaponAI
+        : WEAPON_PISTOL;
     ai.currentWeapon = fallback;
     if (fallback === WEAPON_MG && ai.ammoMG <= 0) ai.ammoMG = MAX_AMMO_MG;
     if (fallback === WEAPON_RR && ai.ammoRR <= 0) ai.ammoRR = MAX_AMMO_RR;
@@ -1957,15 +1913,6 @@ function loadSettings() {
         if (parsedSavedSettings.defaultWeaponAI === undefined) {
             parsedSavedSettings.defaultWeaponAI = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
-        if (parsedSavedSettings.defaultWeaponAI1 === undefined) {
-            parsedSavedSettings.defaultWeaponAI1 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
-        }
-        if (parsedSavedSettings.defaultWeaponAI2 === undefined) {
-            parsedSavedSettings.defaultWeaponAI2 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
-        }
-        if (parsedSavedSettings.defaultWeaponAI3 === undefined) {
-            parsedSavedSettings.defaultWeaponAI3 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
-        }
         if (parsedSavedSettings.mrCount === undefined) {
             parsedSavedSettings.mrCount = gameSettings.mrCount;
         }
@@ -2000,15 +1947,6 @@ function loadSettings() {
         document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
             radio.checked = (radio.value === String(gameSettings.barrelRespawn));
         });
-        const defaultWeaponPlayerSelect = document.getElementById('default-weapon-player');
-        const defaultWeaponAI1Select = document.getElementById('default-weapon-ai1');
-        const defaultWeaponAI2Select = document.getElementById('default-weapon-ai2');
-        const defaultWeaponAI3Select = document.getElementById('default-weapon-ai3');
-        if (defaultWeaponPlayerSelect) defaultWeaponPlayerSelect.value = gameSettings.defaultWeaponPlayer || WEAPON_MG;
-        if (defaultWeaponAI1Select) defaultWeaponAI1Select.value = gameSettings.defaultWeaponAI1 || gameSettings.defaultWeaponAI || WEAPON_MG;
-        if (defaultWeaponAI2Select) defaultWeaponAI2Select.value = gameSettings.defaultWeaponAI2 || gameSettings.defaultWeaponAI || WEAPON_MG;
-        if (defaultWeaponAI3Select) defaultWeaponAI3Select.value = gameSettings.defaultWeaponAI3 || gameSettings.defaultWeaponAI || WEAPON_MG;
-
         const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
         if (defaultWeaponTargetSelect) {
             defaultWeaponTargetSelect.value = 'player';
@@ -2199,15 +2137,6 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.defaultWeaponAI === undefined) {
             parsedSavedSettings.defaultWeaponAI = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
-        if (parsedSavedSettings.defaultWeaponAI1 === undefined) {
-            parsedSavedSettings.defaultWeaponAI1 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
-        }
-        if (parsedSavedSettings.defaultWeaponAI2 === undefined) {
-            parsedSavedSettings.defaultWeaponAI2 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
-        }
-        if (parsedSavedSettings.defaultWeaponAI3 === undefined) {
-            parsedSavedSettings.defaultWeaponAI3 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
-        }
                 if (parsedSavedSettings.buttonPositions === undefined) {
                     parsedSavedSettings.buttonPositions = {
                         fire: { right: '20px', bottom: '120px' },
@@ -2243,16 +2172,6 @@ function loadMapSettings(mapName) {
                 document.getElementById('sr-count').value = gameSettings.srCount;
                 if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
                 if (document.getElementById('mr-count')) document.getElementById('mr-count').value = gameSettings.mrCount;
-
-                const defaultWeaponPlayerSelect = document.getElementById('default-weapon-player');
-                const defaultWeaponAI1Select = document.getElementById('default-weapon-ai1');
-                const defaultWeaponAI2Select = document.getElementById('default-weapon-ai2');
-                const defaultWeaponAI3Select = document.getElementById('default-weapon-ai3');
-                if (defaultWeaponPlayerSelect) defaultWeaponPlayerSelect.value = gameSettings.defaultWeaponPlayer || WEAPON_MG;
-                if (defaultWeaponAI1Select) defaultWeaponAI1Select.value = gameSettings.defaultWeaponAI1 || gameSettings.defaultWeaponAI || WEAPON_MG;
-                if (defaultWeaponAI2Select) defaultWeaponAI2Select.value = gameSettings.defaultWeaponAI2 || gameSettings.defaultWeaponAI || WEAPON_MG;
-                if (defaultWeaponAI3Select) defaultWeaponAI3Select.value = gameSettings.defaultWeaponAI3 || gameSettings.defaultWeaponAI || WEAPON_MG;
-
                 const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
                 if (defaultWeaponTargetSelect) {
                     defaultWeaponTargetSelect.value = 'player';
@@ -7944,7 +7863,7 @@ function aiShoot(ai, timeElapsed) {
         const playerHeadPos = getPlayerHeadPos();
         const playerUpperPos = getPlayerUpperTorsoPos();
         const playerBodyPos = getPlayerBodyPos();
-        if (playerHP > 0 && !isPlayerSpawnProtected(timeElapsed)) {
+        if (playerHP > 0) {
             if (canSeeFrom(aimOrigin, playerHeadPos)) {
                 targets.push({ position: playerHeadPos, distance: ai.position.distanceTo(player.position), type: 'player' });
             } else if (canSeeFrom(aimOrigin, playerUpperPos)) {
@@ -7984,7 +7903,7 @@ function aiShoot(ai, timeElapsed) {
     } else if (gameSettings.gameMode === 'ffa') {
         const potentialTargets = [];
         // プレイヤーをターゲット候補に追加
-        if (playerHP > 0 && !isPlayerSpawnProtected(timeElapsed)) {
+        if (playerHP > 0) {
             const playerHeadPos = getPlayerHeadPos();
             const playerUpperPos = getPlayerUpperTorsoPos();
             const playerBodyPos = getPlayerBodyPos();
@@ -8018,7 +7937,6 @@ function aiShoot(ai, timeElapsed) {
         }
     } else {
         // 通常モードまたは敵AIはプレイヤーを狙う
-        if (playerHP <= 0 || isPlayerSpawnProtected(timeElapsed)) return;
         const playerHeadPos = getPlayerHeadPos();
         const playerUpperPos = getPlayerUpperTorsoPos();
         const playerBodyPos = getPlayerBodyPos();
@@ -8283,19 +8201,28 @@ const lookSpeed = 0.006;
   let keyboardMoveVector = new THREE.Vector2(0, 0);
   let joystickMoveVector = new THREE.Vector2(0, 0);
   let moveManager = null;
-  
-  function initJoystick() {
-      const joystickZone = document.getElementById('joystick-move');
-      if (!joystickZone || typeof nipplejs === 'undefined') return;
+
+  function destroyJoystick() {
+      joystickMoveVector.set(0, 0);
       if (moveManager) {
           moveManager.destroy();
           moveManager = null;
       }
-      joystickMoveVector.set(0, 0);
+  }
+  
+  function initJoystick() {
+      if (!shouldShowTouchControls()) {
+          destroyJoystick();
+          return;
+      }
+      const joystickZone = document.getElementById('joystick-move');
+      if (!joystickZone || typeof nipplejs === 'undefined') {
+          destroyJoystick();
+          return;
+      }
+      destroyJoystick();
       moveManager = nipplejs.create({
           zone: joystickZone,
-          // Keep the stick anchored inside the joystick area.
-          // Dynamic mode can "jump" under multi-touch and feel like it slides to the screen edge.
           mode: 'static',
           position: { left: '50%', top: '50%' },
           color: 'blue',
@@ -8310,13 +8237,7 @@ const lookSpeed = 0.006;
   
       moveManager.on('move', function (evt, data) {
           if (!isGameRunning) return;
-          const vx = Number(data && data.vector && data.vector.x);
-          const vy = Number(data && data.vector && data.vector.y);
-          if (!Number.isFinite(vx) || !Number.isFinite(vy)) {
-              joystickMoveVector.set(0, 0);
-              return;
-          }
-          joystickMoveVector.set(vx, vy);
+          joystickMoveVector.set(data.vector.x, data.vector.y);
       });
   
       moveManager.on('end', function () {
@@ -8331,25 +8252,25 @@ const lookSpeed = 0.006;
   window.addEventListener('orientationchange', () => {
       if (shouldShowTouchControls()) initJoystick();
   });
-  const resetJoystickManager = () => {
-      joystickMoveVector.set(0, 0);
-      if (moveManager) {
-          moveManager.destroy();
-          moveManager = null;
-      }
-  };
   document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-          resetJoystickManager();
-      } else if (isGameRunning && shouldShowTouchControls()) {
+          forceResetTouchState();
+          destroyJoystick();
+          return;
+      }
+      if (isGameRunning && shouldShowTouchControls()) {
           initJoystick();
       }
   });
-  window.addEventListener('blur', resetJoystickManager);
-  window.addEventListener('focus', () => {
-      if (isGameRunning && shouldShowTouchControls()) initJoystick();
+  window.addEventListener('blur', () => {
+      forceResetTouchState();
+      destroyJoystick();
   });
-  document.addEventListener('touchcancel', () => joystickMoveVector.set(0, 0), { passive: true });
+  window.addEventListener('focus', () => {
+      if (isGameRunning && shouldShowTouchControls()) {
+          initJoystick();
+      }
+  });
 const keySet = new Set();
 
 function getNearestLivingEnemyPosition(originPosition) {
@@ -9336,8 +9257,6 @@ function restartGame() {
             ai.aggression = Math.max(0.3, ai.aggression || Math.random());
         }
         applyAIDefaultWeaponLoadout(ai);
-        // Ensure the visible gun matches the selected weapon on initial spawn.
-        resetCharacterVisualPose(ai, ai.currentWeapon);
         ai.targetWeaponPickup = null;
         ai.lastHiddenTime = 0; ai.lastAttackTime = -999; ai.currentAttackTime = 0; ai.avoiding = false;
         if (isTeamMode) {
@@ -9434,7 +9353,6 @@ function restartGame() {
         }
     }
     clock.start();
-    playerSpawnProtectionUntil = clock.getElapsedTime() + PLAYER_SPAWN_PROTECTION_SECONDS;
     lastFireTime = -1;
     playerMGReloadUntil = 0;
     playerMRReloadUntil = 0;
@@ -9649,7 +9567,6 @@ function respawnPlayer() {
     if (playerHPDisplay) { // nullチェックを追加
         playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
     }
-    playerSpawnProtectionUntil = clock.getElapsedTime() + PLAYER_SPAWN_PROTECTION_SECONDS;
 
     const isBillBattle = isBillBattleMode();
 
@@ -9743,6 +9660,7 @@ function forceResetTouchState() {
     isLooking = false;
     lookTouchId = -1;
     isMouseButtonDown = false;
+    joystickMoveVector.set(0, 0);
 }
 
 function startPlayerDeathSequence(projectile) {
@@ -10067,9 +9985,10 @@ function showEnemyKilledMessage() {
     if (!el) {
         el = document.createElement('div');
         el.id = 'enemy-killed-message';
+        el.textContent = 'enemy killed';
         el.style.position = 'fixed';
         el.style.left = '50%';
-        el.style.top = '40%';
+        el.style.top = '44%';
         el.style.transform = 'translate(-50%, -50%)';
         el.style.color = 'red';
         el.style.fontSize = '24px';
@@ -10079,8 +9998,6 @@ function showEnemyKilledMessage() {
         el.style.display = 'none';
         document.body.appendChild(el);
     }
-    el.textContent = 'Enemy Kill';
-    el.style.top = '40%';
     el.style.display = 'block';
     if (enemyKilledMessageTimer) {
         clearTimeout(enemyKilledMessageTimer);
@@ -10848,11 +10765,7 @@ function showSettingsAndPause() {
     if (!isGameRunning && !isPaused) return;
 
     forceResetTouchState();
-    joystickMoveVector.set(0, 0);
-    if (moveManager) {
-        moveManager.destroy();
-        moveManager = null;
-    }
+    destroyJoystick();
     isGameRunning = false;
     if (!isPaused) {
         originalSettings = JSON.parse(JSON.stringify(gameSettings));
@@ -10939,6 +10852,7 @@ function resumeGame() {
             if (fire) { fire.style.display = 'none'; }
             if (crouch) { crouch.style.display = 'none'; }
             if (zoom) { zoom.style.display = 'none'; }
+            destroyJoystick();
             canvas.requestPointerLock();
         }
         enforceTouchUIVisibility();
@@ -12733,24 +12647,11 @@ function animate() {
               const moveDir = moveVector.clone().normalize();
               raycaster.set(prevProjectilePos, moveDir);
               raycaster.far = moveDistance;
-              const obstacleHit = getFirstProjectileHit(raycaster, obstacles);
-              // Raycast floor as well to prevent tunneling at high projectile speeds.
-              // Keep AI non-rocket floor resolution deferred to after player hit tests,
-              // but rockets must always collide with the floor.
-              const shouldRaycastFloorNow = p.isRocket || p.source !== 'ai';
-              const floorHit = shouldRaycastFloorNow
-                  ? (raycaster.intersectObject(floor, false)[0] || null)
-                  : null;
-              let hit = obstacleHit;
-              let hitKind = 'obstacle';
-              if (floorHit && (!hit || floorHit.distance < hit.distance)) {
-                  hit = floorHit;
-                  hitKind = 'floor';
-              }
+              const hit = getFirstProjectileHit(raycaster, obstacles);
               if (hit) {
                   hitSomething = true;
                   hitObject = hit.object;
-                  hitType = hitKind;
+                  hitType = 'obstacle';
                   p.mesh.position.copy(hit.point);
                   if (isBillBattleMode() && hitObject && hitObject.userData && hitObject.userData.isBillBattleCeiling && billBattleLights.length > 0) {
                       const hitDist = prevProjectilePos.distanceTo(hit.point);
@@ -12813,21 +12714,7 @@ function animate() {
             if (!(isBillBattleMode() && !billBattlePlayerEntered)) {
                 for (let j = ais.length - 1; j >= 0; j--) {
                     const ai = ais[j];
-                    const aiBox = getObjectAABBForCollision(ai).expandByScalar(bulletSphere.radius);
-                    let hitAI = aiBox.intersectsSphere(bulletSphere);
-                    if (!hitAI) {
-                        const segDir = new THREE.Vector3().subVectors(p.mesh.position, prevProjectilePos);
-                        const segLen = segDir.length();
-                        if (segLen > 1e-6) {
-                            segDir.normalize();
-                            const segRay = new THREE.Ray(prevProjectilePos.clone(), segDir);
-                            const hitPoint = segRay.intersectBox(aiBox, new THREE.Vector3());
-                            if (hitPoint) {
-                                hitAI = prevProjectilePos.distanceTo(hitPoint) <= segLen;
-                            }
-                        }
-                    }
-                    if (hitAI) {
+                    if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
                         if (ai.hp <= 0) continue;
                         if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player') {
                             continue;
@@ -12904,21 +12791,7 @@ function animate() {
                     
                     if (gameSettings.gameMode !== 'ffa' && ai.team === shooterTeam) continue;
                     
-                    const aiBox = getObjectAABBForCollision(ai).expandByScalar(bulletSphere.radius);
-                    let hitAI = aiBox.intersectsSphere(bulletSphere);
-                    if (!hitAI) {
-                        const segDir = new THREE.Vector3().subVectors(p.mesh.position, prevProjectilePos);
-                        const segLen = segDir.length();
-                        if (segLen > 1e-6) {
-                            segDir.normalize();
-                            const segRay = new THREE.Ray(prevProjectilePos.clone(), segDir);
-                            const hitPoint = segRay.intersectBox(aiBox, new THREE.Vector3());
-                            if (hitPoint) {
-                                hitAI = prevProjectilePos.distanceTo(hitPoint) <= segLen;
-                            }
-                        }
-                    }
-                    if (hitAI) {
+                    if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
                         hitSomething = true;
                         hitObject = ai;
                         hitType = 'ai';
@@ -13019,7 +12892,6 @@ function animate() {
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
                     else if (p.weaponType === WEAPON_MR) damageAmount = 9;
                     else if (p.isSniper || p.isRocket) damageAmount = playerHP;
-                    if (!isPlayerSpawnProtected(timeElapsed) || p.source !== 'ai') {
                     if (playerHP !== Infinity) {
                         playerHP -= damageAmount;
                         if (playerHP <= 0 && isScoping) {
@@ -13119,15 +12991,12 @@ function animate() {
                                     screenShakeDuration = SHAKE_DURATION_MAX;
                                     redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
                                     setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+                                }
+                                if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                                    startPlayerDeathSequence(p);
+                                }
+                            }
                         }
-                        if (playerHP <= 0 && !isPlayerDeathPlaying) {
-                            startPlayerDeathSequence(p);
-                        }
-                    }
-                    } else {
-                        // Spawn protection: ignore AI bullet hits right after respawn.
-                    }
-                }
                     }
                 }
                 if (allowActorDamage && p.source === 'ai' && playerHP > 0) {
@@ -13135,19 +13004,17 @@ function animate() {
                     if (distanceToPlayer < EXPLOSION_RADIUS_ACTUAL) {
                         const playerCenter = player.position.clone().add(new THREE.Vector3(0, 1, 0));
                         if (checkLineOfSight(explosionPos, playerCenter, obstacles)) {
-                            if (!isPlayerSpawnProtected(timeElapsed)) {
-                                if (playerHP !== Infinity) {
-                                    playerHP = 0;
-                                    screenShakeDuration = SHAKE_DURATION_MAX;
-                                    redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-                                    setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+                            if (playerHP !== Infinity) {
+                                playerHP = 0;
+                                screenShakeDuration = SHAKE_DURATION_MAX;
+                                redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+                                setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
+                            }
+                            if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                                if (p.shooter && p.shooter.kills !== undefined) {
+                                    p.shooter.kills++;
                                 }
-                                if (playerHP <= 0 && !isPlayerDeathPlaying) {
-                                    if (p.shooter && p.shooter.kills !== undefined) {
-                                        p.shooter.kills++;
-                                    }
-                                    startPlayerDeathSequence(p);
-                                }
+                                startPlayerDeathSequence(p);
                             }
                         }
                     }
@@ -13766,28 +13633,42 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const previewJoystickZone = document.getElementById('preview-joystick-zone');
     const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
 
-    // Convert pixel values to percentage for responsiveness
-    const w = Math.max(1, window.innerWidth);
-    const h = Math.max(1, window.innerHeight);
-    const toPercent = (value, denom) => `${Math.min(100, Math.max(0, (value / denom) * 100))}%`;
-    const getRect = (el) => (el ? el.getBoundingClientRect() : { left: 0, right: 0, bottom: 0 });
+    const toPercent = (value, size) => {
+        const safeSize = Math.max(1, size);
+        const normalized = Math.min(safeSize, Math.max(0, value));
+        return `${(normalized / safeSize) * 100}%`;
+    };
+    const getRightBottomPercent = (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+            right: toPercent(window.innerWidth - rect.right, window.innerWidth),
+            bottom: toPercent(window.innerHeight - rect.bottom, window.innerHeight)
+        };
+    };
+    const getLeftBottomPercent = (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+            left: toPercent(rect.left, window.innerWidth),
+            bottom: toPercent(window.innerHeight - rect.bottom, window.innerHeight)
+        };
+    };
 
-    const fireRect = getRect(previewFireButton);
-    const crouchRect = getRect(previewCrouchButton);
-    const zoomRect = getRect(previewZoomButton);
-    const joystickRect = getRect(previewJoystickZone);
-    const followRect = getRect(previewFollowButton);
+    const firePos = getRightBottomPercent(previewFireButton);
+    const crouchPos = getRightBottomPercent(previewCrouchButton);
+    const zoomPos = getRightBottomPercent(previewZoomButton);
+    const joystickPos = getLeftBottomPercent(previewJoystickZone);
+    const followPos = getRightBottomPercent(previewFollowButton);
 
-    const fireRight = toPercent(w - fireRect.right, w);
-    const fireBottom = toPercent(h - fireRect.bottom, h);
-    const crouchRight = toPercent(w - crouchRect.right, w);
-    const crouchBottom = toPercent(h - crouchRect.bottom, h);
-    const zoomRight = toPercent(w - zoomRect.right, w);
-    const zoomBottom = toPercent(h - zoomRect.bottom, h);
-    const joystickLeft = toPercent(joystickRect.left, w);
-    const joystickBottom = toPercent(h - joystickRect.bottom, h);
-    const followRight = toPercent(w - followRect.right, w); // 追加
-    const followBottom = toPercent(h - followRect.bottom, h); // 追加
+    const fireRight = firePos.right;
+    const fireBottom = firePos.bottom;
+    const crouchRight = crouchPos.right;
+    const crouchBottom = crouchPos.bottom;
+    const zoomRight = zoomPos.right;
+    const zoomBottom = zoomPos.bottom;
+    const joystickLeft = joystickPos.left;
+    const joystickBottom = joystickPos.bottom;
+    const followRight = followPos.right;
+    const followBottom = followPos.bottom;
 
     gameSettings.buttonPositions.fire = { right: fireRight, bottom: fireBottom };
     gameSettings.buttonPositions.crouch = { right: crouchRight, bottom: crouchBottom };
@@ -13846,6 +13727,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
 }); // End of saveButtonPositionsBtn.addEventListener callback
 
 function makeDraggable(element, isJoystick = false) {
+    if (!element) return;
     let isDragging = false;
     let offsetX, offsetY;
 
@@ -13861,7 +13743,8 @@ function makeDraggable(element, isJoystick = false) {
         document.addEventListener('touchmove', onDrag, { passive: false });
         document.addEventListener('mouseup', endDrag);
         document.addEventListener('touchend', endDrag);
-        if (e.type === 'touchmove') e.preventDefault();
+        document.addEventListener('touchcancel', endDrag);
+        if (e.type === 'touchstart') e.preventDefault();
     };
 
     const onDrag = (e) => {
@@ -13871,10 +13754,9 @@ function makeDraggable(element, isJoystick = false) {
 
         let newX = event.clientX - offsetX;
         let newY = event.clientY - offsetY;
-        const maxX = Math.max(0, window.innerWidth - element.offsetWidth);
-        const maxY = Math.max(0, window.innerHeight - element.offsetHeight);
-        newX = Math.min(maxX, Math.max(0, newX));
-        newY = Math.min(maxY, Math.max(0, newY));
+
+        newX = Math.min(Math.max(0, newX), window.innerWidth - element.offsetWidth);
+        newY = Math.min(Math.max(0, newY), window.innerHeight - element.offsetHeight);
 
         if (isJoystick) {
             const newLeft = newX;
@@ -13899,6 +13781,7 @@ function makeDraggable(element, isJoystick = false) {
         document.removeEventListener('touchmove', onDrag);
         document.removeEventListener('mouseup', endDrag);
         document.removeEventListener('touchend', endDrag);
+        document.removeEventListener('touchcancel', endDrag);
     };
 
     element.addEventListener('mousedown', startDrag);
