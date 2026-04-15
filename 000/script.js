@@ -29,6 +29,7 @@
       bgmMute: false,
       bgmVolume: 0.7,
       bgmMode: 'order',
+      bgmPlayMode: 'continuous',
       bgmEnabledTracks: BGM_TRACKS.slice(),
       nightModeEnabled: false,
     nightModeLightIntensity: 3.0,
@@ -1909,6 +1910,12 @@ function loadSettings() {
         if (parsedSavedSettings.bgmMode !== 'order' && parsedSavedSettings.bgmMode !== 'random') {
             parsedSavedSettings.bgmMode = 'order';
         }
+        if (parsedSavedSettings.bgmPlayMode === undefined) {
+            parsedSavedSettings.bgmPlayMode = 'stage';
+        }
+        if (parsedSavedSettings.bgmPlayMode !== 'stage' && parsedSavedSettings.bgmPlayMode !== 'continuous') {
+            parsedSavedSettings.bgmPlayMode = 'stage';
+        }
         if (!Array.isArray(parsedSavedSettings.bgmEnabledTracks)) {
             parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
         } else {
@@ -1923,12 +1930,6 @@ function loadSettings() {
             }
         }
         parsedSavedSettings.settingsVersion = SETTINGS_VERSION;
-        if (parsedSavedSettings.billBattleSize === undefined) {
-            parsedSavedSettings.billBattleSize = '100';
-        }
-        if (parsedSavedSettings.billBattleLighting === undefined) {
-            parsedSavedSettings.billBattleLighting = 'all';
-        }
         if (parsedSavedSettings.billBattleSize === undefined) {
             parsedSavedSettings.billBattleSize = '100';
         }
@@ -2160,6 +2161,12 @@ function loadMapSettings(mapName) {
         }
         if (parsedSavedSettings.bgmMode !== 'order' && parsedSavedSettings.bgmMode !== 'random') {
             parsedSavedSettings.bgmMode = 'order';
+        }
+        if (parsedSavedSettings.bgmPlayMode === undefined) {
+            parsedSavedSettings.bgmPlayMode = 'stage';
+        }
+        if (parsedSavedSettings.bgmPlayMode !== 'stage' && parsedSavedSettings.bgmPlayMode !== 'continuous') {
+            parsedSavedSettings.bgmPlayMode = 'stage';
         }
         if (!Array.isArray(parsedSavedSettings.bgmEnabledTracks)) {
             parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
@@ -3431,6 +3438,7 @@ function getBillBattleElevatorZ() {
           wall.userData.isWall = true;
           wall.userData.isBillBattleWall = true;
           wall.userData.blocksProjectiles = true;
+          wall.userData.isFloor = false;
       }
       applyBillBattleWallTwoTone(wall);
       return wall;
@@ -8784,7 +8792,11 @@ function startStageBGM() {
         stopGameBGM(false);
         return;
     }
-    playGameBGM(true);
+    if (gameSettings.bgmPlayMode === 'continuous') {
+        playGameBGM(false);
+    } else {
+        playGameBGM(true);
+    }
 }
 
 function updateMenuBGM() {
@@ -10049,7 +10061,7 @@ function showEnemyKilledMessage() {
         el.textContent = 'Enemy Kill';
         el.style.position = 'fixed';
         el.style.left = '50%';
-        el.style.top = '40%';
+        el.style.top = '35%';
         el.style.transform = 'translate(-50%, -50%)';
         el.style.color = 'red';
         el.style.fontSize = '24px';
@@ -13556,6 +13568,10 @@ function refreshBgmSettingsUI() {
         bgmModeOrder.checked = gameSettings.bgmMode !== 'random';
         bgmModeRandom.checked = gameSettings.bgmMode === 'random';
     }
+    if (bgmPlayModeStage && bgmPlayModeContinuous) {
+        bgmPlayModeStage.checked = gameSettings.bgmPlayMode === 'stage';
+        bgmPlayModeContinuous.checked = gameSettings.bgmPlayMode === 'continuous';
+    }
     if (bgmTrackList) {
         bgmTrackList.innerHTML = '';
         const enabled = new Set(getEnabledBgmTracks());
@@ -13682,6 +13698,24 @@ if (bgmModeRandom) {
     bgmModeRandom.addEventListener('change', () => {
         if (bgmModeRandom.checked) {
             gameSettings.bgmMode = 'random';
+            saveSettings();
+        }
+    });
+}
+
+const bgmPlayModeStage = document.getElementById('bgm-play-mode-stage');
+const bgmPlayModeContinuous = document.getElementById('bgm-play-mode-continuous');
+
+if (bgmPlayModeStage && bgmPlayModeContinuous) {
+    bgmPlayModeStage.addEventListener('change', () => {
+        if (bgmPlayModeStage.checked) {
+            gameSettings.bgmPlayMode = 'stage';
+            saveSettings();
+        }
+    });
+    bgmPlayModeContinuous.addEventListener('change', () => {
+        if (bgmPlayModeContinuous.checked) {
+            gameSettings.bgmPlayMode = 'continuous';
             saveSettings();
         }
     });
