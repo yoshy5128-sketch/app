@@ -1313,7 +1313,7 @@ function showReloadingText() {
         document.body.appendChild(el);
     }
     el.style.position = 'fixed';
-    el.style.top = '30%';
+    el.style.top = '20%';
     el.style.left = '50%';
     el.style.transform = 'translate(-50%, -50%)';
     el.style.color = '#FFD700';
@@ -10049,7 +10049,7 @@ function showEnemyKilledMessage() {
         el.textContent = 'Enemy Kill';
         el.style.position = 'fixed';
         el.style.left = '50%';
-        el.style.top = '30%';
+        el.style.top = '40%';
         el.style.transform = 'translate(-50%, -50%)';
         el.style.color = 'red';
         el.style.fontSize = '24px';
