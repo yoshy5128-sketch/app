@@ -1,21 +1,33 @@
-const PLAYER_INITIAL_POSITION = new THREE.Vector3(0, 2.0, -20);
-let gameSettings = {
-    spectatorMode: false,
-    playerHP: 20,
-    aiHP: 20,
+  const PLAYER_INITIAL_POSITION = new THREE.Vector3(0, 2.0, -20);
+  let BGM_TRACKS = [
+      'bgm/0001.mp3',
+      'bgm/0002.mp3',
+      'bgm/0003.mp3',
+      'bgm/0004.mp3'
+  ];
+  let gameSettings = {
+      playerHP: 20,
+      aiHP: 20,
     projectileSpeedMultiplier: 2.0,
     mgCount: 1,
     rrCount: 1,
     srCount: 1,
     sgCount: 1,
     mrCount: 1,
-    defaultWeapon: 'pistol',
-    medikitCount: 0,
-    mapType: 'default',
-    aiCount: 3,
-    autoAim: true,
-    aiShotLevel: 'ama',
-    nightModeEnabled: false,
+      defaultWeapon: 'machinegun',
+      defaultWeaponPlayer: 'machinegun',
+      defaultWeaponAI: 'machinegun',
+        medikitCount: 5,
+      settingsVersion: 3,
+      mapType: 'default',
+      aiCount: 3,
+      autoAim: true,
+      aiShotLevel: 'Amature',
+      bgmMute: false,
+      bgmVolume: 0.7,
+      bgmMode: 'order',
+      bgmEnabledTracks: BGM_TRACKS.slice(),
+      nightModeEnabled: false,
     nightModeLightIntensity: 3.0,
     timeLapseMode: false,
     customMapName: 'Default Custom Map',
@@ -36,22 +48,6 @@ let gameSettings = {
 let originalSettings = {};
 let isPaused = false;
 let forceSettingsLighting = false;
-
-// Spectator Mode variables
-let spectatorModeEnabled = false;
-let spectatorCurrentAI = null;
-let spectatorViewMode = 'first'; // 'first', 'third', 'drone'
-let spectatorDronePosition = new THREE.Vector3(0, 50, 0);
-let spectatorDroneTarget = new THREE.Vector3(0, 0, 0);
-let spectatorZoomLevel = 1.0;
-let spectatorMouseDown = false;
-let spectatorLastMouseX = 0;
-let spectatorLastMouseY = 0;
-let spectatorYaw = 0;
-let spectatorPitch = 0;
-// Alias for compatibility
-let isSpectatorMode = false;
-
 const DEBUG_LOG = false;
 function debugLog(...args) {
     if (DEBUG_LOG) debugLog(...args);
@@ -314,6 +310,7 @@ let characterEditorAnimationId = null;
         ai2mGunSound = document.getElementById('ai2mGunSound');
         aiGunSound = document.getElementById('aiGunSound');
         explosionSound = document.getElementById('explosionSound');
+        bgmAudio = document.getElementById('bgm-opm');
         relAudio = document.getElementById('rel-audio');
         startScreen = document.getElementById('start-screen');
         gameOverScreen = document.getElementById('game-over-screen');
@@ -327,7 +324,6 @@ let characterEditorAnimationId = null;
         aiHPDisplay = document.getElementById('ai-hp-display');
         ai2HPDisplay = document.getElementById('ai2-hp-display');
         ai3HPDisplay = document.getElementById('ai3-hp-display');
-        ai4HPDisplay = document.getElementById('ai4-hp-display');
         redFlashOverlay = document.getElementById('red-flash-overlay');
         followStatusDisplay = document.getElementById('follow-status-display'); // 追加
         followButton = document.getElementById('follow-button'); // 追加
@@ -382,7 +378,7 @@ let characterEditorAnimationId = null;
                 gameDurationDiv.id = 'game-duration-setting';
                 gameDurationDiv.style.marginTop = '10px';
                 gameDurationDiv.innerHTML = `
-                    <label style="display: block;">プレイ時間 (チームデスマッチ):</label>
+                    <label style="display: block;">プレイ時間 (チームデスマッチのみ有効):</label>
                     <label style="display: inline-block; margin-right: 10px;">
                         <input type="radio" name="game-duration" value="180" checked> 3分
                     </label>
@@ -428,24 +424,48 @@ let characterEditorAnimationId = null;
         if (billBattleSizeSelect) billBattleSizeSelect.addEventListener('change', () => { gameSettings.billBattleSize = billBattleSizeSelect.value; saveSettings(); });
         if (billBattleLightingSelect) billBattleLightingSelect.addEventListener('change', () => { gameSettings.billBattleLighting = billBattleLightingSelect.value; saveSettings(); });
         const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
+        const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
+        const syncDefaultWeaponChecks = () => {
+            const target = defaultWeaponTargetSelect ? defaultWeaponTargetSelect.value : 'player';
+            const selected = target === 'ai'
+                ? (gameSettings.defaultWeaponAI || WEAPON_MG)
+                : (gameSettings.defaultWeaponPlayer || WEAPON_MG);
+            defaultWeaponChecks.forEach(check => {
+                check.checked = (selected === check.value);
+            });
+        };
         if (defaultWeaponChecks.length > 0) {
             defaultWeaponChecks.forEach(check => {
-                check.checked = (gameSettings.defaultWeapon === check.value);
                 check.addEventListener('change', () => {
                     if (check.checked) {
                         defaultWeaponChecks.forEach(other => {
                             if (other !== check) other.checked = false;
                         });
-                        gameSettings.defaultWeapon = check.value;
+                        if (defaultWeaponTargetSelect && defaultWeaponTargetSelect.value === 'ai') {
+                            gameSettings.defaultWeaponAI = check.value;
+                        } else {
+                            gameSettings.defaultWeaponPlayer = check.value;
+                        }
                     } else {
                         const anyChecked = Array.from(defaultWeaponChecks).some(c => c.checked);
-                        gameSettings.defaultWeapon = anyChecked
+                        const fallback = anyChecked
                             ? Array.from(defaultWeaponChecks).find(c => c.checked).value
-                            : WEAPON_PISTOL;
+                            : WEAPON_MG;
+                        if (defaultWeaponTargetSelect && defaultWeaponTargetSelect.value === 'ai') {
+                            gameSettings.defaultWeaponAI = fallback;
+                        } else {
+                            gameSettings.defaultWeaponPlayer = fallback;
+                        }
                     }
                     saveSettings();
                 });
             });
+            if (defaultWeaponTargetSelect) {
+                defaultWeaponTargetSelect.addEventListener('change', () => {
+                    syncDefaultWeaponChecks();
+                });
+            }
+            syncDefaultWeaponChecks();
         }
         const medikitCountSelect = document.getElementById('medikit-count');
         if (medikitCountSelect) medikitCountSelect.addEventListener('change', () => {
@@ -490,15 +510,6 @@ let characterEditorAnimationId = null;
                     gameSettings.gameMode = radio.value;
                     applyBillBattleModeConstraints();
                     updateSettingsAvailabilityForMode();
-                    saveSettings();
-                }
-            });
-        });
-        const spectatorModeRadios = document.querySelectorAll('input[name="spectator-mode"]');
-        spectatorModeRadios.forEach(radio => {
-            radio.addEventListener('change', () => {
-                if (radio.checked) {
-                    gameSettings.spectatorMode = radio.value === 'on';
                     saveSettings();
                 }
             });
@@ -666,9 +677,55 @@ let characterEditorAnimationId = null;
             e.preventDefault();
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('readme-screen').style.display = 'flex';
+            updateMenuBGM();
         });
         readmeLinkDiv.appendChild(readmeLink);
+        const bgmMuteDiv = document.createElement('div');
+        bgmMuteDiv.style.marginTop = '8px';
+        bgmMuteDiv.style.textAlign = 'center';
+        const bgmLabel = document.createElement('label');
+        bgmLabel.style.color = 'white';
+        bgmLabel.style.fontSize = '0.9em';
+        const bgmMuteCheckbox = document.createElement('input');
+        bgmMuteCheckbox.type = 'checkbox';
+        bgmMuteCheckbox.id = 'bgm-mute-checkbox';
+        bgmMuteCheckbox.checked = !!gameSettings.bgmMute;
+        bgmMuteCheckbox.addEventListener('change', () => {
+            gameSettings.bgmMute = !!bgmMuteCheckbox.checked;
+            saveSettings();
+            updateMenuBGM();
+        });
+        bgmLabel.appendChild(bgmMuteCheckbox);
+        bgmLabel.appendChild(document.createTextNode(' BGM Mute'));
+        bgmMuteDiv.appendChild(bgmLabel);
+        const bgmSettingsBtn = document.createElement('button');
+        bgmSettingsBtn.id = 'bgm-setting-btn';
+        bgmSettingsBtn.textContent = 'BGM Setting';
+        bgmSettingsBtn.style.marginTop = '8px';
+        bgmSettingsBtn.style.padding = '6px 12px';
+        bgmSettingsBtn.style.fontSize = '0.9em';
+        bgmSettingsBtn.style.backgroundColor = '#444';
+        bgmSettingsBtn.style.color = 'white';
+        bgmSettingsBtn.style.border = 'none';
+        bgmSettingsBtn.style.borderRadius = '4px';
+        bgmSettingsBtn.style.cursor = 'pointer';
+        bgmSettingsBtn.addEventListener('click', () => {
+            const bgmSettingsScreen = document.getElementById('bgm-settings-screen');
+            const startScreenEl = document.getElementById('start-screen');
+            if (bgmSettingsScreen && startScreenEl) {
+                startScreenEl.style.display = 'none';
+                bgmSettingsScreen.style.display = 'flex';
+                if (typeof reloadBgmTracks === 'function') {
+                    reloadBgmTracks();
+                } else if (typeof refreshBgmSettingsUI === 'function') {
+                    refreshBgmSettingsUI();
+                }
+                updateMenuBGM();
+            }
+        });
+        bgmMuteDiv.appendChild(bgmSettingsBtn);
         gunFightSettingsTitle.after(readmeLinkDiv);
+        readmeLinkDiv.after(bgmMuteDiv);
     }
 
     // ReadMeページの追加
@@ -691,22 +748,27 @@ let characterEditorAnimationId = null;
         align-items: center;
     `;
     readmeScreen.innerHTML = `
-        <div style="max-width: 800px; width: 100%; text-align: left;">
+        <div style="max-width: 500px; width: 100%; text-align: left; margin: 0 auto; padding: 0 10px; box-sizing: border-box;">
             <h1 style="text-align: center; color: lightgreen;">GunFightArenaへようこそ</h1>
-            <p>1V3から2V2のチームデスマッチまで、存分にGunFightが楽しめるシンプルかつ超エキサイティングなFPS！それがこのGunFightArenaだ！</p>
-            <p>まずはプレイヤーと敵AIのHP（体力）を決めて、ProjectileSpeed（弾の速さ）を決めよう！×2の最速が一番エキサイティングだぞ！</p>
-            <p>WeaponCountは、アリーナ内に配置できる各武器の数だ。武器は取った後も復活するぞ！但し、武器は1種類しか持つことができない。弾が尽きたら自動的にハンドガンに切り替わる。<br>Medikitは、HPが1回復する。アリーナに配置する数を決めよう！但し、1V3のアーケードモードのみで配置可だ。</p>
-            <p>AICountで敵AIの数を決めよう！チームデスマッチでは、AIが1体味方になるが、その際にも必ず3AIsを選ぶようにしよう！</p>
-            <p>FieldStateで、障害物が破壊された状態からのリスタートが選べるぞ！Keepの場合はどんどん隠れる場所がなくなっていくぞ！</p>
-            <p>MapTypeでは、アプリ内蔵のデフォルトマップか、シンプルだが毎回障害物の配置が異なるランダムマップか、自作のオリジナルカスタムマップかをそれぞれ選べるぞ！</p>
-            <p>強力なMap Editerで自作のオリジナルマップをゼロから作成可能！マップを簡単にカスタマイズして、より一層熱いバトルが楽しめる！</p>
-            <p>LoadCustomMapで自作のマップデータ（.json)を読み込もう！一度読み込んだら、次回からはここからマップを呼び出せるぞ！</p>
-            <p>GameModeで、さまざまなルールの熱いバトルを楽しもう！尚、プレイ時間はチームデスマッチとフリーフォーオールで有効だ！</p>
-            <p>NightModeとは、まさに暗闇での夜戦モード！緊張感たっぷりのスリリングなバトルが楽しめる。LightIntensityでアリーナの明るさを調整可能！</p>
-            <p>ButtonSettingでスマートフォンのボタン位置調整が可能！スマホでは、ゲーム中に★マークを押してポーズONで調整できる。自分に合ったボタンポジションでバトルに挑もう！</p>
-            <p>チームデスマッチでは、味方AIからのFollow（フォロー）が受けられる。Followボタンを押すと、味方AIがプレイヤーに追従し、敵を発見した際には、攻撃もしてくれるぞ！もし敵と遭遇した際には再度ボタンを押して味方AIをフリーにさせて、積極的に攻撃をさせよう！チームワークで敵の背後に回り込んで仕留めるといった戦術も可能だ！但し、フレンドリーファイアにはくれぐれも注意！</p>
-<p>■スマホでの操作：画面左半分＝前後左右移動　画面右半分＝始点移動　各種ボタン＝攻撃、しゃがみ、フォロー　★ボタン＝ポーズ&設定画面　×＝狙撃解除（スコープ画面内）</p>
-<p>■PCでの操作：W=前進　S＝後進　A=左移動　D＝右移動　P=ポーズ&設定画面　F=AIフォロー　C＝しゃがむ　マウス＝視点移動　左クリック＝武器発射　右クリック＝狙撃解除</p>
+            <p>FreeForAllをはじめ、1V3から2V2のTeamDeathmatchまで、存分にGunFightが楽しめるシンプルかつ超エキサイティングなFPS。それがこのGunFightArenaだ！</p>
+            <p>
+・プレイヤーと敵AIのHPを自由に変更できる。無敵モード可。<br>
+・プレイヤーのデフォルト武器と敵AIのデフォルト武器をそれぞれ選択可。<br>
+・ProjectileSpeedで弾の速さを可変できる。<br>
+・Character Editerでキャラの容姿をカスタマイズ可能。<br>
+・WeaponCountでアリーナ内に配置できる各武器の数を可変できる。武器は取った後も復活。但し、装備できる武器は1種類のみ。別の武器を拾うことでチェンジ。<br>
+・Medikitは、アーケード・モードとインドア・コンバットモードのみで有効。HPが回復する。配置する数を可変できる。<br>
+・AICountで敵AIの数を変更可能。チームデスマッチでは、AIが1体味方になる。<br>
+・強力なMap Editerで自作のオリジナルマップをゼロから作成可。自作のマップデータを.jsonとして保存＆読み込み可。<br>
+・NightModeは、暗闇での夜戦モード。LightIntensityでアリーナの明るさを調整可能。<br>
+・ButtonSettingでスマートフォンのボタン位置調整が可能。ゲーム中に★マークを押し、ポーズONで調整可。<br>
+・チームデスマッチでは、Followモードあり。味方AIがプレイヤーを常に追従して援護、攻撃をする。<br>
+・INDOOR COMBATは室内接近戦。部屋のサイズを可変できる。AIはすべて敵。<br>
+・爆発物（ドラム缶）を破壊することで近くの敵をキル可能。爆発物同士は誘爆する。<br>
+・障害物や建物も規定数の爆破回数で破壊可能。
+            </p>
+            <p>■スマホでの操作：<br>画面左半分＝前後左右移動　画面右半分＝始点移動　各種ボタン＝攻撃、しゃがみ、フォロー　★ボタン＝ポーズ&設定画面　×＝狙撃解除（スコープ画面内左）</p>
+            <p>■PCでの操作：<br>W=前進　S＝後進　A=左移動　D＝右移動　P=ポーズ&設定画面　F=AIフォロー　C＝しゃがむ　マウス＝視点移動　左クリック＝武器発射　右クリック＝狙撃解除　Esc/★ボタン＝ポーズ&設定画面</p>
             <div style="text-align: center; margin-top: 30px;">
                 <button id="readme-back-button" style="padding: 15px 30px; font-size: 1.2em; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">戻る</button>
             </div>
@@ -719,6 +781,7 @@ let characterEditorAnimationId = null;
         readmeBackButton.addEventListener('click', () => {
             document.getElementById('readme-screen').style.display = 'none';
             document.getElementById('start-screen').style.display = 'flex';
+            updateMenuBGM();
         });
     }
     }); // Close first DOMContentLoaded event listener
@@ -1001,7 +1064,7 @@ function isInfiniteDefaultWeaponActive(weaponType) {
 }
 
 function isDefaultM1Weapon() {
-    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    const selected = gameSettings.defaultWeaponPlayer || WEAPON_MG;
     return selected === WEAPON_MR;
 }
 
@@ -1081,6 +1144,7 @@ function getMedikitHealAmount() {
     const billBattleLightingSelect = document.getElementById('billbattle-lighting');
     const medikitCountSelect = document.getElementById('medikit-count');
     const medikitSetting = document.getElementById('medikit-setting');
+    const gameDurationRadios = document.querySelectorAll('input[name="game-duration"]');
 
     if (playerHpSelect) {
         for (const opt of playerHpSelect.options) {
@@ -1096,6 +1160,13 @@ function getMedikitHealAmount() {
     setDisabled(timeLapseCheckbox, isBill);
     setDisabled(billBattleSizeSelect, !isBill);
     setDisabled(billBattleLightingSelect, !isBill);
+    gameDurationRadios.forEach(radio => {
+        radio.disabled = isBill;
+        const container = radio.closest && radio.closest('label') ? radio.closest('label') : radio;
+        if (container && container.style) {
+            container.style.opacity = isBill ? 0.5 : 1.0;
+        }
+    });
     const medikitEnabled = gameSettings.gameMode === 'arcade' || isBill;
     setDisabled(medikitCountSelect, !medikitEnabled);
     if (medikitSetting && medikitSetting.style) {
@@ -1125,7 +1196,7 @@ function setPlayerMRClipAmmo(value) {
 
 function isAIDefaultM1Weapon(ai) {
     if (!ai) return false;
-    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    const selected = gameSettings.defaultWeaponAI || WEAPON_MG;
     return selected === WEAPON_MR;
 }
 
@@ -1147,7 +1218,7 @@ function setAIClipAmmo(ai, value) {
 }
 
 function applyPlayerDefaultWeaponLoadout() {
-    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    const selected = gameSettings.defaultWeaponPlayer || WEAPON_MG;
     currentWeapon = selected;
     ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
     ammoRR = selected === WEAPON_RR ? MAX_AMMO_RR : 0;
@@ -1164,7 +1235,7 @@ function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
 }
 
 function applyAIDefaultWeaponLoadout(ai) {
-    const selected = gameSettings.defaultWeapon || WEAPON_PISTOL;
+    const selected = gameSettings.defaultWeaponAI || WEAPON_MG;
     if (!ai.userData) ai.userData = {};
     ai.currentWeapon = selected;
     ai.ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
@@ -1177,8 +1248,8 @@ function applyAIDefaultWeaponLoadout(ai) {
 }
 
 function getPlayerFallbackWeapon() {
-    return gameSettings.defaultWeapon && gameSettings.defaultWeapon !== WEAPON_PISTOL
-        ? gameSettings.defaultWeapon
+    return gameSettings.defaultWeaponPlayer && gameSettings.defaultWeaponPlayer !== WEAPON_PISTOL
+        ? gameSettings.defaultWeaponPlayer
         : WEAPON_PISTOL;
 }
 
@@ -1196,8 +1267,8 @@ function switchPlayerToFallbackWeapon() {
 
 function switchAIToFallbackWeapon(ai) {
     if (!ai) return;
-    const fallback = gameSettings.defaultWeapon && gameSettings.defaultWeapon !== WEAPON_PISTOL
-        ? gameSettings.defaultWeapon
+    const fallback = gameSettings.defaultWeaponAI && gameSettings.defaultWeaponAI !== WEAPON_PISTOL
+        ? gameSettings.defaultWeaponAI
         : WEAPON_PISTOL;
     ai.currentWeapon = fallback;
     if (fallback === WEAPON_MG && ai.ammoMG <= 0) ai.ammoMG = MAX_AMMO_MG;
@@ -1578,20 +1649,10 @@ let billBattleAttackActivated = false;
   let billBattleBaseDirectional = null;
 
   function ensureBuildStamp() {
-      let el = document.getElementById('build-stamp');
-      if (!el) {
-          el = document.createElement('div');
-          el.id = 'build-stamp';
-          el.style.position = 'fixed';
-          el.style.left = '8px';
-          el.style.bottom = '8px';
-          el.style.fontSize = '12px';
-          el.style.color = 'rgba(255,255,255,0.6)';
-          el.style.zIndex = '1000';
-          el.style.pointerEvents = 'none';
-          document.body.appendChild(el);
+      const el = document.getElementById('build-stamp');
+      if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
       }
-      el.textContent = `BUILD ${BUILD_ID}`;
   }
 let isIgnoringTowerCollision = false;
 let ignoreTowerTimer = 0;
@@ -1761,10 +1822,6 @@ function saveSettings() {
     if (barrelRespawnRadio) {
         gameSettings.barrelRespawn = barrelRespawnRadio.value === 'true';
     }
-    const spectatorModeRadio = document.querySelector('input[name="spectator-mode"]:checked');
-    if (spectatorModeRadio) {
-        gameSettings.spectatorMode = spectatorModeRadio.value === 'on';
-    }
     gameSettings.nightModeEnabled = document.getElementById('night-mode').checked;
     gameSettings.nightModeIntensity = document.getElementById('night-mode-intensity').value;
     gameSettings.timeLapseMode = document.getElementById('time-lapse-mode').checked;
@@ -1776,6 +1833,8 @@ function saveSettings() {
     if (billBattleLightingSelect) {
         gameSettings.billBattleLighting = billBattleLightingSelect.value;
     }
+    // Keep legacy field aligned
+    gameSettings.defaultWeapon = gameSettings.defaultWeaponPlayer || WEAPON_MG;
     applyBillBattleModeConstraints();
     updateSettingsAvailabilityForMode();
     localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
@@ -1795,15 +1854,47 @@ function loadSettings() {
         if (parsedSavedSettings.aiShotLevel === undefined) {
             parsedSavedSettings.aiShotLevel = 'ama';
         }
+        if (parsedSavedSettings.bgmMute === undefined) {
+            parsedSavedSettings.bgmMute = false;
+        }
+        if (parsedSavedSettings.bgmMute === undefined) {
+            parsedSavedSettings.bgmMute = false;
+        }
         if (parsedSavedSettings.nightModeLightIntensity === undefined) {
             parsedSavedSettings.nightModeLightIntensity = 2.0;
         }
         if (parsedSavedSettings.medikitCount === undefined) {
-            parsedSavedSettings.medikitCount = 0;
+            parsedSavedSettings.medikitCount = 5;
         }
-        if (parsedSavedSettings.spectatorMode === undefined) {
-            parsedSavedSettings.spectatorMode = false;
+        const savedVersionRaw = Number(parsedSavedSettings.settingsVersion);
+        const savedVersion = Number.isFinite(savedVersionRaw) ? savedVersionRaw : 0;
+        if (savedVersion < SETTINGS_VERSION && parsedSavedSettings.medikitCount === 0) {
+            parsedSavedSettings.medikitCount = 5;
         }
+        if (parsedSavedSettings.bgmVolume === undefined) {
+            parsedSavedSettings.bgmVolume = 0.7;
+        }
+        parsedSavedSettings.bgmVolume = normalizeBgmVolume(parsedSavedSettings.bgmVolume);
+        if (parsedSavedSettings.bgmMode === undefined) {
+            parsedSavedSettings.bgmMode = 'order';
+        }
+        if (parsedSavedSettings.bgmMode !== 'order' && parsedSavedSettings.bgmMode !== 'random') {
+            parsedSavedSettings.bgmMode = 'order';
+        }
+        if (!Array.isArray(parsedSavedSettings.bgmEnabledTracks)) {
+            parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
+        } else {
+            const enabledSet = new Set(parsedSavedSettings.bgmEnabledTracks);
+            const filteredTracks = BGM_TRACKS.filter(track => enabledSet.has(track));
+            if (parsedSavedSettings.bgmEnabledTracks.length === 0) {
+                parsedSavedSettings.bgmEnabledTracks = [];
+            } else if (filteredTracks.length === 0) {
+                parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
+            } else {
+                parsedSavedSettings.bgmEnabledTracks = filteredTracks;
+            }
+        }
+        parsedSavedSettings.settingsVersion = SETTINGS_VERSION;
         if (parsedSavedSettings.billBattleSize === undefined) {
             parsedSavedSettings.billBattleSize = '100';
         }
@@ -1816,8 +1907,11 @@ function loadSettings() {
         if (parsedSavedSettings.billBattleLighting === undefined) {
             parsedSavedSettings.billBattleLighting = 'all';
         }
-        if (parsedSavedSettings.defaultWeapon === undefined) {
-            parsedSavedSettings.defaultWeapon = 'pistol';
+        if (parsedSavedSettings.defaultWeaponPlayer === undefined) {
+            parsedSavedSettings.defaultWeaponPlayer = parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
+        if (parsedSavedSettings.defaultWeaponAI === undefined) {
+            parsedSavedSettings.defaultWeaponAI = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
         if (parsedSavedSettings.mrCount === undefined) {
             parsedSavedSettings.mrCount = gameSettings.mrCount;
@@ -1853,8 +1947,12 @@ function loadSettings() {
         document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
             radio.checked = (radio.value === String(gameSettings.barrelRespawn));
         });
+        const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
+        if (defaultWeaponTargetSelect) {
+            defaultWeaponTargetSelect.value = 'player';
+        }
         document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
-            check.checked = (gameSettings.defaultWeapon === check.value);
+            check.checked = (gameSettings.defaultWeaponPlayer === check.value);
         });
         const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
         const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
@@ -2002,10 +2100,42 @@ function loadMapSettings(mapName) {
             parsedSavedSettings.nightModeLightIntensity = 0.8;
         }
         if (parsedSavedSettings.medikitCount === undefined) {
-            parsedSavedSettings.medikitCount = 0;
+            parsedSavedSettings.medikitCount = 5;
         }
-        if (parsedSavedSettings.defaultWeapon === undefined) {
-            parsedSavedSettings.defaultWeapon = 'pistol';
+        const savedVersionRaw = Number(parsedSavedSettings.settingsVersion);
+        const savedVersion = Number.isFinite(savedVersionRaw) ? savedVersionRaw : 0;
+        if (savedVersion < SETTINGS_VERSION && parsedSavedSettings.medikitCount === 0) {
+            parsedSavedSettings.medikitCount = 5;
+        }
+        if (parsedSavedSettings.bgmVolume === undefined) {
+            parsedSavedSettings.bgmVolume = 0.7;
+        }
+        parsedSavedSettings.bgmVolume = normalizeBgmVolume(parsedSavedSettings.bgmVolume);
+        if (parsedSavedSettings.bgmMode === undefined) {
+            parsedSavedSettings.bgmMode = 'order';
+        }
+        if (parsedSavedSettings.bgmMode !== 'order' && parsedSavedSettings.bgmMode !== 'random') {
+            parsedSavedSettings.bgmMode = 'order';
+        }
+        if (!Array.isArray(parsedSavedSettings.bgmEnabledTracks)) {
+            parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
+        } else {
+            const enabledSet = new Set(parsedSavedSettings.bgmEnabledTracks);
+            const filteredTracks = BGM_TRACKS.filter(track => enabledSet.has(track));
+            if (parsedSavedSettings.bgmEnabledTracks.length === 0) {
+                parsedSavedSettings.bgmEnabledTracks = [];
+            } else if (filteredTracks.length === 0) {
+                parsedSavedSettings.bgmEnabledTracks = BGM_TRACKS.slice();
+            } else {
+                parsedSavedSettings.bgmEnabledTracks = filteredTracks;
+            }
+        }
+        parsedSavedSettings.settingsVersion = SETTINGS_VERSION;
+        if (parsedSavedSettings.defaultWeaponPlayer === undefined) {
+            parsedSavedSettings.defaultWeaponPlayer = parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
+        if (parsedSavedSettings.defaultWeaponAI === undefined) {
+            parsedSavedSettings.defaultWeaponAI = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
                 if (parsedSavedSettings.buttonPositions === undefined) {
                     parsedSavedSettings.buttonPositions = {
@@ -2042,8 +2172,12 @@ function loadMapSettings(mapName) {
                 document.getElementById('sr-count').value = gameSettings.srCount;
                 if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
                 if (document.getElementById('mr-count')) document.getElementById('mr-count').value = gameSettings.mrCount;
+                const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
+                if (defaultWeaponTargetSelect) {
+                    defaultWeaponTargetSelect.value = 'player';
+                }
                 document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
-                    check.checked = (gameSettings.defaultWeapon === check.value);
+                    check.checked = (gameSettings.defaultWeaponPlayer === check.value);
                 });
                 if (document.getElementById('medikit-count')) document.getElementById('medikit-count').value = gameSettings.medikitCount;
                 document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
@@ -2231,6 +2365,7 @@ let ai1mGunSound;
 let ai2mGunSound;
 let aiGunSound;
 let explosionSound;
+let bgmAudio;
 let startScreen;
 let relAudio;
 let gameOverScreen;
@@ -2244,7 +2379,6 @@ let playerWeaponDisplay; // 追加
 let aiHPDisplay;
 let ai2HPDisplay; // 追加
 let ai3HPDisplay; // 追加
-let ai4HPDisplay; // 追加 for spectator mode
 let redFlashOverlay;
 let followStatusDisplay; // 追加
 let followButton; // 追加
@@ -6522,7 +6656,9 @@ function findAndTargetWeapon(ai) {
 }
 
 const projectiles = [];
+const rocketTrails = [];
 const debris = [];
+const pendingExplosionClears = [];
 const projectileSpeed = 50;
 const MAX_PROJECTILES = 180;
 const ROCKET_EXPLOSION_RADIUS = 5;
@@ -6533,12 +6669,16 @@ function createProjectile(startPos, direction, color, size = 0.1, isRocket = fal
         return;
     }
     const finalSpeed = speed * (gameSettings.projectileSpeedMultiplier || 1.0);
+    const now = clock ? clock.getElapsedTime() : 0;
     let bulletGeometry;
     const bulletLength = size * 5;
     const bulletRadius = size / 2;
     bulletGeometry = new THREE.CylinderGeometry(bulletRadius, bulletRadius, bulletLength, 8);
     const bulletMaterial = new THREE.MeshBasicMaterial({ color: color });
     const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+    bullet.userData.isProjectile = true;
+    bullet.userData.source = source;
+    bullet.userData.shooter = shooter || null;
     bullet.position.copy(startPos).add(direction.clone().multiplyScalar(0.5));
     const axis = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion();
@@ -6547,7 +6687,19 @@ function createProjectile(startPos, direction, color, size = 0.1, isRocket = fal
     scene.add(bullet);
     const velocity = direction.clone().normalize().multiplyScalar(finalSpeed);
     const projectileLife = (weaponType === WEAPON_SG) ? SHOTGUN_RANGE / finalSpeed : Infinity;
-    projectiles.push({ mesh: bullet, velocity: velocity, isRocket: isRocket, source: source, isSniper: isSniper, weaponType: weaponType, life: projectileLife, shooter: shooter });
+    projectiles.push({
+        mesh: bullet,
+        velocity: velocity,
+        isRocket: isRocket,
+        source: source,
+        isSniper: isSniper,
+        weaponType: weaponType,
+        life: projectileLife,
+        shooter: shooter,
+        spawnTime: now,
+        lastPos: bullet.position.clone(),
+        stuckTime: 0
+    });
 }
 
 function createExplosionEffect(position) {
@@ -7157,18 +7309,28 @@ function createRedSmokeEffect(position) {
     }
 }
 
-function createRocketTrail(position) {
+function createRocketTrail(position, source = null, shooter = null) {
     const trailGeometry = new THREE.SphereGeometry(0.1, 4, 4);
     const trailMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
     const particle = new THREE.Mesh(trailGeometry, trailMaterial);
+    particle.userData.isRocketTrail = true;
     particle.position.copy(position);
+    particle.userData.source = source;
+    particle.userData.shooter = shooter;
     scene.add(particle);
+    rocketTrails.push({ mesh: particle, source: source, shooter: shooter });
     const duration = 0.8 + Math.random() * 0.5;
     new TWEEN.Tween(particle.scale).to({ x: 0.01, y: 0.01, z: 0.01 }, duration * 1000).easing(TWEEN.Easing.Quadratic.Out).start();
     new TWEEN.Tween(trailMaterial).to({ opacity: 0 }, duration * 1000).easing(TWEEN.Easing.Linear.None).onComplete(() => {
         scene.remove(particle);
         particle.geometry.dispose();
         disposeMaterial(particle.material); // 安全なマテリアル破棄を使用
+        for (let i = rocketTrails.length - 1; i >= 0; i--) {
+            if (rocketTrails[i].mesh === particle) {
+                rocketTrails.splice(i, 1);
+                break;
+            }
+        }
     }).start();
 }
 
@@ -7176,6 +7338,174 @@ function clearAIRocketInFlight(projectile) {
     if (!projectile || !projectile.isRocket || projectile.source !== 'ai') return;
     const shooter = projectile.shooter;
     if (shooter && shooter.userData) shooter.userData.rocketInFlight = false;
+}
+
+function removeAIProjectiles(ai, removeAllAI = false) {
+    if (!ai && !removeAllAI) return;
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        if (p.source !== 'ai') continue;
+        if (!removeAllAI && p.shooter !== ai) continue;
+        clearAIRocketInFlight(p);
+        if (p.mesh) {
+            if (p.mesh.parent) {
+                p.mesh.parent.remove(p.mesh);
+            } else {
+                scene.remove(p.mesh);
+            }
+            if (p.mesh.geometry) p.mesh.geometry.dispose();
+            if (p.mesh.material) disposeMaterial(p.mesh.material);
+        }
+        projectiles.splice(i, 1);
+    }
+    for (let i = rocketTrails.length - 1; i >= 0; i--) {
+        const trail = rocketTrails[i];
+        if (trail.source !== 'ai') continue;
+        if (!removeAllAI && trail.shooter !== ai) continue;
+        const mesh = trail.mesh;
+        if (mesh) {
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            } else {
+                scene.remove(mesh);
+            }
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) disposeMaterial(mesh.material);
+        }
+        rocketTrails.splice(i, 1);
+    }
+    // Safety net: remove any stray projectile meshes that aren't tracked anymore.
+    const toRemove = [];
+    scene.traverse((obj) => {
+        if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isProjectile) return;
+        if (!removeAllAI && obj.userData.shooter !== ai) return;
+        if (removeAllAI && obj.userData.source !== 'ai') return;
+        toRemove.push(obj);
+    });
+    for (const mesh of toRemove) {
+        if (mesh.parent) {
+            mesh.parent.remove(mesh);
+        } else {
+            scene.remove(mesh);
+        }
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) disposeMaterial(mesh.material);
+    }
+}
+
+let lastProjectileCleanupTime = 0;
+function clearProjectileArtifacts() {
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        clearAIRocketInFlight(p);
+        if (p && p.mesh) {
+            if (p.mesh.parent) {
+                p.mesh.parent.remove(p.mesh);
+            } else {
+                scene.remove(p.mesh);
+            }
+            if (p.mesh.geometry) p.mesh.geometry.dispose();
+            if (p.mesh.material) disposeMaterial(p.mesh.material);
+        }
+    }
+    projectiles.length = 0;
+    for (let i = rocketTrails.length - 1; i >= 0; i--) {
+        const trail = rocketTrails[i];
+        const mesh = trail && trail.mesh;
+        if (mesh) {
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            } else {
+                scene.remove(mesh);
+            }
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) disposeMaterial(mesh.material);
+        }
+    }
+    rocketTrails.length = 0;
+    // Safety net: remove any stray projectile/rocket trail meshes that aren't tracked anymore.
+    const toRemove = [];
+    scene.traverse((obj) => {
+        if (!obj || !obj.isMesh || !obj.userData) return;
+        if (!obj.userData.isProjectile && !obj.userData.isRocketTrail) return;
+        toRemove.push(obj);
+    });
+    for (const mesh of toRemove) {
+        if (mesh.parent) {
+            mesh.parent.remove(mesh);
+        } else {
+            scene.remove(mesh);
+        }
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) disposeMaterial(mesh.material);
+    }
+}
+
+function queueExplosionClear(position, radius) {
+    if (!position || !Number.isFinite(radius)) return;
+    pendingExplosionClears.push({ pos: position.clone(), radius: radius });
+}
+
+function applyExplosionClears() {
+    if (pendingExplosionClears.length === 0) return;
+    for (const entry of pendingExplosionClears) {
+        const r = entry.radius + 0.5;
+        const r2 = r * r;
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            const p = projectiles[i];
+            if (!p || !p.mesh) continue;
+            if (p.mesh.position.distanceToSquared(entry.pos) > r2) continue;
+            clearAIRocketInFlight(p);
+            if (p.mesh.parent) {
+                p.mesh.parent.remove(p.mesh);
+            } else {
+                scene.remove(p.mesh);
+            }
+            if (p.mesh.geometry) p.mesh.geometry.dispose();
+            if (p.mesh.material) disposeMaterial(p.mesh.material);
+            projectiles.splice(i, 1);
+        }
+        const toRemove = [];
+        scene.traverse((obj) => {
+            if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isProjectile) return;
+            if (obj.position.distanceToSquared(entry.pos) > r2) return;
+            toRemove.push(obj);
+        });
+        for (const mesh of toRemove) {
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            } else {
+                scene.remove(mesh);
+            }
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) disposeMaterial(mesh.material);
+        }
+    }
+    pendingExplosionClears.length = 0;
+}
+
+function cleanupOrphanProjectiles(timeElapsed) {
+    if (timeElapsed - lastProjectileCleanupTime < 1.0) return;
+    lastProjectileCleanupTime = timeElapsed;
+    const liveMeshes = new Set();
+    for (const p of projectiles) {
+        if (p && p.mesh) liveMeshes.add(p.mesh);
+    }
+    const toRemove = [];
+    scene.traverse((obj) => {
+        if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isProjectile) return;
+        if (liveMeshes.has(obj)) return;
+        toRemove.push(obj);
+    });
+    for (const mesh of toRemove) {
+        if (mesh.parent) {
+            mesh.parent.remove(mesh);
+        } else {
+            scene.remove(mesh);
+        }
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) disposeMaterial(mesh.material);
+    }
 }
 
 function getPlayerSafeFireData(direction) {
@@ -7344,7 +7674,7 @@ function shoot() {
     switch (currentWeapon) {
         case WEAPON_PISTOL: canFire = true; fireRate = FIRE_RATE_PISTOL; break;
         case WEAPON_MG:
-            if (gameSettings.defaultWeapon === WEAPON_MG && now < playerMGReloadUntil) {
+            if (gameSettings.defaultWeaponPlayer === WEAPON_MG && now < playerMGReloadUntil) {
                 canFire = false;
                 break;
             }
@@ -7407,7 +7737,7 @@ function shoot() {
         if (currentWeapon === WEAPON_MG) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_MG) && --ammoMG === 0) {
                 ammoMG = 0;
-                if (gameSettings.defaultWeapon === WEAPON_MG) {
+                if (gameSettings.defaultWeaponPlayer === WEAPON_MG) {
                     // デフォルトMGのみリロード
                     playerMGReloadUntil = now + 2.0;
                     showReloadingText();
@@ -7631,38 +7961,45 @@ function aiShoot(ai, timeElapsed) {
             return;
         }
     }
-    
-    // Calculate direction to target BEFORE rotation
+    // Re-aim right before firing so muzzle direction matches the intended target.
+    let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
+    if (ai.userData && ai.userData.parts) {
+        ai.rotation.y = desiredYaw;
+        applyAimConstraints(ai.userData.parts, ai.rotation.y, targetPosition);
+        const freshMuzzleInfo = getGunMuzzleInfo(ai.userData.parts);
+        if (freshMuzzleInfo) {
+            startPosition = freshMuzzleInfo.position.clone();
+            muzzleDirection = freshMuzzleInfo.direction.clone().normalize();
+        }
+    }
+    // Recheck LOS after final pose/muzzle update (prevents wall-through on AI-vs-AI).
+    if (!checkLineOfSight(startPosition, targetPosition, obstacles)) {
+        if (ai.isCrouching && checkLineOfSight(peekOrigin, targetPosition, obstacles)) {
+            startPosition = peekOrigin.clone();
+            muzzleDirection = null;
+        } else {
+            return;
+        }
+    }
+
     const toTarget = new THREE.Vector3().subVectors(targetPosition, startPosition).normalize();
     let direction = toTarget.clone();
     const distanceToPlayer = distanceToTarget;
-    
-    // RE-ROTATE AI TO FACE TARGET BEFORE ANYTHING ELSE
-    let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
-    ai.rotation.y = desiredYaw;
-    
-    // Update body rotation to match
-    if (ai.userData && ai.userData.parts && ai.userData.parts.body) {
-        ai.userData.parts.body.rotation.y = 0;
+    // 物理整合性優先: 銃口方向とターゲット方向が極端にズレる場合のみ発砲しない
+    if (muzzleDirection) {
+        const muzzleToTargetAngle = muzzleDirection.angleTo(toTarget);
+        if (muzzleToTargetAngle > THREE.MathUtils.degToRad(45)) return;
     }
-    
-    // After rotation, get FRESH muzzle direction (CRITICAL - must get after rotation!)
-    let freshMuzzleInfo = null;
-    if (ai.userData && ai.userData.parts) {
-        freshMuzzleInfo = getGunMuzzleInfo(ai.userData.parts);
-    }
-    if (freshMuzzleInfo) {
-        startPosition = freshMuzzleInfo.position.clone();
-        muzzleDirection = freshMuzzleInfo.direction.clone().normalize();
-    }
-    
-    // No muzzle angle check - allow AI to shoot once rotated to face target
-    // The rotation above handles aiming
-    
-    // Use direction TOWARD TARGET for actual bullet trajectory (for accuracy)
-    // This ensures bullets go where we aim
     direction.normalize();
-    
+    if (gameSettings.aiShotLevel === 'ama') {
+        let spreadDeg = 0;
+        if (ai.currentWeapon === WEAPON_SR) spreadDeg = 2.0;
+        else if (ai.currentWeapon === WEAPON_MR) spreadDeg = 2.5;
+        else if (ai.currentWeapon === WEAPON_RR) spreadDeg = 3.5;
+        if (spreadDeg > 0) {
+            direction = applyAIAimSpread(direction, THREE.MathUtils.degToRad(spreadDeg));
+        }
+    }
     let canAIShoot = false;
     let aiProjectileColor = 0xffff00;
     let aiProjectileSize = 0.1;
@@ -7875,7 +8212,9 @@ const lookSpeed = 0.006;
       joystickMoveVector.set(0, 0);
       moveManager = nipplejs.create({
           zone: joystickZone,
-          mode: 'dynamic',
+          // Keep the stick anchored inside the joystick area.
+          // Dynamic mode can "jump" under multi-touch and feel like it slides to the screen edge.
+          mode: 'static',
           position: { left: '50%', top: '50%' },
           color: 'blue',
           size: 150,
@@ -7889,7 +8228,13 @@ const lookSpeed = 0.006;
   
       moveManager.on('move', function (evt, data) {
           if (!isGameRunning) return;
-          joystickMoveVector.set(data.vector.x, data.vector.y);
+          const vx = Number(data && data.vector && data.vector.x);
+          const vy = Number(data && data.vector && data.vector.y);
+          if (!Number.isFinite(vx) || !Number.isFinite(vy)) {
+              joystickMoveVector.set(0, 0);
+              return;
+          }
+          joystickMoveVector.set(vx, vy);
       });
   
       moveManager.on('end', function () {
@@ -7904,6 +8249,25 @@ const lookSpeed = 0.006;
   window.addEventListener('orientationchange', () => {
       if (shouldShowTouchControls()) initJoystick();
   });
+  const resetJoystickManager = () => {
+      joystickMoveVector.set(0, 0);
+      if (moveManager) {
+          moveManager.destroy();
+          moveManager = null;
+      }
+  };
+  document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+          resetJoystickManager();
+      } else if (isGameRunning && shouldShowTouchControls()) {
+          initJoystick();
+      }
+  });
+  window.addEventListener('blur', resetJoystickManager);
+  window.addEventListener('focus', () => {
+      if (isGameRunning && shouldShowTouchControls()) initJoystick();
+  });
+  document.addEventListener('touchcancel', () => joystickMoveVector.set(0, 0), { passive: true });
 const keySet = new Set();
 
 function getNearestLivingEnemyPosition(originPosition) {
@@ -8057,309 +8421,9 @@ function toggleFollowingPlayerMode() {
     setFollowingPlayerMode(!isFollowingPlayerMode);
 }
 
-// Spectator mode functions
-function selectSpectatorAI(index) {
-    if (!spectatorModeEnabled || index < 0 || index >= ais.length) return;
-    
-    spectatorCurrentAI = ais[index];
-    
-    // Update button styles to show which AI is selected
-    for (let i = 1; i <= 4; i++) {
-        const btn = document.getElementById('spec-ai' + i + '-btn');
-        if (btn) {
-            if (i - 1 === index) {
-                btn.style.borderColor = '#ffff00';
-                btn.style.borderWidth = '3px';
-            } else {
-                btn.style.borderColor = '#fff';
-                btn.style.borderWidth = '2px';
-            }
-        }
-    }
-    
-    // Reset view mode to first person when switching AI
-    spectatorViewMode = 'first';
-    updateSpectatorViewModeText();
-}
-
-function toggleSpectatorViewMode() {
-    if (!spectatorModeEnabled) return;
-    
-    if (spectatorViewMode === 'first') {
-        spectatorViewMode = 'third';
-    } else if (spectatorViewMode === 'third') {
-        spectatorViewMode = 'drone';
-    } else {
-        spectatorViewMode = 'first';
-    }
-    updateSpectatorViewModeText();
-}
-
-function updateSpectatorViewModeText() {
-    const viewModeText = document.getElementById('spectator-view-mode');
-    if (!viewModeText) return;
-    
-    let aiNum = 'None';
-    if (spectatorCurrentAI) {
-        const idx = ais.indexOf(spectatorCurrentAI);
-        if (idx >= 0) aiNum = 'AI ' + (idx + 1);
-    }
-    
-    let modeText = '';
-    if (spectatorViewMode === 'first') modeText = 'First Person';
-    else if (spectatorViewMode === 'third') modeText = 'Third Person';
-    else if (spectatorViewMode === 'drone') modeText = 'Drone View';
-    
-    viewModeText.textContent = 'View: ' + aiNum + ' - ' + modeText;
-}
-
-function updateSpectatorCamera(delta) {
-    if (!isSpectatorMode) return;
-    
-    console.log('updateSpectatorCamera called, isSpectatorMode:', isSpectatorMode, 'spectatorViewMode:', spectatorViewMode);
-    
-    // If no current AI selected, try to select first available AI
-    if (!spectatorCurrentAI || !ais.includes(spectatorCurrentAI)) {
-        const aliveAI = ais.find(a => a && a.hp > 0);
-        if (aliveAI) {
-            selectSpectatorAI(ais.indexOf(aliveAI));
-        } else {
-            // No AI available, skip camera update
-            return;
-        }
-    }
-    
-    const ai = spectatorCurrentAI;
-    if (ai.hp <= 0) {
-        // Find next alive AI
-        const aliveAI = ais.find(a => a && a.hp > 0);
-        if (aliveAI) {
-            selectSpectatorAI(ais.indexOf(aliveAI));
-        }
-        return;
-    }
-    
-    console.log('AI selected:', spectatorCurrentAI ? 'yes' : 'no', 'view:', spectatorViewMode);
-    
-    if (spectatorViewMode === 'first') {
-        // First person view - from AI's eyes (flipped 180 degrees)
-        const headPos = getAIHeadPos(ai);
-        console.log('First person - headPos:', headPos);
-        
-        // Move camera slightly backward from AI's head position
-        const backwardOffset = new THREE.Vector3(0, 0, 1.5); // Backward offset
-        backwardOffset.applyQuaternion(ai.quaternion);
-        
-        // Update camera position to AI's head position + backward offset
-        camera.position.copy(headPos).add(backwardOffset);
-        
-        // Copy AI's rotation and flip 180 degrees (PI radians)
-        camera.rotation.copy(ai.rotation);
-        camera.rotation.y += Math.PI;
-        
-    } else if (spectatorViewMode === 'third') {
-        // Third person view - follow behind the AI with orbit control
-        const aiPos = ai.position.clone();
-        
-        // Calculate camera position based on orbit angles (mouse/joystick control)
-        const distance = 8;
-        const heightOffset = 3;
-        
-        // Convert spherical coordinates to Cartesian - orbit around AI
-        const offsetX = distance * Math.sin(spectatorYaw) * Math.cos(spectatorPitch);
-        const offsetY = distance * Math.sin(spectatorPitch) + heightOffset;
-        const offsetZ = distance * Math.cos(spectatorYaw) * Math.cos(spectatorPitch);
-        
-        const cameraPos = new THREE.Vector3(
-            aiPos.x + offsetX,
-            aiPos.y + offsetY,
-            aiPos.z + offsetZ
-        );
-        
-        camera.position.copy(cameraPos);
-        
-        // Look at AI (so AI appears in front of camera)
-        const lookTarget = aiPos.clone();
-        lookTarget.y += 1.5;
-        camera.lookAt(lookTarget);
-        
-    } else if (spectatorViewMode === 'drone') {
-        // Drone view - free movement
-        // Handle drone movement based on keys
-        const speed = 30 * delta;
-        
-        if (keySet.has('KeyW')) {
-            const forward = new THREE.Vector3(0, 0, -1);
-            forward.applyQuaternion(camera.quaternion);
-            spectatorDronePosition.add(forward.multiplyScalar(speed));
-        }
-        if (keySet.has('KeyS')) {
-            const back = new THREE.Vector3(0, 0, 1);
-            back.applyQuaternion(camera.quaternion);
-            spectatorDronePosition.add(back.multiplyScalar(speed));
-        }
-        if (keySet.has('KeyA')) {
-            const left = new THREE.Vector3(-1, 0, 0);
-            left.applyQuaternion(camera.quaternion);
-            spectatorDronePosition.add(left.multiplyScalar(speed));
-        }
-        if (keySet.has('KeyD')) {
-            const right = new THREE.Vector3(1, 0, 0);
-            right.applyQuaternion(camera.quaternion);
-            spectatorDronePosition.add(right.multiplyScalar(speed));
-        }
-        if (keySet.has('Space')) {
-            spectatorDronePosition.y += speed;
-        }
-        if (keySet.has('ShiftLeft') || keySet.has('ShiftRight')) {
-            spectatorDronePosition.y -= speed;
-        }
-        
-        // Clamp drone position
-        spectatorDronePosition.y = Math.max(5, Math.min(100, spectatorDronePosition.y));
-        
-        camera.position.copy(spectatorDronePosition);
-        
-        // Point camera towards drone target (center of field initially)
-        camera.lookAt(spectatorDroneTarget);
-    }
-    
-    // Apply zoom
-    camera.fov = 75 / spectatorZoomLevel;
-    camera.updateProjectionMatrix();
-}
-
-// Spectator mode mouse control for third person look
-function onSpectatorMouseMove(event) {
-    if (!isSpectatorMode || spectatorViewMode !== 'third') return;
-    
-    const movementX = event.movementX || 0;
-    const movementY = event.movementY || 0;
-    
-    spectatorYaw -= movementX * 0.005;
-    spectatorPitch -= movementY * 0.005;
-    spectatorPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, spectatorPitch));
-}
-
-function initSpectatorJoystick() {
-    // Create spectator joystick for mobile if needed
-    const existingJoystick = document.getElementById('spectator-joystick');
-    if (existingJoystick) return;
-    
-    const joystickContainer = document.createElement('div');
-    joystickContainer.id = 'spectator-joystick';
-    joystickContainer.style.cssText = 'position: fixed; left: 10%; bottom: 10%; width: 120px; height: 120px; z-index: 15;';
-    document.body.appendChild(joystickContainer);
-    
-    if (typeof nipplejs !== 'undefined') {
-        const joystick = nipplejs.create({
-            zone: joystickContainer,
-            mode: 'static',
-            position: { left: '50%', top: '50%' },
-            color: 'rgba(255, 255, 0, 0.5)'
-        });
-        
-        joystick.on('move', (evt, data) => {
-            if (!isSpectatorMode) return;
-            
-            if (spectatorViewMode === 'third') {
-                // Third person: joystick controls orbit
-                const sensitivity = 0.05;
-                if (data.vector.x < -0.2 || data.vector.x > 0.2) {
-                    spectatorYaw -= data.vector.x * sensitivity;
-                }
-                if (data.vector.y < -0.2 || data.vector.y > 0.2) {
-                    spectatorPitch -= data.vector.y * sensitivity;
-                    spectatorPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, spectatorPitch));
-                }
-            } else if (spectatorViewMode === 'drone') {
-                // Drone: joystick controls movement
-                const forward = new THREE.Vector3(0, 0, -1);
-                const right = new THREE.Vector3(1, 0, 0);
-                
-                forward.applyQuaternion(camera.quaternion);
-                right.applyQuaternion(camera.quaternion);
-                
-                const speed = 20;
-                if (data.vector.y < -0.2) {
-                    spectatorDronePosition.add(forward.multiplyScalar(-data.vector.y * speed));
-                }
-                if (data.vector.y > 0.2) {
-                    spectatorDronePosition.add(forward.multiplyScalar(-data.vector.y * speed));
-                }
-                if (data.vector.x < -0.2) {
-                    spectatorDronePosition.add(right.multiplyScalar(data.vector.x * speed));
-                }
-                if (data.vector.x > 0.2) {
-                    spectatorDronePosition.add(right.multiplyScalar(data.vector.x * speed));
-                }
-            }
-        });
-    }
-}
-
-// Setup spectator button event listeners
-function setupSpectatorButtons() {
-    const aiButtons = [
-        document.getElementById('spec-ai1-btn'),
-        document.getElementById('spec-ai2-btn'),
-        document.getElementById('spec-ai3-btn'),
-        document.getElementById('spec-ai4-btn')
-    ];
-    
-    aiButtons.forEach((btn, index) => {
-        if (btn) {
-            btn.addEventListener('click', () => selectSpectatorAI(index));
-            btn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                selectSpectatorAI(index);
-            });
-        }
-    });
-    
-    const zoomSlider = document.getElementById('spectator-zoom-slider');
-    if (zoomSlider) {
-        zoomSlider.addEventListener('input', (e) => {
-            spectatorZoomLevel = parseFloat(e.target.value);
-        });
-    }
-    
-    // View mode toggle button for mobile
-    const viewToggleBtn = document.getElementById('spec-view-toggle-btn');
-    if (viewToggleBtn) {
-        viewToggleBtn.addEventListener('click', () => toggleSpectatorViewMode());
-        viewToggleBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            toggleSpectatorViewMode();
-        });
-    }
-}
-
-// Add to DOMContentLoaded
-document.addEventListener('DOMContentLoaded', function() {
-    setupSpectatorButtons();
-});
-
 document.addEventListener('keydown', (event) => {
     if (!isGameRunning) return;
     keySet.add(event.code);
-    
-    // Spectator mode keyboard controls
-    if (spectatorModeEnabled) {
-        if (event.code === 'Digit1') {
-            selectSpectatorAI(0);
-        } else if (event.code === 'Digit2') {
-            selectSpectatorAI(1);
-        } else if (event.code === 'Digit3') {
-            selectSpectatorAI(2);
-        } else if (event.code === 'Digit4') {
-            selectSpectatorAI(3);
-        } else if (event.code === 'KeyC') {
-            toggleSpectatorViewMode();
-        }
-        return; // Skip normal player controls in spectator mode
-    }
-    
     // デバッグ: キー入力をログ
     if (event.code === 'KeyW' || event.code === 'KeyA' || event.code === 'KeyS' || event.code === 'KeyD') {
         debugLog('Key pressed:', event.code, 'isGameRunning:', isGameRunning, 'justRestarted:', window.justRestarted);
@@ -8386,13 +8450,6 @@ document.addEventListener('pointerlockchange', () => {
 
 function onMouseMove(event) {
     if (!isGameRunning) return;
-    
-    // Spectator mode third person view mouse control (without pointer lock)
-    if (isSpectatorMode && spectatorViewMode === 'third') {
-        onSpectatorMouseMove(event);
-        return;
-    }
-    
     const movementX = event.movementX || 0;
     const movementY = event.movementY || 0;
     player.rotateY(-movementX * lookSpeed);
@@ -8402,9 +8459,6 @@ function onMouseMove(event) {
 
 document.addEventListener('mousedown', (event) => {
     if (!isGameRunning) return;
-    // Spectator mode - block shooting and zooming
-    if (isSpectatorMode) return;
-    
     if (event.button === 0) { // Left click
         handleFirePress();
     } else if (event.button === 2) { // Right click
@@ -8415,11 +8469,7 @@ document.addEventListener('mousedown', (event) => {
         }
     }
 });
-document.addEventListener('mouseup', (event) => { 
-    if (!isGameRunning) return;
-    if (isSpectatorMode) return;
-    if (event.button === 0) { handleFireRelease(); } 
-});
+document.addEventListener('mouseup', (event) => { if (!isGameRunning) return; if (event.button === 0) { handleFireRelease(); } });
 document.addEventListener('contextmenu', (event) => event.preventDefault());
 
 
@@ -8488,6 +8538,18 @@ document.addEventListener('touchend', (event) => {
         }
     }
 }, false);
+document.addEventListener('touchcancel', (event) => {
+    if (lookTouchId === -1) return;
+    for (let i = 0; i < event.changedTouches.length; i++) {
+        const touch = event.changedTouches[i];
+        if (touch.identifier === lookTouchId) {
+            handleFireRelease();
+            isLooking = false;
+            lookTouchId = -1;
+            break;
+        }
+    }
+}, false);
 const crouchButton = document.getElementById('crouch-button');
 if (crouchButton) {
     crouchButton.addEventListener('touchstart', (event) => {
@@ -8537,11 +8599,153 @@ function initializeAudio() {
     for (const id of audioMetaById.keys()) {
         ensureSoundBuffer(id);
     }
+    updateMenuBGM();
+}
+
+function isSettingsScreenVisible() {
+    const start = document.getElementById('start-screen');
+    const readme = document.getElementById('readme-screen');
+    const buttonSettings = document.getElementById('button-settings-screen');
+    const bgmSettings = document.getElementById('bgm-settings-screen');
+    return (start && start.style.display !== 'none')
+        || (readme && readme.style.display !== 'none')
+        || (buttonSettings && buttonSettings.style.display !== 'none')
+        || (bgmSettings && bgmSettings.style.display !== 'none');
+}
+
+let currentBgmTrack = null;
+let bgmOrderIndex = 0;
+const MENU_BGM_TRACK = 'opm.mp3';
+
+function normalizeBgmVolume(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 0.7;
+    return Math.min(1, Math.max(0, num));
+}
+
+function getEnabledBgmTracks() {
+    if (!Array.isArray(gameSettings.bgmEnabledTracks)) {
+        return BGM_TRACKS.slice();
+    }
+    const enabledSet = new Set(gameSettings.bgmEnabledTracks);
+    const filtered = BGM_TRACKS.filter(track => enabledSet.has(track));
+    if (gameSettings.bgmEnabledTracks.length === 0) {
+        return [];
+    }
+    if (filtered.length === 0) {
+        return BGM_TRACKS.slice();
+    }
+    return filtered;
+}
+
+function pickNextBgmTrack() {
+    const enabledTracks = getEnabledBgmTracks();
+    if (enabledTracks.length === 0) return null;
+    if (gameSettings.bgmMode === 'random') {
+        let choice = enabledTracks[Math.floor(Math.random() * enabledTracks.length)];
+        if (enabledTracks.length > 1 && choice === currentBgmTrack) {
+            for (let i = 0; i < 5; i++) {
+                const candidate = enabledTracks[Math.floor(Math.random() * enabledTracks.length)];
+                if (candidate !== currentBgmTrack) {
+                    choice = candidate;
+                    break;
+                }
+            }
+        }
+        return choice;
+    }
+    const index = bgmOrderIndex % enabledTracks.length;
+    const choice = enabledTracks[index];
+    bgmOrderIndex = (index + 1) % enabledTracks.length;
+    return choice;
+}
+
+function applyBgmVolume() {
+    if (!bgmAudio) return;
+    bgmAudio.volume = normalizeBgmVolume(gameSettings.bgmVolume);
+}
+
+function playGameBGM(forceNewTrack = false) {
+    if (!bgmAudio || gameSettings.bgmMute) return;
+    const enabledTracks = getEnabledBgmTracks();
+    if (enabledTracks.length === 0) {
+        stopGameBGM(true);
+        return;
+    }
+    if (forceNewTrack || !currentBgmTrack || !enabledTracks.includes(currentBgmTrack)) {
+        currentBgmTrack = pickNextBgmTrack();
+        if (!currentBgmTrack) {
+            stopGameBGM(true);
+            return;
+        }
+        if (bgmAudio.getAttribute('src') !== currentBgmTrack) {
+            bgmAudio.src = currentBgmTrack;
+            bgmAudio.load();
+        }
+        bgmAudio.currentTime = 0;
+    }
+    bgmAudio.loop = true;
+    applyBgmVolume();
+    bgmAudio.play().catch(() => {});
+}
+
+function stopGameBGM(resetTime = false) {
+    if (!bgmAudio) return;
+    bgmAudio.pause();
+    if (resetTime) {
+        bgmAudio.currentTime = 0;
+    }
+}
+
+function playMenuBGM() {
+    if (!bgmAudio || gameSettings.bgmMute) return;
+    if (bgmAudio.getAttribute('src') !== MENU_BGM_TRACK) {
+        bgmAudio.src = MENU_BGM_TRACK;
+        bgmAudio.load();
+    }
+    bgmAudio.loop = true;
+    applyBgmVolume();
+    bgmAudio.play().catch(() => {});
+}
+
+function stopMenuBGM(resetTime = false) {
+    if (!bgmAudio) return;
+    bgmAudio.pause();
+    if (resetTime) {
+        bgmAudio.currentTime = 0;
+    }
+}
+
+function startStageBGM() {
+    if (!isGameRunning || isSettingsScreenVisible()) {
+        stopGameBGM(false);
+        return;
+    }
+    playGameBGM(true);
+}
+
+function updateMenuBGM() {
+    if (gameSettings.bgmMute) {
+        stopMenuBGM(false);
+        stopGameBGM(false);
+        return;
+    }
+    if (isSettingsScreenVisible()) {
+        stopGameBGM(false);
+        playMenuBGM();
+        return;
+    }
+    stopMenuBGM(false);
+    if (!isGameRunning) {
+        stopGameBGM(false);
+        return;
+    }
+    playGameBGM(false);
 }
 
 function startGame() {
     debugLog('startGame() called');
-    console.log('startGame called, gameSettings.spectatorMode:', gameSettings.spectatorMode);
+    stopGameBGM(true);
     applySettingsScreenLighting(false);
     ensureBuildStamp();
       applyBillBattleModeConstraints();
@@ -8560,81 +8764,6 @@ function startGame() {
     
     const startSc = document.getElementById('start-screen');
     if (startSc) startSc.style.display = 'none';
-    
-    // Spectator mode initialization
-    spectatorModeEnabled = gameSettings.spectatorMode || false;
-    // Also sync legacy boolean used elsewhere
-    isSpectatorMode = spectatorModeEnabled;
-    if (spectatorModeEnabled) {
-        spectatorModeEnabled = true;
-        spectatorCurrentAI = null;
-        spectatorViewMode = 'first';
-        spectatorZoomLevel = 1.0;
-        spectatorDronePosition.set(0, 50, 0);
-        spectatorDroneTarget.set(0, 0, 0);
-        spectatorYaw = 0;
-        spectatorPitch = -Math.PI / 6;
-        
-        // Hide player controls and show spectator UI
-        const joy = document.getElementById('joystick-move');
-        const fire = document.getElementById('fire-button');
-        const crouch = document.getElementById('crouch-button');
-        const zoom = document.getElementById('zoom-button');
-        const followBtn = document.getElementById('follow-button');
-        const crosshair = document.getElementById('crosshair');
-        const playerHPDisplay = document.getElementById('player-hp-display');
-        const playerWeaponDisplay = document.getElementById('player-weapon-display');
-        
-        if (joy) joy.style.display = 'none';
-        if (fire) fire.style.display = 'none';
-        if (crouch) crouch.style.display = 'none';
-        if (zoom) zoom.style.display = 'none';
-        if (followBtn) followBtn.style.display = 'none';
-        if (crosshair) crosshair.style.display = 'none';
-        if (playerHPDisplay) playerHPDisplay.style.display = 'none';
-        if (playerWeaponDisplay) playerWeaponDisplay.style.display = 'none';
-        
-        // Show spectator UI
-        const specAIButtons = document.getElementById('spectator-ai-buttons');
-        const specZoomControl = document.getElementById('spectator-zoom-control');
-        const specViewMode = document.getElementById('spectator-view-mode');
-        
-        if (specAIButtons) specAIButtons.style.display = 'block';
-        if (specZoomControl) specZoomControl.style.display = 'block';
-        if (specViewMode) {
-            specViewMode.style.display = 'block';
-            specViewMode.textContent = 'View: AI 1 - First Person';
-        }
-        
-        // For mobile, also show spectator UI
-        if (shouldShowTouchControls()) {
-            if (specAIButtons) specAIButtons.style.display = 'block';
-            if (specZoomControl) specZoomControl.style.display = 'block';
-            // Initialize spectator joystick for mobile
-            initSpectatorJoystick();
-        }
-        
-        // Hide player and setup camera for spectator
-        player.visible = false;
-        player.position.set(0, -1000, 0); // Move player away
-        
-        // Detach camera from player for spectator mode
-        player.remove(camera);
-        scene.add(camera);
-        camera.position.set(0, 50, 20); // Initial position for camera
-        
-        // Set AI count to 4 for spectator mode
-        gameSettings.aiCount = 4;
-    } else {
-        // Re-attach camera to player for normal mode
-        if (camera.parent !== player) {
-            scene.remove(camera);
-            player.add(camera);
-            camera.position.set(0, 0, 0);
-            camera.position.z = 5;
-        }
-    }
-    
     if (renderer && renderer.domElement) {
         renderer.domElement.style.display = 'block';
     }
@@ -8658,10 +8787,7 @@ function startGame() {
     }
     const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display']; // 共通UI
 
-    if (isSpectatorMode) {
-        // Spectator mode shows all AI HP displays
-        gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display', 'ai4-hp-display', 'spectator-ai-buttons', 'spectator-zoom-control', 'spectator-view-mode');
-    } else if (gameSettings.gameMode === 'arcade') {
+    if (gameSettings.gameMode === 'arcade') {
         gameUI.push('kill-count-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // アーケードモードのAI HP表示も追加
     } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
         gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // チームモードのAI HP表示
@@ -8692,64 +8818,60 @@ function startGame() {
     }
     const element = document.documentElement;
 
-    if (shouldShowTouchControls()) {
-        debugLog('startGame(): Mobile device detected.');
+      if (shouldShowTouchControls()) {
+          debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
+          const joy = document.getElementById('joystick-move');
+          const fire = document.getElementById('fire-button');
+          const crouch = document.getElementById('crouch-button');
+          const zoom = document.getElementById('zoom-button');
+          const pause = document.getElementById('pause-button');
+          const followBtn = document.getElementById('follow-button'); 
 
-        if (isSpectatorMode) {
-            // Spectator mode on mobile
-            const specAIButtons = document.getElementById('spectator-ai-buttons');
-            const specZoomControl = document.getElementById('spectator-zoom-control');
-            const specViewToggle = document.getElementById('spec-view-toggle-btn');
+        if (joy) { joy.style.display = 'block'; debugLog('startGame(): joystick-move display set to block'); }
+        if (fire) { fire.style.display = 'flex'; debugLog('startGame(): fire-button display set to flex'); }
+        if (crouch) { crouch.style.display = 'flex'; debugLog('startGame(): crouch-button display set to flex'); }
+        if (zoom) { zoom.style.display = 'flex'; debugLog('startGame(): zoom-button display set to flex'); }
+        if (pause) { pause.style.display = 'block'; debugLog('startGame(): pause-button display set to block'); }
 
-            if (specAIButtons) specAIButtons.style.display = 'block';
-            if (specZoomControl) specZoomControl.style.display = 'block';
-            if (specViewToggle) specViewToggle.style.display = 'block';
-
-            initSpectatorJoystick();
-        } else {
-            // Normal game mode
-            const joy = document.getElementById('joystick-move');
-            const fire = document.getElementById('fire-button');
-            const crouch = document.getElementById('crouch-button');
-            const zoom = document.getElementById('zoom-button');
-            const pause = document.getElementById('pause-button');
-            const followBtn = document.getElementById('follow-button');
-
-            if (joy) joy.style.display = 'block';
-            if (fire) fire.style.display = 'flex';
-            if (crouch) crouch.style.display = 'flex';
-            if (zoom) zoom.style.display = 'flex';
-            if (pause) pause.style.display = 'block';
-            if (followBtn) {
-                if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
-                    followBtn.style.display = 'flex';
-                } else {
-                    followBtn.style.display = 'none';
-                }
-            }
-
-            initJoystick();
-        }
-    } else {
-        // PC device
+          if (followBtn) { 
+              if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                  followBtn.style.display = 'flex'; debugLog('startGame(): follow-button display set to flex (team mode)');
+              } else {
+                  followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none (non-team mode)');
+              }
+          }
+          initJoystick();
+      } else {
+        debugLog('startGame(): PC device detected. Setting UI to none.');
         const joy = document.getElementById('joystick-move');
         const fire = document.getElementById('fire-button');
         const crouch = document.getElementById('crouch-button');
         const zoom = document.getElementById('zoom-button');
-        const followBtn = document.getElementById('follow-button');
+        const followBtn = document.getElementById('follow-button'); 
 
-        if (joy) joy.style.display = 'none';
-        if (fire) fire.style.display = 'none';
-        if (crouch) crouch.style.display = 'none';
-        if (zoom) zoom.style.display = 'none';
-if (followBtn) followBtn.style.display = 'none';
+        if (joy) { joy.style.display = 'none'; debugLog('startGame(): joystick-move display set to none'); }
+        if (fire) { fire.style.display = 'none'; debugLog('startGame(): fire-button display set to none'); }
+        if (crouch) { crouch.style.display = 'none'; debugLog('startGame(): crouch-button display set to none'); }
+        if (zoom) { zoom.style.display = 'none'; debugLog('startGame(): zoom-button display set to none'); }
+        if (followBtn) { followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none'); }
     }
     enforceTouchUIVisibility();
     try {
         if (element.requestFullscreen) {
-            element.requestFullscreen().catch(function(err) { console.warn('Fullscreen error:', err); });
+            element.requestFullscreen().catch(err => console.warn('Fullscreen API error:', err));
+        } else if (element.webkitRequestFullscreen) {
+            element.webkitRequestFullscreen().catch(err => console.warn('Fullscreen API error (webkit):', err));
         }
-    } catch(e) { console.warn('Fullscreen error:', e); }
+    } catch (e) {
+        console.warn('Error trying to enter fullscreen:', e);
+    }
+    try {
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock('landscape').catch(e => console.warn('Orientation lock failed:', e));
+        }
+    } catch (e) {
+        console.warn('Error trying to lock orientation:', e);
+    }
     if (typeof resetObstacles === 'function') resetObstacles();
     // 強制的に表示設定 (デバッグ目的)
     if (playerHPDisplay) playerHPDisplay.style.display = 'block';
@@ -8781,7 +8903,6 @@ function shuffle(array) {
 
 function restartGame() {
     debugLog('restartGame() called');
-    console.log('restartGame called, isSpectatorMode:', isSpectatorMode, 'ai count:', ais.length);
     applySettingsScreenLighting(false);
     ensureBuildStamp();
       applyBillBattleModeConstraints();
@@ -8891,33 +9012,24 @@ function restartGame() {
         if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.style.display = 'none';
     }
     // --- ここまで ---
-    
-    // Spectator mode - skip player setup but keep game running
-    if (!isSpectatorMode) {
-        let playerSpawnPos;
-        if (isBillBattleMode()) {
-            playerSpawnPos = getBillBattlePlayerSpawn();
-        } else if (availableSpawnPoints.length > 0) {
-            playerSpawnPos = availableSpawnPoints.pop();
-        } else {
-            const playerSpawn = customSpawnPoints ? customSpawnPoints.find(p => p.name === 'Player') : null;
-            playerSpawnPos = playerSpawn ? new THREE.Vector3(playerSpawn.x, 2.0, playerSpawn.z) : PLAYER_INITIAL_POSITION;
-        }
-        player.position.copy(playerSpawnPos);
-        if (isBillBattleMode()) {
-            enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
-            // Reset crouch/height to normal on indoor combat start
-            isCrouchingToggle = false;
-            playerTargetHeight = BILL_BATTLE_PLAYER_HEIGHT;
-            player.position.y = playerTargetHeight;
-            if (playerModel) {
-                playerModel.position.set(0, -playerTargetHeight, 0);
-            }
-        }
+    let playerSpawnPos;
+    if (isBillBattleMode()) {
+        playerSpawnPos = getBillBattlePlayerSpawn();
+    } else if (availableSpawnPoints.length > 0) {
+        playerSpawnPos = availableSpawnPoints.pop();
     } else {
-        // Initialize first AI for spectator
-        if (ais.length > 0) {
-            selectSpectatorAI(0);
+        const playerSpawn = customSpawnPoints ? customSpawnPoints.find(p => p.name === 'Player') : null;
+        playerSpawnPos = playerSpawn ? new THREE.Vector3(playerSpawn.x, 2.0, playerSpawn.z) : PLAYER_INITIAL_POSITION;
+    }
+    player.position.copy(playerSpawnPos);
+    if (isBillBattleMode()) {
+        enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
+        // Reset crouch/height to normal on indoor combat start
+        isCrouchingToggle = false;
+        playerTargetHeight = BILL_BATTLE_PLAYER_HEIGHT;
+        player.position.y = playerTargetHeight;
+        if (playerModel) {
+            playerModel.position.set(0, -playerTargetHeight, 0);
         }
     }
     // If spawn overlaps obstacles/explosives, relocate to a safe spot to avoid input lock.
@@ -8967,19 +9079,13 @@ function restartGame() {
     const isTeamArcadeMode = gameSettings.gameMode === 'teamArcade';
 
     if (isTeamMode || isTeamArcadeMode) { // 変更
-        finalAICount = 3; // 2V2: プレイヤー(人間のプレイヤーまたは代わり)+1体味方のAI+2体敵=3体
+        finalAICount = 3; // チームモードおよびチームアーケードモードでは常に3体（1体味方 + 2体敵）
     }
-    
-    // Spectator mode always uses 4 AIs
-    if (isSpectatorMode) {
-        finalAICount = 4;
-    }
-    
     for (const ai of ais) {
         cleanupAI(ai); // Use cleanupAI to properly remove AI and its resources
     }
     ais.length = 0;
-    const aiColors = [0x00ff00, 0x00ffff, 0xffa500, 0xff00ff]; // Added magenta for 4th AI
+    const aiColors = [0x00ff00, 0x00ffff, 0x0FFa500];
     const teamColors = {
         player: 0x00ffff, // 味方AIはシアン
         enemy: [0x00ff00, 0xffff00] // 敵AIは緑と黄
@@ -8992,9 +9098,8 @@ function restartGame() {
         }
 
         if (isTeamMode || isTeamArcadeMode) { // 変更
-            // 2V2: i=0が味方のAI、i=1,2が敵
             if (i === 0) {
-                aiTeam = 'player'; // 最初の1体は味方AI
+                aiTeam = 'player'; // 最初の1体は味方
                 aiColor = teamColors.player;
             } else {
                 aiTeam = 'enemy'; // 残り2体は敵
@@ -9104,7 +9209,6 @@ function restartGame() {
     const ai1HPDisplay = document.getElementById('ai-hp-display');
     const ai2HPDisplay = document.getElementById('ai2-hp-display');
     const ai3HPDisplay = document.getElementById('ai3-hp-display');
-    const ai4HPDisplay = document.getElementById('ai4-hp-display');
     ais.forEach((ai, index) => {
         ai.hp = aiHP;
         // 味方AIは積極的に攻撃するため、初期状態をATTACKINGにする
@@ -9167,7 +9271,6 @@ function restartGame() {
             if (index === 0) { if (ai1HPDisplay) ai1HPDisplay.textContent = `AI 1 HP: ${aiHPText}`; if (ai1HPDisplay) ai1HPDisplay.style.color = 'limegreen'; }
             else if (index === 1) { if (ai2HPDisplay) ai2HPDisplay.textContent = `AI 2 HP: ${aiHPText}`; if (ai2HPDisplay) ai2HPDisplay.style.color = 'cyan'; }
             else if (index === 2) { if (ai3HPDisplay) ai3HPDisplay.textContent = `AI 3 HP: ${aiHPText}`; if (ai3HPDisplay) ai3HPDisplay.style.color = 'orange'; }
-            else if (index === 3) { if (ai4HPDisplay) ai4HPDisplay.textContent = `AI 4 HP: ${aiHPText}`; if (ai4HPDisplay) ai4HPDisplay.style.color = '#ff00ff'; }
         }
     });
 
@@ -9231,11 +9334,7 @@ function restartGame() {
         if (pause) { pause.style.display = 'none'; debugLog('restartGame(): pause-button display set to none'); } // PauseボタンもPCでは非表示
     }
     enforceTouchUIVisibility();
-    for (let i = projectiles.length - 1; i >= 0; i--) {
-        clearAIRocketInFlight(projectiles[i]);
-        scene.remove(projectiles[i].mesh);
-    }
-    projectiles.length = 0;
+    clearProjectileArtifacts();
     for (let i = debris.length - 1; i >= 0; i--) {
         const mesh = debris[i].mesh;
         if (mesh.parent) {
@@ -9262,32 +9361,22 @@ function restartGame() {
     isElevating = false; // 昇降状態もリセット
     isGameRunning = true;
     isPaused = false; // ゲームが一時停止状態ではないことを明確にする
+    startStageBGM();
     document.exitPointerLock(); // 念のためポインターロックを解除し、再取得の機会を与える
     
-    // Spectator mode - skip player model creation
-    if (!isSpectatorMode) {
-        // 既存のplayerModelがplayerに追加されている場合、まず削除する
-        if (playerModel && playerModel.parent) {
-            player.remove(playerModel);
-        }
-        playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
-        player.add(playerModel);
-        playerModel.position.set(0, -playerTargetHeight, 0);
-        if (playerModel) { // 念のためnullチェック
-            playerModel.visible = false; // プレイヤーモデルは非表示に保つ
-        }
-        // playerBodyとplayerHeadをplayerModelのuserDataから取得
-        playerBody = playerModel.userData.parts.body;
-        playerHead = playerModel.userData.parts.head;
-    } else {
-        // Spectator mode - remove player model if exists
-        if (playerModel && playerModel.parent) {
-            player.remove(playerModel);
-            playerModel = null;
-        }
-        playerBody = null;
-        playerHead = null;
+    // 既存のplayerModelがplayerに追加されている場合、まず削除する
+    if (playerModel && playerModel.parent) {
+        player.remove(playerModel);
     }
+    playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
+    player.add(playerModel);
+    playerModel.position.set(0, -playerTargetHeight, 0);
+    if (playerModel) { // 念のためnullチェック
+        playerModel.visible = false; // プレイヤーモデルは非表示に保つ
+    }
+    // playerBodyとplayerHeadをplayerModelのuserDataから取得
+    playerBody = playerModel.userData.parts.body;
+    playerHead = playerModel.userData.parts.head;
 }
 
 function startAIDeathSequence(impactVelocity, ai) {
@@ -9571,9 +9660,6 @@ function forceResetTouchState() {
 }
 
 function startPlayerDeathSequence(projectile) {
-    // Spectator mode - no player death sequence
-    if (isSpectatorMode) return;
-    
     if (isPlayerDeathPlaying || playerHP > 0) return;
     forceResetTouchState(); // Reset input states
     isPlayerDeathPlaying = true;
@@ -9878,9 +9964,6 @@ function createWindows(obstacleMesh, buildingWidth, buildingHeight, buildingDept
 }
 
 function shouldPlayAIDeathKillCam(ai, killerSource) {
-    // Spectator mode - always skip kill cam
-    if (isSpectatorMode) return false;
-    
     const mode = gameSettings.killCamMode || 'playerOnly';
     if (mode === 'off') return false;
     if (mode === 'all') return true;
@@ -9953,6 +10036,9 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     if (!ai) return;
     if (!ai.userData) ai.userData = {};
     ai.userData.isDying = true;
+    if (gameSettings.aiShotLevel === 'ama') {
+        removeAIProjectiles(ai, true);
+    }
     if (isBillBattleMode() && killerSource !== 'player') {
         finalizeAIDeathWithoutKillCam(ai, killerSource);
         return;
@@ -10052,6 +10138,7 @@ function showGameOver() {
     forceResetTouchState();
     isGameRunning = false;
     setFollowingPlayerMode(false);
+    clearProjectileArtifacts();
     gameOverScreen.style.display = 'flex';
     document.exitPointerLock();
 }
@@ -10059,6 +10146,7 @@ function showGameOver() {
 function showWinScreen() {
     forceResetTouchState();
     isGameRunning = false;
+    clearProjectileArtifacts();
     winScreen.style.display = 'flex';
     document.exitPointerLock();
     const winBtn = winScreen ? winScreen.querySelector('.restart-button') : null;
@@ -10673,6 +10761,11 @@ function showSettingsAndPause() {
     if (!isGameRunning && !isPaused) return;
 
     forceResetTouchState();
+    joystickMoveVector.set(0, 0);
+    if (moveManager) {
+        moveManager.destroy();
+        moveManager = null;
+    }
     isGameRunning = false;
     if (!isPaused) {
         originalSettings = JSON.parse(JSON.stringify(gameSettings));
@@ -10695,6 +10788,7 @@ function showSettingsAndPause() {
     
     // Update unified map selector to show current map
     updateUnifiedMapSelector();
+    updateMenuBGM();
 }
 
 function resumeGame() {
@@ -10735,50 +10829,36 @@ function resumeGame() {
             document.getElementById('kill-count-display').style.display = 'block';
         }
 
-if (shouldShowTouchControls()) {
-          debugLog('startGame(): Mobile device detected. Setting UI to block/flex.');
-          
-          if (isSpectatorMode) {
-              // Spectator mode on mobile - show spectator controls, hide regular controls
-              const specAIButtons = document.getElementById('spectator-ai-buttons');
-              const specZoomControl = document.getElementById('spectator-zoom-control');
-              const specViewToggle = document.getElementById('spec-view-toggle-btn');
-              
-              if (specAIButtons) specAIButtons.style.display = 'block';
-              if (specZoomControl) specZoomControl.style.display = 'block';
-              if (specViewToggle) specViewToggle.style.display = 'block';
-              
-              // Initialize spectator joystick for mobile
-              initSpectatorJoystick();
-          } else {
-              // Normal mode - hide spectator controls, show game controls
-              const specAIButtons = document.getElementById('spectator-ai-buttons');
-              const specZoomControl = document.getElementById('spectator-zoom-control');
-              const specViewToggle = document.getElementById('spec-view-toggle-btn');
-              
-              if (specAIButtons) specAIButtons.style.display = 'none';
-              if (specZoomControl) specZoomControl.style.display = 'none';
-              if (specViewToggle) specViewToggle.style.display = 'none';
-              
-              const joy = document.getElementById('joystick-move');
-              const fire = document.getElementById('fire-button');
-              const crouch = document.getElementById('crouch-button');
-              const zoom = document.getElementById('zoom-button');
-              const pause = document.getElementById('pause-button');
-              
-              if (joy) joy.style.display = 'block';
-              if (fire) fire.style.display = 'flex';
-              if (crouch) crouch.style.display = 'flex';
-              if (zoom) zoom.style.display = 'flex';
-              if (pause) pause.style.display = 'block';
-              
-              initJoystick();
-          }
-      } else {
+        if (shouldShowTouchControls()) {
+            // resumeGame(): Mobile device detected. Setting UI to block/flex.
+            const joy = document.getElementById('joystick-move');
+            const fire = document.getElementById('fire-button');
+            const crouch = document.getElementById('crouch-button');
+            const zoom = document.getElementById('zoom-button');
+            const pause = document.getElementById('pause-button');
+            if (joy) { joy.style.display = 'block'; }
+            if (fire) { fire.style.display = 'flex'; }
+            if (crouch) { crouch.style.display = 'flex'; }
+            if (zoom) { zoom.style.display = 'flex'; }
+            if (pause) { pause.style.display = 'block'; }
+            initJoystick();
+        } else {
+            // resumeGame(): PC device detected.
+            const joy = document.getElementById('joystick-move');
+            const fire = document.getElementById('fire-button');
+            const crouch = document.getElementById('crouch-button');
+            const zoom = document.getElementById('zoom-button');
+            if (joy) { joy.style.display = 'none'; }
+            if (fire) { fire.style.display = 'none'; }
+            if (crouch) { crouch.style.display = 'none'; }
+            if (zoom) { zoom.style.display = 'none'; }
+            canvas.requestPointerLock();
+        }
         enforceTouchUIVisibility();
 
         isGameRunning = true;
     }
+    updateMenuBGM();
 }
 
 function animate() {
@@ -10842,6 +10922,7 @@ function animate() {
     updateBillBattleAttackDelay(timeElapsed);
     updateBillBattleElevator(timeElapsed);
     updateBillBattleLightFlicker(timeElapsed);
+    cleanupOrphanProjectiles(timeElapsed);
     const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
 
     // 定期的に浮遊屋根パーツをクリーンアップ（ビルバトルは除外）
@@ -10862,7 +10943,7 @@ function animate() {
     // Player MG reload completion (needs to run even when not firing)
     if (playerMGReloadUntil > 0 && timeElapsed >= playerMGReloadUntil) {
         playerMGReloadUntil = 0;
-        if (gameSettings.defaultWeapon === WEAPON_MG) {
+        if (gameSettings.defaultWeaponPlayer === WEAPON_MG) {
             ammoMG = MAX_AMMO_MG;
             hideReloadingText();
         }
@@ -10993,8 +11074,7 @@ function animate() {
     if (isRifleZoomed && !canUseRifleZoom(currentWeapon)) {
         setRifleZoom(false);
     }
-    // Spectator mode - block shooting
-    if (!isSpectatorMode && isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
+    if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
         shoot();
     }
     updateCrosshairForWeapon();
@@ -11020,12 +11100,6 @@ function animate() {
     let finalMoveVector = joystickMoveVector.length() > 0 ? joystickMoveVector.clone() : keyboardMoveVector.clone();
 
     if (finalMoveVector.length() > 0) finalMoveVector.normalize();
-    // Spectator mode - block player movement
-    if (isSpectatorMode) {
-        finalMoveVector.set(0, 0);
-        keyboardMoveVector.set(0, 0);
-        joystickMoveVector.set(0, 0);
-    }
     // リスポーン直後の移動を強制的に停止させる
     if (window.justRestarted || isPlayerDeathPlaying || isElevating) {
         debugLog('Movement blocked - justRestarted:', window.justRestarted, 'isPlayerDeathPlaying:', isPlayerDeathPlaying, 'isElevating:', isElevating);
@@ -12612,7 +12686,7 @@ function animate() {
               }
           }
           if (p.isRocket) {
-              createRocketTrail(p.mesh.position.clone());
+              createRocketTrail(p.mesh.position.clone(), p.source, p.shooter);
           }
           const bulletSphere = new THREE.Sphere(p.mesh.position, p.isRocket ? 0.5 : 0.1);
           // Obstacle hit is already handled by the segment raycast above.
@@ -12876,11 +12950,13 @@ function animate() {
                 const hitIsBarrel = hitType === 'obstacle' && hitObject && hitObject.userData && hitObject.userData.type === 'barrel';
                 if (hitIsBarrel) {
                     explodeBarrel(hitObject, p.source, p.shooter || null);
+                    queueExplosionClear(hitObject.position, BARREL_EXPLOSION_RADIUS);
                 } else if (p.isRocket) {
                     const explosionPos = p.mesh.position.clone();
                     if (explosionSound) playSpatialSound(explosionSound, explosionPos);
                     createExplosionEffect(explosionPos);
                     applyExplosionEffectsToBillLights(explosionPos, ROCKET_EXPLOSION_RADIUS);
+                    queueExplosionClear(explosionPos, ROCKET_EXPLOSION_RADIUS);
                     const EXPLOSION_RADIUS_ACTUAL = ROCKET_EXPLOSION_RADIUS;
                 const allowActorDamage = canApplyBillBattleDamage();
                 if (allowActorDamage && p.source === 'player') {
@@ -12970,6 +13046,32 @@ function animate() {
             }
             continue;
         }
+        if (!p.lastPos) {
+            p.lastPos = p.mesh.position.clone();
+            p.stuckTime = 0;
+        } else {
+            const movedDist = p.mesh.position.distanceTo(p.lastPos);
+            if (movedDist < 0.001) {
+                p.stuckTime = (p.stuckTime || 0) + delta;
+            } else {
+                p.stuckTime = 0;
+            }
+            p.lastPos.copy(p.mesh.position);
+            if (p.stuckTime > 0.3) {
+                clearAIRocketInFlight(p);
+                if (p.mesh) {
+                    if (p.mesh.parent) {
+                        p.mesh.parent.remove(p.mesh);
+                    } else {
+                        scene.remove(p.mesh);
+                    }
+                    if (p.mesh.geometry) p.mesh.geometry.dispose();
+                    if (p.mesh.material) disposeMaterial(p.mesh.material);
+                }
+                projectiles.splice(i, 1);
+                continue;
+            }
+        }
         const projArenaR = Math.sqrt(p.mesh.position.x * p.mesh.position.x + p.mesh.position.z * p.mesh.position.z);
         if (projArenaR > ARENA_PLAY_AREA_RADIUS) {
             scene.remove(p.mesh);
@@ -12977,7 +13079,8 @@ function animate() {
             projectiles.splice(i, 1);
         }
     }
-    const aiHPDisplays = [aiHPDisplay, ai2HPDisplay, ai3HPDisplay, ai4HPDisplay]; // グローバル変数を使用
+    applyExplosionClears();
+    const aiHPDisplays = [aiHPDisplay, ai2HPDisplay, ai3HPDisplay]; // グローバル変数を使用
     for (let i = 0; i < aiHPDisplays.length; i++) {
         const display = aiHPDisplays[i];
         if (!display) continue;
@@ -12985,14 +13088,7 @@ function animate() {
 
         if (ai && ai.hp > 0) {
             display.style.display = 'block';
-            if (isSpectatorMode) {
-                // Spectator mode shows all AI info
-                display.textContent = `AI ${i + 1} HP: ${ai.hp === Infinity ? '∞' : ai.hp} | Kills: ${ai.kills || 0}`;
-                if (i === 0) display.style.color = 'limegreen';
-                else if (i === 1) display.style.color = 'cyan';
-                else if (i === 2) display.style.color = 'orange';
-                else if (i === 3) display.style.color = '#ff00ff';
-            } else if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
+            if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
                 if (i === 0) {
                     display.textContent = `Teammate HP: ${ai.hp === Infinity ? '∞' : ai.hp}`;
                     display.style.color = 'cyan';
@@ -13017,13 +13113,7 @@ function animate() {
             display.classList.remove('dead-ai-hp'); // 生きている場合はクラスを削除
         } else if (ai && ai.hp <= 0) { // AIが存在し、HPが0以下の場合
             display.style.display = 'block';
-            if (isSpectatorMode) {
-                display.textContent = `AI ${i + 1} HP: 0 | Kills: ${ai.kills || 0}`;
-                if (i === 0) display.style.color = 'limegreen';
-                else if (i === 1) display.style.color = 'cyan';
-                else if (i === 2) display.style.color = 'orange';
-                else if (i === 3) display.style.color = '#ff00ff';
-            } else if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
+            if (isTeamModeOrTeamArcade) { // isTeamModeOrTeamArcadeに変更
                 if (i === 0) {
                     display.textContent = `Teammate HP: 0`;
                     display.style.color = 'cyan';
@@ -13044,7 +13134,6 @@ function animate() {
                 if (i === 0) display.style.color = 'limegreen';
                 else if (i === 1) display.style.color = 'cyan';
                 else if (i === 2) display.style.color = 'orange';
-                else if (i === 3) display.style.color = '#ff00ff';
             }
             display.classList.add('dead-ai-hp'); // 死んでいる場合はクラスを追加
         } else { // AIが存在しない場合 (AIの総数よりiが大きい場合)
@@ -13064,14 +13153,8 @@ function animate() {
         }
     } else {
         const allAIsDefeated = ais.every(ai => ai.hp <= 0);
-        // In spectator mode, when all AIs are dead, end the game
         if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && (gameSettings.gameMode === 'battle' || gameSettings.gameMode === 'ffa') && !isBillBattleMode()) {
-            if (isSpectatorMode) {
-                // Spectator mode - show win when all AIs defeated
-                showWinScreen();
-            } else {
-                showWinScreen();
-            }
+            showWinScreen();
         }
     }
     if (playerHPDisplay) { 
@@ -13091,11 +13174,7 @@ function animate() {
     } else {
         if (killCountDisplay) killCountDisplay.style.display = 'none';
     }
-    
-    // Update spectator camera
-    if (isSpectatorMode) {
-        updateSpectatorCamera(delta);
-    } else if (screenShakeDuration > 0) {
+    if (screenShakeDuration > 0) {
         screenShakeDuration -= delta;
         const shakeFactor = screenShakeDuration / SHAKE_DURATION_MAX;
         camera.position.x = (Math.random() - 0.5) * SHAKE_INTENSITY * shakeFactor;
@@ -13160,18 +13239,12 @@ if (startBtn) {
         if (durationRadio) {
             gameSettings.gameDuration = parseInt(durationRadio.value, 10);
         }
-        const spectatorModeRadio = document.querySelector('input[name="spectator-mode"]:checked');
-        if (spectatorModeRadio) {
-            gameSettings.spectatorMode = spectatorModeRadio.value === 'on';
-        }
         saveSettings();
         initializeAudio();
         startGame();
         restartGame();
     });
 }
-console.log('Script loaded, gameSettings:', gameSettings);
-
 const rButtons = document.querySelectorAll('.restart-button');
 rButtons.forEach(button => button.addEventListener('click', () => {
     initializeAudio();
@@ -13195,9 +13268,24 @@ settingsLinks.forEach(link => {
         const screenToHideId = link.dataset.screenToHide;
         document.getElementById(screenToHideId).style.display = 'none';
         startScreen.style.display = 'flex';
+        updateMenuBGM();
     });
 });
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+let hasInitializedMenuAudio = false;
+const tryInitMenuAudio = () => {
+    if (hasInitializedMenuAudio) return;
+    hasInitializedMenuAudio = true;
+    initializeAudio();
+    updateMenuBGM();
+    document.removeEventListener('pointerdown', tryInitMenuAudio);
+    document.removeEventListener('touchstart', tryInitMenuAudio);
+    document.removeEventListener('keydown', tryInitMenuAudio);
+};
+const SETTINGS_VERSION = 3;
+document.addEventListener('pointerdown', tryInitMenuAudio, { passive: true });
+document.addEventListener('touchstart', tryInitMenuAudio, { passive: true });
+document.addEventListener('keydown', tryInitMenuAudio);
 
 // --- Button Settings Logic ---
 const buttonSettingsScreen = document.getElementById('button-settings-screen');
@@ -13211,12 +13299,331 @@ openButtonSettingsBtn.addEventListener('click', () => {
     startScreenElement.style.display = 'none';
     buttonSettingsScreen.style.display = 'block';
     feedbackDiv.style.display = 'none'; // Hide feedback on open
+    updateMenuBGM();
 });
 
 backToSettingsBtn.addEventListener('click', () => {
     buttonSettingsScreen.style.display = 'none';
     startScreenElement.style.display = 'block';
+    updateMenuBGM();
 });
+
+// --- BGM Settings Logic ---
+const bgmSettingsScreen = document.getElementById('bgm-settings-screen');
+const bgmSettingsBackBtn = document.getElementById('bgm-settings-back-btn');
+const bgmReloadBtn = document.getElementById('bgm-reload-btn');
+const bgmVolumeSlider = document.getElementById('bgm-volume');
+const bgmVolumeValue = document.getElementById('bgm-volume-value');
+const bgmModeOrder = document.getElementById('bgm-mode-order');
+const bgmModeRandom = document.getElementById('bgm-mode-random');
+const bgmTrackList = document.getElementById('bgm-track-list');
+const bgmPreviewAudio = new Audio();
+bgmPreviewAudio.preload = 'none';
+let currentBgmPreviewRow = null;
+bgmPreviewAudio.addEventListener('ended', () => {
+    if (currentBgmPreviewRow) {
+        currentBgmPreviewRow.style.backgroundColor = '';
+        currentBgmPreviewRow.style.borderRadius = '';
+        currentBgmPreviewRow = null;
+    }
+    updateMenuBGM();
+});
+
+function stopBgmPreview() {
+    if (!bgmPreviewAudio) return;
+    bgmPreviewAudio.pause();
+    bgmPreviewAudio.currentTime = 0;
+    if (currentBgmPreviewRow) {
+        currentBgmPreviewRow.style.backgroundColor = '';
+        currentBgmPreviewRow.style.borderRadius = '';
+        currentBgmPreviewRow = null;
+    }
+    updateMenuBGM();
+}
+
+function normalizeBgmTrackPath(path) {
+    if (!path) return null;
+    let clean = String(path).replace(/\\/g, '/');
+    clean = clean.split('?')[0].split('#')[0].replace(/^\.\//, '');
+    if (/^https?:\/\//i.test(clean)) {
+        try {
+            const url = new URL(clean, window.location.href);
+            clean = url.pathname;
+        } catch {
+            return null;
+        }
+    }
+    if (clean.startsWith('/')) clean = clean.slice(1);
+    if (!clean.toLowerCase().endsWith('.mp3')) return null;
+    if (!clean.toLowerCase().startsWith('bgm/')) {
+        clean = `bgm/${clean}`;
+    }
+    return clean;
+}
+
+async function fetchBgmTrackList() {
+    const jsonCandidates = ['bgm/tracklist.json', 'bgm/manifest.json', 'bgm/tracks.json'];
+    for (const url of jsonCandidates) {
+        try {
+            const resp = await fetch(`${url}?t=${Date.now()}`, { cache: 'no-store' });
+            if (!resp.ok) continue;
+            const data = await resp.json();
+            const rawTracks = Array.isArray(data) ? data : (Array.isArray(data.tracks) ? data.tracks : []);
+            if (rawTracks.length > 0) {
+                const normalized = rawTracks
+                    .map(normalizeBgmTrackPath)
+                    .filter(Boolean);
+                if (normalized.length > 0) return normalized;
+            }
+        } catch {
+            // ignore
+        }
+    }
+    try {
+        const host = window.location.hostname;
+        if (host && host.endsWith('github.io')) {
+            const owner = host.split('.')[0];
+            const pathParts = window.location.pathname.split('/').filter(Boolean);
+            const repo = pathParts.length > 0 ? pathParts[0] : `${owner}.github.io`;
+            const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/bgm`;
+            const resp = await fetch(`${apiUrl}?t=${Date.now()}`, { cache: 'no-store' });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (Array.isArray(data)) {
+                    const fromApi = data
+                        .filter(item => item && item.type === 'file' && typeof item.name === 'string' && item.name.toLowerCase().endsWith('.mp3'))
+                        .map(item => `bgm/${item.name}`);
+                    if (fromApi.length > 0) return fromApi;
+                }
+            }
+            const branchCandidates = ['gh-pages', 'main', 'master'];
+            for (const branch of branchCandidates) {
+                const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/bgm/tracklist.json`;
+                try {
+                    const rawResp = await fetch(`${rawUrl}?t=${Date.now()}`, { cache: 'no-store' });
+                    if (!rawResp.ok) continue;
+                    const data = await rawResp.json();
+                    const rawTracks = Array.isArray(data) ? data : (Array.isArray(data.tracks) ? data.tracks : []);
+                    if (rawTracks.length > 0) {
+                        const normalized = rawTracks
+                            .map(normalizeBgmTrackPath)
+                            .filter(Boolean);
+                        if (normalized.length > 0) return normalized;
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+        }
+    } catch {
+        // ignore
+    }
+    try {
+        const resp = await fetch(`bgm/?t=${Date.now()}`, { cache: 'no-store' });
+        if (!resp.ok) return [];
+        const html = await resp.text();
+        const matches = [];
+        const regex = /href=["']([^"']+\.mp3[^"']*)["']/gi;
+        let match;
+        while ((match = regex.exec(html)) !== null) {
+            matches.push(match[1]);
+        }
+        const normalized = matches
+            .map(normalizeBgmTrackPath)
+            .filter(Boolean);
+        return normalized;
+    } catch {
+        return [];
+    }
+}
+
+function applyBgmTrackList(newTracks) {
+    if (!Array.isArray(newTracks) || newTracks.length === 0) return false;
+    const unique = [];
+    const seen = new Set();
+    for (const track of newTracks) {
+        if (!seen.has(track)) {
+            seen.add(track);
+            unique.push(track);
+        }
+    }
+    unique.sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
+    const prevTrackSet = new Set(BGM_TRACKS);
+    const prevEnabledSet = new Set(gameSettings.bgmEnabledTracks || []);
+    const nextEnabled = [];
+    for (const track of unique) {
+        if (prevEnabledSet.size === 0) {
+            continue;
+        }
+        if (prevEnabledSet.has(track)) {
+            nextEnabled.push(track);
+            continue;
+        }
+        if (!prevTrackSet.has(track)) {
+            nextEnabled.push(track);
+        }
+    }
+    BGM_TRACKS = unique;
+    gameSettings.bgmEnabledTracks = nextEnabled;
+    bgmOrderIndex = 0;
+    if (currentBgmTrack && !seen.has(currentBgmTrack)) {
+        currentBgmTrack = null;
+    }
+    saveSettings();
+    refreshBgmSettingsUI();
+    updateMenuBGM();
+    return true;
+}
+
+async function reloadBgmTracks() {
+    const tracks = await fetchBgmTrackList();
+    if (tracks.length > 0) {
+        applyBgmTrackList(tracks);
+    } else {
+        refreshBgmSettingsUI();
+    }
+}
+
+function refreshBgmSettingsUI() {
+    if (bgmVolumeSlider) {
+        const volume = normalizeBgmVolume(gameSettings.bgmVolume);
+        bgmVolumeSlider.value = Math.round(volume * 100);
+        if (bgmVolumeValue) bgmVolumeValue.textContent = `${Math.round(volume * 100)}%`;
+    }
+    if (bgmModeOrder && bgmModeRandom) {
+        bgmModeOrder.checked = gameSettings.bgmMode !== 'random';
+        bgmModeRandom.checked = gameSettings.bgmMode === 'random';
+    }
+    if (bgmTrackList) {
+        bgmTrackList.innerHTML = '';
+        const enabled = new Set(getEnabledBgmTracks());
+        BGM_TRACKS.forEach(track => {
+            const label = document.createElement('label');
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '8px';
+            label.style.justifyContent = 'space-between';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = enabled.has(track);
+            checkbox.addEventListener('change', () => {
+                const current = new Set(gameSettings.bgmEnabledTracks || []);
+                if (checkbox.checked) {
+                    current.add(track);
+                } else {
+                    current.delete(track);
+                }
+                gameSettings.bgmEnabledTracks = BGM_TRACKS.filter(track => current.has(track));
+                bgmOrderIndex = 0;
+                saveSettings();
+                updateMenuBGM();
+            });
+            const nameSpan = document.createElement('span');
+            const parts = track.split('/');
+            nameSpan.textContent = parts[parts.length - 1];
+            const leftWrap = document.createElement('div');
+            leftWrap.style.display = 'flex';
+            leftWrap.style.alignItems = 'center';
+            leftWrap.style.gap = '8px';
+            leftWrap.appendChild(checkbox);
+            leftWrap.appendChild(nameSpan);
+            const rightWrap = document.createElement('div');
+            rightWrap.style.display = 'flex';
+            rightWrap.style.alignItems = 'center';
+            rightWrap.style.gap = '6px';
+            const playBtn = document.createElement('button');
+            playBtn.textContent = 'Play';
+            playBtn.style.padding = '4px 10px';
+            playBtn.style.fontSize = '0.9em';
+            playBtn.style.backgroundColor = '#2f6fed';
+            playBtn.style.color = 'white';
+            playBtn.style.border = 'none';
+            playBtn.style.borderRadius = '4px';
+            playBtn.style.cursor = 'pointer';
+            playBtn.addEventListener('click', () => {
+                if (bgmPreviewAudio) {
+                    bgmPreviewAudio.pause();
+                    bgmPreviewAudio.currentTime = 0;
+                    bgmPreviewAudio.src = track;
+                    bgmPreviewAudio.load();
+                    bgmPreviewAudio.muted = false;
+                    bgmPreviewAudio.volume = normalizeBgmVolume(gameSettings.bgmVolume);
+                    stopMenuBGM(false);
+                    if (currentBgmPreviewRow && currentBgmPreviewRow !== label) {
+                        currentBgmPreviewRow.style.backgroundColor = '';
+                        currentBgmPreviewRow.style.borderRadius = '';
+                    }
+                    currentBgmPreviewRow = label;
+                    label.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
+                    label.style.borderRadius = '6px';
+                    bgmPreviewAudio.play().catch(err => {
+                        console.warn('BGM preview play failed:', err);
+                    });
+                }
+            });
+            const stopBtn = document.createElement('button');
+            stopBtn.textContent = 'Stop';
+            stopBtn.style.padding = '4px 10px';
+            stopBtn.style.fontSize = '0.9em';
+            stopBtn.style.backgroundColor = '#555';
+            stopBtn.style.color = 'white';
+            stopBtn.style.border = 'none';
+            stopBtn.style.borderRadius = '4px';
+            stopBtn.style.cursor = 'pointer';
+            stopBtn.addEventListener('click', () => {
+                stopBgmPreview();
+            });
+            rightWrap.appendChild(playBtn);
+            rightWrap.appendChild(stopBtn);
+            label.appendChild(leftWrap);
+            label.appendChild(rightWrap);
+            bgmTrackList.appendChild(label);
+        });
+    }
+}
+
+if (bgmSettingsBackBtn) {
+    bgmSettingsBackBtn.addEventListener('click', () => {
+        stopBgmPreview();
+        if (bgmSettingsScreen) bgmSettingsScreen.style.display = 'none';
+        startScreenElement.style.display = 'flex';
+        updateMenuBGM();
+    });
+}
+
+if (bgmReloadBtn) {
+    bgmReloadBtn.addEventListener('click', () => {
+        reloadBgmTracks();
+    });
+}
+
+if (bgmVolumeSlider) {
+    bgmVolumeSlider.addEventListener('input', () => {
+        const volume = normalizeBgmVolume(Number(bgmVolumeSlider.value) / 100);
+        gameSettings.bgmVolume = volume;
+        if (bgmVolumeValue) bgmVolumeValue.textContent = `${Math.round(volume * 100)}%`;
+        applyBgmVolume();
+        saveSettings();
+    });
+}
+
+if (bgmModeOrder) {
+    bgmModeOrder.addEventListener('change', () => {
+        if (bgmModeOrder.checked) {
+            gameSettings.bgmMode = 'order';
+            saveSettings();
+        }
+    });
+}
+
+if (bgmModeRandom) {
+    bgmModeRandom.addEventListener('change', () => {
+        if (bgmModeRandom.checked) {
+            gameSettings.bgmMode = 'random';
+            saveSettings();
+        }
+    });
+}
 
 saveButtonPositionsBtn.addEventListener('click', () => {
     const previewFireButton = document.getElementById('preview-fire-button');
@@ -13226,16 +13633,27 @@ saveButtonPositionsBtn.addEventListener('click', () => {
     const previewFollowButton = document.getElementById('preview-follow-button'); // 追加
 
     // Convert pixel values to percentage for responsiveness
-    const fireRight = (parseInt(previewFireButton.style.right, 10) / window.innerWidth) * 100 + '%';
-    const fireBottom = (parseInt(previewFireButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
-    const crouchRight = (parseInt(previewCrouchButton.style.right, 10) / window.innerWidth) * 100 + '%';
-    const crouchBottom = (parseInt(previewCrouchButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
-    const zoomRight = (parseInt(previewZoomButton.style.right, 10) / window.innerWidth) * 100 + '%';
-    const zoomBottom = (parseInt(previewZoomButton.style.bottom, 10) / window.innerHeight) * 100 + '%';
-    const joystickLeft = (parseInt(previewJoystickZone.style.left, 10) / window.innerWidth) * 100 + '%';
-    const joystickBottom = (parseInt(previewJoystickZone.style.bottom, 10) / window.innerHeight) * 100 + '%';
-    const followRight = (parseInt(previewFollowButton.style.right, 10) / window.innerWidth) * 100 + '%'; // 追加
-    const followBottom = (parseInt(previewFollowButton.style.bottom, 10) / window.innerHeight) * 100 + '%'; // 追加
+    const w = Math.max(1, window.innerWidth);
+    const h = Math.max(1, window.innerHeight);
+    const toPercent = (value, denom) => `${Math.min(100, Math.max(0, (value / denom) * 100))}%`;
+    const getRect = (el) => (el ? el.getBoundingClientRect() : { left: 0, right: 0, bottom: 0 });
+
+    const fireRect = getRect(previewFireButton);
+    const crouchRect = getRect(previewCrouchButton);
+    const zoomRect = getRect(previewZoomButton);
+    const joystickRect = getRect(previewJoystickZone);
+    const followRect = getRect(previewFollowButton);
+
+    const fireRight = toPercent(w - fireRect.right, w);
+    const fireBottom = toPercent(h - fireRect.bottom, h);
+    const crouchRight = toPercent(w - crouchRect.right, w);
+    const crouchBottom = toPercent(h - crouchRect.bottom, h);
+    const zoomRight = toPercent(w - zoomRect.right, w);
+    const zoomBottom = toPercent(h - zoomRect.bottom, h);
+    const joystickLeft = toPercent(joystickRect.left, w);
+    const joystickBottom = toPercent(h - joystickRect.bottom, h);
+    const followRight = toPercent(w - followRect.right, w); // 追加
+    const followBottom = toPercent(h - followRect.bottom, h); // 追加
 
     gameSettings.buttonPositions.fire = { right: fireRight, bottom: fireBottom };
     gameSettings.buttonPositions.crouch = { right: crouchRight, bottom: crouchBottom };
@@ -13319,6 +13737,10 @@ function makeDraggable(element, isJoystick = false) {
 
         let newX = event.clientX - offsetX;
         let newY = event.clientY - offsetY;
+        const maxX = Math.max(0, window.innerWidth - element.offsetWidth);
+        const maxY = Math.max(0, window.innerHeight - element.offsetHeight);
+        newX = Math.min(maxX, Math.max(0, newX));
+        newY = Math.min(maxY, Math.max(0, newY));
 
         if (isJoystick) {
             const newLeft = newX;
