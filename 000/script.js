@@ -17,6 +17,9 @@
       defaultWeapon: 'machinegun',
       defaultWeaponPlayer: 'machinegun',
       defaultWeaponAI: 'machinegun',
+      defaultWeaponAI1: 'machinegun',
+      defaultWeaponAI2: 'machinegun',
+      defaultWeaponAI3: 'machinegun',
         medikitCount: 5,
       settingsVersion: 3,
       mapType: 'default',
@@ -423,6 +426,24 @@ let characterEditorAnimationId = null;
         if (mrCountSelect) mrCountSelect.addEventListener('change', () => { gameSettings.mrCount = parseInt(mrCountSelect.value, 10); saveSettings(); });
         if (billBattleSizeSelect) billBattleSizeSelect.addEventListener('change', () => { gameSettings.billBattleSize = billBattleSizeSelect.value; saveSettings(); });
         if (billBattleLightingSelect) billBattleLightingSelect.addEventListener('change', () => { gameSettings.billBattleLighting = billBattleLightingSelect.value; saveSettings(); });
+
+        const defaultWeaponPlayerSelect = document.getElementById('default-weapon-player');
+        const defaultWeaponAI1Select = document.getElementById('default-weapon-ai1');
+        const defaultWeaponAI2Select = document.getElementById('default-weapon-ai2');
+        const defaultWeaponAI3Select = document.getElementById('default-weapon-ai3');
+        const bindDefaultWeaponSelect = (el, key) => {
+            if (!el) return;
+            el.value = gameSettings[key] || WEAPON_MG;
+            el.addEventListener('change', () => {
+                gameSettings[key] = el.value || WEAPON_MG;
+                saveSettings();
+            });
+        };
+        bindDefaultWeaponSelect(defaultWeaponPlayerSelect, 'defaultWeaponPlayer');
+        bindDefaultWeaponSelect(defaultWeaponAI1Select, 'defaultWeaponAI1');
+        bindDefaultWeaponSelect(defaultWeaponAI2Select, 'defaultWeaponAI2');
+        bindDefaultWeaponSelect(defaultWeaponAI3Select, 'defaultWeaponAI3');
+
         const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
         const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
         const syncDefaultWeaponChecks = () => {
@@ -443,6 +464,9 @@ let characterEditorAnimationId = null;
                         });
                         if (defaultWeaponTargetSelect && defaultWeaponTargetSelect.value === 'ai') {
                             gameSettings.defaultWeaponAI = check.value;
+                            gameSettings.defaultWeaponAI1 = check.value;
+                            gameSettings.defaultWeaponAI2 = check.value;
+                            gameSettings.defaultWeaponAI3 = check.value;
                         } else {
                             gameSettings.defaultWeaponPlayer = check.value;
                         }
@@ -453,6 +477,9 @@ let characterEditorAnimationId = null;
                             : WEAPON_MG;
                         if (defaultWeaponTargetSelect && defaultWeaponTargetSelect.value === 'ai') {
                             gameSettings.defaultWeaponAI = fallback;
+                            gameSettings.defaultWeaponAI1 = fallback;
+                            gameSettings.defaultWeaponAI2 = fallback;
+                            gameSettings.defaultWeaponAI3 = fallback;
                         } else {
                             gameSettings.defaultWeaponPlayer = fallback;
                         }
@@ -1235,7 +1262,12 @@ function isInfiniteDefaultWeaponActiveForAI(ai, weaponType) {
 }
 
 function applyAIDefaultWeaponLoadout(ai) {
-    const selected = gameSettings.defaultWeaponAI || WEAPON_MG;
+    const idx = ais.indexOf(ai);
+    let selected = WEAPON_MG;
+    if (idx === 0) selected = gameSettings.defaultWeaponAI1 || gameSettings.defaultWeaponAI || WEAPON_MG;
+    else if (idx === 1) selected = gameSettings.defaultWeaponAI2 || gameSettings.defaultWeaponAI || WEAPON_MG;
+    else if (idx === 2) selected = gameSettings.defaultWeaponAI3 || gameSettings.defaultWeaponAI || WEAPON_MG;
+    else selected = gameSettings.defaultWeaponAI || WEAPON_MG;
     if (!ai.userData) ai.userData = {};
     ai.currentWeapon = selected;
     ai.ammoMG = selected === WEAPON_MG ? MAX_AMMO_MG : 0;
@@ -1267,9 +1299,15 @@ function switchPlayerToFallbackWeapon() {
 
 function switchAIToFallbackWeapon(ai) {
     if (!ai) return;
-    const fallback = gameSettings.defaultWeaponAI && gameSettings.defaultWeaponAI !== WEAPON_PISTOL
-        ? gameSettings.defaultWeaponAI
-        : WEAPON_PISTOL;
+    const idx = ais.indexOf(ai);
+    const aiDefault = idx === 0
+        ? (gameSettings.defaultWeaponAI1 || gameSettings.defaultWeaponAI || WEAPON_MG)
+        : (idx === 1
+            ? (gameSettings.defaultWeaponAI2 || gameSettings.defaultWeaponAI || WEAPON_MG)
+            : (idx === 2
+                ? (gameSettings.defaultWeaponAI3 || gameSettings.defaultWeaponAI || WEAPON_MG)
+                : (gameSettings.defaultWeaponAI || WEAPON_MG)));
+    const fallback = aiDefault && aiDefault !== WEAPON_PISTOL ? aiDefault : WEAPON_PISTOL;
     ai.currentWeapon = fallback;
     if (fallback === WEAPON_MG && ai.ammoMG <= 0) ai.ammoMG = MAX_AMMO_MG;
     if (fallback === WEAPON_RR && ai.ammoRR <= 0) ai.ammoRR = MAX_AMMO_RR;
@@ -1913,6 +1951,15 @@ function loadSettings() {
         if (parsedSavedSettings.defaultWeaponAI === undefined) {
             parsedSavedSettings.defaultWeaponAI = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
+        if (parsedSavedSettings.defaultWeaponAI1 === undefined) {
+            parsedSavedSettings.defaultWeaponAI1 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
+        if (parsedSavedSettings.defaultWeaponAI2 === undefined) {
+            parsedSavedSettings.defaultWeaponAI2 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
+        if (parsedSavedSettings.defaultWeaponAI3 === undefined) {
+            parsedSavedSettings.defaultWeaponAI3 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
         if (parsedSavedSettings.mrCount === undefined) {
             parsedSavedSettings.mrCount = gameSettings.mrCount;
         }
@@ -1947,6 +1994,15 @@ function loadSettings() {
         document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
             radio.checked = (radio.value === String(gameSettings.barrelRespawn));
         });
+        const defaultWeaponPlayerSelect = document.getElementById('default-weapon-player');
+        const defaultWeaponAI1Select = document.getElementById('default-weapon-ai1');
+        const defaultWeaponAI2Select = document.getElementById('default-weapon-ai2');
+        const defaultWeaponAI3Select = document.getElementById('default-weapon-ai3');
+        if (defaultWeaponPlayerSelect) defaultWeaponPlayerSelect.value = gameSettings.defaultWeaponPlayer || WEAPON_MG;
+        if (defaultWeaponAI1Select) defaultWeaponAI1Select.value = gameSettings.defaultWeaponAI1 || gameSettings.defaultWeaponAI || WEAPON_MG;
+        if (defaultWeaponAI2Select) defaultWeaponAI2Select.value = gameSettings.defaultWeaponAI2 || gameSettings.defaultWeaponAI || WEAPON_MG;
+        if (defaultWeaponAI3Select) defaultWeaponAI3Select.value = gameSettings.defaultWeaponAI3 || gameSettings.defaultWeaponAI || WEAPON_MG;
+
         const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
         if (defaultWeaponTargetSelect) {
             defaultWeaponTargetSelect.value = 'player';
@@ -2137,6 +2193,15 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.defaultWeaponAI === undefined) {
             parsedSavedSettings.defaultWeaponAI = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
+        if (parsedSavedSettings.defaultWeaponAI1 === undefined) {
+            parsedSavedSettings.defaultWeaponAI1 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
+        if (parsedSavedSettings.defaultWeaponAI2 === undefined) {
+            parsedSavedSettings.defaultWeaponAI2 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
+        if (parsedSavedSettings.defaultWeaponAI3 === undefined) {
+            parsedSavedSettings.defaultWeaponAI3 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
+        }
                 if (parsedSavedSettings.buttonPositions === undefined) {
                     parsedSavedSettings.buttonPositions = {
                         fire: { right: '20px', bottom: '120px' },
@@ -2172,6 +2237,16 @@ function loadMapSettings(mapName) {
                 document.getElementById('sr-count').value = gameSettings.srCount;
                 if (document.getElementById('sg-count')) document.getElementById('sg-count').value = gameSettings.sgCount;
                 if (document.getElementById('mr-count')) document.getElementById('mr-count').value = gameSettings.mrCount;
+
+                const defaultWeaponPlayerSelect = document.getElementById('default-weapon-player');
+                const defaultWeaponAI1Select = document.getElementById('default-weapon-ai1');
+                const defaultWeaponAI2Select = document.getElementById('default-weapon-ai2');
+                const defaultWeaponAI3Select = document.getElementById('default-weapon-ai3');
+                if (defaultWeaponPlayerSelect) defaultWeaponPlayerSelect.value = gameSettings.defaultWeaponPlayer || WEAPON_MG;
+                if (defaultWeaponAI1Select) defaultWeaponAI1Select.value = gameSettings.defaultWeaponAI1 || gameSettings.defaultWeaponAI || WEAPON_MG;
+                if (defaultWeaponAI2Select) defaultWeaponAI2Select.value = gameSettings.defaultWeaponAI2 || gameSettings.defaultWeaponAI || WEAPON_MG;
+                if (defaultWeaponAI3Select) defaultWeaponAI3Select.value = gameSettings.defaultWeaponAI3 || gameSettings.defaultWeaponAI || WEAPON_MG;
+
                 const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
                 if (defaultWeaponTargetSelect) {
                     defaultWeaponTargetSelect.value = 'player';
