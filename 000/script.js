@@ -8806,6 +8806,9 @@ function updateMenuBGM() {
         return;
     }
     if (isSettingsScreenVisible()) {
+        if (gameSettings.bgmPlayMode === 'continuous' && currentBgmTrack) {
+            return;
+        }
         stopGameBGM(false);
         playMenuBGM();
         return;
