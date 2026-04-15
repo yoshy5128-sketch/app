@@ -925,6 +925,12 @@ let playerTargetHeight = 2.0;
 let isCrouchingToggle = false;
 const GRAVITY = 9.8;
 let playerHP = 3;
+let playerSpawnProtectionUntil = 0;
+const PLAYER_SPAWN_PROTECTION_SECONDS = 2.0;
+
+function isPlayerSpawnProtected(timeElapsed) {
+    return playerHP > 0 && Number.isFinite(timeElapsed) && timeElapsed < playerSpawnProtectionUntil;
+}
 let lastPlayerDeathPos = null;
 let screenShakeDuration = 0;
 const SHAKE_DURATION_MAX = 0.4;
@@ -7938,7 +7944,7 @@ function aiShoot(ai, timeElapsed) {
         const playerHeadPos = getPlayerHeadPos();
         const playerUpperPos = getPlayerUpperTorsoPos();
         const playerBodyPos = getPlayerBodyPos();
-        if (playerHP > 0) {
+        if (playerHP > 0 && !isPlayerSpawnProtected(timeElapsed)) {
             if (canSeeFrom(aimOrigin, playerHeadPos)) {
                 targets.push({ position: playerHeadPos, distance: ai.position.distanceTo(player.position), type: 'player' });
             } else if (canSeeFrom(aimOrigin, playerUpperPos)) {
@@ -7978,7 +7984,7 @@ function aiShoot(ai, timeElapsed) {
     } else if (gameSettings.gameMode === 'ffa') {
         const potentialTargets = [];
         // プレイヤーをターゲット候補に追加
-        if (playerHP > 0) {
+        if (playerHP > 0 && !isPlayerSpawnProtected(timeElapsed)) {
             const playerHeadPos = getPlayerHeadPos();
             const playerUpperPos = getPlayerUpperTorsoPos();
             const playerBodyPos = getPlayerBodyPos();
@@ -8012,6 +8018,7 @@ function aiShoot(ai, timeElapsed) {
         }
     } else {
         // 通常モードまたは敵AIはプレイヤーを狙う
+        if (playerHP <= 0 || isPlayerSpawnProtected(timeElapsed)) return;
         const playerHeadPos = getPlayerHeadPos();
         const playerUpperPos = getPlayerUpperTorsoPos();
         const playerBodyPos = getPlayerBodyPos();
@@ -9329,6 +9336,8 @@ function restartGame() {
             ai.aggression = Math.max(0.3, ai.aggression || Math.random());
         }
         applyAIDefaultWeaponLoadout(ai);
+        // Ensure the visible gun matches the selected weapon on initial spawn.
+        resetCharacterVisualPose(ai, ai.currentWeapon);
         ai.targetWeaponPickup = null;
         ai.lastHiddenTime = 0; ai.lastAttackTime = -999; ai.currentAttackTime = 0; ai.avoiding = false;
         if (isTeamMode) {
@@ -9425,6 +9434,7 @@ function restartGame() {
         }
     }
     clock.start();
+    playerSpawnProtectionUntil = clock.getElapsedTime() + PLAYER_SPAWN_PROTECTION_SECONDS;
     lastFireTime = -1;
     playerMGReloadUntil = 0;
     playerMRReloadUntil = 0;
@@ -9639,6 +9649,7 @@ function respawnPlayer() {
     if (playerHPDisplay) { // nullチェックを追加
         playerHPDisplay.textContent = `HP: ${playerHP === Infinity ? '∞' : playerHP}`;
     }
+    playerSpawnProtectionUntil = clock.getElapsedTime() + PLAYER_SPAWN_PROTECTION_SECONDS;
 
     const isBillBattle = isBillBattleMode();
 
@@ -10056,10 +10067,9 @@ function showEnemyKilledMessage() {
     if (!el) {
         el = document.createElement('div');
         el.id = 'enemy-killed-message';
-        el.textContent = 'enemy killed';
         el.style.position = 'fixed';
         el.style.left = '50%';
-        el.style.top = '44%';
+        el.style.top = '40%';
         el.style.transform = 'translate(-50%, -50%)';
         el.style.color = 'red';
         el.style.fontSize = '24px';
@@ -10069,6 +10079,8 @@ function showEnemyKilledMessage() {
         el.style.display = 'none';
         document.body.appendChild(el);
     }
+    el.textContent = 'Enemy Kill';
+    el.style.top = '40%';
     el.style.display = 'block';
     if (enemyKilledMessageTimer) {
         clearTimeout(enemyKilledMessageTimer);
@@ -12966,6 +12978,7 @@ function animate() {
                     if (p.weaponType === WEAPON_SG) damageAmount = SHOTGUN_PELLET_DAMAGE;
                     else if (p.weaponType === WEAPON_MR) damageAmount = 9;
                     else if (p.isSniper || p.isRocket) damageAmount = playerHP;
+                    if (!isPlayerSpawnProtected(timeElapsed) || p.source !== 'ai') {
                     if (playerHP !== Infinity) {
                         playerHP -= damageAmount;
                         if (playerHP <= 0 && isScoping) {
@@ -13065,12 +13078,15 @@ function animate() {
                                     screenShakeDuration = SHAKE_DURATION_MAX;
                                     redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
                                     setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
-                                }
-                                if (playerHP <= 0 && !isPlayerDeathPlaying) {
-                                    startPlayerDeathSequence(p);
-                                }
-                            }
                         }
+                        if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                            startPlayerDeathSequence(p);
+                        }
+                    }
+                    } else {
+                        // Spawn protection: ignore AI bullet hits right after respawn.
+                    }
+                }
                     }
                 }
                 if (allowActorDamage && p.source === 'ai' && playerHP > 0) {
@@ -13078,17 +13094,19 @@ function animate() {
                     if (distanceToPlayer < EXPLOSION_RADIUS_ACTUAL) {
                         const playerCenter = player.position.clone().add(new THREE.Vector3(0, 1, 0));
                         if (checkLineOfSight(explosionPos, playerCenter, obstacles)) {
-                            if (playerHP !== Infinity) {
-                                playerHP = 0;
-                                screenShakeDuration = SHAKE_DURATION_MAX;
-                                redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
-                                setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
-                            }
-                            if (playerHP <= 0 && !isPlayerDeathPlaying) {
-                                if (p.shooter && p.shooter.kills !== undefined) {
-                                    p.shooter.kills++;
+                            if (!isPlayerSpawnProtected(timeElapsed)) {
+                                if (playerHP !== Infinity) {
+                                    playerHP = 0;
+                                    screenShakeDuration = SHAKE_DURATION_MAX;
+                                    redFlashOverlay.style.backgroundColor = 'rgba(255, 0, 0, 0.5)';
+                                    setTimeout(() => { redFlashOverlay.style.backgroundColor = 'transparent'; }, 100);
                                 }
-                                startPlayerDeathSequence(p);
+                                if (playerHP <= 0 && !isPlayerDeathPlaying) {
+                                    if (p.shooter && p.shooter.kills !== undefined) {
+                                        p.shooter.kills++;
+                                    }
+                                    startPlayerDeathSequence(p);
+                                }
                             }
                         }
                     }
