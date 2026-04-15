@@ -10046,10 +10046,10 @@ function showEnemyKilledMessage() {
     if (!el) {
         el = document.createElement('div');
         el.id = 'enemy-killed-message';
-        el.textContent = 'enemy killed';
+        el.textContent = 'Enemy Kill';
         el.style.position = 'fixed';
         el.style.left = '50%';
-        el.style.top = '44%';
+        el.style.top = '30%';
         el.style.transform = 'translate(-50%, -50%)';
         el.style.color = 'red';
         el.style.fontSize = '24px';
