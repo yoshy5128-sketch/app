@@ -1988,9 +1988,16 @@ function loadSettings() {
         if (defaultWeaponTargetSelect) {
             defaultWeaponTargetSelect.value = 'player';
         }
-        document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
-            check.checked = (gameSettings.defaultWeaponPlayer === check.value);
-        });
+        const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
+        const syncWeaponUI = () => {
+            const target = defaultWeaponTargetSelect ? defaultWeaponTargetSelect.value : 'player';
+            const selected = getDefaultWeaponForTarget(target);
+            defaultWeaponChecks.forEach(check => {
+                check.checked = (selected === check.value);
+            });
+        };
+        syncWeaponUI();
+        defaultWeaponTargetSelect.addEventListener('change', syncWeaponUI);
         const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
         const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
         if (nightModeIntensitySlider) {
@@ -2222,9 +2229,16 @@ function loadMapSettings(mapName) {
                 if (defaultWeaponTargetSelect) {
                     defaultWeaponTargetSelect.value = 'player';
                 }
-                document.querySelectorAll('input[name="default-weapon"]').forEach(check => {
-                    check.checked = (gameSettings.defaultWeaponPlayer === check.value);
-                });
+                const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
+                const syncWeaponUI = () => {
+                    const target = defaultWeaponTargetSelect ? defaultWeaponTargetSelect.value : 'player';
+                    const selected = getDefaultWeaponForTarget(target);
+                    defaultWeaponChecks.forEach(check => {
+                        check.checked = (selected === check.value);
+                    });
+                };
+                syncWeaponUI();
+                defaultWeaponTargetSelect.addEventListener('change', syncWeaponUI);
                 if (document.getElementById('medikit-count')) document.getElementById('medikit-count').value = gameSettings.medikitCount;
                 document.querySelectorAll('input[name="ai-count"]').forEach(radio => {
                     radio.checked = (radio.value === String(gameSettings.aiCount));
