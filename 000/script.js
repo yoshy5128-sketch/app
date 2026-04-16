@@ -8755,7 +8755,24 @@ function playGameBGM(forceNewTrack = false) {
         }
         bgmAudio.currentTime = 0;
     }
-    bgmAudio.loop = true;
+    if (gameSettings.bgmPlayMode === 'continuous') {
+        bgmAudio.loop = false;
+        if (!bgmAudio._hasContinuousEndedListener) {
+            bgmAudio._hasContinuousEndedListener = true;
+            bgmAudio.addEventListener('ended', function onBgmEnded() {
+                if (gameSettings.bgmPlayMode === 'continuous' && isGameRunning && !isSettingsScreenVisible()) {
+                    currentBgmTrack = pickNextBgmTrack();
+                    if (currentBgmTrack) {
+                        bgmAudio.src = currentBgmTrack;
+                        bgmAudio.load();
+                        bgmAudio.play().catch(() => {});
+                    }
+                }
+            });
+        }
+    } else {
+        bgmAudio.loop = true;
+    }
     applyBgmVolume();
     bgmAudio.play().catch(() => {});
 }
@@ -8763,6 +8780,7 @@ function playGameBGM(forceNewTrack = false) {
 function stopGameBGM(resetTime = false) {
     if (!bgmAudio) return;
     bgmAudio.pause();
+    bgmAudio._hasContinuousEndedListener = false;
     if (resetTime) {
         bgmAudio.currentTime = 0;
     }
@@ -10088,6 +10106,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
     if (!ai) return;
     if (!ai.userData) ai.userData = {};
     syncKillCamLighting();
+    console.log('finalizeAIDeathWithoutKillCam called, killCamMode:', gameSettings.killCamMode, 'gameMode:', gameSettings.gameMode, 'isBillBattle:', isBillBattleMode(), 'killerSource:', killerSource);
     if (isBillBattleMode() && killerSource !== 'player') {
         const reviveHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
         ai.hp = reviveHP;
@@ -10097,12 +10116,107 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         return;
     }
     ai.targetWeaponPickup = null;
-    if (isBillBattleMode()) {
+    if (isBillBattleMode() && killerSource !== 'player') {
         ai.visible = false;
         ai.userData.isDying = false;
         billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
         updateBillBattleKillDisplay();
         restoreRightButtonsDefault();
+        return;
+    }
+    if (isBillBattleMode() && killerSource === 'player' && gameSettings.killCamMode === 'off') {
+        console.log('Executing death animation in BillBattle mode for player kill');
+        if (killerSource === 'player') {
+            showEnemyKilledMessage();
+        }
+        createRedSmokeEffect(ai.position.clone());
+        removeAIProjectiles(ai, true);
+        if (ai.userData && ai.userData.parts) {
+            const parts = ai.userData.parts;
+            if (parts.gun) {
+                applyGunStyle(parts.gun, ai.currentWeapon);
+            }
+            applyRagdollPose(parts);
+            alignGunGripToRightHand(parts);
+        }
+        const fallRotationAxisAngle = Math.PI / 2;
+        const finalAIRotation = ai.rotation.clone();
+        finalAIRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
+        new TWEEN.Tween(ai.rotation).to({ x: finalAIRotation.x }, 1200).easing(TWEEN.Easing.Quadratic.Out).start();
+        const aiKick = new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
+        aiKick.normalize().multiplyScalar(3.0);
+        aiKick.y += 1.5;
+        const startPos = ai.position.clone();
+        const endPos = new THREE.Vector3(
+            startPos.x + aiKick.x * 0.4,
+            Math.max(startPos.y - FLOOR_HEIGHT, startPos.y + aiKick.y * 0.4),
+            startPos.z + aiKick.z * 0.4
+        );
+        if (isBillBattleMode()) {
+            endPos.x = Math.max(-BILL_BATTLE_HALF + 2, Math.min(BILL_BATTLE_HALF - 2, endPos.x));
+            endPos.z = Math.max(-BILL_BATTLE_HALF + 2, Math.min(BILL_BATTLE_HALF - 2, endPos.z));
+        } else {
+            const dist = Math.sqrt(endPos.x * endPos.x + endPos.z * endPos.z);
+            if (dist > ARENA_PLAY_AREA_RADIUS - 2) {
+                const ratio = (ARENA_PLAY_AREA_RADIUS - 2) / dist;
+                endPos.x *= ratio;
+                endPos.z *= ratio;
+            }
+        }
+        new TWEEN.Tween(ai.position).to({ x: endPos.x, y: endPos.y, z: endPos.z }, 1500).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
+            setTimeout(() => {
+                ai.visible = false;
+                ai.userData.isDying = false;
+                billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
+                updateBillBattleKillDisplay();
+                restoreRightButtonsDefault();
+            }, 1200);
+        }).start();
+        return;
+    }
+    if (gameSettings.killCamMode === 'off') {
+        console.log('Executing killcam OFF death sequence for AI, gameMode:', gameSettings.gameMode);
+        if (killerSource === 'player') {
+            showEnemyKilledMessage();
+        }
+        createRedSmokeEffect(ai.position.clone());
+        removeAIProjectiles(ai, true);
+        const parts = ai.userData ? ai.userData.parts : null;
+        if (parts) {
+            if (parts.gun) {
+                applyGunStyle(parts.gun, ai.currentWeapon);
+            }
+            applyRagdollPose(parts);
+            alignGunGripToRightHand(parts);
+        }
+        const fallRotationAxisAngle = Math.PI / 2;
+        const finalAIRotation = ai.rotation.clone();
+        finalAIRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
+        new TWEEN.Tween(ai.rotation).to({ x: finalAIRotation.x }, 1200).easing(TWEEN.Easing.Quadratic.Out).start();
+        const aiKick = new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
+        aiKick.normalize().multiplyScalar(3.0);
+        aiKick.y += 1.5;
+        const startPos = ai.position.clone();
+        const endPos = new THREE.Vector3(
+            startPos.x + aiKick.x * 0.4,
+            Math.max(startPos.y - FLOOR_HEIGHT, startPos.y + aiKick.y * 0.4),
+            startPos.z + aiKick.z * 0.4
+        );
+        const dist = Math.sqrt(endPos.x * endPos.x + endPos.z * endPos.z);
+        if (dist > ARENA_PLAY_AREA_RADIUS - 2) {
+            const ratio = (ARENA_PLAY_AREA_RADIUS - 2) / dist;
+            endPos.x *= ratio;
+            endPos.z *= ratio;
+        }
+        new TWEEN.Tween(ai.position).to({ x: endPos.x, y: endPos.y, z: endPos.z }, 1500).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
+            setTimeout(() => {
+                if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+                    respawnAI(ai);
+                } else {
+                    ai.visible = false;
+                }
+            }, 1200);
+        }).start();
         return;
     }
     if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
@@ -10123,10 +10237,9 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
         finalizeAIDeathWithoutKillCam(ai, killerSource);
         return;
     }
+    console.log('aiFallDownCinematicSequence called, killCamMode:', gameSettings.killCamMode, 'shouldPlayKillCam:', shouldPlayAIDeathKillCam(ai, killerSource));
     if (!shouldPlayAIDeathKillCam(ai, killerSource)) {
-        if (gameSettings.killCamMode === 'off' && killerSource === 'player' && ai) {
-            showEnemyKilledMessage();
-        }
+        console.log('Calling finalizeAIDeathWithoutKillCam because killcam is OFF');
         finalizeAIDeathWithoutKillCam(ai, killerSource);
         return;
     }
@@ -10216,6 +10329,9 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
 
 function showGameOver() {
     forceResetTouchState();
+    hideReloadingText();
+    const enemyKilledEl = document.getElementById('enemy-killed-message');
+    if (enemyKilledEl) enemyKilledEl.style.display = 'none';
     isGameRunning = false;
     setFollowingPlayerMode(false);
     clearProjectileArtifacts();
@@ -10225,6 +10341,9 @@ function showGameOver() {
 
 function showWinScreen() {
     forceResetTouchState();
+    hideReloadingText();
+    const enemyKilledEl = document.getElementById('enemy-killed-message');
+    if (enemyKilledEl) enemyKilledEl.style.display = 'none';
     isGameRunning = false;
     clearProjectileArtifacts();
     winScreen.style.display = 'flex';
