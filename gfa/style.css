@@ -46,6 +46,7 @@ canvas {
     width: 150px; 
     height: 150px;
     z-index: 10;
+    touch-action: none;
 }
 #fire-button {
     position: fixed;
@@ -189,4 +190,3 @@ canvas {
 #follow-status-display.blinking {
     animation: blink 1s linear infinite;
 }
-
