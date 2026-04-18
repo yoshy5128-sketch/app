@@ -1,4 +1,4 @@
-const CACHE_NAME = 'descent-maze-v5';
+const CACHE_NAME = 'descent-maze-v6';
 const ASSETS = [
   './',
   './index.html',

@@ -80,6 +80,27 @@
             background: rgba(0,0,0,0.9); color: white; text-align: center; z-index: 100; 
         }
         #clear-screen, #shop-screen { display: none; }
+
+        /* README Screen */
+        #readme-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.95); color: white; text-align: center; z-index: 110;
+            padding: 24px;
+            box-sizing: border-box;
+        }
+        #readme-body {
+            width: min(900px, 92vw);
+            max-height: 70vh;
+            overflow: auto;
+            text-align: left;
+            line-height: 1.6;
+            color: #ddd;
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 18px;
+            background: rgba(255,255,255,0.05);
+            white-space: pre-wrap;
+        }
         
         .menu-buttons { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; z-index: 101;}
         button { padding: 15px 40px; font-size: 1.1em; cursor: pointer; background: #4a3c2c; color: #ffd700; border: 1px solid #ffd700; border-radius: 4px; transition: 0.2s; min-width: 250px; touch-action: manipulation; }
@@ -166,23 +187,44 @@
     <div id="stage-label">STAGE 1<br><span id="theme-name">THE DUST RUINS</span></div>
     <div id="stage-announcement">THE DUST RUINS</div>
 
-        <div id="instructions">
-            <h1 style="letter-spacing: 8px;">DESCENT MAZE</h1>
-            <div class="menu-buttons">
-                <button onclick="startGame(true)">NEW GAME</button>
+    <div id="instructions">
+        <h1 style="letter-spacing: 8px;">DESCENT MAZE</h1>
+        <div class="menu-buttons">
+            <button onclick="startGame(true)">NEW GAME</button>
 <button onclick="localStorage.clear(); location.reload();" style="background:#600;">DELETE SAVE DATA</button>
             <button class="btn-continue" id="btn-continue-1" onclick="startGame(false, 1)">CONTINUE SLOT 1 (STAGE <span id="saved-stage-val-1"></span>)</button>
             <button class="btn-continue" id="btn-continue-2" onclick="startGame(false, 2)">CONTINUE SLOT 2 (STAGE <span id="saved-stage-val-2"></span>)</button>
             <button class="btn-continue" id="btn-continue-3" onclick="startGame(false, 3)">CONTINUE SLOT 3 (STAGE <span id="saved-stage-val-3"></span>)</button>
-            </div>
-            <div style="margin-top: 15px; color: #aaa; font-size: 0.9em;">
-                ACTIVE SLOT:
-                <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(1)">1</button>
-                <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(2)">2</button>
-                <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(3)">3</button>
-            </div>
-            <p id="how-to-play" style="font-size: 0.8em; margin-top: 40px; color: #888;"></p>
         </div>
+        <div style="margin-top: 15px; color: #aaa; font-size: 0.9em;">
+            ACTIVE SLOT:
+            <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(1)">1</button>
+            <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(2)">2</button>
+            <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(3)">3</button>
+        </div>
+
+        <div style="margin-top: 18px;">
+            <button style="min-width: 180px; padding: 10px 20px; background:#111;" onclick="openReadme()">README</button>
+        </div>
+        <p id="how-to-play" style="font-size: 0.8em; margin-top: 40px; color: #888;"></p>
+    </div>
+
+    <div id="readme-screen">
+        <h2 style="letter-spacing: 4px; margin: 0 0 14px;">README</h2>
+        <div id="readme-body">暗闇の高所で股間が寒くなる恐怖感を体感せよ！
+
+階段を駆け下り、時には駆け上がり、指定された数の鍵を集めてから、遥か下にある出口を目指せ！
+
+点滅している階段の踊り場は、ジャンブで上の階段にスルーアップできるぞ！
+
+たとえどんな高さから飛び降りても、下に階段の踊り場があれば着地が可能。だが、欲張りすぎて着地に失敗すると…奈落の底へと落ちてしまうのでくれぐれも注意！
+
+アイテムショップでは、鍵が光って暗闇でも発見しやすくなるアイテムやどこでもセーブが可能となるセーブスロット。さらには、空中を一定時間飛べるジェットパックまで、さまざまなアイテムが手に入る！
+こうしたアイテムは、至るところに落ちているコインを集めてゲットできるぞ！</div>
+        <div class="menu-buttons" style="margin-top: 18px;">
+            <button onclick="closeReadme()">戻る</button>
+        </div>
+    </div>
 
     <div id="clear-screen">
         <h1 id="status-text">STAGE CLEAR</h1>
@@ -422,9 +464,9 @@
         }
 
         // --- Shop Functions ---
-        window.openShop = () => {
-            if (isGameOver) return;
-            document.getElementById('shop-screen').style.display = 'flex';
+         window.openShop = () => {
+             if (isGameOver) return;
+             document.getElementById('shop-screen').style.display = 'flex';
             document.getElementById('shop-coin-display').innerText = collectedCoins;
             document.getElementById('shop-msg').innerText = "";
             if (!isMobile && controls) controls.unlock();
@@ -435,11 +477,24 @@
             document.getElementById('btn-buy-save').disabled = hasSaveAnywhere;
         };
 
-        window.closeShop = () => {
-            document.getElementById('shop-screen').style.display = 'none';
-            prevTime = performance.now(); // Prevent time jump
-            if (!isMobile && controls) controls.lock();
-        };
+         window.closeShop = () => {
+             document.getElementById('shop-screen').style.display = 'none';
+             prevTime = performance.now(); // Prevent time jump
+             if (!isMobile && controls) controls.lock();
+         };
+
+         window.openReadme = () => {
+             document.getElementById('readme-screen').style.display = 'flex';
+             if (!isMobile && controls) controls.unlock();
+         };
+
+         window.closeReadme = () => {
+             document.getElementById('readme-screen').style.display = 'none';
+             prevTime = performance.now();
+             if (!isMobile && controls && document.getElementById('instructions').style.display === 'none') {
+                 controls.lock();
+             }
+         };
 
          window.buyItem = (type, cost) => {
             const msg = document.getElementById('shop-msg');
@@ -940,8 +995,8 @@
             const time = performance.now();
             const delta = Math.min((time - prevTime) / 1000, 0.1);
 
-            // Don't update if Shop is Open
-            if (document.getElementById('shop-screen').style.display === 'flex') {
+            // Don't update if a menu overlay is open
+            if (document.getElementById('shop-screen').style.display === 'flex' || document.getElementById('readme-screen').style.display === 'flex') {
                 prevTime = time;
                 return;
             }
