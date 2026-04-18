@@ -1,1244 +1,242 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Descent Maze</title>
-    <!-- Manifest is injected only on http(s) to avoid file:// CORS noise -->
-<meta name="theme-color" content="#4a3c2c">
-<link rel="apple-touch-icon" href="icon-512.png">
- <script>
-   // file:// is a unique origin; manifest + service worker will fail there.
-   const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APPLABO</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 2em;
+      text-align: center;
+    }
+    h1 {
+      color: #333;
+      font-size: 3em;
+      margin-bottom: 0.2em;
+    }
+    p {
+      color: #666;
+      font-size: 1.2em;
+      margin-bottom: 2em;
+    }
+    .apps-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 1200px; /* 全体の最大幅を設定 */
+      margin: 0 auto;
+      text-align: center;
+    }
+    .apps-title {
+      font-size: 1.6em;
+      color: #444;
+      border-bottom: 2px solid #e0e0e0;
+      margin-bottom: 1em;
+      padding-bottom: 0.2em;
+      font-weight: 700;
+      width: 100%;
+    }
+    .app-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5em;
+      list-style: none;
+      padding: 0;
+      justify-content: center;
+      margin: 0;
+      width: 100%;
+    }
+    .app-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+      padding: 1.5em;
+      width: 280px; /* 固定幅にすることで列を安定させる */
+      display: flex;
+      flex-direction: column; /* 中身を縦に並べる */
+      text-align: center;
+      transition: box-shadow 0.2s, transform 0.2s;
+      box-sizing: border-box;
+    }
+    .app-card:hover {
+      box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+      transform: translateY(-2px);
+    }
+    .app-name {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #222;
+      margin-bottom: 0.5em;
+      min-height: 2.4em; /* タイトルの高さを最低2行分確保して揃える */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .app-desc {
+      color: #555;
+      font-size: 0.95em;
+      margin-bottom: 1.5em;
+      flex-grow: 1; /* ここが重要：説明文が短くても余白を埋めてボタンを下に押し下げる */
+      line-height: 1.4;
+    }
+    .app-link {
+      display: inline-block;
+      padding: 0.6em 1.2em;
+      border-radius: 6px;
+      background: #007acc;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.2s;
+      margin-top: auto; /* ボタンを常に一番下に配置 */
+    }
+    .app-link:hover {
+      background: #005fa3;
+    }
 
-   if (isHttp) {
-     const manifest = document.createElement('link');
-     manifest.rel = 'manifest';
-     manifest.href = 'manifest.json';
-     document.head.appendChild(manifest);
-   }
-
-   if (isHttp && 'serviceWorker' in navigator) {
-     window.addEventListener('load', () => {
-       navigator.serviceWorker.register('./sw.js').catch(() => {});
-     });
-   }
- </script>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Georgia', serif; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-        
-        /* UI Elements */
-        #ui-overlay { position: absolute; top: 15px; left: 15px; color: gold; font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px black; z-index: 15; pointer-events: none; }
-        .coin-icon { color: #ffd700; margin-left: 15px; }
-        .key-icon { color: #c0c0c0; }
-        
-        #gear-btn { 
-            position: absolute; top: 15px; right: 15px; 
-            width: 40px; height: 40px; font-size: 24px; 
-            background: rgba(0,0,0,0.5); color: white; border: 1px solid white; border-radius: 50%; 
-            display: flex; justify-content: center; align-items: center; 
-            cursor: pointer; z-index: 60; pointer-events: auto; 
-        }
-        #gear-btn:active { background: white; color: black; }
-
-        #jetpack-toggle {
-            position: absolute; top: 15px; right: 65px; /* Positioned next to the gear button */
-            width: 40px; height: 40px; font-size: 16px; font-weight: bold;
-            background: rgba(0,0,0,0.5); color: #aaa; border: 1px solid #aaa; border-radius: 8px;
-            display: flex; justify-content: center; align-items: center;
-            cursor: pointer; z-index: 60; pointer-events: auto;
-            user-select: none;
-        }
-        #jetpack-toggle.active {
-            background: #ffd700;
-            color: black;
-            border-color: white;
-            box-shadow: 0 0 10px #ffd700;
-        }
-
-        #save-spot-btn {
-            position: absolute; top: 15px; right: 115px; /* Positioned next to the jetpack button */
-            width: 40px; height: 40px; font-size: 11px; font-weight: bold;
-            background: rgba(0,0,0,0.5); color: #aaa; border: 1px solid #aaa; border-radius: 8px;
-            display: flex; justify-content: center; align-items: center;
-            cursor: pointer; z-index: 60; pointer-events: auto;
-            user-select: none;
-        }
-        #save-spot-btn.saved {
-             background: #00ff00;
-             color: black;
-             box-shadow: 0 0 10px #00ff00;
-        }
-
-        #stage-label { position: absolute; top: 60px; right: 15px; color: white; font-size: 16px; text-align: right; pointer-events: none; }
-        #stage-announcement { position: absolute; width: 100%; top: 30%; text-align: center; color: white; font-size: 2.5em; text-shadow: 0 0 15px rgba(255,255,255,0.5); pointer-events: none; opacity: 0; transition: opacity 1s; z-index: 20; }
-        
-        /* Menu Screens */
-        #instructions, #clear-screen, #shop-screen { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            display: flex; flex-direction: column; justify-content: center; align-items: center; 
-            background: rgba(0,0,0,0.9); color: white; text-align: center; z-index: 100; 
-        }
-        #clear-screen, #shop-screen { display: none; }
-
-        /* README Screen */
-        #readme-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: none; flex-direction: column; justify-content: center; align-items: center;
-            background: rgba(0,0,0,0.95); color: white; text-align: center; z-index: 110;
-            padding: 24px;
-            box-sizing: border-box;
-        }
-        #readme-body {
-            width: min(900px, 92vw);
-            max-height: 70vh;
-            overflow: auto;
-            text-align: left;
-            line-height: 1.6;
-            color: #ddd;
-            border: 1px solid rgba(255,255,255,0.15);
-            padding: 18px;
-            background: rgba(255,255,255,0.05);
-            white-space: pre-wrap;
-        }
-        
-        .menu-buttons { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; z-index: 101;}
-        button { padding: 15px 40px; font-size: 1.1em; cursor: pointer; background: #4a3c2c; color: #ffd700; border: 1px solid #ffd700; border-radius: 4px; transition: 0.2s; min-width: 250px; touch-action: manipulation; }
-        button:active { background: #ffd700; color: #000; }
-        button:disabled { border-color: #555; color: #555; background: #222; cursor: default; }
-        .btn-continue { display: none; background: #2c3e4a; }
-
-        /* Shop Specific */
-        #shop-items { display: flex; flex-direction: column; gap: 10px; width: 80%; max-width: 400px; }
-        .shop-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 10px; border: 1px solid #555; }
-        .shop-desc { text-align: left; font-size: 0.9em; }
-        .shop-cost { color: #ffd700; font-weight: bold; }
-
-        /* Mobile Controls UI */
-        .mobile-ui { display: none !important; position: absolute; z-index: 50; touch-action: none; }
-        .is-mobile .mobile-ui { display: flex !important; }
-
-        /* Joystick */
-        #joystick-zone { bottom: 30px; left: 30px; width: 140px; height: 140px; position: absolute; z-index: 50; }
-        #joystick-container { 
-            width: 100%; height: 100%; 
-            background: rgba(255, 255, 255, 0.1); 
-            border: 2px solid rgba(255, 255, 255, 0.3); 
-            border-radius: 50%; 
-            position: relative;
-            display: flex; justify-content: center; align-items: center;
-        }
-        #joystick-knob { 
-            position: absolute; width: 50px; height: 50px; 
-            background: rgba(255, 255, 255, 0.5); 
-            border-radius: 50%; 
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            pointer-events: none; 
-            transform: translate(0px, 0px);
-        }
-
-        /* Jump Button */
-        #jump-button { 
-            bottom: 40px; right: 30px; width: 90px; height: 90px; 
-            background: rgba(255, 255, 255, 0.2); 
-            border: 3px solid rgba(255,255,255,0.6); 
-            border-radius: 50%; 
-            display: flex; justify-content: center; align-items: center; 
-            font-weight: bold; color: white; font-size: 1.2em;
-            user-select: none;
-        }
-        #jump-button:active { background: rgba(255, 255, 255, 0.5); transform: scale(0.95); }
-
-        /* Camera Touch Area (Right side of screen) */
-        #touch-camera-area { 
-            top: 0; right: 0; width: 50%; height: 100%; 
-            position: absolute; z-index: 40; 
-        }
-
-        /* Landscape Warning */
-        #rotate-warning { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; color: gold; z-index: 999; justify-content: center; align-items: center; text-align: center; flex-direction: column; }
-        @media screen and (orientation: portrait) {
-            .is-mobile #rotate-warning { display: flex; }
-        }
-    </style>
+    /* レスポンシブ対応 */
+    @media (max-width: 650px) {
+      body {
+        padding: 1em;
+      }
+      .app-card {
+        width: 100%; /* スマホでは1列にする */
+        max-width: 350px;
+      }
+    }
+  </style>
 </head>
-<body id="game-body">
-    <div id="rotate-warning">
-        <h1>PLEASE ROTATE DEVICE</h1>
-        <p>This game requires landscape mode.</p>
-    </div>
+<body>
+
+  <h1>APPLABO</h1>
+  <p>ここにあるのはスマホ向けのWEBアプリです。<br>※一部PC対応もあり</p>
+
+  <div style="text-align: center; margin-bottom: 2em;">
+    <img src="qr.png" alt="QRコード" style="width: 45vw; max-width: 200px;">
+    <p style="color:#555; font-size:0.9em; margin-top:0.5em;">このQRコードをスマホで読み取ってください</p>
+  </div>
+
+  <section class="apps-section">
+    <div class="apps-title">アプリ一覧</div>
+    <ul class="app-list">
+      
+      <li class="app-card">
+        <div class="app-name">GunFightArena</div>
+        <div class="app-desc">シンプルでスピーディーかつ、エキサイティングなFPSシューティング PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/gfa/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+      
+<li class="app-card">
+        <div class="app-name">Descent Maze</div>
+        <div class="app-desc">出口を探して、どこまでもどこまでも続く宙に浮く階段を降りてゆく恐怖… PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/down/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+      
+      <li class="app-card">
+        <div class="app-name">Everest Simulator</div>
+        <div class="app-desc">あなたは生命を賭けてエベレストを制覇できるか？！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/eve/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">GO MP3</div>
+        <div class="app-desc">複数のフォルダにあるMP3データをソングリスト形式で管理可能。Chromeのみ対応 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/gomp3/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">CutMP3</div>
+        <div class="app-desc">MP3ファイルのトリミング加工が可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/cutmp3/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">区間リピート動画プレイヤー</div>
+        <div class="app-desc">区間リピート再生が可能な動画プレイヤー 再生スピード変更可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/vrp/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">Excelいらづ</div>
+        <div class="app-desc">Excelファイルの編集・保存が可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/excel/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">宅配DEATH</div>
+        <div class="app-desc">ギリギリのガソリンを使って最短ルートで宅配せよ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/takuhai/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">Shapes Fight</div>
+        <div class="app-desc">いつでもどこでもサクッと気軽にShooting FPS PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/shapesfight/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">MARZ HELL</div>
+        <div class="app-desc">ここは絶望に苛まれた迷宮MARZ。門番たちの目を掻い潜りながらエリアからの脱出を目指せ！PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/marz/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">バッティングマシン・シミュレーター</div>
+        <div class="app-desc">スピードの緩急から変化球まで自由自在に投げてくるバッティングマシンに挑め！ PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/batt" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">ピッチング・シミュレーター</div>
+        <div class="app-desc">豪腕投手となり、さまざまな球種を投げ分けてAI打者と対戦！PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/pitch/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">Life Simulater</div>
+        <div class="app-desc">あなたは人生という道を寿命が尽きるまで歩みはじめます。PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/life/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">石切りゲーム</div>
+        <div class="app-desc">平たい石を川に投げて何回ジャンプさせられるか？！ PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/stone/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">あっちむいてホイ！</div>
+        <div class="app-desc">じゃんけんして指先で方向を指すアレ。スワイプで方向を指せ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/hoi/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">Bomber Simulater</div>
+        <div class="app-desc">爆撃シミュレーター 地上の物体をすべて破壊せよ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/bomber/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">マニュアル車シミュレーター</div>
+        <div class="app-desc">マニュアル車のギアチェンジを楽しめる（まだ未完成）PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/manual/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+      <li class="app-card">
+        <div class="app-name">積み木爆破シミュレーター</div>
+        <div class="app-desc">積み木を爆破して粉々にせよ！3秒で爆発する通常爆弾と4連鎖爆弾で壊しまくれ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/tsumi" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+
+    </ul>
+  </section>
 
-    <audio id="bgm" src="wind.mp3" loop></audio>
-    <audio id="sfx-get" src="get.mp3"></audio>
-    <audio id="sfx-fall" src="gan.mp3"></audio>
-    <audio id="sfx-clear" src="clear.mp3"></audio>
-    <audio id="sfx-footsteps" src="ashi.mp3" loop></audio>
-    <audio id="sfx-land" src="chaku.mp3"></audio>
-
-    <div id="ui-overlay">
-        <span class="key-icon">KEYS: <span id="item-count">0</span> / 4</span><br>
-        <span class="coin-icon">COINS: <span id="coin-count">10</span></span><br>
-        <span style="font-size: 14px; color: #ddd;">SAVE SLOT: <span id="save-slot-val">1</span></span><br>
-        <span id="jetpack-status" style="font-size: 14px; color: white;"></span>
-    </div>
-    <div id="jetpack-toggle" style="display: none;">JET</div>
-    <div id="save-spot-btn" style="display: none;">SAVE</div>
-    <div id="gear-btn">⚙</div>
-    <div id="stage-label">STAGE 1<br><span id="theme-name">THE DUST RUINS</span></div>
-    <div id="stage-announcement">THE DUST RUINS</div>
-
-    <div id="instructions">
-        <h1 style="letter-spacing: 8px;">DESCENT MAZE</h1>
-        <div class="menu-buttons">
-            <button onclick="startGame(true)">NEW GAME</button>
-<button onclick="localStorage.clear(); location.reload();" style="background:#600;">DELETE SAVE DATA</button>
-            <button class="btn-continue" id="btn-continue-1" onclick="startGame(false, 1)">CONTINUE SLOT 1 (STAGE <span id="saved-stage-val-1"></span>)</button>
-            <button class="btn-continue" id="btn-continue-2" onclick="startGame(false, 2)">CONTINUE SLOT 2 (STAGE <span id="saved-stage-val-2"></span>)</button>
-            <button class="btn-continue" id="btn-continue-3" onclick="startGame(false, 3)">CONTINUE SLOT 3 (STAGE <span id="saved-stage-val-3"></span>)</button>
-        </div>
-        <div style="margin-top: 15px; color: #aaa; font-size: 0.9em;">
-            ACTIVE SLOT:
-            <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(1)">1</button>
-            <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(2)">2</button>
-            <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(3)">3</button>
-        </div>
-
-        <div style="margin-top: 18px;">
-            <button style="min-width: 180px; padding: 10px 20px; background:#111;" onclick="openReadme()">README</button>
-        </div>
-        <p id="how-to-play" style="font-size: 0.8em; margin-top: 40px; color: #888;"></p>
-    </div>
-
-    <div id="readme-screen">
-        <h2 style="letter-spacing: 4px; margin: 0 0 14px;">README</h2>
-        <div id="readme-body">暗闇の高所で股間が寒くなる恐怖感を体感せよ！
-
-階段を駆け下り、時には駆け上がり、指定された数の鍵を集めてから、遥か下にある出口を目指せ！
-
-点滅している階段の踊り場は、ジャンブで上の階段にスルーアップできるぞ！
-
-たとえどんな高さから飛び降りても、下に階段の踊り場があれば着地が可能。だが、欲張りすぎて着地に失敗すると…奈落の底へと落ちてしまうのでくれぐれも注意！
-
-アイテムショップでは、鍵が光って暗闇でも発見しやすくなるアイテムやどこでもセーブが可能となるセーブスロット。さらには、空中を一定時間飛べるジェットパックまで、さまざまなアイテムが手に入る！
-こうしたアイテムは、至るところに落ちているコインを集めてゲットできるぞ！</div>
-        <div class="menu-buttons" style="margin-top: 18px;">
-            <button onclick="closeReadme()">戻る</button>
-        </div>
-    </div>
-
-    <div id="clear-screen">
-        <h1 id="status-text">STAGE CLEAR</h1>
-        <button id="action-button">NEXT LEVEL</button>
-    </div>
-
-    <div id="shop-screen">
-        <h2>ITEM SHOP</h2>
-        <div style="margin-bottom: 20px;">Current Coins: <span id="shop-coin-display" style="color:#ffd700; font-weight:bold;">0</span></div>
-        <div id="shop-items">
-            <div class="shop-item">
-                <div class="shop-desc">
-                    <strong>Key Locator</strong><br>Highlight keys location
-                </div>
-                <div>
-                    <span class="shop-cost">1 G</span><br>
-                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('locator', 1)" id="btn-buy-locator">BUY</button>
-                </div>
-            </div>
-            <div class="shop-item">
-                <div class="shop-desc">
-                    <strong>Save Anywhere</strong><br>Save current spot
-                </div>
-                <div>
-                    <span class="shop-cost">2 G</span><br>
-                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('save', 2)" id="btn-buy-save">BUY</button>
-                </div>
-            </div>
-            <div class="shop-item">
-                <div class="shop-desc">
-                    <strong>Ult. Jetpack</strong><br>Fly for 30s
-                </div>
-                <div>
-                    <span class="shop-cost">10 G</span><br>
-                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('jetpack', 10)" id="btn-buy-jetpack">BUY</button>
-                </div>
-            </div>
-        </div>
-        <div class="menu-buttons" style="margin-top: 30px;">
-            <button onclick="closeShop()">RESUME GAME</button>
-        </div>
-        <p id="shop-msg" style="color: #0f0; height: 20px;"></p>
-    </div>
-
-    <div id="joystick-zone" class="mobile-ui">
-        <div id="joystick-container">
-            <div id="joystick-knob"></div>
-        </div>
-    </div>
-    <div id="jump-button" class="mobile-ui">JUMP</div>
-    <div id="touch-camera-area" class="mobile-ui"></div>
-
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-
-    <script type="module">
-        import * as THREE from 'three';
-        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-
-         let currentStage = 1;
-         let isGameOver = false;
-         let collectedItemCount = 0;
-         let collectedCoins = 10;
-
-         // Save Slots
-         const SAVE_SLOTS = 3;
-         let activeSaveSlot = 1;
-        
-        // Items State
-        let hasJetpack = false;
-        let isJetpackSwitchOn = false;
-        let jetpackState = 'standby'; // 'standby', 'active', 'cooldown'
-        let jetpackFuel = 0; // seconds
-        let jetpackCooldownTimer = 0; // seconds
-        let hasKeyLocator = false;
-        let hasSaveAnywhere = false;
-
-        // Detect Mobile
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth < 800 && 'ontouchstart' in window);
-        if (isMobile) document.getElementById('game-body').classList.add('is-mobile');
-
-        const THEMES = [
-            { name: "THE DUST RUINS", sky: 0x8b7355, fog: 0x8b7355, stair: 0x5a4a3a },
-            { name: "THE POISON SWAMP", sky: 0x0a1a0a, fog: 0x0a1a0a, stair: 0x2d3d2d },
-            { name: "THE ASHEN SILENCE", sky: 0x1a1a1a, fog: 0x1a1a1a, stair: 0x444444 },
-            { name: "THE BLOOD TWILIGHT", sky: 0x240a0a, fog: 0x240a0a, stair: 0x4a1a1a }
-        ];
-
-         let scene, camera, renderer, controls;
-         let objects = [], collectibleItems = [], goal = null, floor = null;
-         let hintSteps = []; // Bottom-most parts of each staircase segment (landing) to blink when near/below
-        
-        // Movement Variables
-        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        let canJump = false;
-        let isJumpHeld = false; // For jetpack
-        let velocity = new THREE.Vector3();
-        let targetY = 51.8, prevTime = performance.now();
-        
-        // Camera Variables
-        let cameraYaw = 0;
-        let cameraPitch = 0;
-        
-        // Mobile Input
-        let joyVector = { x: 0, y: 0 };
-        let isFootstepPlaying = false; 
-        let wasOnGround = true; // For detecting landing
-
-         const stairMat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
-         const HINT_EMISSIVE_COLOR = 0xFFD700;
-         const HINT_RADIUS = 12; // world units
-         const HINT_RADIUS_SQ = HINT_RADIUS * HINT_RADIUS;
-        // Key is now Silver
-        const keyMat = new THREE.MeshStandardMaterial({ color: 0xC0C0C0, metalness: 0.9, roughness: 0.2, emissive: 0x222222 });
-        // Coin is Gold
-        const coinMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 0.8, roughness: 0.2 });
-
-         // Save Data Handling
-         function getSaveKey(slot) {
-             return `descent_maze_data_slot_${slot}`;
-         }
-
-         function clampSaveSlot(slot) {
-             const n = Number(slot);
-             if (!Number.isFinite(n)) return 1;
-             const i = Math.trunc(n);
-             return Math.max(1, Math.min(SAVE_SLOTS, i));
-         }
-
-         function getSavedActiveSlot() {
-             const raw = localStorage.getItem('descent_maze_active_slot');
-             if (!raw) return 1;
-             return clampSaveSlot(raw);
-         }
-
-         function getSaveData(slot) {
-             const saved = localStorage.getItem(getSaveKey(slot));
-             if (!saved) return null;
-             try {
-                 return JSON.parse(saved);
-             } catch {
-                 return null;
-             }
-         }
-
-         function updateSaveSlotUI() {
-             const slotEl = document.getElementById('save-slot-val');
-             if (slotEl) slotEl.innerText = activeSaveSlot;
-             const saveBtn = document.getElementById('save-spot-btn');
-             if (saveBtn) saveBtn.innerText = `SAVE${activeSaveSlot}`;
-         }
-
-         function refreshContinueButtons() {
-             for (let slot = 1; slot <= SAVE_SLOTS; slot++) {
-                 const data = getSaveData(slot);
-                 const btn = document.getElementById(`btn-continue-${slot}`);
-                 const stageEl = document.getElementById(`saved-stage-val-${slot}`);
-                 if (!btn || !stageEl) continue;
-                 if (data && typeof data.stage === 'number') {
-                     btn.style.display = 'block';
-                     stageEl.innerText = data.stage;
-                 } else {
-                     btn.style.display = 'none';
-                     stageEl.innerText = '';
-                 }
-             }
-         }
-
-         function setActiveSaveSlotInternal(slot) {
-             activeSaveSlot = clampSaveSlot(slot);
-             localStorage.setItem('descent_maze_active_slot', String(activeSaveSlot));
-             updateSaveSlotUI();
-         }
-
-         window.setActiveSaveSlot = (slot) => {
-             setActiveSaveSlotInternal(slot);
-         };
-
-         function saveGame(type, stageNum, pos, keys, slot = activeSaveSlot) {
-             let data = {};
-             // For progress saves, we preserve item ownership but reset position/keys
-             if (type === 'progress') {
-                 const existingData = getSaveData(slot) || {};
-                 data = {
-                     ...existingData, // Preserve item states
-                     stage: stageNum,
-                     coins: collectedCoins,
-                     playerPos: null,
-                     keys: 0,
-                 };
-             } 
-             // For full saves, we save everything at the current moment
-             else if (type === 'full') {
-                 data = {
-                     stage: stageNum,
-                     coins: collectedCoins,
-                     playerPos: pos ? {x: pos.x, y: pos.y, z: pos.z} : null,
-                     keys: keys,
-                     hasKeyLocator: hasKeyLocator,
-                     hasJetpack: hasJetpack,
-                     hasSaveAnywhere: hasSaveAnywhere
-                 };
-             }
-             localStorage.setItem(getSaveKey(slot), JSON.stringify(data));
-             refreshContinueButtons();
-         }
-
-         function loadGameFromData(savedData) {
-            // Load game state
-            collectedCoins = savedData.coins;
-            hasKeyLocator = savedData.hasKeyLocator || false;
-            hasJetpack = savedData.hasJetpack || false;
-            hasSaveAnywhere = savedData.hasSaveAnywhere || false;
-
-             // Reset dynamic states and UI
-             isJetpackSwitchOn = false;
-             jetpackState = 'standby';
-             jetpackFuel = hasJetpack ? 5 : 0;
-            
-             document.getElementById('jetpack-toggle').style.display = hasJetpack ? 'flex' : 'none';
-             document.getElementById('jetpack-toggle').classList.remove('active');
-             document.getElementById('save-spot-btn').style.display = hasSaveAnywhere ? 'flex' : 'none';
-             updateHowToPlay();
-
-            // Generate stage from loaded data. If no specific position is saved, start from the beginning of the stage.
-            if (savedData.playerPos) {
-                generateStage(savedData.stage, savedData.playerPos, savedData.keys);
-            } else {
-                generateStage(savedData.stage, null, 0);
-            }
-        }
-
-        // --- Shop Functions ---
-         window.openShop = () => {
-             if (isGameOver) return;
-             document.getElementById('shop-screen').style.display = 'flex';
-            document.getElementById('shop-coin-display').innerText = collectedCoins;
-            document.getElementById('shop-msg').innerText = "";
-            if (!isMobile && controls) controls.unlock();
-            
-            // Update button states
-            document.getElementById('btn-buy-locator').disabled = hasKeyLocator;
-            document.getElementById('btn-buy-jetpack').disabled = hasJetpack;
-            document.getElementById('btn-buy-save').disabled = hasSaveAnywhere;
-        };
-
-         window.closeShop = () => {
-             document.getElementById('shop-screen').style.display = 'none';
-             prevTime = performance.now(); // Prevent time jump
-             if (!isMobile && controls) controls.lock();
-         };
-
-         window.openReadme = () => {
-             document.getElementById('readme-screen').style.display = 'flex';
-             if (!isMobile && controls) controls.unlock();
-         };
-
-         window.closeReadme = () => {
-             document.getElementById('readme-screen').style.display = 'none';
-             prevTime = performance.now();
-             if (!isMobile && controls && document.getElementById('instructions').style.display === 'none') {
-                 controls.lock();
-             }
-         };
-
-         window.buyItem = (type, cost) => {
-            const msg = document.getElementById('shop-msg');
-            if (collectedCoins >= cost) {
-                if (type === 'locator') {
-                    if (hasKeyLocator) { msg.innerText = "ALREADY ACTIVE"; return; }
-                    collectedCoins -= cost;
-                    hasKeyLocator = true;
-                    highlightKeys();
-                    msg.innerText = "LOCATOR ACTIVATED";
-                    document.getElementById('btn-buy-locator').disabled = true;
-                }
-                 else if (type === 'save') {
-                     if (hasSaveAnywhere) { msg.innerText = "ALREADY OWNED"; return; }
-                     collectedCoins -= cost;
-                     hasSaveAnywhere = true;
-                     document.getElementById('save-spot-btn').style.display = 'flex';
-                     updateHowToPlay();
-                     msg.innerText = "SAVE ANYWHERE UNLOCKED";
-                     document.getElementById('btn-buy-save').disabled = true;
-                 }
-                else if (type === 'jetpack') {
-                    if (hasJetpack) { msg.innerText = "ALREADY OWNED"; return; }
-                    collectedCoins -= cost;
-                    hasJetpack = true;
-                    jetpackState = 'standby';
-                    document.getElementById('jetpack-toggle').style.display = 'flex';
-                    updateHUD(); // To show standby message
-                    msg.innerText = "JETPACK PURCHASED";
-                    document.getElementById('btn-buy-jetpack').disabled = true;
-                }
-                updateHUD();
-                document.getElementById('shop-coin-display').innerText = collectedCoins;
-            } else {
-                msg.innerText = "NOT ENOUGH COINS";
-            }
-        };
-
-        function highlightKeys() {
-            if (!hasKeyLocator) return;
-            collectibleItems.forEach(item => {
-                if (item.userData.type === 'key') {
-                    // Add a bright light to the key
-                    if (!item.userData.hasLight) {
-                        const light = new THREE.PointLight(0x00ff00, 5, 50);
-                        item.add(light);
-                        item.userData.hasLight = true;
-                        // Brighten material
-                        item.traverse((child) => {
-                            if (child.isMesh) {
-                                child.material = child.material.clone();
-                                child.material.emissive.set(0x00ff00);
-                                child.material.emissiveIntensity = 2.0;
-                            }
-                        });
-                    }
-                }
-            });
-        }
-
-         function updateHUD() {
-             document.getElementById('coin-count').innerText = collectedCoins;
-             document.getElementById('item-count').innerText = collectedItemCount;
-             const jetpackStatusEl = document.getElementById('jetpack-status');
-             if (hasJetpack) {
-                 switch (jetpackState) {
-                     case 'standby':
-                         jetpackStatusEl.innerHTML = `<span style="color:#00ff00;">JETPACK STANDBY</span>`;
-                         break;
-                     case 'cooldown':
-                         jetpackStatusEl.innerHTML = `JETPACK COOLING: ${Math.ceil(jetpackCooldownTimer)}s`;
-                         break;
-                     case 'active':
-                         // This will be handled in the animate loop for real-time update
-                         break;
-                 }
-             } else {
-                 jetpackStatusEl.innerHTML = '';
-             }
-         }
-
-         function updateHowToPlay() {
-             const el = document.getElementById('how-to-play');
-             if (!el) return;
-
-             if (isMobile) {
-                 el.innerText = "LEFT STICK: MOVE / RIGHT SCREEN: LOOK / BUTTON: JUMP";
-                 return;
-             }
-
-             const quickSaveHint = hasSaveAnywhere ?
-                 "I: ITEM SHOP / F1: QUICK SAVE" :
-                 "I: ITEM SHOP / F1: QUICK SAVE (BUY 'Save Anywhere')";
-             el.innerText = `WASD: MOVE / SPACE: JUMP / MOUSE: LOOK\n${quickSaveHint}`;
-         }
-
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
-            document.body.appendChild(renderer.domElement);
-
-             if (!isMobile) {
-                 controls = new PointerLockControls(camera, document.body);
-                 updateHowToPlay();
-                
-                // Fix for gear button click vs pointer lock
-                document.getElementById('gear-btn').addEventListener('click', (e) => {
-                    e.stopPropagation(); // prevent re-lock immediately
-                    window.openShop();
-                });
-                
-             } else {
-                 updateHowToPlay();
-                 setupMobileControls();
-                document.getElementById('gear-btn').addEventListener('touchstart', (e) => {
-                    e.stopPropagation();
-                    window.openShop();
-                });
-            }
-
-             // Desktop: click the gameplay area to restore mouse-look after ESC.
-             // (UI buttons already call stopPropagation.)
-             if (!isMobile) {
-                 document.body.addEventListener('click', () => {
-                     if (!controls) return;
-                     if (document.getElementById('instructions').style.display !== 'none') return;
-                     if (document.getElementById('shop-screen').style.display === 'flex') return;
-                     if (document.getElementById('clear-screen').style.display === 'flex') return;
-                     controls.lock();
-                     prevTime = performance.now();
-                 });
-             }
-
-            scene.add(new THREE.AmbientLight(0xffffff, 0.9));
-            const light = new THREE.PointLight(0xffffff, 150, 100);
-            camera.add(light);
-            scene.add(camera);
-
-            window.addEventListener('resize', onWindowResize);
-            activeSaveSlot = getSavedActiveSlot();
-            updateSaveSlotUI();
-            refreshContinueButtons();
-
-            // Jetpack Toggle
-            const jetpackToggleBtn = document.getElementById('jetpack-toggle');
-            jetpackToggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (hasJetpack) {
-                    isJetpackSwitchOn = !isJetpackSwitchOn;
-                    jetpackToggleBtn.classList.toggle('active', isJetpackSwitchOn);
-                }
-            });
-
-            // Save Spot Button
-            const saveSpotBtn = document.getElementById('save-spot-btn');
-            saveSpotBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (hasSaveAnywhere && canJump) { // Only allow saving when on ground
-                    saveGame('full', currentStage, camera.position, collectedItemCount, activeSaveSlot);
-                    // Visual feedback: green for success
-                    saveSpotBtn.classList.add('saved');
-                    setTimeout(() => saveSpotBtn.classList.remove('saved'), 500);
-
-                     // Desktop: after clicking SAVE with cursor, resume mouse-look immediately.
-                     if (!isMobile && controls) {
-                         controls.lock();
-                         prevTime = performance.now();
-                     }
-                } else if (hasSaveAnywhere) {
-                    // Visual feedback: red for failure (e.g., in air)
-                    saveSpotBtn.style.backgroundColor = '#f00';
-                    setTimeout(() => saveSpotBtn.style.backgroundColor = 'rgba(0,0,0,0.5)', 500);
-
-                     // Desktop: still resume mouse-look after the attempt.
-                     if (!isMobile && controls) {
-                         controls.lock();
-                         prevTime = performance.now();
-                     }
-                }
-            });
-            
-            // Initial generation (background)
-            generateStage(1);
-            animate();
-        }
-
-         function generateStage(stageNum, savedPos = null, savedKeys = 0) {
-            currentStage = stageNum;
-            const theme = THEMES[(stageNum - 1) % THEMES.length];
-            scene.background = new THREE.Color(theme.sky);
-            
-            const fogNear = Math.max(45 - (stageNum * 3), 12);
-            const fogFar = Math.max(160 - (stageNum * 6), 70);
-            scene.fog = new THREE.Fog(theme.fog, fogNear, fogFar);
-            stairMat.color.set(theme.stair);
-            
-            document.getElementById('stage-label').innerHTML = `STAGE ${stageNum}<br><span id="theme-name">${theme.name}</span>`;
-            const ann = document.getElementById('stage-announcement');
-            ann.innerText = theme.name; ann.style.opacity = 1;
-            setTimeout(() => ann.style.opacity = 0, 3000);
-
-             // Cleanup
-             objects.forEach(o => scene.remove(o));
-             collectibleItems.forEach(k => scene.remove(k));
-             if(goal) scene.remove(goal);
-             if(floor) scene.remove(floor);
-             objects = []; collectibleItems = [];
-             hintSteps = [];
-            
-            // Restore or Reset logic
-            collectedItemCount = savedKeys;
-            updateHUD();
-
-            let seed = 555 + stageNum;
-            const rnd = () => { const x = Math.sin(seed++) * 10000; return x - Math.floor(x); };
-
-            const startP = new THREE.Mesh(new THREE.BoxGeometry(10, 1.2, 10), stairMat);
-            startP.position.set(0, 50, 0);
-            scene.add(startP); objects.push(startP);
-            
-            // Position Player
-            if (savedPos) {
-                camera.position.set(savedPos.x, savedPos.y, savedPos.z);
-                velocity.set(0, 0, 0); // CRITICAL: Reset velocity on load to prevent falling
-            } else {
-                camera.position.set(0, 51.8, 0); 
-                velocity.set(0, 0, 0);
-                cameraYaw = 0; cameraPitch = 0;
-                updateCameraRotation();
-            }
-
-            let keyRemaining = 4 - savedKeys;
-            // Reduce keys to spawn if loading from save (simple logic: just spawn all, let player find 4 total. 
-            // Strict logic is complex, for this update we assume standard 4 keys spawn).
-            
-            const maxDepth = 25 + (stageNum * 10); 
-            const branchChance = Math.min(0.25 + (stageNum * 0.05), 0.5); 
-            let currentPos = new THREE.Vector3(0, 50, 0);
-            let coinsSpawned = 0;
-
-             function createPath(startPos, startRot, depth, isMainPath) {
-                let pos = startPos.clone();
-                let lastRot = startRot;
-
-                for (let i = 0; i < depth; i++) {
-                    const rot = lastRot + (Math.floor(rnd() * 3) - 1) * (Math.PI / 2);
-                    lastRot = rot;
-
-                     for (let s = 0; s < 5; s++) {
-                         const step = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.2, 1.6), stairMat);
-                         const offset = new THREE.Vector3(0, s * -0.7, s * 1.3).applyAxisAngle(new THREE.Vector3(0,1,0), rot);
-                         step.position.copy(pos).add(offset);
-                         step.rotation.y = rot;
-                         scene.add(step); objects.push(step);
-                     }
-
-                     const landMat = stairMat.clone();
-                     // Clone material so we can pulse emissive without affecting all stairs.
-                     landMat.emissive = new THREE.Color(HINT_EMISSIVE_COLOR);
-                     landMat.emissiveIntensity = 0;
-                     const land = new THREE.Mesh(new THREE.BoxGeometry(9, 1.2, 9), landMat);
-                     const landOffset = new THREE.Vector3(0, -3.5, 9.5).applyAxisAngle(new THREE.Vector3(0,1,0), rot);
-                     land.position.copy(pos).add(landOffset);
-                     land.rotation.y = rot;
-                     scene.add(land); objects.push(land);
-                     land.userData.isHintStep = true;
-                     hintSteps.push(land);
-                     pos.copy(land.position);
-
-                    // Key Spawning
-                    if ((isMainPath && i > 0 && i % 12 === 0 && keyRemaining > 1) || 
-                        (!isMainPath && i === depth - 1 && keyRemaining > 0)) {
-                        const k = createKey();
-                        k.position.copy(land.position).add(new THREE.Vector3(0, 2.2, 0));
-                        k.userData.baseY = k.position.y;
-                        scene.add(k); collectibleItems.push(k);
-                        keyRemaining--;
-                    }
-
-                    // Coin Spawning (Hard to reach places / Side branches or Air)
-                    // Limit: 2 per stage
-                    if (coinsSpawned < 2 && rnd() < 0.1 && i > 5) {
-                        const coin = createCoin();
-                        // Place coin high up or slightly off platform
-                        const coinOffset = new THREE.Vector3((rnd()-0.5)*5, 6, (rnd()-0.5)*5); 
-                        coin.position.copy(land.position).add(coinOffset);
-                        coin.userData.baseY = coin.position.y;
-                        scene.add(coin); collectibleItems.push(coin);
-                        coinsSpawned++;
-                    }
-
-                    if (isMainPath && rnd() < branchChance && depth - i > 6) {
-                        const sideRot = rot + (rnd() < 0.5 ? Math.PI/2 : -Math.PI/2);
-                        const sideDepth = 5 + Math.floor(rnd() * (4 + stageNum));
-                        createPath(pos.clone(), sideRot, sideDepth, false);
-                    }
-                    pos.y -= 5.0;
-                }
-                return pos;
-            }
-
-            const finalPos = createPath(currentPos, 0, maxDepth, true);
-
-            goal = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 1000, 32), new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3 }));
-            goal.position.set(finalPos.x, finalPos.y - 490, finalPos.z);
-            goal.userData.topY = finalPos.y + 10;
-            goal.visible = false;
-            scene.add(goal);
-
-            floor = new THREE.Mesh(new THREE.PlaneGeometry(10000, 10000), new THREE.MeshStandardMaterial({ color: 0x000000 }));
-            floor.rotation.x = -Math.PI/2; floor.position.y = finalPos.y - 200;
-            scene.add(floor);
-            isGameOver = false;
-
-            // Re-apply item effects if active
-            if (hasKeyLocator) highlightKeys();
-        }
-
-        function createKey() {
-            const g = new THREE.Group();
-            g.userData.type = 'key';
-            const r = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.1, 12, 24), keyMat); r.position.y = 0.6; g.add(r);
-            const s = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.9, 12), keyMat); s.position.y = 0.2; g.add(s);
-            const b = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.06), keyMat); b.position.set(0.15, 0, 0); g.add(b);
-            return g;
-        }
-
-        function createCoin() {
-            const g = new THREE.Group();
-            g.userData.type = 'coin';
-            const c = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32), coinMat);
-            c.rotation.x = Math.PI / 2;
-            c.position.y = 0.5;
-            g.add(c);
-            return g;
-        }
-
-        function updateCameraRotation() {
-            const minPitch = -Math.PI / 2 + 0.1;
-            const maxPitch = Math.PI / 2 - 0.1;
-            cameraPitch = Math.max(minPitch, Math.min(maxPitch, cameraPitch));
-
-            const qx = new THREE.Quaternion();
-            qx.setFromAxisAngle(new THREE.Vector3(1, 0, 0), cameraPitch);
-            const qy = new THREE.Quaternion();
-            qy.setFromAxisAngle(new THREE.Vector3(0, 1, 0), cameraYaw);
-            
-            camera.quaternion.copy(qy).multiply(qx);
-        }
-
-        function setupMobileControls() {
-            const joyZone = document.getElementById('joystick-zone');
-            const knob = document.getElementById('joystick-knob');
-            const maxDist = 45; 
-
-            const handleJoy = (e) => {
-                e.preventDefault();
-                const touch = e.targetTouches[0]; 
-                const rect = joyZone.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                const dx = touch.clientX - centerX;
-                const dy = touch.clientY - centerY;
-                const distance = Math.min(Math.sqrt(dx*dx + dy*dy), maxDist);
-                const angle = Math.atan2(dy, dx);
-                const moveX = Math.cos(angle) * distance;
-                const moveY = Math.sin(angle) * distance;
-                knob.style.transform = `translate(${moveX}px, ${moveY}px)`;
-                joyVector.x = moveX / maxDist; joyVector.y = moveY / maxDist; 
-            };
-            const resetJoy = (e) => {
-                e.preventDefault();
-                knob.style.transform = `translate(0px, 0px)`;
-                joyVector.x = 0; joyVector.y = 0;
-            };
-            joyZone.addEventListener('touchstart', handleJoy, {passive: false});
-            joyZone.addEventListener('touchmove', handleJoy, {passive: false});
-            joyZone.addEventListener('touchend', resetJoy);
-            
-            // Stable Camera Logic
-            const camArea = document.getElementById('touch-camera-area');
-            let lastTouchX = 0; 
-            let lastTouchY = 0;
-            let activeTouchId = null;
-
-            camArea.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (activeTouchId === null) {
-                    const t = e.changedTouches[0];
-                    activeTouchId = t.identifier;
-                    lastTouchX = t.clientX;
-                    lastTouchY = t.clientY;
-                }
-            }, {passive: false});
-
-            camArea.addEventListener('touchmove', (e) => {
-                e.preventDefault();
-                if (activeTouchId === null) return;
-                let touch = null;
-                for (let i = 0; i < e.changedTouches.length; i++) {
-                    if (e.changedTouches[i].identifier === activeTouchId) {
-                        touch = e.changedTouches[i];
-                        break;
-                    }
-                }
-                if (touch) {
-                    const dx = touch.clientX - lastTouchX;
-                    const dy = touch.clientY - lastTouchY;
-                    const sens = 0.005;
-                    cameraYaw -= dx * sens; 
-                    cameraPitch -= dy * sens;
-                    updateCameraRotation();
-                    lastTouchX = touch.clientX;
-                    lastTouchY = touch.clientY;
-                }
-            }, {passive: false});
-
-            const endTouch = (e) => {
-                e.preventDefault();
-                for (let i = 0; i < e.changedTouches.length; i++) {
-                    if (e.changedTouches[i].identifier === activeTouchId) {
-                        activeTouchId = null;
-                        break;
-                    }
-                }
-            };
-
-            camArea.addEventListener('touchend', endTouch);
-            camArea.addEventListener('touchcancel', endTouch);
-
-            const btnJump = document.getElementById('jump-button');
-            btnJump.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                isJumpHeld = true;
-                const footstepAudio = document.getElementById('sfx-footsteps');
-                if (isFootstepPlaying) {
-                    footstepAudio.pause();
-                    isFootstepPlaying = false;
-                }
-                if(canJump) { velocity.y += 17; canJump = false; }
-            }, {passive: false});
-            btnJump.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                isJumpHeld = false;
-            }, {passive: false});
-        }
-
-        function enterFullscreen() {
-            const elem = document.documentElement;
-            if (elem.requestFullscreen) { elem.requestFullscreen().catch(err => console.log(err)); }
-            else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
-        }
-
-         window.startGame = (isNew, slot = activeSaveSlot) => {
-            if (isMobile) enterFullscreen();
-            setActiveSaveSlotInternal(slot);
-            
-             // If New Game, reset everything
-             if (isNew) {
-                // Clear the slot and start fresh.
-                localStorage.removeItem(getSaveKey(activeSaveSlot));
-                refreshContinueButtons();
-
-                hasKeyLocator = false;
-                hasJetpack = false;
-                isJetpackSwitchOn = false;
-                jetpackState = 'standby';
-                jetpackFuel = 0; // Explicitly reset fuel
-                 hasSaveAnywhere = false; // Reset save ability
-
-                 updateHowToPlay();
-
-                document.getElementById('jetpack-toggle').style.display = 'none';
-                document.getElementById('jetpack-toggle').classList.remove('active');
-                document.getElementById('save-spot-btn').style.display = 'none';
-                
-                collectedCoins = 0;
-                generateStage(1);
-             } else {
-                 const savedData = getSaveData(activeSaveSlot);
-                 if (savedData) {
-                     // If continue, load from save data using the centralized function
-                     loadGameFromData(savedData);
-                 }
-             }
-            
-            updateHUD();
-            document.getElementById('instructions').style.display = 'none';
-            if(!isMobile && controls) controls.lock();
-            document.getElementById('bgm').play().catch(()=>{});
-        };
-
-         function animate() {
-            requestAnimationFrame(animate);
-            const time = performance.now();
-            const delta = Math.min((time - prevTime) / 1000, 0.1);
-
-            // Don't update if a menu overlay is open
-            if (document.getElementById('shop-screen').style.display === 'flex' || document.getElementById('readme-screen').style.display === 'flex') {
-                prevTime = time;
-                return;
-            }
-
-             if (!isGameOver) {
-                // Reset jump state each frame before checking collisions
-                canJump = false;
-
-                // Friction
-                velocity.x -= velocity.x * 10.0 * delta;
-                velocity.z -= velocity.z * 10.0 * delta;
-
-                const jetpackStatusEl = document.getElementById('jetpack-status');
-                let isJetpacking = false;
-
-                // New Jetpack Logic
-                if (hasJetpack) {
-                    // Cooldown state handling
-                    if (jetpackState === 'cooldown') {
-                        jetpackCooldownTimer -= delta;
-                        updateHUD(); // Display countdown
-                        if (jetpackCooldownTimer <= 0) {
-                            jetpackState = 'standby';
-                            jetpackFuel = 5; // Refill fuel
-                            updateHUD(); // Display "STANDBY"
-                        }
-                    }
-                    
-                    // Spray logic: only when switch is on, jump is held, and not in cooldown
-                    if (isJetpackSwitchOn && isJumpHeld && jetpackState === 'standby') {
-                        if (jetpackFuel > 0) {
-                            isJetpacking = true;
-                            jetpackFuel -= delta;
-                            
-                            // Apply lift
-                            velocity.y += 40.0 * delta;
-                            if (velocity.y > 15) velocity.y = 15;
-                            
-                            // Update UI in real-time
-                            jetpackStatusEl.innerHTML = `JETPACK ON: <span style="color:yellow;">${jetpackFuel.toFixed(1)}s</span>`;
-
-                            // Check if fuel just ran out
-                            if (jetpackFuel <= 0) {
-                                jetpackFuel = 0;
-                                jetpackState = 'cooldown';
-                                jetpackCooldownTimer = 60; // Start 60-second cooldown
-                            }
-                        }
-                    }
-                }
-
-                // Apply gravity ONLY if not actively jetpacking
-                if (!isJetpacking) {
-                    velocity.y -= 42.0 * delta;
-                }
-                
-                // Camera Direction for Movement
-                const camFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                camFwd.y = 0; camFwd.normalize();
-                const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-                camRight.y = 0; camRight.normalize();
-
-                let moveX = 0; let moveZ = 0;
-
-                if (moveForward) moveZ += 1; if (moveBackward) moveZ -= 1;
-                if (moveLeft) moveX -= 1; if (moveRight) moveX += 1;
-
-                if (Math.abs(joyVector.y) > 0.1) moveZ += (-joyVector.y);
-                if (Math.abs(joyVector.x) > 0.1) moveX += joyVector.x;
-
-                if (Math.abs(moveX) > 0 || Math.abs(moveZ) > 0) {
-                    velocity.x += (camFwd.x * moveZ + camRight.x * moveX) * 75 * delta;
-                    velocity.z += (camFwd.z * moveZ + camRight.z * moveX) * 75 * delta;
-                }
-
-                camera.position.x += velocity.x * delta;
-                camera.position.z += velocity.z * delta;
-
-                const ray = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0), 0, 4);
-                const hit = ray.intersectObjects(objects);
-                let onObj = false;
-                if(hit.length > 0) {
-                    const gY = hit[0].point.y + 1.8;
-                    if(camera.position.y <= gY + 1.0 && velocity.y < 0) { 
-                        velocity.y = 0; canJump = true; targetY = gY; onObj = true; 
-                    }
-                }
-
-                if(!onObj) camera.position.y += velocity.y * delta;
-                else camera.position.y += (targetY - camera.position.y) * 0.3;
-
-                // --- Landing Audio Logic ---
-                if (canJump && !wasOnGround) {
-                    document.getElementById('sfx-land').play().catch(e => console.error("Landing audio play failed:", e));
-                }
-
-                // --- Footstep Audio Logic ---
-                const footstepAudio = document.getElementById('sfx-footsteps');
-                const isMoving = moveForward || moveBackward || moveLeft || moveRight || Math.abs(joyVector.x) > 0.1 || Math.abs(joyVector.y) > 0.1;
-                const isMovingOnGround = isMoving && canJump;
-
-                if (isMovingOnGround && !isFootstepPlaying) {
-                    footstepAudio.play().catch(e => console.error("Footstep audio play failed:", e));
-                    isFootstepPlaying = true;
-                } else if (!isMovingOnGround && isFootstepPlaying) {
-                    footstepAudio.pause();
-                    footstepAudio.currentTime = 0;
-                    isFootstepPlaying = false;
-                }
-
-                // Collectibles
-                collectibleItems.forEach((k, i) => {
-                    k.rotation.y += delta * 3;
-                    k.position.y = k.userData.baseY + Math.sin(time*0.004)*0.25;
-                    
-                    if(camera.position.distanceTo(k.position) < 3.2) {
-                        document.getElementById('sfx-get').currentTime=0; document.getElementById('sfx-get').play().catch(()=>{});
-                        scene.remove(k); collectibleItems.splice(i, 1);
-                        
-                        if (k.userData.type === 'key') {
-                            collectedItemCount++;
-                            if(collectedItemCount >= 4) goal.material.color.set(0x00ff00);
-                        } else if (k.userData.type === 'coin') {
-                            collectedCoins++;
-                        }
-                        updateHUD();
-                    }
-                });
-
-                if(camera.position.y < 20) goal.visible = true;
-                if(camera.position.y < floor.position.y + 50) {
-                    isGameOver = true; document.getElementById('sfx-fall').play().catch(()=>{});
-                    showEndScreen("FELL INTO THE ABYSS", "RETRY STAGE", () => {
-                        document.getElementById('clear-screen').style.display='none';
-                        // On retry, load the last saved data
-                        const savedData = getSaveData(activeSaveSlot);
-                        if (savedData) {
-                            loadGameFromData(savedData);
-                        } else {
-                            // If there's no save data for some reason, start stage over
-                            generateStage(currentStage); 
-                        }
-                        if(!isMobile && controls) controls.lock();
-                    });
-                }
-                
-                 if(goal.visible && collectedItemCount >= 4) {
-                    const d = new THREE.Vector2(camera.position.x-goal.position.x, camera.position.z-goal.position.z).length();
-                    if(d < 12 && Math.abs(camera.position.y - goal.userData.topY) < 15) {
-                        isGameOver = true;
-                        const next = currentStage + 1;
-                        // Save progress for the next stage, but not the specific spot
-                        saveGame('progress', next);
-                        showEndScreen("LEVEL COMPLETED", "DESCEND DEEPER", () => {
-                            document.getElementById('clear-screen').style.display='none';
-                            document.getElementById('bgm').play().catch(()=>{}); generateStage(next);
-                            if(!isMobile && controls) controls.lock();
-                        }, true);
-                     }
-                 }
-
-                 // Hint: blink the bottom step of each floating staircase when player is near and below it.
-                 // This communicates "jump up into the stair" as an intended interaction.
-                 for (let i = 0; i < hintSteps.length; i++) {
-                     const step = hintSteps[i];
-                     const isBelow = camera.position.y < step.position.y + 1.0;
-                     const isNear = camera.position.distanceToSquared(step.position) < HINT_RADIUS_SQ;
-                     const mat = step.material;
-                     if (isBelow && isNear) {
-                         const pulse = (Math.sin(time * 0.006) + 1) * 0.5; // ~1s period (time is ms)
-                         mat.emissiveIntensity = 0.25 + pulse * 2.0;
-                     } else {
-                         mat.emissiveIntensity = 0;
-                     }
-                 }
-             }
-            // Update grounding state for next frame
-            wasOnGround = canJump;
-
-            prevTime = time; renderer.render(scene, camera);
-        }
-
-        function showEndScreen(text, btnText, btnAction, isClear = false) {
-            document.getElementById('status-text').innerText = text;
-            const btn = document.getElementById('action-button');
-            btn.innerText = btnText; btn.onclick = btnAction;
-            document.getElementById('clear-screen').style.display = 'flex';
-            if(isClear) { document.getElementById('bgm').pause(); document.getElementById('sfx-clear').play().catch(()=>{}); }
-            if(!isMobile && controls) controls.unlock();
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        document.addEventListener('keydown', e => {
-            if (e.code === 'F1') {
-                e.preventDefault();
-                if (!isMobile && !isGameOver && hasSaveAnywhere && canJump && document.getElementById('shop-screen').style.display !== 'flex') {
-                    saveGame('full', currentStage, camera.position, collectedItemCount, activeSaveSlot);
-                    const saveSpotBtn = document.getElementById('save-spot-btn');
-                    saveSpotBtn.classList.add('saved');
-                    setTimeout(() => saveSpotBtn.classList.remove('saved'), 500);
-                    if (controls) {
-                        controls.lock();
-                        prevTime = performance.now();
-                    }
-                }
-                return;
-            }
-            if(e.code==='KeyW') moveForward=true; if(e.code==='KeyS') moveBackward=true;
-            if(e.code==='KeyA') moveLeft=true; if(e.code==='KeyD') moveRight=true;
-            if(e.code==='Space') {
-                isJumpHeld = true;
-                const footstepAudio = document.getElementById('sfx-footsteps');
-                if (isFootstepPlaying) {
-                    footstepAudio.pause();
-                    isFootstepPlaying = false;
-                }
-                if(canJump) { velocity.y+=17; canJump=false; }
-            }
-            if (e.code === 'KeyJ' && hasJetpack) {
-                const jetpackToggleBtn = document.getElementById('jetpack-toggle');
-                isJetpackSwitchOn = !isJetpackSwitchOn;
-                jetpackToggleBtn.classList.toggle('active', isJetpackSwitchOn);
-            }
-            if (e.code === 'KeyI') {
-                if (document.getElementById('shop-screen').style.display === 'flex') {
-                    window.closeShop();
-                } else {
-                    window.openShop();
-                }
-            }
-        });
-        document.addEventListener('keyup', e => {
-            if(e.code==='KeyW') moveForward=false; if(e.code==='KeyS') moveBackward=false;
-            if(e.code==='KeyA') moveLeft=false; if(e.code==='KeyD') moveRight=false;
-            if(e.code==='Space') isJumpHeld = false;
-        });
-
-        init();
-    </script>
 </body>
+
 </html>
+
+
+
