@@ -4,16 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Descent Maze</title>
-    <link rel="manifest" href="manifest.json">
+    <!-- Manifest is injected only on http(s) to avoid file:// CORS noise -->
 <meta name="theme-color" content="#4a3c2c">
 <link rel="apple-touch-icon" href="icon-512.png">
-<script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js');
-    });
-  }
-</script>
+ <script>
+   // file:// is a unique origin; manifest + service worker will fail there.
+   const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+
+   if (isHttp) {
+     const manifest = document.createElement('link');
+     manifest.rel = 'manifest';
+     manifest.href = 'manifest.json';
+     document.head.appendChild(manifest);
+   }
+
+   if (isHttp && 'serviceWorker' in navigator) {
+     window.addEventListener('load', () => {
+       navigator.serviceWorker.register('./sw.js').catch(() => {});
+     });
+   }
+ </script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Georgia', serif; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         
@@ -75,7 +85,7 @@
         button { padding: 15px 40px; font-size: 1.1em; cursor: pointer; background: #4a3c2c; color: #ffd700; border: 1px solid #ffd700; border-radius: 4px; transition: 0.2s; min-width: 250px; touch-action: manipulation; }
         button:active { background: #ffd700; color: #000; }
         button:disabled { border-color: #555; color: #555; background: #222; cursor: default; }
-        #btn-continue { display: none; background: #2c3e4a; }
+        .btn-continue { display: none; background: #2c3e4a; }
 
         /* Shop Specific */
         #shop-items { display: flex; flex-direction: column; gap: 10px; width: 80%; max-width: 400px; }
@@ -147,6 +157,7 @@
     <div id="ui-overlay">
         <span class="key-icon">KEYS: <span id="item-count">0</span> / 4</span><br>
         <span class="coin-icon">COINS: <span id="coin-count">10</span></span><br>
+        <span style="font-size: 14px; color: #ddd;">SAVE SLOT: <span id="save-slot-val">1</span></span><br>
         <span id="jetpack-status" style="font-size: 14px; color: white;"></span>
     </div>
     <div id="jetpack-toggle" style="display: none;">JET</div>
@@ -155,15 +166,23 @@
     <div id="stage-label">STAGE 1<br><span id="theme-name">THE DUST RUINS</span></div>
     <div id="stage-announcement">THE DUST RUINS</div>
 
-    <div id="instructions">
-        <h1 style="letter-spacing: 8px;">DESCENT MAZE</h1>
-        <div class="menu-buttons">
-            <button onclick="startGame(true)">NEW GAME</button>
+        <div id="instructions">
+            <h1 style="letter-spacing: 8px;">DESCENT MAZE</h1>
+            <div class="menu-buttons">
+                <button onclick="startGame(true)">NEW GAME</button>
 <button onclick="localStorage.clear(); location.reload();" style="background:#600;">DELETE SAVE DATA</button>
-            <button id="btn-continue" onclick="startGame(false)">CONTINUE (STAGE <span id="saved-stage-val"></span>)</button>
+            <button class="btn-continue" id="btn-continue-1" onclick="startGame(false, 1)">CONTINUE SLOT 1 (STAGE <span id="saved-stage-val-1"></span>)</button>
+            <button class="btn-continue" id="btn-continue-2" onclick="startGame(false, 2)">CONTINUE SLOT 2 (STAGE <span id="saved-stage-val-2"></span>)</button>
+            <button class="btn-continue" id="btn-continue-3" onclick="startGame(false, 3)">CONTINUE SLOT 3 (STAGE <span id="saved-stage-val-3"></span>)</button>
+            </div>
+            <div style="margin-top: 15px; color: #aaa; font-size: 0.9em;">
+                ACTIVE SLOT:
+                <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(1)">1</button>
+                <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(2)">2</button>
+                <button style="min-width: 60px; padding: 6px 10px;" onclick="setActiveSaveSlot(3)">3</button>
+            </div>
+            <p id="how-to-play" style="font-size: 0.8em; margin-top: 40px; color: #888;"></p>
         </div>
-        <p id="how-to-play" style="font-size: 0.8em; margin-top: 40px; color: #888;"></p>
-    </div>
 
     <div id="clear-screen">
         <h1 id="status-text">STAGE CLEAR</h1>
@@ -229,10 +248,14 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-        let currentStage = 1;
-        let isGameOver = false;
-        let collectedItemCount = 0;
-        let collectedCoins = 10;
+         let currentStage = 1;
+         let isGameOver = false;
+         let collectedItemCount = 0;
+         let collectedCoins = 10;
+
+         // Save Slots
+         const SAVE_SLOTS = 3;
+         let activeSaveSlot = 1;
         
         // Items State
         let hasJetpack = false;
@@ -254,8 +277,9 @@
             { name: "THE BLOOD TWILIGHT", sky: 0x240a0a, fog: 0x240a0a, stair: 0x4a1a1a }
         ];
 
-        let scene, camera, renderer, controls;
-        let objects = [], collectibleItems = [], goal = null, floor = null;
+         let scene, camera, renderer, controls;
+         let objects = [], collectibleItems = [], goal = null, floor = null;
+         let hintSteps = []; // Bottom-most parts of each staircase segment (landing) to blink when near/below
         
         // Movement Variables
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
@@ -273,67 +297,121 @@
         let isFootstepPlaying = false; 
         let wasOnGround = true; // For detecting landing
 
-        const stairMat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
+         const stairMat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
+         const HINT_EMISSIVE_COLOR = 0xFFD700;
+         const HINT_RADIUS = 12; // world units
+         const HINT_RADIUS_SQ = HINT_RADIUS * HINT_RADIUS;
         // Key is now Silver
         const keyMat = new THREE.MeshStandardMaterial({ color: 0xC0C0C0, metalness: 0.9, roughness: 0.2, emissive: 0x222222 });
         // Coin is Gold
         const coinMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 0.8, roughness: 0.2 });
 
-        // Save Data Handling
-        function checkSaveData() {
-            const saved = localStorage.getItem('descent_maze_data');
-            if (saved) {
-                const data = JSON.parse(saved);
-                document.getElementById('btn-continue').style.display = 'block';
-                document.getElementById('saved-stage-val').innerText = data.stage;
-                return data;
-            }
-            return null;
-        }
+         // Save Data Handling
+         function getSaveKey(slot) {
+             return `descent_maze_data_slot_${slot}`;
+         }
 
-        function saveGame(type, stageNum, pos, keys) {
-            let data = {};
-            // For progress saves, we preserve item ownership but reset position/keys
-            if (type === 'progress') {
-                const existingData = JSON.parse(localStorage.getItem('descent_maze_data')) || {};
-                data = {
-                    ...existingData, // Preserve item states
-                    stage: stageNum,
-                    coins: collectedCoins,
-                    playerPos: null,
-                    keys: 0,
-                };
-            } 
-            // For full saves, we save everything at the current moment
-            else if (type === 'full') {
-                data = {
-                    stage: stageNum,
-                    coins: collectedCoins,
-                    playerPos: pos ? {x: pos.x, y: pos.y, z: pos.z} : null,
-                    keys: keys,
-                    hasKeyLocator: hasKeyLocator,
-                    hasJetpack: hasJetpack,
-                    hasSaveAnywhere: hasSaveAnywhere
-                };
-            }
-            localStorage.setItem('descent_maze_data', JSON.stringify(data));
-        }
+         function clampSaveSlot(slot) {
+             const n = Number(slot);
+             if (!Number.isFinite(n)) return 1;
+             const i = Math.trunc(n);
+             return Math.max(1, Math.min(SAVE_SLOTS, i));
+         }
 
-        function loadGameFromData(savedData) {
+         function getSavedActiveSlot() {
+             const raw = localStorage.getItem('descent_maze_active_slot');
+             if (!raw) return 1;
+             return clampSaveSlot(raw);
+         }
+
+         function getSaveData(slot) {
+             const saved = localStorage.getItem(getSaveKey(slot));
+             if (!saved) return null;
+             try {
+                 return JSON.parse(saved);
+             } catch {
+                 return null;
+             }
+         }
+
+         function updateSaveSlotUI() {
+             const slotEl = document.getElementById('save-slot-val');
+             if (slotEl) slotEl.innerText = activeSaveSlot;
+             const saveBtn = document.getElementById('save-spot-btn');
+             if (saveBtn) saveBtn.innerText = `SAVE${activeSaveSlot}`;
+         }
+
+         function refreshContinueButtons() {
+             for (let slot = 1; slot <= SAVE_SLOTS; slot++) {
+                 const data = getSaveData(slot);
+                 const btn = document.getElementById(`btn-continue-${slot}`);
+                 const stageEl = document.getElementById(`saved-stage-val-${slot}`);
+                 if (!btn || !stageEl) continue;
+                 if (data && typeof data.stage === 'number') {
+                     btn.style.display = 'block';
+                     stageEl.innerText = data.stage;
+                 } else {
+                     btn.style.display = 'none';
+                     stageEl.innerText = '';
+                 }
+             }
+         }
+
+         function setActiveSaveSlotInternal(slot) {
+             activeSaveSlot = clampSaveSlot(slot);
+             localStorage.setItem('descent_maze_active_slot', String(activeSaveSlot));
+             updateSaveSlotUI();
+         }
+
+         window.setActiveSaveSlot = (slot) => {
+             setActiveSaveSlotInternal(slot);
+         };
+
+         function saveGame(type, stageNum, pos, keys, slot = activeSaveSlot) {
+             let data = {};
+             // For progress saves, we preserve item ownership but reset position/keys
+             if (type === 'progress') {
+                 const existingData = getSaveData(slot) || {};
+                 data = {
+                     ...existingData, // Preserve item states
+                     stage: stageNum,
+                     coins: collectedCoins,
+                     playerPos: null,
+                     keys: 0,
+                 };
+             } 
+             // For full saves, we save everything at the current moment
+             else if (type === 'full') {
+                 data = {
+                     stage: stageNum,
+                     coins: collectedCoins,
+                     playerPos: pos ? {x: pos.x, y: pos.y, z: pos.z} : null,
+                     keys: keys,
+                     hasKeyLocator: hasKeyLocator,
+                     hasJetpack: hasJetpack,
+                     hasSaveAnywhere: hasSaveAnywhere
+                 };
+             }
+             localStorage.setItem(getSaveKey(slot), JSON.stringify(data));
+             refreshContinueButtons();
+         }
+
+         function loadGameFromData(savedData) {
             // Load game state
             collectedCoins = savedData.coins;
             hasKeyLocator = savedData.hasKeyLocator || false;
             hasJetpack = savedData.hasJetpack || false;
             hasSaveAnywhere = savedData.hasSaveAnywhere || false;
 
-            // Reset dynamic states and UI
-            isJetpackSwitchOn = false;
-            jetpackState = 'standby';
-            jetpackFuel = hasJetpack ? 5 : 0;
+             // Reset dynamic states and UI
+             isJetpackSwitchOn = false;
+             jetpackState = 'standby';
+             jetpackFuel = hasJetpack ? 5 : 0;
             
-            document.getElementById('jetpack-toggle').style.display = hasJetpack ? 'flex' : 'none';
-            document.getElementById('jetpack-toggle').classList.remove('active');
-            document.getElementById('save-spot-btn').style.display = hasSaveAnywhere ? 'flex' : 'none';
+             document.getElementById('jetpack-toggle').style.display = hasJetpack ? 'flex' : 'none';
+             document.getElementById('jetpack-toggle').classList.remove('active');
+             document.getElementById('save-spot-btn').style.display = hasSaveAnywhere ? 'flex' : 'none';
+             updateHowToPlay();
 
             // Generate stage from loaded data. If no specific position is saved, start from the beginning of the stage.
             if (savedData.playerPos) {
@@ -363,7 +441,7 @@
             if (!isMobile && controls) controls.lock();
         };
 
-        window.buyItem = (type, cost) => {
+         window.buyItem = (type, cost) => {
             const msg = document.getElementById('shop-msg');
             if (collectedCoins >= cost) {
                 if (type === 'locator') {
@@ -374,14 +452,15 @@
                     msg.innerText = "LOCATOR ACTIVATED";
                     document.getElementById('btn-buy-locator').disabled = true;
                 }
-                else if (type === 'save') {
-                    if (hasSaveAnywhere) { msg.innerText = "ALREADY OWNED"; return; }
-                    collectedCoins -= cost;
-                    hasSaveAnywhere = true;
-                    document.getElementById('save-spot-btn').style.display = 'flex';
-                    msg.innerText = "SAVE ANYWHERE UNLOCKED";
-                    document.getElementById('btn-buy-save').disabled = true;
-                }
+                 else if (type === 'save') {
+                     if (hasSaveAnywhere) { msg.innerText = "ALREADY OWNED"; return; }
+                     collectedCoins -= cost;
+                     hasSaveAnywhere = true;
+                     document.getElementById('save-spot-btn').style.display = 'flex';
+                     updateHowToPlay();
+                     msg.innerText = "SAVE ANYWHERE UNLOCKED";
+                     document.getElementById('btn-buy-save').disabled = true;
+                 }
                 else if (type === 'jetpack') {
                     if (hasJetpack) { msg.innerText = "ALREADY OWNED"; return; }
                     collectedCoins -= cost;
@@ -421,26 +500,41 @@
             });
         }
 
-        function updateHUD() {
-            document.getElementById('coin-count').innerText = collectedCoins;
-            document.getElementById('item-count').innerText = collectedItemCount;
-            const jetpackStatusEl = document.getElementById('jetpack-status');
-            if (hasJetpack) {
-                switch (jetpackState) {
-                    case 'standby':
-                        jetpackStatusEl.innerHTML = `<span style="color:#00ff00;">JETPACK STANDBY</span>`;
-                        break;
-                    case 'cooldown':
-                        jetpackStatusEl.innerHTML = `JETPACK COOLING: ${Math.ceil(jetpackCooldownTimer)}s`;
-                        break;
-                    case 'active':
-                        // This will be handled in the animate loop for real-time update
-                        break;
-                }
-            } else {
-                jetpackStatusEl.innerHTML = '';
-            }
-        }
+         function updateHUD() {
+             document.getElementById('coin-count').innerText = collectedCoins;
+             document.getElementById('item-count').innerText = collectedItemCount;
+             const jetpackStatusEl = document.getElementById('jetpack-status');
+             if (hasJetpack) {
+                 switch (jetpackState) {
+                     case 'standby':
+                         jetpackStatusEl.innerHTML = `<span style="color:#00ff00;">JETPACK STANDBY</span>`;
+                         break;
+                     case 'cooldown':
+                         jetpackStatusEl.innerHTML = `JETPACK COOLING: ${Math.ceil(jetpackCooldownTimer)}s`;
+                         break;
+                     case 'active':
+                         // This will be handled in the animate loop for real-time update
+                         break;
+                 }
+             } else {
+                 jetpackStatusEl.innerHTML = '';
+             }
+         }
+
+         function updateHowToPlay() {
+             const el = document.getElementById('how-to-play');
+             if (!el) return;
+
+             if (isMobile) {
+                 el.innerText = "LEFT STICK: MOVE / RIGHT SCREEN: LOOK / BUTTON: JUMP";
+                 return;
+             }
+
+             const quickSaveHint = hasSaveAnywhere ?
+                 "I: ITEM SHOP / F1: QUICK SAVE" :
+                 "I: ITEM SHOP / F1: QUICK SAVE (BUY 'Save Anywhere')";
+             el.innerText = `WASD: MOVE / SPACE: JUMP / MOUSE: LOOK\n${quickSaveHint}`;
+         }
 
         function init() {
             scene = new THREE.Scene();
@@ -450,9 +544,9 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); 
             document.body.appendChild(renderer.domElement);
 
-            if (!isMobile) {
-                controls = new PointerLockControls(camera, document.body);
-                document.getElementById('how-to-play').innerText = "WASD: MOVE / SPACE: JUMP / MOUSE: LOOK";
+             if (!isMobile) {
+                 controls = new PointerLockControls(camera, document.body);
+                 updateHowToPlay();
                 
                 // Fix for gear button click vs pointer lock
                 document.getElementById('gear-btn').addEventListener('click', (e) => {
@@ -460,14 +554,27 @@
                     window.openShop();
                 });
                 
-            } else {
-                document.getElementById('how-to-play').innerText = "LEFT STICK: MOVE / RIGHT SCREEN: LOOK / BUTTON: JUMP";
-                setupMobileControls();
+             } else {
+                 updateHowToPlay();
+                 setupMobileControls();
                 document.getElementById('gear-btn').addEventListener('touchstart', (e) => {
                     e.stopPropagation();
                     window.openShop();
                 });
             }
+
+             // Desktop: click the gameplay area to restore mouse-look after ESC.
+             // (UI buttons already call stopPropagation.)
+             if (!isMobile) {
+                 document.body.addEventListener('click', () => {
+                     if (!controls) return;
+                     if (document.getElementById('instructions').style.display !== 'none') return;
+                     if (document.getElementById('shop-screen').style.display === 'flex') return;
+                     if (document.getElementById('clear-screen').style.display === 'flex') return;
+                     controls.lock();
+                     prevTime = performance.now();
+                 });
+             }
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.9));
             const light = new THREE.PointLight(0xffffff, 150, 100);
@@ -475,7 +582,9 @@
             scene.add(camera);
 
             window.addEventListener('resize', onWindowResize);
-            checkSaveData();
+            activeSaveSlot = getSavedActiveSlot();
+            updateSaveSlotUI();
+            refreshContinueButtons();
 
             // Jetpack Toggle
             const jetpackToggleBtn = document.getElementById('jetpack-toggle');
@@ -492,14 +601,26 @@
             saveSpotBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (hasSaveAnywhere && canJump) { // Only allow saving when on ground
-                    saveGame('full', currentStage, camera.position, collectedItemCount);
+                    saveGame('full', currentStage, camera.position, collectedItemCount, activeSaveSlot);
                     // Visual feedback: green for success
                     saveSpotBtn.classList.add('saved');
                     setTimeout(() => saveSpotBtn.classList.remove('saved'), 500);
+
+                     // Desktop: after clicking SAVE with cursor, resume mouse-look immediately.
+                     if (!isMobile && controls) {
+                         controls.lock();
+                         prevTime = performance.now();
+                     }
                 } else if (hasSaveAnywhere) {
                     // Visual feedback: red for failure (e.g., in air)
                     saveSpotBtn.style.backgroundColor = '#f00';
                     setTimeout(() => saveSpotBtn.style.backgroundColor = 'rgba(0,0,0,0.5)', 500);
+
+                     // Desktop: still resume mouse-look after the attempt.
+                     if (!isMobile && controls) {
+                         controls.lock();
+                         prevTime = performance.now();
+                     }
                 }
             });
             
@@ -508,7 +629,7 @@
             animate();
         }
 
-        function generateStage(stageNum, savedPos = null, savedKeys = 0) {
+         function generateStage(stageNum, savedPos = null, savedKeys = 0) {
             currentStage = stageNum;
             const theme = THEMES[(stageNum - 1) % THEMES.length];
             scene.background = new THREE.Color(theme.sky);
@@ -523,12 +644,13 @@
             ann.innerText = theme.name; ann.style.opacity = 1;
             setTimeout(() => ann.style.opacity = 0, 3000);
 
-            // Cleanup
-            objects.forEach(o => scene.remove(o));
-            collectibleItems.forEach(k => scene.remove(k));
-            if(goal) scene.remove(goal);
-            if(floor) scene.remove(floor);
-            objects = []; collectibleItems = [];
+             // Cleanup
+             objects.forEach(o => scene.remove(o));
+             collectibleItems.forEach(k => scene.remove(k));
+             if(goal) scene.remove(goal);
+             if(floor) scene.remove(floor);
+             objects = []; collectibleItems = [];
+             hintSteps = [];
             
             // Restore or Reset logic
             collectedItemCount = savedKeys;
@@ -561,7 +683,7 @@
             let currentPos = new THREE.Vector3(0, 50, 0);
             let coinsSpawned = 0;
 
-            function createPath(startPos, startRot, depth, isMainPath) {
+             function createPath(startPos, startRot, depth, isMainPath) {
                 let pos = startPos.clone();
                 let lastRot = startRot;
 
@@ -569,20 +691,26 @@
                     const rot = lastRot + (Math.floor(rnd() * 3) - 1) * (Math.PI / 2);
                     lastRot = rot;
 
-                    for (let s = 0; s < 5; s++) {
-                        const step = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.2, 1.6), stairMat);
-                        const offset = new THREE.Vector3(0, s * -0.7, s * 1.3).applyAxisAngle(new THREE.Vector3(0,1,0), rot);
-                        step.position.copy(pos).add(offset);
-                        step.rotation.y = rot;
-                        scene.add(step); objects.push(step);
-                    }
+                     for (let s = 0; s < 5; s++) {
+                         const step = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.2, 1.6), stairMat);
+                         const offset = new THREE.Vector3(0, s * -0.7, s * 1.3).applyAxisAngle(new THREE.Vector3(0,1,0), rot);
+                         step.position.copy(pos).add(offset);
+                         step.rotation.y = rot;
+                         scene.add(step); objects.push(step);
+                     }
 
-                    const land = new THREE.Mesh(new THREE.BoxGeometry(9, 1.2, 9), stairMat);
-                    const landOffset = new THREE.Vector3(0, -3.5, 9.5).applyAxisAngle(new THREE.Vector3(0,1,0), rot);
-                    land.position.copy(pos).add(landOffset);
-                    land.rotation.y = rot;
-                    scene.add(land); objects.push(land);
-                    pos.copy(land.position);
+                     const landMat = stairMat.clone();
+                     // Clone material so we can pulse emissive without affecting all stairs.
+                     landMat.emissive = new THREE.Color(HINT_EMISSIVE_COLOR);
+                     landMat.emissiveIntensity = 0;
+                     const land = new THREE.Mesh(new THREE.BoxGeometry(9, 1.2, 9), landMat);
+                     const landOffset = new THREE.Vector3(0, -3.5, 9.5).applyAxisAngle(new THREE.Vector3(0,1,0), rot);
+                     land.position.copy(pos).add(landOffset);
+                     land.rotation.y = rot;
+                     scene.add(land); objects.push(land);
+                     land.userData.isHintStep = true;
+                     hintSteps.push(land);
+                     pos.copy(land.position);
 
                     // Key Spawning
                     if ((isMainPath && i > 0 && i % 12 === 0 && keyRemaining > 1) || 
@@ -768,18 +896,24 @@
             else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
         }
 
-        window.startGame = (isNew) => {
+         window.startGame = (isNew, slot = activeSaveSlot) => {
             if (isMobile) enterFullscreen();
-            const savedData = checkSaveData();
+            setActiveSaveSlotInternal(slot);
             
-            // If New Game, reset everything
-            if (isNew) {
+             // If New Game, reset everything
+             if (isNew) {
+                // Clear the slot and start fresh.
+                localStorage.removeItem(getSaveKey(activeSaveSlot));
+                refreshContinueButtons();
+
                 hasKeyLocator = false;
                 hasJetpack = false;
                 isJetpackSwitchOn = false;
                 jetpackState = 'standby';
                 jetpackFuel = 0; // Explicitly reset fuel
-                hasSaveAnywhere = false; // Reset save ability
+                 hasSaveAnywhere = false; // Reset save ability
+
+                 updateHowToPlay();
 
                 document.getElementById('jetpack-toggle').style.display = 'none';
                 document.getElementById('jetpack-toggle').classList.remove('active');
@@ -787,10 +921,13 @@
                 
                 collectedCoins = 0;
                 generateStage(1);
-            } else if (savedData) {
-                // If continue, load from save data using the centralized function
-                loadGameFromData(savedData);
-            }
+             } else {
+                 const savedData = getSaveData(activeSaveSlot);
+                 if (savedData) {
+                     // If continue, load from save data using the centralized function
+                     loadGameFromData(savedData);
+                 }
+             }
             
             updateHUD();
             document.getElementById('instructions').style.display = 'none';
@@ -798,7 +935,7 @@
             document.getElementById('bgm').play().catch(()=>{});
         };
 
-        function animate() {
+         function animate() {
             requestAnimationFrame(animate);
             const time = performance.now();
             const delta = Math.min((time - prevTime) / 1000, 0.1);
@@ -809,7 +946,7 @@
                 return;
             }
 
-            if (!isGameOver) {
+             if (!isGameOver) {
                 // Reset jump state each frame before checking collisions
                 canJump = false;
 
@@ -940,7 +1077,7 @@
                     showEndScreen("FELL INTO THE ABYSS", "RETRY STAGE", () => {
                         document.getElementById('clear-screen').style.display='none';
                         // On retry, load the last saved data
-                        const savedData = checkSaveData();
+                        const savedData = getSaveData(activeSaveSlot);
                         if (savedData) {
                             loadGameFromData(savedData);
                         } else {
@@ -951,7 +1088,7 @@
                     });
                 }
                 
-                if(goal.visible && collectedItemCount >= 4) {
+                 if(goal.visible && collectedItemCount >= 4) {
                     const d = new THREE.Vector2(camera.position.x-goal.position.x, camera.position.z-goal.position.z).length();
                     if(d < 12 && Math.abs(camera.position.y - goal.userData.topY) < 15) {
                         isGameOver = true;
@@ -963,9 +1100,24 @@
                             document.getElementById('bgm').play().catch(()=>{}); generateStage(next);
                             if(!isMobile && controls) controls.lock();
                         }, true);
-                    }
-                }
-            }
+                     }
+                 }
+
+                 // Hint: blink the bottom step of each floating staircase when player is near and below it.
+                 // This communicates "jump up into the stair" as an intended interaction.
+                 for (let i = 0; i < hintSteps.length; i++) {
+                     const step = hintSteps[i];
+                     const isBelow = camera.position.y < step.position.y + 1.0;
+                     const isNear = camera.position.distanceToSquared(step.position) < HINT_RADIUS_SQ;
+                     const mat = step.material;
+                     if (isBelow && isNear) {
+                         const pulse = (Math.sin(time * 0.006) + 1) * 0.5; // ~1s period (time is ms)
+                         mat.emissiveIntensity = 0.25 + pulse * 2.0;
+                     } else {
+                         mat.emissiveIntensity = 0;
+                     }
+                 }
+             }
             // Update grounding state for next frame
             wasOnGround = canJump;
 
@@ -987,6 +1139,20 @@
         }
 
         document.addEventListener('keydown', e => {
+            if (e.code === 'F1') {
+                e.preventDefault();
+                if (!isMobile && !isGameOver && hasSaveAnywhere && canJump && document.getElementById('shop-screen').style.display !== 'flex') {
+                    saveGame('full', currentStage, camera.position, collectedItemCount, activeSaveSlot);
+                    const saveSpotBtn = document.getElementById('save-spot-btn');
+                    saveSpotBtn.classList.add('saved');
+                    setTimeout(() => saveSpotBtn.classList.remove('saved'), 500);
+                    if (controls) {
+                        controls.lock();
+                        prevTime = performance.now();
+                    }
+                }
+                return;
+            }
             if(e.code==='KeyW') moveForward=true; if(e.code==='KeyS') moveBackward=true;
             if(e.code==='KeyA') moveLeft=true; if(e.code==='KeyD') moveRight=true;
             if(e.code==='Space') {
