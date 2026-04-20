@@ -4,26 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Descent Maze</title>
-    <!-- Manifest is injected only on http(s) to avoid file:// CORS noise -->
-<meta name="theme-color" content="#4a3c2c">
-<link rel="apple-touch-icon" href="icon-512.png">
- <script>
-   // file:// is a unique origin; manifest + service worker will fail there.
-   const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
-
-   if (isHttp) {
-     const manifest = document.createElement('link');
-     manifest.rel = 'manifest';
-     manifest.href = 'manifest.json';
-     document.head.appendChild(manifest);
-   }
-
-   if (isHttp && 'serviceWorker' in navigator) {
-     window.addEventListener('load', () => {
-       navigator.serviceWorker.register('./sw.js').catch(() => {});
-     });
-   }
- </script>
+    <meta name="theme-color" content="#4a3c2c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-512.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+    <script>
+      // file:// is a unique origin; service workers will fail there.
+      const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+      if (isHttp && 'serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(() => {});
+        });
+      }
+    </script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Georgia', serif; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
         
@@ -75,24 +70,39 @@
         
         /* Menu Screens */
         #instructions, #clear-screen, #shop-screen { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            display: flex; flex-direction: column; justify-content: center; align-items: center; 
-            background: rgba(0,0,0,0.9); color: white; text-align: center; z-index: 100; 
+             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+             display: flex; flex-direction: column; justify-content: center; align-items: center; 
+             background: rgba(0,0,0,0.9); color: white; text-align: center; z-index: 100; 
+         }
+         #clear-screen, #shop-screen { display: none; }
+
+        /* Allow scrolling inside overlays even though body is non-scrollable */
+        #shop-screen {
+            justify-content: flex-start;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 24px;
+            box-sizing: border-box;
+            touch-action: pan-y;
         }
-        #clear-screen, #shop-screen { display: none; }
 
         /* README Screen */
         #readme-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: none; flex-direction: column; justify-content: center; align-items: center;
+            display: none; flex-direction: column; justify-content: flex-start; align-items: center;
             background: rgba(0,0,0,0.95); color: white; text-align: center; z-index: 110;
             padding: 24px;
             box-sizing: border-box;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
         }
         #readme-body {
             width: min(900px, 92vw);
             max-height: 70vh;
             overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
             text-align: left;
             line-height: 1.6;
             color: #ddd;
@@ -109,7 +119,16 @@
         .btn-continue { display: none; background: #2c3e4a; }
 
         /* Shop Specific */
-        #shop-items { display: flex; flex-direction: column; gap: 10px; width: 80%; max-width: 400px; }
+        #shop-items {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: min(520px, 92vw);
+            max-height: 60vh;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
         .shop-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 10px; border: 1px solid #555; }
         .shop-desc { text-align: left; font-size: 0.9em; }
         .shop-cost { color: #ffd700; font-weight: bold; }
