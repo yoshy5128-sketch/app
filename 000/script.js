@@ -7442,13 +7442,16 @@ function removeAIProjectiles(ai, removeAllAI = false) {
         }
         rocketTrails.splice(i, 1);
     }
-    // Safety net: remove any stray projectile meshes that aren't tracked anymore.
+// Safety net: remove ALL meshes with isProjectile or isRocketTrail from AI
     const toRemove = [];
     scene.traverse((obj) => {
-        if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isProjectile) return;
-        if (!removeAllAI && obj.userData.shooter !== ai) return;
-        if (removeAllAI && obj.userData.source !== 'ai') return;
-        toRemove.push(obj);
+        if (!obj || !obj.isMesh || !obj.userData) return;
+        const isProjectileOrTrail = obj.userData.isProjectile || obj.userData.isRocketTrail;
+        if (!isProjectileOrTrail) return;
+        // Always remove AI projectiles/trails when called from aiFallDownCinematicSequence
+        if (obj.userData.source === 'ai') {
+            toRemove.push(obj);
+        }
     });
     for (const mesh of toRemove) {
         if (mesh.parent) {
@@ -9626,6 +9629,32 @@ function respawnAI(ai) {
     let farthestPosition = findSaferRespawnPosition(ai, hostilePositions, BODY_HEIGHT * 2, 10, ai);
     if (!farthestPosition) farthestPosition = new THREE.Vector3(0, getGroundY(new THREE.Vector3(0, 0, 0), BODY_HEIGHT * 2), 0);
     ai.position.copy(farthestPosition);
+
+    // アリーナ内に収める
+    const distFromCenter = Math.sqrt(ai.position.x * ai.position.x + ai.position.z * ai.position.z);
+    if (distFromCenter > ARENA_PLAY_AREA_RADIUS - 3) {
+        const ratio = (ARENA_PLAY_AREA_RADIUS - 3) / distFromCenter;
+        ai.position.x *= ratio;
+        ai.position.z *= ratio;
+    }
+
+    let aiRespawnAttempts = 0;
+    while (checkCollision(ai, obstacles) && aiRespawnAttempts < 8) {
+        const shiftDir = new THREE.Vector3(
+            (Math.random() - 0.5) * 2,
+            0,
+            (Math.random() - 0.5) * 2
+        ).normalize().multiplyScalar(1.0);
+        ai.position.add(shiftDir);
+        const dist = Math.sqrt(ai.position.x * ai.position.x + ai.position.z * ai.position.z);
+        if (dist > ARENA_PLAY_AREA_RADIUS - 3) {
+            const ratio = (ARENA_PLAY_AREA_RADIUS - 3) / dist;
+            ai.position.x *= ratio;
+            ai.position.z *= ratio;
+        }
+        aiRespawnAttempts++;
+    }
+
     ai.rotation.set(0, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 0);
     ai.state = 'HIDING';
     applyAIDefaultWeaponLoadout(ai);
@@ -9688,10 +9717,58 @@ function respawnPlayer() {
     let safePos = isBillBattle
         ? getBillBattlePlayerSpawn()
         : findSaferRespawnPosition(player, hostilePositions, playerTargetHeight * 2, 10, null);
+
+    // findSaferRespawnPositionが返した位置が実際に衝突チェックを通ることを確認
+    if (safePos) {
+        player.position.copy(safePos);
+        // 一時的に位置を設定して衝突チェック
+        if (checkCollision(player, obstacles)) {
+            // 衝突がある場合は別の位置を探す
+            safePos = null;
+        }
+    }
+
+    // safePosがnull、または衝突がある場合のフォールバック
+    let retryCount = 0;
+    while (retryCount < 10) {
+        if (safePos) break;
+        safePos = findSaferRespawnPosition(player, hostilePositions, playerTargetHeight * 2, 10, null);
+        if (safePos) {
+            player.position.copy(safePos);
+            if (!checkCollision(player, obstacles)) break;
+        }
+        if (!safePos) {
+            // 中央付近を候補にする
+            safePos = new THREE.Vector3(
+                (Math.random() - 0.5) * 20,
+                0,
+                (Math.random() - 0.5) * 20
+            );
+            safePos.y = getGroundY(safePos, playerTargetHeight * 2);
+            player.position.copy(safePos);
+            if (!checkCollision(player, obstacles)) break;
+        }
+        retryCount++;
+    }
+
+    // すべての試行が失敗した場合、中央に強制配置
+    if (!safePos || checkCollision(player, obstacles)) {
+        player.position.set(0, getGroundY(new THREE.Vector3(0, 0, 0), playerTargetHeight * 2), 0);
+        if (checkCollision(player, obstacles)) {
+            player.position.set(0, playerTargetHeight, 0);
+        }
+    }
+
+    // lastDeathPosとの距離チェック
     if (safePos && lastPlayerDeathPos) {
-        let retryCount = 0;
+        retryCount = 0;
         while (safePos.distanceTo(lastPlayerDeathPos) < 8 && retryCount < 4) {
-            safePos = findSaferRespawnPosition(player, hostilePositions, playerTargetHeight * 2, 10, null);
+            const tryPos = findSaferRespawnPosition(player, hostilePositions, playerTargetHeight * 2, 10, null);
+            if (tryPos) {
+                safePos = tryPos;
+                player.position.copy(safePos);
+                if (!checkCollision(player, obstacles)) break;
+            }
             retryCount++;
         }
     }
@@ -9733,6 +9810,36 @@ function respawnPlayer() {
     camera.rotation.x = 0; // カメラの縦回転をリセット
     applyPlayerDefaultWeaponLoadout();
 
+    // リスポーン後にプレイヤーと障害物の重なりをチェックして強制的に解決
+    let spawnCollisionAttempts = 0;
+    while (checkCollision(player, obstacles) && spawnCollisionAttempts < 15) {
+        resolvePlayerCollision(player, obstacles, 0.5);
+        if (checkCollision(player, obstacles)) {
+            // まだ衝突している場合は位置を強制的にずらす
+            const shiftDir = new THREE.Vector3(
+                (Math.random() - 0.5) * 2,
+                0,
+                (Math.random() - 0.5) * 2
+            ).normalize().multiplyScalar(2.0);
+            player.position.add(shiftDir);
+            // アリーナ内に戻す
+            const dist = Math.sqrt(player.position.x * player.position.x + player.position.z * player.position.z);
+            if (dist > ARENA_PLAY_AREA_RADIUS - 5) {
+                const ratio = (ARENA_PLAY_AREA_RADIUS - 5) / dist;
+                player.position.x *= ratio;
+                player.position.z *= ratio;
+            }
+            // Y座標を地面に再設定
+            player.position.y = getGroundY(player.position, playerTargetHeight * 2);
+        }
+        spawnCollisionAttempts++;
+    }
+
+    // 15回やっても解決しない場合は、中央にテレポート
+    if (checkCollision(player, obstacles)) {
+        player.position.set(0, playerTargetHeight, 0);
+    }
+
     // playerModelの表示状態を確実に更新
     if (playerModel) {
         resetCharacterPose(playerModel);
@@ -9740,12 +9847,11 @@ function respawnPlayer() {
             playerModel.userData.parts.gun.visible = true;
         }
         playerModel.rotation.set(0, 0, 0);
-        if (!playerModel.parent) { // もしplayerModelがシーンから削除されていたらplayerに追加
+        if (!playerModel.parent) {
             player.add(playerModel);
         }
-        // playerModel.visible = true; // 常に表示
-        playerModel.visible = false; // <-- ここに明示的に追加
-        playerModel.position.set(0, -playerTargetHeight, 0); // playerModelはplayerの子なので相対位置を設定
+        playerModel.visible = false;
+        playerModel.position.set(0, -playerTargetHeight, 0);
     }
 }
 
@@ -10124,6 +10230,10 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         restoreRightButtonsDefault();
         return;
     }
+    if (isBillBattleMode() && killerSource === 'player') {
+        billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
+        updateBillBattleKillDisplay();
+    }
     if (isBillBattleMode() && killerSource === 'player' && gameSettings.killCamMode === 'off') {
         console.log('Executing death animation in BillBattle mode for player kill');
         if (killerSource === 'player') {
@@ -10224,15 +10334,18 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
     } else {
         ai.visible = false;
     }
+    // BillBattle: decrement kill counter
+    if (isBillBattleMode()) {
+        billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
+        updateBillBattleKillDisplay();
+    }
 }
 
 function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown') {
     if (!ai) return;
     if (!ai.userData) ai.userData = {};
     ai.userData.isDying = true;
-    if (gameSettings.aiShotLevel === 'ama') {
-        removeAIProjectiles(ai, true);
-    }
+    removeAIProjectiles(ai, true);
     if (isBillBattleMode() && killerSource !== 'player') {
         finalizeAIDeathWithoutKillCam(ai, killerSource);
         return;
@@ -13349,7 +13462,7 @@ function animate() {
         }
     } else {
         const allAIsDefeated = ais.every(ai => ai.hp <= 0);
-        if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && (gameSettings.gameMode === 'battle' || gameSettings.gameMode === 'ffa') && !isBillBattleMode()) {
+        if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && (gameSettings.gameMode === 'battle' || gameSettings.gameMode === 'ffa' || gameSettings.gameMode === 'arcade') && !isBillBattleMode()) {
             showWinScreen();
         }
     }
