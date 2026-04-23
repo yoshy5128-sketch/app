@@ -127,6 +127,12 @@
             justify-content: center;
             background: #222;
         }
+        .gun-editor-actions button {
+            min-width: 0;
+            max-width: 100%;
+            white-space: normal;
+            word-break: break-word;
+        }
         .gun-editor-controls-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -148,6 +154,15 @@
             }
             .gun-editor-controls-grid {
                 grid-template-columns: 1fr;
+            }
+            .gun-editor-actions {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 6px;
+                justify-content: stretch;
+            }
+            .gun-editor-actions button {
+                width: 100%;
             }
         }
     </style>
