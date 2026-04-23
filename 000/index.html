@@ -77,6 +77,51 @@
                 font-size: 0.6em !important;
             }
         }
+
+        .gun-editor-shell {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 16px;
+            align-items: stretch;
+            min-height: calc(100vh - 120px);
+        }
+        .gun-editor-pane {
+            background-color: #222;
+            border-radius: 6px;
+            padding: 12px;
+            box-sizing: border-box;
+            min-height: 0;
+        }
+        .gun-editor-preview-pane {
+            display: flex;
+            flex-direction: column;
+            position: sticky;
+            top: 12px;
+            height: calc(100vh - 150px);
+        }
+        .gun-editor-settings-pane {
+            overflow-y: auto;
+            height: calc(100vh - 150px);
+        }
+        .gun-editor-controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        @media (max-width: 980px) {
+            .gun-editor-shell {
+                grid-template-columns: 1fr;
+            }
+            .gun-editor-preview-pane,
+            .gun-editor-settings-pane {
+                position: static;
+                height: auto;
+                overflow: visible;
+            }
+            .gun-editor-controls-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
     
     <link rel="stylesheet" href="style.css">
@@ -118,6 +163,11 @@
             <button id="open-character-editor" style="padding: 10px 20px; font-size: 1em; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">
                 Open Character Editor
             </button>
+            <div style="margin-top: 8px;">
+                <button id="open-gun-editor" style="padding: 10px 20px; font-size: 1em; background-color: #ff7b00; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">
+                    Open Gun Editor
+                </button>
+            </div>
 
             <h2 style="margin-top: 20px;">Weapon Count</h2>
             <label for="mg-count">Machine Guns (MG):</label>
@@ -625,6 +675,39 @@
                 <button id="import-character-json" style="width: 100%; padding: 10px; background-color: #FF9800; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-bottom: 10px;">Import All Characters (JSON)</button>
                 <input type="file" id="json-file-input" accept=".json" style="display: none;">
                 <button id="close-character-editor" style="padding: 10px 20px; margin: 0 10px; background-color: #f44336; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gun-editor-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto;">
+        <div style="padding: 16px; min-height: 100%; max-width: 1200px; margin: 0 auto; box-sizing: border-box;">
+            <h2 style="color: white; text-align: center; margin-bottom: 14px;">Gun Editor</h2>
+            <div class="gun-editor-shell">
+                <div class="gun-editor-pane gun-editor-preview-pane">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: white;">
+                        <label for="gun-editor-weapon-select">Weapon:</label>
+                        <select id="gun-editor-weapon-select" style="font-size: 1em; padding: 5px;">
+                            <option value="pistol">Pistol</option>
+                            <option value="machinegun">Machine Gun</option>
+                            <option value="rocketlauncher">Rocket Launcher</option>
+                            <option value="sniperrifle">Sniper Rifle</option>
+                            <option value="shotgun">Shotgun</option>
+                            <option value="m1rifle">M1 Rifle</option>
+                        </select>
+                    </div>
+                    <div id="gun-preview-container" style="width: 100%; flex: 1; min-height: 300px; background-color: #111; border-radius: 4px;"></div>
+                    <p style="color: #bbb; font-size: 0.9em; margin-top: 8px;">Preview updates live while editing.</p>
+                </div>
+                <div class="gun-editor-pane gun-editor-settings-pane">
+                    <h3 style="color: white; margin-top: 0; margin-bottom: 8px;">Parameters</h3>
+                    <div id="gun-editor-controls" class="gun-editor-controls-grid"></div>
+                </div>
+            </div>
+            <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
+                <button id="gun-editor-save" style="padding: 10px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Gun Settings</button>
+                <button id="gun-editor-reset-weapon" style="padding: 10px 16px; background-color: #888; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset Current Weapon</button>
+                <button id="gun-editor-reset-all" style="padding: 10px 16px; background-color: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset All Weapons</button>
+                <button id="close-gun-editor" style="padding: 10px 16px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
             </div>
         </div>
     </div>
