@@ -14554,8 +14554,8 @@ function initGunPreview() {
     gunEditorScene = new THREE.Scene();
     gunEditorScene.background = new THREE.Color(0x101010);
     gunEditorCamera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
-    gunEditorCamera.position.set(0, 0.22, 3.0);
-    gunEditorCamera.lookAt(0, 0.08, 0);
+    gunEditorCamera.position.set(0, 0.6, 3.2);
+    gunEditorCamera.lookAt(0, 0.2, 0);
 
     gunEditorRenderer = new THREE.WebGLRenderer({ antialias: true });
     gunEditorRenderer.setSize(container.clientWidth, container.clientHeight);
@@ -14580,7 +14580,7 @@ function initGunPreview() {
         new THREE.BoxGeometry(0.1, 0.1, 1.0),
         new THREE.MeshStandardMaterial({ color: 0x999999 })
     );
-    gunPreviewMesh.position.set(0, 0.08, 0);
+    gunPreviewMesh.position.set(0, 0, 0);
     gunEditorScene.add(gunPreviewMesh);
 
     renderGunEditorFrame();
