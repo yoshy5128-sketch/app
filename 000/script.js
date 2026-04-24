@@ -306,6 +306,7 @@ let gunEditorInputs = {};
 let gunEditorAnimating = false;
 let gunPreviewZoomLevel = 1.0;
 let gunPreviewTouchDistance = 0;
+let gunPreviewResizeBound = false;
 let weaponCustomizationRevision = 0;
 const runtimeGunModelCache = {};
 
@@ -14553,14 +14554,17 @@ function initGunPreview() {
     const container = document.getElementById('gun-preview-container');
     if (!container || gunEditorRenderer) return;
 
+    const initialWidth = Math.max(1, Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1));
+    const initialHeight = Math.max(1, Math.floor(container.clientHeight || container.getBoundingClientRect().height || 1));
+
     gunEditorScene = new THREE.Scene();
     gunEditorScene.background = new THREE.Color(0x87ceeb);
-    gunEditorCamera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
+    gunEditorCamera = new THREE.PerspectiveCamera(60, initialWidth / initialHeight, 0.1, 100);
     gunEditorCamera.position.set(0, 0.22, 3.0);
     gunEditorCamera.lookAt(0, 0.08, 0);
 
     gunEditorRenderer = new THREE.WebGLRenderer({ antialias: true });
-    gunEditorRenderer.setSize(container.clientWidth, container.clientHeight);
+    gunEditorRenderer.setSize(initialWidth, initialHeight);
     while (container.firstChild) container.removeChild(container.firstChild);
     container.appendChild(gunEditorRenderer.domElement);
     setupGunPreviewZoomControls(container);
@@ -14587,6 +14591,17 @@ function initGunPreview() {
     gunPreviewMesh.position.set(0, 0.08, 0);
     gunEditorScene.add(gunPreviewMesh);
 
+    renderGunEditorFrame();
+}
+
+function resizeGunPreviewRenderer() {
+    const container = document.getElementById('gun-preview-container');
+    if (!container || !gunEditorRenderer || !gunEditorCamera) return;
+    const width = Math.max(1, Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1));
+    const height = Math.max(1, Math.floor(container.clientHeight || container.getBoundingClientRect().height || 1));
+    gunEditorRenderer.setSize(width, height, false);
+    gunEditorCamera.aspect = width / height;
+    gunEditorCamera.updateProjectionMatrix();
     renderGunEditorFrame();
 }
 
@@ -14711,6 +14726,9 @@ function openGunEditor() {
         requestGunEditorLandscapeFullscreen();
     }
     initGunPreview();
+    requestAnimationFrame(resizeGunPreviewRenderer);
+    setTimeout(resizeGunPreviewRenderer, 200);
+    setTimeout(resizeGunPreviewRenderer, 550);
     startGunEditorAnimation();
     gunEditorLiveModel = sanitizeGunModel(getEffectiveGunModel(currentGunEditorWeapon), currentGunEditorWeapon);
     refreshGunEditorInputValues();
@@ -14753,6 +14771,22 @@ function initGunEditor() {
         openBtn.addEventListener('click', (e) => {
             e.preventDefault();
             openGunEditor();
+        });
+    }
+    if (!gunPreviewResizeBound) {
+        gunPreviewResizeBound = true;
+        window.addEventListener('resize', () => {
+            const screen = document.getElementById('gun-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                resizeGunPreviewRenderer();
+            }
+        });
+        window.addEventListener('orientationchange', () => {
+            const screen = document.getElementById('gun-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeGunPreviewRenderer, 120);
+                setTimeout(resizeGunPreviewRenderer, 420);
+            }
         });
     }
     if (closeBtn) {
