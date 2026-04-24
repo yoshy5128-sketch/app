@@ -14750,6 +14750,7 @@ function initGunEditor() {
     const openBtn = document.getElementById('open-gun-editor');
     const closeBtn = document.getElementById('close-gun-editor');
     const fullscreenBtn = document.getElementById('gun-editor-fullscreen');
+    const fullscreenTopBtn = document.getElementById('gun-editor-fullscreen-top');
     const saveBtn = document.getElementById('gun-editor-save');
     const resetWeaponBtn = document.getElementById('gun-editor-reset-weapon');
     const resetAllBtn = document.getElementById('gun-editor-reset-all');
@@ -14797,6 +14798,12 @@ function initGunEditor() {
     }
     if (fullscreenBtn) {
         fullscreenBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            requestGunEditorLandscapeFullscreen();
+        });
+    }
+    if (fullscreenTopBtn) {
+        fullscreenTopBtn.addEventListener('click', (e) => {
             e.preventDefault();
             requestGunEditorLandscapeFullscreen();
         });
