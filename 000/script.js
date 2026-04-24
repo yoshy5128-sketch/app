@@ -5386,20 +5386,20 @@ function buildGunStyleKey(model, weaponType) {
 
 function applyGunStyle(gunMesh, weaponType, overrideModel = null) {
     if (!gunMesh) return;
-    // Remove old attachments (magazine/scope etc.)
-    while (gunMesh.children.length > 0) {
-        const child = gunMesh.children[0];
-        gunMesh.remove(child);
-        if (child.geometry) child.geometry.dispose();
-        disposeMaterial(child.material); // 安全なマテリアル破棄を使用
-    }
-
     const model = overrideModel
         ? sanitizeGunModel(overrideModel, weaponType)
         : getRuntimeGunModel(weaponType);
     const styleKey = buildGunStyleKey(model, weaponType);
     if (gunMesh.userData && gunMesh.userData.gunStyleKey === styleKey) {
         return;
+    }
+
+    // Remove old attachments (magazine/scope etc.)
+    while (gunMesh.children.length > 0) {
+        const child = gunMesh.children[0];
+        gunMesh.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        disposeMaterial(child.material); // 安全なマテリアル破棄を使用
     }
 
     if (gunMesh.geometry) gunMesh.geometry.dispose();
