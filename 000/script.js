@@ -307,6 +307,8 @@ let gunEditorAnimating = false;
 let gunPreviewZoomLevel = 1.0;
 let gunPreviewTouchDistance = 0;
 let gunPreviewResizeBound = false;
+let gunEditorPrevBodyOverflow = '';
+let gunEditorPrevHtmlOverflow = '';
 let weaponCustomizationRevision = 0;
 const runtimeGunModelCache = {};
 
@@ -14691,6 +14693,21 @@ function updateGunEditorPreview() {
     applyGunStyle(gunPreviewMesh, currentGunEditorWeapon, gunEditorLiveModel);
 }
 
+function setGunEditorScrollLock(locked) {
+    const body = document.body;
+    const html = document.documentElement;
+    if (!body || !html) return;
+    if (locked) {
+        gunEditorPrevBodyOverflow = body.style.overflow || '';
+        gunEditorPrevHtmlOverflow = html.style.overflow || '';
+        body.style.overflow = 'hidden';
+        html.style.overflow = 'hidden';
+    } else {
+        body.style.overflow = gunEditorPrevBodyOverflow || '';
+        html.style.overflow = gunEditorPrevHtmlOverflow || '';
+    }
+}
+
 function requestGunEditorLandscapeFullscreen() {
     const gunEditorScreen = document.getElementById('gun-editor-screen');
     const target = gunEditorScreen || document.documentElement;
@@ -14716,12 +14733,38 @@ function requestGunEditorLandscapeFullscreen() {
     } catch (e) {
         console.warn('Error trying to lock gun editor orientation:', e);
     }
+    setTimeout(resizeGunPreviewRenderer, 80);
+    setTimeout(resizeGunPreviewRenderer, 260);
+    setTimeout(resizeGunPreviewRenderer, 520);
+}
+
+function exitGunEditorFullscreen() {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) {
+        try {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(err => console.warn('Exit fullscreen error:', err));
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        } catch (e) {
+            console.warn('Error trying to exit fullscreen:', e);
+        }
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.unlock) {
+            window.screen.orientation.unlock();
+        }
+    } catch (e) {
+        console.warn('Error trying to unlock orientation:', e);
+    }
 }
 
 function openGunEditor() {
     const screen = document.getElementById('gun-editor-screen');
     if (!screen) return;
     screen.style.display = 'block';
+    setGunEditorScrollLock(true);
     const container = document.getElementById('gun-preview-container');
     if (container && gunEditorRenderer && gunEditorRenderer.domElement && gunEditorRenderer.domElement.parentElement !== container) {
         while (container.firstChild) container.removeChild(container.firstChild);
@@ -14742,6 +14785,8 @@ function openGunEditor() {
 function closeGunEditor() {
     const screen = document.getElementById('gun-editor-screen');
     if (screen) screen.style.display = 'none';
+    exitGunEditorFullscreen();
+    setGunEditorScrollLock(false);
     stopGunEditorAnimation();
 }
 
@@ -14791,6 +14836,31 @@ function initGunEditor() {
             if (screen && screen.style.display !== 'none') {
                 setTimeout(resizeGunPreviewRenderer, 120);
                 setTimeout(resizeGunPreviewRenderer, 420);
+            }
+        });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                const screen = document.getElementById('gun-editor-screen');
+                if (screen && screen.style.display !== 'none') {
+                    setTimeout(resizeGunPreviewRenderer, 50);
+                    setTimeout(resizeGunPreviewRenderer, 200);
+                }
+            });
+        }
+        document.addEventListener('fullscreenchange', () => {
+            const screen = document.getElementById('gun-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeGunPreviewRenderer, 60);
+                setTimeout(resizeGunPreviewRenderer, 220);
+                setTimeout(resizeGunPreviewRenderer, 480);
+            }
+        });
+        document.addEventListener('webkitfullscreenchange', () => {
+            const screen = document.getElementById('gun-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeGunPreviewRenderer, 60);
+                setTimeout(resizeGunPreviewRenderer, 220);
+                setTimeout(resizeGunPreviewRenderer, 480);
             }
         });
     }
