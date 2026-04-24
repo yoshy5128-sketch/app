@@ -14554,7 +14554,7 @@ function initGunPreview() {
     if (!container || gunEditorRenderer) return;
 
     gunEditorScene = new THREE.Scene();
-    gunEditorScene.background = new THREE.Color(0x101010);
+    gunEditorScene.background = new THREE.Color(0x87ceeb);
     gunEditorCamera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
     gunEditorCamera.position.set(0, 0.22, 3.0);
     gunEditorCamera.lookAt(0, 0.08, 0);
@@ -14676,10 +14676,40 @@ function updateGunEditorPreview() {
     applyGunStyle(gunPreviewMesh, currentGunEditorWeapon, gunEditorLiveModel);
 }
 
+function requestGunEditorLandscapeFullscreen() {
+    const gunEditorScreen = document.getElementById('gun-editor-screen');
+    const target = gunEditorScreen || document.documentElement;
+    try {
+        if (target.requestFullscreen) {
+            const result = target.requestFullscreen();
+            if (result && typeof result.catch === 'function') {
+                result.catch(err => console.warn('Gun editor fullscreen error:', err));
+            }
+        } else if (target.webkitRequestFullscreen) {
+            target.webkitRequestFullscreen();
+        }
+    } catch (e) {
+        console.warn('Error trying to enter gun editor fullscreen:', e);
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+            const lockResult = window.screen.orientation.lock('landscape');
+            if (lockResult && typeof lockResult.catch === 'function') {
+                lockResult.catch(err => console.warn('Gun editor orientation lock failed:', err));
+            }
+        }
+    } catch (e) {
+        console.warn('Error trying to lock gun editor orientation:', e);
+    }
+}
+
 function openGunEditor() {
     const screen = document.getElementById('gun-editor-screen');
     if (!screen) return;
     screen.style.display = 'block';
+    if (shouldShowTouchControls()) {
+        requestGunEditorLandscapeFullscreen();
+    }
     initGunPreview();
     startGunEditorAnimation();
     gunEditorLiveModel = sanitizeGunModel(getEffectiveGunModel(currentGunEditorWeapon), currentGunEditorWeapon);
@@ -14701,6 +14731,7 @@ function initGunEditor() {
 
     const openBtn = document.getElementById('open-gun-editor');
     const closeBtn = document.getElementById('close-gun-editor');
+    const fullscreenBtn = document.getElementById('gun-editor-fullscreen');
     const saveBtn = document.getElementById('gun-editor-save');
     const resetWeaponBtn = document.getElementById('gun-editor-reset-weapon');
     const resetAllBtn = document.getElementById('gun-editor-reset-all');
@@ -14728,6 +14759,12 @@ function initGunEditor() {
         closeBtn.addEventListener('click', (e) => {
             e.preventDefault();
             closeGunEditor();
+        });
+    }
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            requestGunEditorLandscapeFullscreen();
         });
     }
     if (saveBtn) {
