@@ -304,6 +304,8 @@ let currentGunEditorWeapon = 'pistol';
 let gunEditorLiveModel = null;
 let gunEditorInputs = {};
 let gunEditorAnimating = false;
+let gunPreviewZoomLevel = 1.0;
+let gunPreviewTouchDistance = 0;
 let weaponCustomizationRevision = 0;
 const runtimeGunModelCache = {};
 
@@ -14554,13 +14556,15 @@ function initGunPreview() {
     gunEditorScene = new THREE.Scene();
     gunEditorScene.background = new THREE.Color(0x101010);
     gunEditorCamera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
-    gunEditorCamera.position.set(0, 0.6, 3.2);
-    gunEditorCamera.lookAt(0, 0.2, 0);
+    gunEditorCamera.position.set(0, 0.22, 3.0);
+    gunEditorCamera.lookAt(0, 0.08, 0);
 
     gunEditorRenderer = new THREE.WebGLRenderer({ antialias: true });
     gunEditorRenderer.setSize(container.clientWidth, container.clientHeight);
     while (container.firstChild) container.removeChild(container.firstChild);
     container.appendChild(gunEditorRenderer.domElement);
+    setupGunPreviewZoomControls(container);
+    updateGunPreviewCameraZoom();
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.7);
     gunEditorScene.add(ambient);
@@ -14580,10 +14584,66 @@ function initGunPreview() {
         new THREE.BoxGeometry(0.1, 0.1, 1.0),
         new THREE.MeshStandardMaterial({ color: 0x999999 })
     );
-    gunPreviewMesh.position.set(0, 0, 0);
+    gunPreviewMesh.position.set(0, 0.08, 0);
     gunEditorScene.add(gunPreviewMesh);
 
     renderGunEditorFrame();
+}
+
+function updateGunPreviewCameraZoom() {
+    if (!gunEditorCamera) return;
+    const zoom = Math.max(0.55, Math.min(3.5, gunPreviewZoomLevel));
+    gunPreviewZoomLevel = zoom;
+    const baseZ = 3.0;
+    const baseY = 0.22;
+    gunEditorCamera.position.z = baseZ / zoom;
+    gunEditorCamera.position.y = baseY / zoom;
+    gunEditorCamera.lookAt(0, 0.08, 0);
+    gunEditorCamera.updateProjectionMatrix();
+}
+
+function getTouchDistance(touches) {
+    if (!touches || touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function setupGunPreviewZoomControls(container) {
+    if (!container || container.dataset.zoomBound === '1') return;
+    container.dataset.zoomBound = '1';
+    container.style.touchAction = 'none';
+
+    container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        gunPreviewZoomLevel += delta;
+        updateGunPreviewCameraZoom();
+        renderGunEditorFrame();
+    }, { passive: false });
+
+    container.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            gunPreviewTouchDistance = getTouchDistance(e.touches);
+        }
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 2) return;
+        e.preventDefault();
+        const nextDistance = getTouchDistance(e.touches);
+        if (gunPreviewTouchDistance > 0 && nextDistance > 0) {
+            const scale = nextDistance / gunPreviewTouchDistance;
+            gunPreviewZoomLevel *= scale;
+            updateGunPreviewCameraZoom();
+            renderGunEditorFrame();
+        }
+        gunPreviewTouchDistance = nextDistance;
+    }, { passive: false });
+
+    container.addEventListener('touchend', () => {
+        gunPreviewTouchDistance = 0;
+    }, { passive: true });
 }
 
 function startGunEditorAnimation() {
