@@ -14722,10 +14722,14 @@ function openGunEditor() {
     const screen = document.getElementById('gun-editor-screen');
     if (!screen) return;
     screen.style.display = 'block';
-    if (shouldShowTouchControls()) {
-        requestGunEditorLandscapeFullscreen();
+    const container = document.getElementById('gun-preview-container');
+    if (container && gunEditorRenderer && gunEditorRenderer.domElement && gunEditorRenderer.domElement.parentElement !== container) {
+        while (container.firstChild) container.removeChild(container.firstChild);
+        container.appendChild(gunEditorRenderer.domElement);
     }
     initGunPreview();
+    gunPreviewZoomLevel = 1.0;
+    updateGunPreviewCameraZoom();
     requestAnimationFrame(resizeGunPreviewRenderer);
     setTimeout(resizeGunPreviewRenderer, 200);
     setTimeout(resizeGunPreviewRenderer, 550);
