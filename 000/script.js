@@ -14604,19 +14604,35 @@ function resizeGunPreviewRenderer() {
     gunEditorRenderer.setSize(width, height, false);
     gunEditorCamera.aspect = width / height;
     gunEditorCamera.updateProjectionMatrix();
+    updateGunPreviewCameraZoom();
     renderGunEditorFrame();
+}
+
+function frameGunPreviewCameraToMesh(zoomLevel) {
+    if (!gunEditorCamera || !gunPreviewMesh) return;
+    const box = new THREE.Box3().setFromObject(gunPreviewMesh);
+    if (!box || box.isEmpty()) return;
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    box.getCenter(center);
+    box.getSize(size);
+
+    const maxDim = Math.max(0.6, size.x, size.y, size.z);
+    const fovRad = THREE.MathUtils.degToRad(gunEditorCamera.fov);
+    const baseDistance = (maxDim * 0.95) / Math.tan(fovRad / 2);
+    const zoom = Math.max(0.55, Math.min(3.5, zoomLevel || 1.0));
+    const distance = baseDistance / zoom;
+
+    gunEditorCamera.position.set(center.x, center.y + 0.08, center.z + distance);
+    gunEditorCamera.lookAt(center.x, center.y, center.z);
+    gunEditorCamera.updateProjectionMatrix();
 }
 
 function updateGunPreviewCameraZoom() {
     if (!gunEditorCamera) return;
     const zoom = Math.max(0.55, Math.min(3.5, gunPreviewZoomLevel));
     gunPreviewZoomLevel = zoom;
-    const baseZ = 3.0;
-    const baseY = 0.22;
-    gunEditorCamera.position.z = baseZ / zoom;
-    gunEditorCamera.position.y = baseY / zoom;
-    gunEditorCamera.lookAt(0, 0.08, 0);
-    gunEditorCamera.updateProjectionMatrix();
+    frameGunPreviewCameraToMesh(zoom);
 }
 
 function getTouchDistance(touches) {
@@ -14663,6 +14679,36 @@ function setupGunPreviewZoomControls(container) {
     }, { passive: true });
 }
 
+function disposeGunPreviewMesh(mesh) {
+    if (!mesh) return;
+    while (mesh.children && mesh.children.length > 0) {
+        const child = mesh.children[0];
+        mesh.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        disposeMaterial(child.material);
+    }
+    if (mesh.geometry) mesh.geometry.dispose();
+    disposeMaterial(mesh.material);
+}
+
+function destroyGunPreview() {
+    if (gunEditorScene && gunPreviewMesh) {
+        gunEditorScene.remove(gunPreviewMesh);
+    }
+    disposeGunPreviewMesh(gunPreviewMesh);
+    gunPreviewMesh = null;
+
+    if (gunEditorRenderer) {
+        if (gunEditorRenderer.domElement && gunEditorRenderer.domElement.parentElement) {
+            gunEditorRenderer.domElement.parentElement.removeChild(gunEditorRenderer.domElement);
+        }
+        gunEditorRenderer.dispose();
+    }
+    gunEditorRenderer = null;
+    gunEditorScene = null;
+    gunEditorCamera = null;
+}
+
 function startGunEditorAnimation() {
     if (gunEditorAnimating) return;
     gunEditorAnimating = true;
@@ -14691,6 +14737,8 @@ function renderGunEditorFrame() {
 function updateGunEditorPreview() {
     if (!gunPreviewMesh) return;
     applyGunStyle(gunPreviewMesh, currentGunEditorWeapon, gunEditorLiveModel);
+    updateGunPreviewCameraZoom();
+    renderGunEditorFrame();
 }
 
 function setGunEditorScrollLock(locked) {
@@ -14765,11 +14813,7 @@ function openGunEditor() {
     if (!screen) return;
     screen.style.display = 'block';
     setGunEditorScrollLock(true);
-    const container = document.getElementById('gun-preview-container');
-    if (container && gunEditorRenderer && gunEditorRenderer.domElement && gunEditorRenderer.domElement.parentElement !== container) {
-        while (container.firstChild) container.removeChild(container.firstChild);
-        container.appendChild(gunEditorRenderer.domElement);
-    }
+    destroyGunPreview();
     initGunPreview();
     gunPreviewZoomLevel = 1.0;
     updateGunPreviewCameraZoom();
