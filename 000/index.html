@@ -54,7 +54,10 @@
         .character-editor-preview-pane {
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
         }
         .character-editor-settings-pane {
             display: flex;
