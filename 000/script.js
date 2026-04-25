@@ -14907,6 +14907,33 @@ function exitGunEditorFullscreen() {
     }
 }
 
+function requestSettingsLandscapeFullscreen() {
+    if (!shouldShowTouchControls()) return;
+    const target = document.documentElement;
+    try {
+        if (target.requestFullscreen) {
+            const result = target.requestFullscreen();
+            if (result && typeof result.catch === 'function') {
+                result.catch(err => console.warn('Settings fullscreen error:', err));
+            }
+        } else if (target.webkitRequestFullscreen) {
+            target.webkitRequestFullscreen();
+        }
+    } catch (e) {
+        console.warn('Error trying to enter settings fullscreen:', e);
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+            const lockResult = window.screen.orientation.lock('landscape');
+            if (lockResult && typeof lockResult.catch === 'function') {
+                lockResult.catch(err => console.warn('Settings orientation lock failed:', err));
+            }
+        }
+    } catch (e) {
+        console.warn('Error trying to lock settings orientation:', e);
+    }
+}
+
 function openGunEditor() {
     const screen = document.getElementById('gun-editor-screen');
     if (!screen) return;
@@ -14929,6 +14956,8 @@ function closeGunEditor() {
     const screen = document.getElementById('gun-editor-screen');
     if (screen) screen.style.display = 'none';
     exitGunEditorFullscreen();
+    setTimeout(requestSettingsLandscapeFullscreen, 40);
+    setTimeout(requestSettingsLandscapeFullscreen, 220);
     setGunEditorScrollLock(false);
     stopGunEditorAnimation();
 }
