@@ -313,6 +313,33 @@ let weaponCustomizationRevision = 0;
 const runtimeGunModelCache = {};
 
 const GUN_CUSTOMIZATION_STORAGE_KEY = 'weaponCustomization';
+// Recovery preset captured from the user's previous local customization state.
+const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
+    machinegun: {
+        body: { shape: 'box', length: 1.1, thickness: 0.1, color: '#111111', metalness: 0.81, roughness: 0.1 },
+        scope: { enabled: false, radius: 0.04, length: 0.24, color: '#aaaaaa', posX: 0, posY: 0.11, posZ: 0.2 },
+        magazine: { enabled: true, width: 0.08, height: 0.44, depth: 0.11, color: '#222222', posX: 0, posY: -0.26, posZ: 0.05 },
+        barrel: { enabled: true, shape: 'cylinder', width: 0.05, height: 0.05, depth: 1.09, color: '#111111', posX: 0, posY: 0, posZ: 0.25 }
+    },
+    sniperrifle: {
+        body: { shape: 'box', length: 1.29, thickness: 0.09, color: '#1d1b1b', metalness: 0.3, roughness: 0.5 },
+        scope: { enabled: true, radius: 0.03, length: 0.29, color: '#2f2d2d', posX: 0, posY: 0.08, posZ: -0.17 },
+        magazine: { enabled: true, width: 0.04, height: 0.12, depth: 0.2, color: '#222222', posX: 0, posY: -0.11, posZ: 0.05 },
+        barrel: { enabled: true, shape: 'cylinder', width: 0.05, height: 0.05, depth: 1.72, color: '#111111', posX: 0, posY: 0, posZ: 0.35 }
+    },
+    shotgun: {
+        body: { shape: 'box', length: 1.2, thickness: 0.12, color: '#231f1f', metalness: 0.3, roughness: 0.5 },
+        scope: { enabled: false, radius: 0.04, length: 0.24, color: '#aaaaaa', posX: 0, posY: 0.11, posZ: 0.2 },
+        magazine: { enabled: false, width: 0.08, height: 0.22, depth: 0.11, color: '#222222', posX: 0, posY: -0.15, posZ: 0.05 },
+        barrel: { enabled: true, shape: 'cylinder', width: 0.08, height: 0.05, depth: 0.69, color: '#111111', posX: 0, posY: 0, posZ: 0.35 }
+    },
+    m1rifle: {
+        body: { shape: 'box', length: 1.4, thickness: 0.12, color: '#8b4513', metalness: 0.3, roughness: 0.5 },
+        scope: { enabled: false, radius: 0.04, length: 0.24, color: '#aaaaaa', posX: 0, posY: 0.11, posZ: 0.2 },
+        magazine: { enabled: false, width: 0.08, height: 0.22, depth: 0.11, color: '#222222', posX: 0, posY: -0.15, posZ: 0.05 },
+        barrel: { enabled: true, shape: 'cylinder', width: 0.06, height: 0.06, depth: 1.05, color: '#111111', posX: 0, posY: 0, posZ: 0.49 }
+    }
+};
 
 
 
@@ -5251,7 +5278,9 @@ function getEffectiveGunModel(weaponType) {
     const defaultModel = getDefaultGunModelForWeapon(weaponType);
     const custom = weaponCustomization && weaponCustomization[weaponType]
         ? weaponCustomization[weaponType]
-        : null;
+        : (WEAPON_CUSTOMIZATION_RECOVERY_PRESET[weaponType]
+            ? WEAPON_CUSTOMIZATION_RECOVERY_PRESET[weaponType]
+            : null);
     if (!custom) return defaultModel;
     return mergeGunModel(defaultModel, deepCloneGunModel(custom));
 }
@@ -5324,6 +5353,12 @@ function loadWeaponCustomization() {
                 next[type] = sanitizeGunModel(parsed[type], type);
             }
         }
+        // Force-restore the previously used custom look for these weapons.
+        for (const type of [WEAPON_MG, WEAPON_SR, WEAPON_SG, WEAPON_MR]) {
+            if (WEAPON_CUSTOMIZATION_RECOVERY_PRESET[type]) {
+                next[type] = sanitizeGunModel(WEAPON_CUSTOMIZATION_RECOVERY_PRESET[type], type);
+            }
+        }
         weaponCustomization = next;
         weaponCustomizationRevision++;
         for (const key in runtimeGunModelCache) {
@@ -5382,6 +5417,51 @@ function buildGunStyleKey(model, weaponType) {
         m.enabled, m.width, m.height, m.depth, m.color, m.posX, m.posY, m.posZ,
         br.enabled, br.shape, br.width, br.height, br.depth, br.color, br.posX, br.posY, br.posZ
     ].join('|');
+}
+
+function addDefaultWeaponFurniture(gunMesh, model, weaponType) {
+    if (!gunMesh || !model || !model.body) return;
+    const bodyLength = Number(model.body.length) || 1.0;
+    const bodyThickness = Number(model.body.thickness) || 0.1;
+    const bodyColor = model.body.color || '#111111';
+    const furnitureMaterial = new THREE.MeshLambertMaterial({ color: bodyColor });
+
+    if (weaponType === WEAPON_PISTOL || weaponType === WEAPON_MG || weaponType === WEAPON_SG || weaponType === WEAPON_RR) {
+        const gripWidth = 0.06;
+        const gripHeight = 0.2;
+        const gripDepth = 0.08;
+        const grip = new THREE.Mesh(
+            new THREE.BoxGeometry(gripWidth, gripHeight, gripDepth),
+            furnitureMaterial
+        );
+        grip.position.set(
+            0,
+            -(bodyThickness * 0.5 + gripHeight * 0.5 - 0.01),
+            -bodyLength * 0.33
+        );
+        // Match reference: lean in the opposite direction from previous version.
+        grip.rotation.x = THREE.MathUtils.degToRad(18);
+        gunMesh.add(grip);
+    }
+
+    if (weaponType === WEAPON_MR || weaponType === WEAPON_SR) {
+        const stockShape = new THREE.Shape();
+        // Larger isosceles triangle stock: starts near rear-bottom and extends backward/downward.
+        stockShape.moveTo(0.2, 0.0);      // apex (toward gun body)
+        stockShape.lineTo(-0.44, -0.3);   // rear-bottom
+        stockShape.lineTo(-0.44, 0.06);   // rear-top
+        stockShape.lineTo(0.2, 0.0);
+        const stockGeometry = new THREE.ExtrudeGeometry(stockShape, {
+            depth: 0.08,
+            bevelEnabled: false
+        });
+        stockGeometry.translate(-0.2, 0, -0.04);
+        const stock = new THREE.Mesh(stockGeometry, furnitureMaterial);
+        stock.rotation.y = -Math.PI / 2;
+        stock.rotation.x = THREE.MathUtils.degToRad(-6);
+        stock.position.set(0, -(bodyThickness * 0.42), -bodyLength * 0.4);
+        gunMesh.add(stock);
+    }
 }
 
 function applyGunStyle(gunMesh, weaponType, overrideModel = null) {
@@ -5455,6 +5535,7 @@ function applyGunStyle(gunMesh, weaponType, overrideModel = null) {
         barrel.position.set(model.barrel.posX, model.barrel.posY, model.barrel.posZ);
         gunMesh.add(barrel);
     }
+    addDefaultWeaponFurniture(gunMesh, model, weaponType);
     if (!gunMesh.userData) gunMesh.userData = {};
     gunMesh.userData.gunStyleKey = styleKey;
 }
@@ -5489,6 +5570,12 @@ function stopKillCamPhysics() {
     killCamPhysics.lastBounceAt = 0;
 }
 
+function stopKillCamPhysicsForActor(actor) {
+    if (killCamPhysics.active && killCamPhysics.actor === actor) {
+        stopKillCamPhysics();
+    }
+}
+
 function ensurePauseButtonVisible() {
     const pauseBtn = document.getElementById('pause-button');
     if (pauseBtn && shouldShowTouchControls()) {
@@ -5521,26 +5608,51 @@ function resolveKillCamObstacleBounce(actor, velocity, obstacle) {
     if (!actor || !velocity || !obstacle) return false;
     if (obstacle.userData && obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof) return false;
     if (obstacle.userData && obstacle.userData.isLadder) return false;
-    const actorBox = new THREE.Box3().setFromObject(actor);
-    const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-    if (!actorBox.intersectsBox(obstacleBox)) return false;
+    const bounce = 0.55;
+    const tangentialDamping = 0.82;
+    const separationPadding = 0.04;
+    let collided = false;
 
-    const overlapX = Math.min(actorBox.max.x - obstacleBox.min.x, obstacleBox.max.x - actorBox.min.x);
-    const overlapZ = Math.min(actorBox.max.z - obstacleBox.min.z, obstacleBox.max.z - actorBox.min.z);
-    if (!Number.isFinite(overlapX) || !Number.isFinite(overlapZ)) return false;
-    const bounce = 0.5;
-    if (overlapX < overlapZ) {
-        const dir = (actor.position.x < obstacle.position.x) ? -1 : 1;
-        actor.position.x += dir * overlapX;
-        velocity.x = -velocity.x * bounce;
-        velocity.z *= 0.85;
-    } else {
-        const dir = (actor.position.z < obstacle.position.z) ? -1 : 1;
-        actor.position.z += dir * overlapZ;
-        velocity.z = -velocity.z * bounce;
-        velocity.x *= 0.85;
+    // Resolve penetration repeatedly to avoid remaining inside an obstacle.
+    for (let i = 0; i < 3; i++) {
+        const actorBox = new THREE.Box3().setFromObject(actor);
+        const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+        if (!actorBox.intersectsBox(obstacleBox)) break;
+
+        const overlapX = Math.min(actorBox.max.x - obstacleBox.min.x, obstacleBox.max.x - actorBox.min.x);
+        const overlapZ = Math.min(actorBox.max.z - obstacleBox.min.z, obstacleBox.max.z - actorBox.min.z);
+        if (!Number.isFinite(overlapX) || !Number.isFinite(overlapZ) || overlapX <= 0 || overlapZ <= 0) break;
+
+        const actorCenterX = (actorBox.min.x + actorBox.max.x) * 0.5;
+        const actorCenterZ = (actorBox.min.z + actorBox.max.z) * 0.5;
+        const obstacleCenterX = (obstacleBox.min.x + obstacleBox.max.x) * 0.5;
+        const obstacleCenterZ = (obstacleBox.min.z + obstacleBox.max.z) * 0.5;
+
+        if (overlapX <= overlapZ) {
+            const dir = (actorCenterX < obstacleCenterX) ? -1 : 1;
+            actor.position.x += dir * (overlapX + separationPadding);
+            velocity.x = -velocity.x * bounce;
+            velocity.z *= tangentialDamping;
+        } else {
+            const dir = (actorCenterZ < obstacleCenterZ) ? -1 : 1;
+            actor.position.z += dir * (overlapZ + separationPadding);
+            velocity.z = -velocity.z * bounce;
+            velocity.x *= tangentialDamping;
+        }
+        collided = true;
     }
-    return true;
+
+    if (collided) {
+        const groundY = (actor === player)
+            ? getGroundY(actor.position, playerTargetHeight * 2)
+            : getGroundSurfaceY(actor.position);
+        const minY = groundY + killCamPhysics.clearance;
+        if (actor.position.y < minY) {
+            actor.position.y = minY;
+            if (velocity.y < 0) velocity.y = Math.abs(velocity.y) * 0.35;
+        }
+    }
+    return collided;
 }
 
 function updateKillCamPhysics(delta) {
@@ -10474,8 +10586,8 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         }
         createRedSmokeEffect(ai.position.clone());
         removeAIProjectiles(ai, true);
-        if (ai.userData && ai.userData.parts) {
-            const parts = ai.userData.parts;
+        const parts = ai.userData ? ai.userData.parts : null;
+        if (parts) {
             if (parts.gun) {
                 applyGunStyle(parts.gun, ai.currentWeapon);
             }
@@ -10489,32 +10601,17 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         const aiKick = new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
         aiKick.normalize().multiplyScalar(3.0);
         aiKick.y += 1.5;
-        const startPos = ai.position.clone();
-        const endPos = new THREE.Vector3(
-            startPos.x + aiKick.x * 0.4,
-            Math.max(startPos.y - FLOOR_HEIGHT, startPos.y + aiKick.y * 0.4),
-            startPos.z + aiKick.z * 0.4
-        );
-        if (isBillBattleMode()) {
-            endPos.x = Math.max(-BILL_BATTLE_HALF + 2, Math.min(BILL_BATTLE_HALF - 2, endPos.x));
-            endPos.z = Math.max(-BILL_BATTLE_HALF + 2, Math.min(BILL_BATTLE_HALF - 2, endPos.z));
-        } else {
-            const dist = Math.sqrt(endPos.x * endPos.x + endPos.z * endPos.z);
-            if (dist > ARENA_PLAY_AREA_RADIUS - 2) {
-                const ratio = (ARENA_PLAY_AREA_RADIUS - 2) / dist;
-                endPos.x *= ratio;
-                endPos.z *= ratio;
-            }
-        }
-        new TWEEN.Tween(ai.position).to({ x: endPos.x, y: endPos.y, z: endPos.z }, 1500).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
-            setTimeout(() => {
-                ai.visible = false;
-                ai.userData.isDying = false;
-                billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
-                updateBillBattleKillDisplay();
-                restoreRightButtonsDefault();
-            }, 1200);
-        }).start();
+        const aiInitialVelocity = aiKick.clone();
+        aiInitialVelocity.y += 1.2;
+        startKillCamPhysics(ai, parts, aiInitialVelocity, 0.4);
+        setTimeout(() => {
+            stopKillCamPhysicsForActor(ai);
+            ai.visible = false;
+            ai.userData.isDying = false;
+            billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
+            updateBillBattleKillDisplay();
+            restoreRightButtonsDefault();
+        }, 2700);
         return;
     }
     if (gameSettings.killCamMode === 'off') {
@@ -10539,27 +10636,25 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         const aiKick = new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
         aiKick.normalize().multiplyScalar(3.0);
         aiKick.y += 1.5;
-        const startPos = ai.position.clone();
-        const endPos = new THREE.Vector3(
-            startPos.x + aiKick.x * 0.4,
-            Math.max(startPos.y - FLOOR_HEIGHT, startPos.y + aiKick.y * 0.4),
-            startPos.z + aiKick.z * 0.4
-        );
-        const dist = Math.sqrt(endPos.x * endPos.x + endPos.z * endPos.z);
-        if (dist > ARENA_PLAY_AREA_RADIUS - 2) {
-            const ratio = (ARENA_PLAY_AREA_RADIUS - 2) / dist;
-            endPos.x *= ratio;
-            endPos.z *= ratio;
-        }
-        new TWEEN.Tween(ai.position).to({ x: endPos.x, y: endPos.y, z: endPos.z }, 1500).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
-            setTimeout(() => {
-                if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
-                    respawnAI(ai);
-                } else {
-                    ai.visible = false;
-                }
-            }, 1200);
-        }).start();
+        const aiInitialVelocity = aiKick.clone();
+        aiInitialVelocity.y += 1.2;
+        startKillCamPhysics(ai, parts, aiInitialVelocity, 0.35);
+        setTimeout(() => {
+            stopKillCamPhysicsForActor(ai);
+            if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+                respawnAI(ai);
+            } else {
+                ai.visible = false;
+            }
+        }, 2700);
+        return;
+    }
+    if (isBillBattleMode() && killerSource === 'player') {
+        ai.visible = false;
+        ai.userData.isDying = false;
+        billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
+        updateBillBattleKillDisplay();
+        restoreRightButtonsDefault();
         return;
     }
     if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
@@ -11419,6 +11514,9 @@ function animate() {
     }
 
     enforceTouchUIVisibility();
+    if (killCamPhysics.active && !isPlayerDeathPlaying && !isAIDeathPlaying) {
+        updateKillCamPhysics(delta);
+    }
 
     if (isPlayerDeathPlaying) {
         updateKillCamPhysics(delta);
