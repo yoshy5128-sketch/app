@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gunfight-arena-cache-v3';
+const CACHE_NAME = 'gunfight-arena-cache-v5';
 const urlsToCache = [
   './',
   './index.html',

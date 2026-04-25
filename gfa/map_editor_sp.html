@@ -36,13 +36,34 @@
             overflow-y: hidden; /* 親コンテナのスクロールを無効化 */
         }
         #ui-container h2 {
-            margin: 3px 0;
+            margin: 0;
             color: #1abc9c;
-            border-bottom: 1px solid #16a085;
-            padding-bottom: 2px;
-            width: 100%;
-            text-align: center;
+            border-bottom: none;
+            padding-bottom: 0;
+            width: auto;
+            text-align: left;
             flex-shrink: 0;
+        }
+        #editor-topbar {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #16a085;
+            padding: 2px 0 4px 0;
+            margin-bottom: 2px;
+            gap: 8px;
+        }
+        #editor-fullscreen-button {
+            width: auto;
+            margin: 0;
+            padding: 6px 10px;
+            font-size: 12px;
+            background-color: #16a085;
+            flex-shrink: 0;
+        }
+        #editor-fullscreen-button:hover {
+            background-color: #138d75;
         }
         #ui-container h3, #ui-container h4 {
             margin: 5px 0 3px 0;
@@ -177,7 +198,10 @@
     <div id="editor-container">
         <div id="canvas-container"></div>
         <div id="ui-container">
-            <h2>Map Editor</h2>
+            <div id="editor-topbar">
+                <h2>Map Editor</h2>
+                <button id="editor-fullscreen-button" type="button">FullScreen</button>
+            </div>
             <p style="margin-bottom: 5px;">**PC:** L-Click: Add/Select/Move | R-Click: Delete | R-Drag: Pan | Scroll: Zoom</p>
 
             <div id="ui-content-wrapper">
@@ -2086,6 +2110,7 @@
             });
             document.getElementById('import-file-button').addEventListener('click', () => document.getElementById('import-file-input').click());
             document.getElementById('import-file-input').addEventListener('change', importMapFromFile);
+            document.getElementById('editor-fullscreen-button').addEventListener('click', () => tryEnterEditorFullscreen(true));
             
             const uiContainer = document.getElementById('ui-container');
             uiContainer.addEventListener('mousedown', e => e.stopPropagation());

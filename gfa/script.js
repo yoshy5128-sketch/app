@@ -54,7 +54,7 @@ let isPaused = false;
 let forceSettingsLighting = false;
 const DEBUG_LOG = false;
 function debugLog(...args) {
-    if (DEBUG_LOG) debugLog(...args);
+    if (DEBUG_LOG) console.log(...args);
 }
 
 // キャラクター設定
@@ -292,6 +292,55 @@ let characterEditorRenderer = null;
 let previewCharacter = null;
 let currentPreviewCharacter = 'player';
 let characterEditorAnimationId = null;
+let characterPreviewResizeBound = false;
+
+// Gun editor state
+let weaponCustomization = {};
+let gunEditorScene = null;
+let gunEditorCamera = null;
+let gunEditorRenderer = null;
+let gunEditorAnimationId = null;
+let gunPreviewMesh = null;
+let currentGunEditorWeapon = 'pistol';
+let gunEditorLiveModel = null;
+let gunEditorInputs = {};
+let gunEditorAnimating = false;
+let gunPreviewZoomLevel = 1.0;
+let gunPreviewTouchDistance = 0;
+let gunPreviewResizeBound = false;
+let gunEditorPrevBodyOverflow = '';
+let gunEditorPrevHtmlOverflow = '';
+let weaponCustomizationRevision = 0;
+const runtimeGunModelCache = {};
+
+const GUN_CUSTOMIZATION_STORAGE_KEY = 'weaponCustomization';
+// Recovery preset captured from the user's previous local customization state.
+const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
+    machinegun: {
+        body: { shape: 'box', length: 1.1, thickness: 0.1, color: '#111111', metalness: 0.81, roughness: 0.1 },
+        scope: { enabled: false, radius: 0.04, length: 0.24, color: '#aaaaaa', posX: 0, posY: 0.11, posZ: 0.2 },
+        magazine: { enabled: true, width: 0.08, height: 0.44, depth: 0.11, color: '#222222', posX: 0, posY: -0.26, posZ: 0.05 },
+        barrel: { enabled: true, shape: 'cylinder', width: 0.05, height: 0.05, depth: 1.09, color: '#111111', posX: 0, posY: 0, posZ: 0.25 }
+    },
+    sniperrifle: {
+        body: { shape: 'box', length: 1.29, thickness: 0.09, color: '#1d1b1b', metalness: 0.3, roughness: 0.5 },
+        scope: { enabled: true, radius: 0.03, length: 0.29, color: '#2f2d2d', posX: 0, posY: 0.08, posZ: -0.17 },
+        magazine: { enabled: true, width: 0.04, height: 0.12, depth: 0.2, color: '#222222', posX: 0, posY: -0.11, posZ: 0.05 },
+        barrel: { enabled: true, shape: 'cylinder', width: 0.05, height: 0.05, depth: 1.72, color: '#111111', posX: 0, posY: 0, posZ: 0.35 }
+    },
+    shotgun: {
+        body: { shape: 'box', length: 1.2, thickness: 0.12, color: '#231f1f', metalness: 0.3, roughness: 0.5 },
+        scope: { enabled: false, radius: 0.04, length: 0.24, color: '#aaaaaa', posX: 0, posY: 0.11, posZ: 0.2 },
+        magazine: { enabled: false, width: 0.08, height: 0.22, depth: 0.11, color: '#222222', posX: 0, posY: -0.15, posZ: 0.05 },
+        barrel: { enabled: true, shape: 'cylinder', width: 0.08, height: 0.05, depth: 0.69, color: '#111111', posX: 0, posY: 0, posZ: 0.35 }
+    },
+    m1rifle: {
+        body: { shape: 'box', length: 1.4, thickness: 0.12, color: '#8b4513', metalness: 0.3, roughness: 0.5 },
+        scope: { enabled: false, radius: 0.04, length: 0.24, color: '#aaaaaa', posX: 0, posY: 0.11, posZ: 0.2 },
+        magazine: { enabled: false, width: 0.08, height: 0.22, depth: 0.11, color: '#222222', posX: 0, posY: -0.15, posZ: 0.05 },
+        barrel: { enabled: true, shape: 'cylinder', width: 0.06, height: 0.06, depth: 1.05, color: '#111111', posX: 0, posY: 0, posZ: 0.49 }
+    }
+};
 
 
 
@@ -299,6 +348,7 @@ let characterEditorAnimationId = null;
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize textures first
         initializeTextures();
+        loadWeaponCustomization();
         
         // ここにDOM要素への割り当てを移動
         playerGunSound = document.getElementById('playerGunSound');
@@ -337,6 +387,7 @@ let characterEditorAnimationId = null;
         }
         scopeOverlay = document.getElementById('scope-overlay');
         cancelScopeButton = document.getElementById('cancel-scope-button');
+        crosshairElement = document.getElementById('crosshair');
         crosshairCircle = document.getElementById('crosshair-circle');
         crosshairPlusH = document.getElementById('crosshair-plus-h');
         crosshairPlusV = document.getElementById('crosshair-plus-v');
@@ -2455,6 +2506,10 @@ let crosshairCircle;
 let crosshairPlusH;
 let crosshairPlusV;
 let killCountDisplay;
+let crosshairElement = null;
+let lastCrosshairVisible = null;
+let lastPlayerWeaponDisplayHTML = '';
+let lastCrosshairWeaponType = null;
 let playerKills = 0;
 let playerTeamKills = 0;
 let enemyTeamKills = 0;
@@ -5107,8 +5162,319 @@ function createCharacterModel(color, customization = null) {
     return characterModel;
 }
 
-function applyGunStyle(gunMesh, weaponType) {
+function getDefaultGunModelForWeapon(weaponType) {
+    const base = {
+        body: {
+            shape: 'box',
+            length: 1.2,
+            thickness: 0.12,
+            color: '#111111',
+            metalness: 0.3,
+            roughness: 0.5
+        },
+        scope: {
+            enabled: false,
+            radius: 0.04,
+            length: 0.24,
+            color: '#aaaaaa',
+            posX: 0,
+            posY: 0.11,
+            posZ: 0.2
+        },
+        magazine: {
+            enabled: false,
+            width: 0.08,
+            height: 0.22,
+            depth: 0.11,
+            color: '#222222',
+            posX: 0,
+            posY: -0.15,
+            posZ: 0.05
+        },
+        barrel: {
+            enabled: false,
+            shape: 'box',
+            width: 0.05,
+            height: 0.05,
+            depth: 0.85,
+            color: '#111111',
+            posX: 0,
+            posY: 0,
+            posZ: 0.35
+        }
+    };
+
+    switch (weaponType) {
+        case WEAPON_PISTOL:
+            base.body.length = 0.6;
+            base.body.thickness = 0.08;
+            base.body.color = '#222222';
+            base.body.metalness = 0.8;
+            base.body.roughness = 0.1;
+            break;
+        case WEAPON_MG:
+            base.body.length = 1.1;
+            base.body.thickness = 0.1;
+            base.body.color = '#111111';
+            base.body.metalness = 0.8;
+            base.body.roughness = 0.1;
+            base.magazine.enabled = true;
+            break;
+        case WEAPON_RR:
+            base.body.shape = 'cylinder';
+            base.body.length = 2.6;
+            base.body.thickness = 0.22;
+            base.body.color = '#6b4b1f';
+            base.body.metalness = 0.3;
+            base.body.roughness = 0.5;
+            break;
+        case WEAPON_SR:
+            base.body.length = 1.65;
+            base.body.thickness = 0.09;
+            base.body.color = '#cccccc';
+            base.scope.enabled = true;
+            base.scope.radius = base.body.thickness * 0.35;
+            base.scope.length = base.body.thickness * 2.6;
+            base.scope.posY = base.body.thickness * 0.9;
+            base.scope.posZ = base.body.length * 0.18;
+            break;
+        case WEAPON_SG:
+            base.body.length = 1.2;
+            base.body.thickness = 0.12;
+            base.body.color = '#444444';
+            break;
+        case WEAPON_MR:
+            base.body.length = 1.4;
+            base.body.thickness = 0.12;
+            base.body.color = '#8b4513';
+            base.barrel.enabled = true;
+            base.barrel.width = base.body.thickness * 0.5;
+            base.barrel.height = base.body.thickness * 0.5;
+            base.barrel.depth = base.body.length * 0.75;
+            base.barrel.posZ = base.body.length * 0.35;
+            break;
+    }
+    return base;
+}
+
+function deepCloneGunModel(model) {
+    return JSON.parse(JSON.stringify(model));
+}
+
+function mergeGunModel(target, source) {
+    if (!source || typeof source !== 'object') return target;
+    for (const key of Object.keys(source)) {
+        const value = source[key];
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+            if (!target[key] || typeof target[key] !== 'object') target[key] = {};
+            mergeGunModel(target[key], value);
+        } else {
+            target[key] = value;
+        }
+    }
+    return target;
+}
+
+function getEffectiveGunModel(weaponType) {
+    const defaultModel = getDefaultGunModelForWeapon(weaponType);
+    const custom = weaponCustomization && weaponCustomization[weaponType]
+        ? weaponCustomization[weaponType]
+        : (WEAPON_CUSTOMIZATION_RECOVERY_PRESET[weaponType]
+            ? WEAPON_CUSTOMIZATION_RECOVERY_PRESET[weaponType]
+            : null);
+    if (!custom) return defaultModel;
+    return mergeGunModel(defaultModel, deepCloneGunModel(custom));
+}
+
+function sanitizeGunModel(model, weaponType) {
+    const merged = mergeGunModel(getDefaultGunModelForWeapon(weaponType), deepCloneGunModel(model || {}));
+    const clamp = (v, min, max, fallback) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return fallback;
+        return Math.max(min, Math.min(max, n));
+    };
+    const normColor = (hex, fallback) => {
+        if (typeof hex !== 'string') return fallback;
+        const value = hex.trim();
+        if (!/^#([0-9a-fA-F]{6})$/.test(value)) return fallback;
+        return value.toLowerCase();
+    };
+    merged.body.shape = merged.body.shape === 'cylinder' ? 'cylinder' : 'box';
+    merged.body.length = clamp(merged.body.length, 0.3, 3.5, 1.2);
+    merged.body.thickness = clamp(merged.body.thickness, 0.03, 0.5, 0.12);
+    merged.body.color = normColor(merged.body.color, '#111111');
+    merged.body.metalness = clamp(merged.body.metalness, 0, 1, 0.3);
+    merged.body.roughness = clamp(merged.body.roughness, 0, 1, 0.5);
+
+    merged.scope.enabled = !!merged.scope.enabled;
+    merged.scope.radius = clamp(merged.scope.radius, 0.01, 0.4, 0.04);
+    merged.scope.length = clamp(merged.scope.length, 0.08, 1.5, 0.24);
+    merged.scope.color = normColor(merged.scope.color, '#aaaaaa');
+    merged.scope.posX = clamp(merged.scope.posX, -1.5, 1.5, 0);
+    merged.scope.posY = clamp(merged.scope.posY, -1.5, 1.5, 0.11);
+    merged.scope.posZ = clamp(merged.scope.posZ, -2.5, 2.5, 0.2);
+
+    merged.magazine.enabled = !!merged.magazine.enabled;
+    merged.magazine.width = clamp(merged.magazine.width, 0.02, 1.2, 0.08);
+    merged.magazine.height = clamp(merged.magazine.height, 0.02, 1.2, 0.22);
+    merged.magazine.depth = clamp(merged.magazine.depth, 0.02, 1.2, 0.11);
+    merged.magazine.color = normColor(merged.magazine.color, '#222222');
+    merged.magazine.posX = clamp(merged.magazine.posX, -1.5, 1.5, 0);
+    merged.magazine.posY = clamp(merged.magazine.posY, -1.5, 1.5, -0.15);
+    merged.magazine.posZ = clamp(merged.magazine.posZ, -2.5, 2.5, 0.05);
+
+    merged.barrel.enabled = !!merged.barrel.enabled;
+    merged.barrel.shape = merged.barrel.shape === 'cylinder' ? 'cylinder' : 'box';
+    merged.barrel.width = clamp(merged.barrel.width, 0.02, 1.2, 0.05);
+    merged.barrel.height = clamp(merged.barrel.height, 0.02, 1.2, 0.05);
+    merged.barrel.depth = clamp(merged.barrel.depth, 0.05, 2.5, 0.85);
+    merged.barrel.color = normColor(merged.barrel.color, '#111111');
+    merged.barrel.posX = clamp(merged.barrel.posX, -1.5, 1.5, 0);
+    merged.barrel.posY = clamp(merged.barrel.posY, -1.5, 1.5, 0);
+    merged.barrel.posZ = clamp(merged.barrel.posZ, -2.5, 2.5, 0.35);
+    return merged;
+}
+
+function loadWeaponCustomization() {
+    try {
+        const raw = localStorage.getItem(GUN_CUSTOMIZATION_STORAGE_KEY);
+        if (!raw) {
+            weaponCustomization = {};
+            return;
+        }
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {
+            weaponCustomization = {};
+            return;
+        }
+        const next = {};
+        const weaponTypes = [WEAPON_PISTOL, WEAPON_MG, WEAPON_RR, WEAPON_SR, WEAPON_SG, WEAPON_MR];
+        for (const type of weaponTypes) {
+            if (parsed[type]) {
+                next[type] = sanitizeGunModel(parsed[type], type);
+            }
+        }
+        // Force-restore the previously used custom look for these weapons.
+        for (const type of [WEAPON_MG, WEAPON_SR, WEAPON_SG, WEAPON_MR]) {
+            if (WEAPON_CUSTOMIZATION_RECOVERY_PRESET[type]) {
+                next[type] = sanitizeGunModel(WEAPON_CUSTOMIZATION_RECOVERY_PRESET[type], type);
+            }
+        }
+        weaponCustomization = next;
+        weaponCustomizationRevision++;
+        for (const key in runtimeGunModelCache) {
+            delete runtimeGunModelCache[key];
+        }
+    } catch (error) {
+        console.error('Failed to load weapon customization:', error);
+        weaponCustomization = {};
+        weaponCustomizationRevision++;
+        for (const key in runtimeGunModelCache) {
+            delete runtimeGunModelCache[key];
+        }
+    }
+}
+
+function saveWeaponCustomization() {
+    localStorage.setItem(GUN_CUSTOMIZATION_STORAGE_KEY, JSON.stringify(weaponCustomization));
+    weaponCustomizationRevision++;
+    for (const key in runtimeGunModelCache) {
+        delete runtimeGunModelCache[key];
+    }
+}
+
+function applyGunStylesToActiveCharacters() {
+    if (playerModel && playerModel.userData && playerModel.userData.parts && playerModel.userData.parts.gun) {
+        applyGunStyle(playerModel.userData.parts.gun, currentWeapon);
+    }
+    if (Array.isArray(ais)) {
+        for (const ai of ais) {
+            if (!ai || !ai.userData || !ai.userData.parts || !ai.userData.parts.gun) continue;
+            applyGunStyle(ai.userData.parts.gun, ai.currentWeapon || WEAPON_PISTOL);
+        }
+    }
+    if (previewCharacter && previewCharacter.userData && previewCharacter.userData.parts && previewCharacter.userData.parts.gun) {
+        applyGunStyle(previewCharacter.userData.parts.gun, currentWeapon || WEAPON_PISTOL);
+    }
+}
+
+function getRuntimeGunModel(weaponType) {
+    const cacheKey = `${weaponType}|${weaponCustomizationRevision}`;
+    if (!runtimeGunModelCache[cacheKey]) {
+        runtimeGunModelCache[cacheKey] = sanitizeGunModel(getEffectiveGunModel(weaponType), weaponType);
+    }
+    return runtimeGunModelCache[cacheKey];
+}
+
+function buildGunStyleKey(model, weaponType) {
+    const b = model.body;
+    const s = model.scope;
+    const m = model.magazine;
+    const br = model.barrel;
+    return [
+        weaponType,
+        b.shape, b.length, b.thickness, b.color, b.metalness, b.roughness,
+        s.enabled, s.radius, s.length, s.color, s.posX, s.posY, s.posZ,
+        m.enabled, m.width, m.height, m.depth, m.color, m.posX, m.posY, m.posZ,
+        br.enabled, br.shape, br.width, br.height, br.depth, br.color, br.posX, br.posY, br.posZ
+    ].join('|');
+}
+
+function addDefaultWeaponFurniture(gunMesh, model, weaponType) {
+    if (!gunMesh || !model || !model.body) return;
+    const bodyLength = Number(model.body.length) || 1.0;
+    const bodyThickness = Number(model.body.thickness) || 0.1;
+    const bodyColor = model.body.color || '#111111';
+    const furnitureMaterial = new THREE.MeshLambertMaterial({ color: bodyColor });
+
+    if (weaponType === WEAPON_PISTOL || weaponType === WEAPON_MG || weaponType === WEAPON_SG || weaponType === WEAPON_RR) {
+        const gripWidth = 0.06;
+        const gripHeight = 0.2;
+        const gripDepth = 0.08;
+        const grip = new THREE.Mesh(
+            new THREE.BoxGeometry(gripWidth, gripHeight, gripDepth),
+            furnitureMaterial
+        );
+        grip.position.set(
+            0,
+            -(bodyThickness * 0.5 + gripHeight * 0.5 - 0.01),
+            -bodyLength * 0.33
+        );
+        // Match reference: lean in the opposite direction from previous version.
+        grip.rotation.x = THREE.MathUtils.degToRad(18);
+        gunMesh.add(grip);
+    }
+
+    if (weaponType === WEAPON_MR || weaponType === WEAPON_SR) {
+        const stockShape = new THREE.Shape();
+        // Larger isosceles triangle stock: starts near rear-bottom and extends backward/downward.
+        stockShape.moveTo(0.2, 0.0);      // apex (toward gun body)
+        stockShape.lineTo(-0.44, -0.3);   // rear-bottom
+        stockShape.lineTo(-0.44, 0.06);   // rear-top
+        stockShape.lineTo(0.2, 0.0);
+        const stockGeometry = new THREE.ExtrudeGeometry(stockShape, {
+            depth: 0.08,
+            bevelEnabled: false
+        });
+        stockGeometry.translate(-0.2, 0, -0.04);
+        const stock = new THREE.Mesh(stockGeometry, furnitureMaterial);
+        stock.rotation.y = -Math.PI / 2;
+        stock.rotation.x = THREE.MathUtils.degToRad(-6);
+        stock.position.set(0, -(bodyThickness * 0.42), -bodyLength * 0.4);
+        gunMesh.add(stock);
+    }
+}
+
+function applyGunStyle(gunMesh, weaponType, overrideModel = null) {
     if (!gunMesh) return;
+    const model = overrideModel
+        ? sanitizeGunModel(overrideModel, weaponType)
+        : getRuntimeGunModel(weaponType);
+    const styleKey = buildGunStyleKey(model, weaponType);
+    if (gunMesh.userData && gunMesh.userData.gunStyleKey === styleKey) {
+        return;
+    }
+
     // Remove old attachments (magazine/scope etc.)
     while (gunMesh.children.length > 0) {
         const child = gunMesh.children[0];
@@ -5117,71 +5483,62 @@ function applyGunStyle(gunMesh, weaponType) {
         disposeMaterial(child.material); // 安全なマテリアル破棄を使用
     }
 
-    let length = 1.2;
-    let thickness = 0.12;
-    let color = 0x111111;
-    let shape = 'box';
-    switch (weaponType) {
-        case WEAPON_PISTOL: length = 0.6; thickness = 0.08; color = 0x222222; break;
-        case WEAPON_MG: length = 1.1; thickness = 0.10; color = 0x111111; break;
-        case WEAPON_RR: length = 2.6; thickness = 0.22; color = 0x6b4b1f; shape = 'cylinder'; break;
-        case WEAPON_SR: length = 1.65; thickness = 0.09; color = 0xcccccc; break;
-        case WEAPON_SG: length = 1.2; thickness = 0.12; color = 0x444444; break;
-        case WEAPON_MR: length = 1.4; thickness = 0.12; color = 0x8b4513; break;
-    }
-    gunMesh.geometry.dispose();
-    if (shape === 'cylinder') {
-        const g = new THREE.CylinderGeometry(thickness / 2, thickness / 2, length, 16);
-        g.rotateX(Math.PI / 2); // align cylinder axis to Z
+    if (gunMesh.geometry) gunMesh.geometry.dispose();
+    if (gunMesh.material) disposeMaterial(gunMesh.material);
+
+    if (model.body.shape === 'cylinder') {
+        const g = new THREE.CylinderGeometry(model.body.thickness / 2, model.body.thickness / 2, model.body.length, 18);
+        g.rotateX(Math.PI / 2);
         gunMesh.geometry = g;
     } else {
-        gunMesh.geometry = new THREE.BoxGeometry(thickness, thickness, length);
+        gunMesh.geometry = new THREE.BoxGeometry(model.body.thickness, model.body.thickness, model.body.length);
     }
-    gunMesh.material.color.setHex(color);
-    
-    // Add shiny effect for black weapons using MeshStandardMaterial
-    if (color === 0x222222 || color === 0x111111) {
-        gunMesh.material = new THREE.MeshStandardMaterial({ 
-            color: color,
-            metalness: 0.8,
-            roughness: 0.1
-        });
-    } else {
-        gunMesh.material = new THREE.MeshStandardMaterial({ 
-            color: color,
-            metalness: 0.3,
-            roughness: 0.5
-        });
-    }
-    gunMesh.userData.gunLength = length;
-    gunMesh.position.z = length / 2;
 
-    if (weaponType === WEAPON_MG) {
-        // Add a simple box magazine under the gun
+    gunMesh.material = new THREE.MeshStandardMaterial({
+        color: model.body.color,
+        metalness: model.body.metalness,
+        roughness: model.body.roughness
+    });
+    gunMesh.userData.gunLength = model.body.length;
+    gunMesh.position.z = model.body.length / 2;
+
+    if (model.magazine.enabled) {
         const mag = new THREE.Mesh(
-            new THREE.BoxGeometry(thickness * 0.8, thickness * 2.2, thickness * 1.1),
-            new THREE.MeshLambertMaterial({ color: 0x222222 })
+            new THREE.BoxGeometry(model.magazine.width, model.magazine.height, model.magazine.depth),
+            new THREE.MeshLambertMaterial({ color: model.magazine.color })
         );
-        mag.position.set(0, -thickness * 1.5, length * 0.05);
+        mag.position.set(model.magazine.posX, model.magazine.posY, model.magazine.posZ);
         gunMesh.add(mag);
-    } else if (weaponType === WEAPON_SR) {
-        // Add a cylindrical scope on top, near left supporting hand area
+    }
+
+    if (model.scope.enabled) {
         const scope = new THREE.Mesh(
-            new THREE.CylinderGeometry(thickness * 0.35, thickness * 0.35, thickness * 2.6, 12),
-            new THREE.MeshLambertMaterial({ color: 0xaaaaaa })
+            new THREE.CylinderGeometry(model.scope.radius, model.scope.radius, model.scope.length, 14),
+            new THREE.MeshLambertMaterial({ color: model.scope.color })
         );
-        scope.rotation.x = Math.PI / 2; // along Z
-        scope.position.set(0, thickness * 0.9, length * 0.18);
+        scope.rotation.x = Math.PI / 2;
+        scope.position.set(model.scope.posX, model.scope.posY, model.scope.posZ);
         gunMesh.add(scope);
-    } else if (weaponType === WEAPON_MR) {
-        // Add a slightly longer black barrel
+    }
+
+    if (model.barrel.enabled) {
+        let barrelGeometry;
+        if (model.barrel.shape === 'cylinder') {
+            barrelGeometry = new THREE.CylinderGeometry(model.barrel.width / 2, model.barrel.width / 2, model.barrel.depth, 14);
+            barrelGeometry.rotateX(Math.PI / 2);
+        } else {
+            barrelGeometry = new THREE.BoxGeometry(model.barrel.width, model.barrel.height, model.barrel.depth);
+        }
         const barrel = new THREE.Mesh(
-            new THREE.BoxGeometry(thickness * 0.5, thickness * 0.5, length * 0.75),
-            new THREE.MeshLambertMaterial({ color: 0x111111 })
+            barrelGeometry,
+            new THREE.MeshLambertMaterial({ color: model.barrel.color })
         );
-        barrel.position.set(0, 0, length * 0.35);
+        barrel.position.set(model.barrel.posX, model.barrel.posY, model.barrel.posZ);
         gunMesh.add(barrel);
     }
+    addDefaultWeaponFurniture(gunMesh, model, weaponType);
+    if (!gunMesh.userData) gunMesh.userData = {};
+    gunMesh.userData.gunStyleKey = styleKey;
 }
 
 function clampAngle(value, min, max) {
@@ -5212,6 +5569,12 @@ function stopKillCamPhysics() {
     killCamPhysics.velocity.set(0, 0, 0);
     killCamPhysics.clearance = 0.25;
     killCamPhysics.lastBounceAt = 0;
+}
+
+function stopKillCamPhysicsForActor(actor) {
+    if (killCamPhysics.active && killCamPhysics.actor === actor) {
+        stopKillCamPhysics();
+    }
 }
 
 function ensurePauseButtonVisible() {
@@ -5246,26 +5609,51 @@ function resolveKillCamObstacleBounce(actor, velocity, obstacle) {
     if (!actor || !velocity || !obstacle) return false;
     if (obstacle.userData && obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof) return false;
     if (obstacle.userData && obstacle.userData.isLadder) return false;
-    const actorBox = new THREE.Box3().setFromObject(actor);
-    const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-    if (!actorBox.intersectsBox(obstacleBox)) return false;
+    const bounce = 0.55;
+    const tangentialDamping = 0.82;
+    const separationPadding = 0.04;
+    let collided = false;
 
-    const overlapX = Math.min(actorBox.max.x - obstacleBox.min.x, obstacleBox.max.x - actorBox.min.x);
-    const overlapZ = Math.min(actorBox.max.z - obstacleBox.min.z, obstacleBox.max.z - actorBox.min.z);
-    if (!Number.isFinite(overlapX) || !Number.isFinite(overlapZ)) return false;
-    const bounce = 0.5;
-    if (overlapX < overlapZ) {
-        const dir = (actor.position.x < obstacle.position.x) ? -1 : 1;
-        actor.position.x += dir * overlapX;
-        velocity.x = -velocity.x * bounce;
-        velocity.z *= 0.85;
-    } else {
-        const dir = (actor.position.z < obstacle.position.z) ? -1 : 1;
-        actor.position.z += dir * overlapZ;
-        velocity.z = -velocity.z * bounce;
-        velocity.x *= 0.85;
+    // Resolve penetration repeatedly to avoid remaining inside an obstacle.
+    for (let i = 0; i < 3; i++) {
+        const actorBox = new THREE.Box3().setFromObject(actor);
+        const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+        if (!actorBox.intersectsBox(obstacleBox)) break;
+
+        const overlapX = Math.min(actorBox.max.x - obstacleBox.min.x, obstacleBox.max.x - actorBox.min.x);
+        const overlapZ = Math.min(actorBox.max.z - obstacleBox.min.z, obstacleBox.max.z - actorBox.min.z);
+        if (!Number.isFinite(overlapX) || !Number.isFinite(overlapZ) || overlapX <= 0 || overlapZ <= 0) break;
+
+        const actorCenterX = (actorBox.min.x + actorBox.max.x) * 0.5;
+        const actorCenterZ = (actorBox.min.z + actorBox.max.z) * 0.5;
+        const obstacleCenterX = (obstacleBox.min.x + obstacleBox.max.x) * 0.5;
+        const obstacleCenterZ = (obstacleBox.min.z + obstacleBox.max.z) * 0.5;
+
+        if (overlapX <= overlapZ) {
+            const dir = (actorCenterX < obstacleCenterX) ? -1 : 1;
+            actor.position.x += dir * (overlapX + separationPadding);
+            velocity.x = -velocity.x * bounce;
+            velocity.z *= tangentialDamping;
+        } else {
+            const dir = (actorCenterZ < obstacleCenterZ) ? -1 : 1;
+            actor.position.z += dir * (overlapZ + separationPadding);
+            velocity.z = -velocity.z * bounce;
+            velocity.x *= tangentialDamping;
+        }
+        collided = true;
     }
-    return true;
+
+    if (collided) {
+        const groundY = (actor === player)
+            ? getGroundY(actor.position, playerTargetHeight * 2)
+            : getGroundSurfaceY(actor.position);
+        const minY = groundY + killCamPhysics.clearance;
+        if (actor.position.y < minY) {
+            actor.position.y = minY;
+            if (velocity.y < 0) velocity.y = Math.abs(velocity.y) * 0.35;
+        }
+    }
+    return collided;
 }
 
 function updateKillCamPhysics(delta) {
@@ -6159,33 +6547,29 @@ function findNearestLadder(ai, playerPosition) {
     return nearestLadder;
 }
 
-function getAIRooftopClimbChance(ai) {
-    // Specified probabilities when holding a non-shotgun weapon:
-    // Sniper: 50%, Machinegun: 20%, RocketLauncher: 20%, Pistol: 10%
-    // Shotgun and other weapons: 0%
+function getAIRooftopClimbChance(ai, distanceToLadder = Infinity, isTower = false) {
     if (!ai || !ai.currentWeapon) return 0.0;
-    const nearbyLadder = findNearbyLadderSensor(ai, 22);
-    const nearbyTower = nearbyLadder && isTowerObstacle(nearbyLadder.userData?.obstacle);
-    if (nearbyTower) {
-        switch (ai.currentWeapon) {
-            case WEAPON_SR: return 0.6;
-            case WEAPON_MG: return 0.35;
-            case WEAPON_MR: return 0.28;
-            case WEAPON_RR: return 0.3;
-            case WEAPON_PISTOL: return 0.12;
-            case WEAPON_SG: return 0.0;
-            default: return 0.0;
-        }
-    }
+    // Trigger only when AI naturally approaches a ladder building.
+    if (!Number.isFinite(distanceToLadder) || distanceToLadder > 12.0) return 0.0;
+    let distanceChance = 0.0;
+    if (distanceToLadder <= 5.0) distanceChance = 0.92;
+    else if (distanceToLadder <= 8.0) distanceChance = 0.82;
+    else distanceChance = 0.68;
+
+    let weaponMul = 1.0;
     switch (ai.currentWeapon) {
-        case WEAPON_SR: return 0.45;
-        case WEAPON_MG: return 0.25;
-        case WEAPON_MR: return 0.2;
-        case WEAPON_RR: return 0.22;
-        case WEAPON_PISTOL: return 0.1;
-        case WEAPON_SG: return 0.0;
-        default: return 0.0;
+        case WEAPON_SR: weaponMul = 1.0; break;
+        case WEAPON_MG: weaponMul = 0.96; break;
+        case WEAPON_MR: weaponMul = 0.94; break;
+        case WEAPON_RR: weaponMul = 0.93; break;
+        case WEAPON_PISTOL: weaponMul = 0.85; break;
+        case WEAPON_SG: weaponMul = 0.8; break;
+        default: weaponMul = 0.88; break;
     }
+
+    let chance = distanceChance * weaponMul;
+    if (isTower) chance += 0.05;
+    return THREE.MathUtils.clamp(chance, 0, 0.95);
 }
 
 function isAIWeaponOutOfAmmo(ai) {
@@ -6200,25 +6584,76 @@ function isAIWeaponOutOfAmmo(ai) {
     }
 }
 
-function isEnemyRooftopSlotBusy(requesterAI) {
+function isTeamBasedAIMode() {
+    return gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+}
+
+function isAIRooftopFlowActive(ai) {
+    if (!ai || ai.hp <= 0) return false;
+    const phase = ai.userData?.rooftopPhase || 'none';
+    if (phase !== 'none') return true;
+    if (ai.userData?.rooftopIntent || ai.userData?.onRooftop) return true;
+    return (
+        ai.state === 'MOVING_TO_LADDER' ||
+        ai.state === 'CLIMBING' ||
+        ai.state === 'ROOFTOP_COMBAT' ||
+        ai.state === 'DESCENDING'
+    );
+}
+
+function getActiveRooftopAIs(excludeAI = null) {
+    const list = [];
     for (const other of ais) {
-        if (!other || other === requesterAI || other.hp <= 0) continue;
-        if (other.team !== 'enemy') continue;
-        if (
-            other.userData?.rooftopIntent ||
-            other.userData?.onRooftop ||
-            other.state === 'MOVING_TO_LADDER' ||
-            other.state === 'CLIMBING' ||
-            other.state === 'ROOFTOP_COMBAT' ||
-            other.state === 'DESCENDING'
-        ) {
+        if (!other || other === excludeAI) continue;
+        if (isAIRooftopFlowActive(other)) list.push(other);
+    }
+    return list;
+}
+
+function countActiveRooftopAIsOnObstacle(obstacle, excludeAI = null) {
+    if (!obstacle) return 0;
+    let count = 0;
+    for (const other of getActiveRooftopAIs(excludeAI)) {
+        if (other.userData?.rooftopObstacle === obstacle) count++;
+    }
+    return count;
+}
+
+function hasSameTeamRooftopAIOnObstacle(requesterAI, obstacle) {
+    if (!requesterAI || !obstacle) return false;
+    for (const other of getActiveRooftopAIs(requesterAI)) {
+        if (other.team === requesterAI.team && other.userData?.rooftopObstacle === obstacle) {
             return true;
         }
     }
     return false;
 }
 
-function chooseLadderForAI(ai) {
+function canTeamAssignAnotherRooftopAI(requesterAI) {
+    if (!requesterAI) return false;
+    if (!isTeamBasedAIMode()) return true;
+    const aliveTeamAIs = ais.filter(other => other && other.hp > 0 && other.team === requesterAI.team);
+    if (aliveTeamAIs.length <= 0) return false;
+    const activeTeamRooftop = getActiveRooftopAIs(requesterAI).filter(other => other.team === requesterAI.team).length;
+    // If player team has a living human player, the ground-role requirement can be satisfied by player.
+    const playerCanHoldGround = requesterAI.team === 'player' && playerHP > 0;
+    const maxTeamRooftopAI = playerCanHoldGround
+        ? aliveTeamAIs.length
+        : Math.max(0, aliveTeamAIs.length - 1);
+    return activeTeamRooftop < maxTeamRooftopAI;
+}
+
+function shouldForceGroundRole(ai) {
+    if (!ai || !isTeamBasedAIMode()) return false;
+    if (!isAIRooftopFlowActive(ai)) return false;
+    const aliveTeamAIs = ais.filter(other => other && other.hp > 0 && other.team === ai.team);
+    if (aliveTeamAIs.length <= 1) return true;
+    const activeTeamRooftop = getActiveRooftopAIs(null).filter(other => other.team === ai.team).length;
+    const maxAllowed = Math.max(0, aliveTeamAIs.length - 1);
+    return activeTeamRooftop > maxAllowed;
+}
+
+function chooseLadderForAI(ai, maxDistance = 12.0) {
     if (!ladderSwitches || ladderSwitches.length === 0) return null;
     const targetPos = getClosestOpponentPosition(ai) || player.position.clone();
     let best = null;
@@ -6228,9 +6663,16 @@ function chooseLadderForAI(ai) {
         const obstacle = sensor.userData?.obstacle;
         if (!ladderPos || !obstacle) continue;
         const dAI = ai.position.distanceTo(ladderPos);
+        if (dAI > maxDistance) continue;
+        const activeOnObstacle = countActiveRooftopAIsOnObstacle(obstacle, ai);
+        // Hard limit: max 2 AIs per building rooftop flow.
+        if (activeOnObstacle >= 2) continue;
+        // Teammates must not stack on the same building simultaneously.
+        if (hasSameTeamRooftopAIOnObstacle(ai, obstacle)) continue;
         const dEnemy = targetPos.distanceTo(obstacle.position);
         const towerBias = isTowerObstacle(obstacle) ? 0.8 : 1.0;
-        const score = (dAI * 0.65 + dEnemy * 0.35) * towerBias;
+        const occupancyPenalty = activeOnObstacle * 6.0;
+        const score = (dAI * 0.6 + dEnemy * 0.4 + occupancyPenalty) * towerBias;
         if (score < bestScore) {
             bestScore = score;
             best = sensor;
@@ -6326,25 +6768,37 @@ function clampAIToRooftop(ai) {
     ai.position.y = center.y + height / 2;
 }
 
-function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate) {
+function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate, isAISeen = false) {
     if (!ai || ai.hp <= 0 || !ai.userData) return false;
     if (ladderSwitches.length === 0) return false;
     if (isFollowLockedTeammate) return false;
     if (ai.userData.onRooftop || ai.userData.rooftopIntent || ai.isElevating) return false;
     if ((ai.userData.rooftopPhase || 'none') !== 'none') return false;
+    // Keep rooftop planning from interrupting tight combat/utility states.
+    if (ai.state !== 'ATTACKING' && ai.state !== 'MOVING') return false;
+    if (isAISeen && ai.state === 'ATTACKING') return false;
+    // Global cap: max 2 AIs in rooftop flow at once.
+    if (getActiveRooftopAIs(ai).length >= 2) return false;
+    if (!canTeamAssignAnotherRooftopAI(ai)) return false;
     if (!FORCE_AI_ROOFTOP_TEST) {
         if ((ai.userData.nextRooftopDecisionAt || 0) > timeElapsed) return false;
-        ai.userData.nextRooftopDecisionAt = timeElapsed + 0.7 + Math.random() * 0.9;
+        ai.userData.nextRooftopDecisionAt = timeElapsed + 0.35 + Math.random() * 0.35;
     }
 
+    const nearbySensor = chooseLadderForAI(ai, 12.0);
+    if (!nearbySensor) return false;
+    const nearbyLadderPos = nearbySensor.userData?.ladderPos || nearbySensor.position;
+    const nearbyObstacle = nearbySensor.userData?.obstacle || null;
+    const distToNearby = nearbyLadderPos ? ai.position.distanceTo(nearbyLadderPos) : Infinity;
+    const nearbyTower = isTowerObstacle(nearbyObstacle);
+
     if (!FORCE_AI_ROOFTOP_TEST) {
-        const chance = getAIRooftopClimbChance(ai);
+        let chance = getAIRooftopClimbChance(ai, distToNearby, nearbyTower);
+        if (isAISeen) chance *= 0.55;
         if (chance <= 0 || Math.random() >= chance) return false;
     }
 
-    if (!FORCE_AI_ROOFTOP_TEST && ai.team === 'enemy' && isEnemyRooftopSlotBusy(ai)) return false;
-
-    const sensor = chooseLadderForAI(ai);
+    const sensor = nearbySensor;
     if (!sensor) return false;
     const ladderPos = sensor.userData?.ladderPos;
     const obstacle = sensor.userData?.obstacle;
@@ -6364,7 +6818,7 @@ function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate) {
     ai.userData.nextRooftopDecisionAt = timeElapsed + 4.0;
     ai.userData.rooftopPhase = 'to_ladder';
     ai.userData.rooftopStateSince = timeElapsed;
-    ai.state = 'MOVING';
+    ai.state = 'MOVING_TO_LADDER';
     ai.targetPosition.copy(ai.userData.rooftopLadderPos);
     ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
     return true;
@@ -7881,13 +8335,15 @@ function aiShoot(ai, timeElapsed) {
     let startPosition = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.75 * 0.5 : BODY_HEIGHT * 0.75, 0));
     const aimOrigin = ai.position.clone().add(new THREE.Vector3(0, ai.isCrouching ? BODY_HEIGHT * 0.65 : BODY_HEIGHT * 0.9, 0));
     const peekOrigin = ai.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.9, 0));
-    const canSeeFrom = (origin, target) => {
-        if (checkLineOfSight(origin, target, obstacles)) return true;
-        if (ai.isCrouching) {
-            return checkLineOfSight(peekOrigin, target, obstacles);
+    const aiHeadOrigin = getAIHeadPos(ai);
+    const getClearShotOrigin = (target, primaryOrigin) => {
+        const candidates = [primaryOrigin, aimOrigin, peekOrigin, aiHeadOrigin];
+        for (const candidate of candidates) {
+            if (checkLineOfSight(candidate, target, obstacles)) return candidate.clone();
         }
-        return false;
+        return null;
     };
+    const canSeeFrom = (origin, target) => getClearShotOrigin(target, origin) !== null;
     const muzzleInfo = (ai.userData && ai.userData.parts) ? getGunMuzzleInfo(ai.userData.parts) : null;
     let muzzleDirection = muzzleInfo ? muzzleInfo.direction.clone().normalize() : null;
     let targetIsPlayer = false;
@@ -8021,13 +8477,13 @@ function aiShoot(ai, timeElapsed) {
     
     if (targetPosition === null) return;
     // Strict rule: do not fire if obstacle blocks muzzle -> target.
-    if (!checkLineOfSight(startPosition, targetPosition, obstacles)) {
-        if (ai.isCrouching && checkLineOfSight(peekOrigin, targetPosition, obstacles)) {
-            startPosition = peekOrigin.clone();
+    {
+        const clearOrigin = getClearShotOrigin(targetPosition, startPosition);
+        if (!clearOrigin) return;
+        if (clearOrigin.distanceToSquared(startPosition) > 1e-6) {
             muzzleDirection = null;
-        } else {
-            return;
         }
+        startPosition = clearOrigin;
     }
     // Re-aim right before firing so muzzle direction matches the intended target.
     let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
@@ -8041,13 +8497,13 @@ function aiShoot(ai, timeElapsed) {
         }
     }
     // Recheck LOS after final pose/muzzle update (prevents wall-through on AI-vs-AI).
-    if (!checkLineOfSight(startPosition, targetPosition, obstacles)) {
-        if (ai.isCrouching && checkLineOfSight(peekOrigin, targetPosition, obstacles)) {
-            startPosition = peekOrigin.clone();
+    {
+        const clearOrigin = getClearShotOrigin(targetPosition, startPosition);
+        if (!clearOrigin) return;
+        if (clearOrigin.distanceToSquared(startPosition) > 1e-6) {
             muzzleDirection = null;
-        } else {
-            return;
         }
+        startPosition = clearOrigin;
     }
 
     const toTarget = new THREE.Vector3().subVectors(targetPosition, startPosition).normalize();
@@ -10131,8 +10587,8 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         }
         createRedSmokeEffect(ai.position.clone());
         removeAIProjectiles(ai, true);
-        if (ai.userData && ai.userData.parts) {
-            const parts = ai.userData.parts;
+        const parts = ai.userData ? ai.userData.parts : null;
+        if (parts) {
             if (parts.gun) {
                 applyGunStyle(parts.gun, ai.currentWeapon);
             }
@@ -10146,32 +10602,17 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         const aiKick = new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
         aiKick.normalize().multiplyScalar(3.0);
         aiKick.y += 1.5;
-        const startPos = ai.position.clone();
-        const endPos = new THREE.Vector3(
-            startPos.x + aiKick.x * 0.4,
-            Math.max(startPos.y - FLOOR_HEIGHT, startPos.y + aiKick.y * 0.4),
-            startPos.z + aiKick.z * 0.4
-        );
-        if (isBillBattleMode()) {
-            endPos.x = Math.max(-BILL_BATTLE_HALF + 2, Math.min(BILL_BATTLE_HALF - 2, endPos.x));
-            endPos.z = Math.max(-BILL_BATTLE_HALF + 2, Math.min(BILL_BATTLE_HALF - 2, endPos.z));
-        } else {
-            const dist = Math.sqrt(endPos.x * endPos.x + endPos.z * endPos.z);
-            if (dist > ARENA_PLAY_AREA_RADIUS - 2) {
-                const ratio = (ARENA_PLAY_AREA_RADIUS - 2) / dist;
-                endPos.x *= ratio;
-                endPos.z *= ratio;
-            }
-        }
-        new TWEEN.Tween(ai.position).to({ x: endPos.x, y: endPos.y, z: endPos.z }, 1500).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
-            setTimeout(() => {
-                ai.visible = false;
-                ai.userData.isDying = false;
-                billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
-                updateBillBattleKillDisplay();
-                restoreRightButtonsDefault();
-            }, 1200);
-        }).start();
+        const aiInitialVelocity = aiKick.clone();
+        aiInitialVelocity.y += 1.2;
+        startKillCamPhysics(ai, parts, aiInitialVelocity, 0.4);
+        setTimeout(() => {
+            stopKillCamPhysicsForActor(ai);
+            ai.visible = false;
+            ai.userData.isDying = false;
+            billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
+            updateBillBattleKillDisplay();
+            restoreRightButtonsDefault();
+        }, 2700);
         return;
     }
     if (gameSettings.killCamMode === 'off') {
@@ -10196,27 +10637,25 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         const aiKick = new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
         aiKick.normalize().multiplyScalar(3.0);
         aiKick.y += 1.5;
-        const startPos = ai.position.clone();
-        const endPos = new THREE.Vector3(
-            startPos.x + aiKick.x * 0.4,
-            Math.max(startPos.y - FLOOR_HEIGHT, startPos.y + aiKick.y * 0.4),
-            startPos.z + aiKick.z * 0.4
-        );
-        const dist = Math.sqrt(endPos.x * endPos.x + endPos.z * endPos.z);
-        if (dist > ARENA_PLAY_AREA_RADIUS - 2) {
-            const ratio = (ARENA_PLAY_AREA_RADIUS - 2) / dist;
-            endPos.x *= ratio;
-            endPos.z *= ratio;
-        }
-        new TWEEN.Tween(ai.position).to({ x: endPos.x, y: endPos.y, z: endPos.z }, 1500).easing(TWEEN.Easing.Quadratic.Out).onComplete(() => {
-            setTimeout(() => {
-                if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
-                    respawnAI(ai);
-                } else {
-                    ai.visible = false;
-                }
-            }, 1200);
-        }).start();
+        const aiInitialVelocity = aiKick.clone();
+        aiInitialVelocity.y += 1.2;
+        startKillCamPhysics(ai, parts, aiInitialVelocity, 0.35);
+        setTimeout(() => {
+            stopKillCamPhysicsForActor(ai);
+            if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+                respawnAI(ai);
+            } else {
+                ai.visible = false;
+            }
+        }, 2700);
+        return;
+    }
+    if (isBillBattleMode() && killerSource === 'player') {
+        ai.visible = false;
+        ai.userData.isDying = false;
+        billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
+        updateBillBattleKillDisplay();
+        restoreRightButtonsDefault();
         return;
     }
     if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
@@ -10362,8 +10801,18 @@ function showWinScreen() {
     if(pauseBtn) pauseBtn.style.display = 'none';
 }
 
+function setCrosshairVisible(visible) {
+    if (!crosshairElement) crosshairElement = document.getElementById('crosshair');
+    if (!crosshairElement) return;
+    const currentVisible = crosshairElement.style.display !== 'none';
+    if (currentVisible === visible && lastCrosshairVisible === visible) return;
+    crosshairElement.style.display = visible ? 'block' : 'none';
+    lastCrosshairVisible = visible;
+}
+
 function updateCrosshairForWeapon() {
-    const crosshair = document.getElementById('crosshair');
+    const crosshair = crosshairElement || document.getElementById('crosshair');
+    crosshairElement = crosshair;
     if (!crosshair) return;
     const lineH = document.getElementById('line-h');
     const lineV = document.getElementById('line-v');
@@ -11066,6 +11515,9 @@ function animate() {
     }
 
     enforceTouchUIVisibility();
+    if (killCamPhysics.active && !isPlayerDeathPlaying && !isAIDeathPlaying) {
+        updateKillCamPhysics(delta);
+    }
 
     if (isPlayerDeathPlaying) {
         updateKillCamPhysics(delta);
@@ -11265,7 +11717,11 @@ function animate() {
             case WEAPON_MR: weaponName = 'M1 Rifle'; ammoCount = getPlayerMRDisplayAmmo(); break;
             case WEAPON_PISTOL: weaponName = 'Pistol'; ammoCount = '∞'; break;
         }
-        playerWeaponDisplay.innerHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`; // playerWeaponDisplayを使用
+        const displayHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`;
+        if (displayHTML !== lastPlayerWeaponDisplayHTML) {
+            playerWeaponDisplay.innerHTML = displayHTML; // playerWeaponDisplayを使用
+            lastPlayerWeaponDisplayHTML = displayHTML;
+        }
     }
     if (isRifleZoomed && !canUseRifleZoom(currentWeapon)) {
         setRifleZoom(false);
@@ -11273,13 +11729,16 @@ function animate() {
     if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
         shoot();
     }
-    updateCrosshairForWeapon();
+    if (lastCrosshairWeaponType !== currentWeapon) {
+        updateCrosshairForWeapon();
+        lastCrosshairWeaponType = currentWeapon;
+    }
     if (isScoping) {
-        document.getElementById('crosshair').style.display = 'none';
+        setCrosshairVisible(false);
         updateSniperScopeAutoAim(delta);
     } else {
         if (scopeOverlay.style.display === 'none') {
-            document.getElementById('crosshair').style.display = 'block';
+            setCrosshairVisible(true);
         }
     }
     keyboardMoveVector.set(0, 0);
@@ -11935,7 +12394,7 @@ function animate() {
 
         // Rooftop behavior decision (weapon-based probability; both enemy and teammate AI)
         if (ENABLE_AI_ROOFTOP_LOGIC) {
-            tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate);
+            tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate, isAISeen);
         }
 
         if (ENABLE_AI_ROOFTOP_LOGIC && ai.userData.rooftopPhase === 'to_ladder') {
@@ -11948,7 +12407,7 @@ function animate() {
                     ai.userData.rooftopPhase = 'none';
                     ai.userData.nextRooftopDecisionAt = timeElapsed + 3.0;
                 }
-                ai.state = 'MOVING';
+                ai.state = 'MOVING_TO_LADDER';
                 ai.targetPosition.copy(ai.userData.rooftopLadderPos);
                 ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
                 if (ai.position.distanceTo(ai.targetPosition) < 0.8) {
@@ -12009,7 +12468,7 @@ function animate() {
                 ai.userData.rooftopIntent = false;
                 ai.userData.onRooftop = false;
             } else {
-                ai.state = 'MOVING';
+                ai.state = 'DESCENDING';
                 ai.targetPosition.copy(ai.userData.rooftopLadderPos);
                 ai.targetPosition.y = ai.position.y;
                 const flatDist = new THREE.Vector3(ai.position.x - ai.targetPosition.x, 0, ai.position.z - ai.targetPosition.z).length();
@@ -14028,6 +14487,614 @@ if (resumeGameBtn) {
 }
 
 // Character Editor Functions
+function getGunEditorFieldDefs() {
+    return [
+        { key: 'body.shape', label: 'Body Shape', type: 'select', options: ['box', 'cylinder'] },
+        { key: 'body.length', label: 'Body Length', type: 'range', min: 0.3, max: 3.5, step: 0.01 },
+        { key: 'body.thickness', label: 'Body Thickness', type: 'range', min: 0.03, max: 0.5, step: 0.005 },
+        { key: 'body.color', label: 'Body Color', type: 'color' },
+        { key: 'body.metalness', label: 'Body Metalness', type: 'range', min: 0, max: 1, step: 0.01 },
+        { key: 'body.roughness', label: 'Body Roughness', type: 'range', min: 0, max: 1, step: 0.01 },
+
+        { key: 'scope.enabled', label: 'Scope Enabled', type: 'checkbox' },
+        { key: 'scope.radius', label: 'Scope Radius', type: 'range', min: 0.01, max: 0.4, step: 0.005 },
+        { key: 'scope.length', label: 'Scope Length', type: 'range', min: 0.08, max: 1.5, step: 0.01 },
+        { key: 'scope.posX', label: 'Scope Pos X', type: 'range', min: -1.5, max: 1.5, step: 0.01 },
+        { key: 'scope.posY', label: 'Scope Pos Y', type: 'range', min: -1.5, max: 1.5, step: 0.01 },
+        { key: 'scope.posZ', label: 'Scope Pos Z', type: 'range', min: -2.5, max: 2.5, step: 0.01 },
+        { key: 'scope.color', label: 'Scope Color', type: 'color' },
+
+        { key: 'magazine.enabled', label: 'Magazine Enabled', type: 'checkbox' },
+        { key: 'magazine.width', label: 'Magazine Width', type: 'range', min: 0.02, max: 1.2, step: 0.01 },
+        { key: 'magazine.height', label: 'Magazine Height', type: 'range', min: 0.02, max: 1.2, step: 0.01 },
+        { key: 'magazine.depth', label: 'Magazine Depth', type: 'range', min: 0.02, max: 1.2, step: 0.01 },
+        { key: 'magazine.posX', label: 'Magazine Pos X', type: 'range', min: -1.5, max: 1.5, step: 0.01 },
+        { key: 'magazine.posY', label: 'Magazine Pos Y', type: 'range', min: -1.5, max: 1.5, step: 0.01 },
+        { key: 'magazine.posZ', label: 'Magazine Pos Z', type: 'range', min: -2.5, max: 2.5, step: 0.01 },
+        { key: 'magazine.color', label: 'Magazine Color', type: 'color' },
+
+        { key: 'barrel.enabled', label: 'Barrel Enabled', type: 'checkbox' },
+        { key: 'barrel.shape', label: 'Barrel Shape', type: 'select', options: ['box', 'cylinder'] },
+        { key: 'barrel.width', label: 'Barrel Width', type: 'range', min: 0.02, max: 1.2, step: 0.01 },
+        { key: 'barrel.height', label: 'Barrel Height', type: 'range', min: 0.02, max: 1.2, step: 0.01 },
+        { key: 'barrel.depth', label: 'Barrel Length', type: 'range', min: 0.05, max: 2.5, step: 0.01 },
+        { key: 'barrel.posX', label: 'Barrel Pos X', type: 'range', min: -1.5, max: 1.5, step: 0.01 },
+        { key: 'barrel.posY', label: 'Barrel Pos Y', type: 'range', min: -1.5, max: 1.5, step: 0.01 },
+        { key: 'barrel.posZ', label: 'Barrel Pos Z', type: 'range', min: -2.5, max: 2.5, step: 0.01 },
+        { key: 'barrel.color', label: 'Barrel Color', type: 'color' }
+    ];
+}
+
+function getByPath(obj, path) {
+    if (!obj) return undefined;
+    const parts = path.split('.');
+    let cur = obj;
+    for (const p of parts) {
+        if (!cur || typeof cur !== 'object') return undefined;
+        cur = cur[p];
+    }
+    return cur;
+}
+
+function setByPath(obj, path, value) {
+    const parts = path.split('.');
+    let cur = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+        cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+}
+
+function buildGunEditorControls() {
+    const controlsRoot = document.getElementById('gun-editor-controls');
+    if (!controlsRoot) return;
+    controlsRoot.innerHTML = '';
+    gunEditorInputs = {};
+
+    const createField = (field) => {
+        const wrap = document.createElement('div');
+        wrap.style.backgroundColor = '#333';
+        wrap.style.borderRadius = '4px';
+        wrap.style.padding = '8px';
+
+        const label = document.createElement('label');
+        label.textContent = field.label;
+        label.style.display = 'block';
+        label.style.color = 'white';
+        label.style.fontSize = '0.85em';
+        label.style.marginBottom = '6px';
+        wrap.appendChild(label);
+
+        let input;
+        if (field.type === 'select') {
+            input = document.createElement('select');
+            for (const opt of field.options) {
+                const o = document.createElement('option');
+                o.value = opt;
+                o.textContent = opt;
+                input.appendChild(o);
+            }
+        } else {
+            input = document.createElement('input');
+            input.type = field.type === 'checkbox' ? 'checkbox' : field.type;
+            if (field.type === 'range') {
+                input.min = String(field.min);
+                input.max = String(field.max);
+                input.step = String(field.step);
+            }
+        }
+        input.style.width = field.type === 'checkbox' ? 'auto' : '100%';
+        input.dataset.path = field.key;
+        gunEditorInputs[field.key] = input;
+
+        const valueLabel = document.createElement('div');
+        valueLabel.style.color = '#bbb';
+        valueLabel.style.fontSize = '0.75em';
+        valueLabel.style.marginTop = '4px';
+        valueLabel.dataset.valueLabel = field.key;
+        wrap.appendChild(input);
+        if (field.type === 'range') wrap.appendChild(valueLabel);
+
+        input.addEventListener('input', () => {
+            applyGunEditorInputsToModel();
+            updateGunEditorPreview();
+        });
+        input.addEventListener('change', () => {
+            applyGunEditorInputsToModel();
+            updateGunEditorPreview();
+        });
+        return wrap;
+    };
+
+    const defs = getGunEditorFieldDefs();
+    for (const field of defs) {
+        controlsRoot.appendChild(createField(field));
+    }
+}
+
+function refreshGunEditorInputValues() {
+    if (!gunEditorLiveModel) return;
+    const defs = getGunEditorFieldDefs();
+    for (const field of defs) {
+        const input = gunEditorInputs[field.key];
+        if (!input) continue;
+        const value = getByPath(gunEditorLiveModel, field.key);
+        if (field.type === 'checkbox') {
+            input.checked = !!value;
+        } else {
+            input.value = value;
+        }
+        if (field.type === 'range') {
+            const label = document.querySelector(`[data-value-label="${field.key}"]`);
+            if (label) label.textContent = Number(value).toFixed(2);
+        }
+    }
+}
+
+function applyGunEditorInputsToModel() {
+    if (!gunEditorLiveModel) return;
+    const defs = getGunEditorFieldDefs();
+    for (const field of defs) {
+        const input = gunEditorInputs[field.key];
+        if (!input) continue;
+        let value;
+        if (field.type === 'checkbox') value = !!input.checked;
+        else if (field.type === 'range') value = Number(input.value);
+        else value = input.value;
+        setByPath(gunEditorLiveModel, field.key, value);
+        if (field.type === 'range') {
+            const label = document.querySelector(`[data-value-label="${field.key}"]`);
+            if (label) label.textContent = Number(value).toFixed(2);
+        }
+    }
+    gunEditorLiveModel = sanitizeGunModel(gunEditorLiveModel, currentGunEditorWeapon);
+}
+
+function initGunPreview() {
+    const container = document.getElementById('gun-preview-container');
+    if (!container || gunEditorRenderer) return;
+
+    const initialWidth = Math.max(1, Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1));
+    const initialHeight = Math.max(1, Math.floor(container.clientHeight || container.getBoundingClientRect().height || 1));
+
+    gunEditorScene = new THREE.Scene();
+    gunEditorScene.background = new THREE.Color(0x87ceeb);
+    gunEditorCamera = new THREE.PerspectiveCamera(60, initialWidth / initialHeight, 0.1, 100);
+    gunEditorCamera.position.set(0, 0.22, 3.0);
+    gunEditorCamera.lookAt(0, 0.08, 0);
+
+    gunEditorRenderer = new THREE.WebGLRenderer({ antialias: true });
+    gunEditorRenderer.setSize(initialWidth, initialHeight);
+    while (container.firstChild) container.removeChild(container.firstChild);
+    container.appendChild(gunEditorRenderer.domElement);
+    setupGunPreviewZoomControls(container);
+    updateGunPreviewCameraZoom();
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+    gunEditorScene.add(ambient);
+    const key = new THREE.DirectionalLight(0xffffff, 0.9);
+    key.position.set(2, 4, 3);
+    gunEditorScene.add(key);
+
+    const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(8, 8),
+        new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9, metalness: 0.1 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.6;
+    gunEditorScene.add(floor);
+
+    gunPreviewMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1, 0.1, 1.0),
+        new THREE.MeshStandardMaterial({ color: 0x999999 })
+    );
+    gunPreviewMesh.position.set(0, 0.08, 0);
+    gunEditorScene.add(gunPreviewMesh);
+
+    renderGunEditorFrame();
+}
+
+function resizeGunPreviewRenderer() {
+    const container = document.getElementById('gun-preview-container');
+    if (!container || !gunEditorRenderer || !gunEditorCamera) return;
+    const width = Math.max(1, Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1));
+    const height = Math.max(1, Math.floor(container.clientHeight || container.getBoundingClientRect().height || 1));
+    gunEditorRenderer.setSize(width, height, false);
+    gunEditorCamera.aspect = width / height;
+    gunEditorCamera.updateProjectionMatrix();
+    updateGunPreviewCameraZoom();
+    renderGunEditorFrame();
+}
+
+function frameGunPreviewCameraToMesh(zoomLevel) {
+    if (!gunEditorCamera || !gunPreviewMesh) return;
+    const box = new THREE.Box3().setFromObject(gunPreviewMesh);
+    if (!box || box.isEmpty()) return;
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    box.getCenter(center);
+    box.getSize(size);
+
+    const maxDim = Math.max(0.6, size.x, size.y, size.z);
+    const fovRad = THREE.MathUtils.degToRad(gunEditorCamera.fov);
+    const baseDistance = (maxDim * 0.95) / Math.tan(fovRad / 2);
+    const zoom = Math.max(0.55, Math.min(3.5, zoomLevel || 1.0));
+    const distance = baseDistance / zoom;
+
+    gunEditorCamera.position.set(center.x, center.y + 0.08, center.z + distance);
+    gunEditorCamera.lookAt(center.x, center.y, center.z);
+    gunEditorCamera.updateProjectionMatrix();
+}
+
+function updateGunPreviewCameraZoom() {
+    if (!gunEditorCamera) return;
+    const zoom = Math.max(0.55, Math.min(3.5, gunPreviewZoomLevel));
+    gunPreviewZoomLevel = zoom;
+    frameGunPreviewCameraToMesh(zoom);
+}
+
+function getTouchDistance(touches) {
+    if (!touches || touches.length < 2) return 0;
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function setupGunPreviewZoomControls(container) {
+    if (!container || container.dataset.zoomBound === '1') return;
+    container.dataset.zoomBound = '1';
+    container.style.touchAction = 'none';
+
+    container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        gunPreviewZoomLevel += delta;
+        updateGunPreviewCameraZoom();
+        renderGunEditorFrame();
+    }, { passive: false });
+
+    container.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+            gunPreviewTouchDistance = getTouchDistance(e.touches);
+        }
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 2) return;
+        e.preventDefault();
+        const nextDistance = getTouchDistance(e.touches);
+        if (gunPreviewTouchDistance > 0 && nextDistance > 0) {
+            const scale = nextDistance / gunPreviewTouchDistance;
+            gunPreviewZoomLevel *= scale;
+            updateGunPreviewCameraZoom();
+            renderGunEditorFrame();
+        }
+        gunPreviewTouchDistance = nextDistance;
+    }, { passive: false });
+
+    container.addEventListener('touchend', () => {
+        gunPreviewTouchDistance = 0;
+    }, { passive: true });
+}
+
+function disposeGunPreviewMesh(mesh) {
+    if (!mesh) return;
+    while (mesh.children && mesh.children.length > 0) {
+        const child = mesh.children[0];
+        mesh.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        disposeMaterial(child.material);
+    }
+    if (mesh.geometry) mesh.geometry.dispose();
+    disposeMaterial(mesh.material);
+}
+
+function destroyGunPreview() {
+    if (gunEditorScene && gunPreviewMesh) {
+        gunEditorScene.remove(gunPreviewMesh);
+    }
+    disposeGunPreviewMesh(gunPreviewMesh);
+    gunPreviewMesh = null;
+
+    if (gunEditorRenderer) {
+        if (gunEditorRenderer.domElement && gunEditorRenderer.domElement.parentElement) {
+            gunEditorRenderer.domElement.parentElement.removeChild(gunEditorRenderer.domElement);
+        }
+        gunEditorRenderer.dispose();
+    }
+    gunEditorRenderer = null;
+    gunEditorScene = null;
+    gunEditorCamera = null;
+}
+
+function startGunEditorAnimation() {
+    if (gunEditorAnimating) return;
+    gunEditorAnimating = true;
+    const loop = () => {
+        if (!gunEditorAnimating) return;
+        gunEditorAnimationId = requestAnimationFrame(loop);
+        renderGunEditorFrame();
+    };
+    loop();
+}
+
+function stopGunEditorAnimation() {
+    gunEditorAnimating = false;
+    if (gunEditorAnimationId) {
+        cancelAnimationFrame(gunEditorAnimationId);
+        gunEditorAnimationId = null;
+    }
+}
+
+function renderGunEditorFrame() {
+    if (!gunEditorRenderer || !gunEditorScene || !gunEditorCamera) return;
+    if (gunPreviewMesh) gunPreviewMesh.rotation.y += 0.008;
+    gunEditorRenderer.render(gunEditorScene, gunEditorCamera);
+}
+
+function updateGunEditorPreview() {
+    if (!gunPreviewMesh) return;
+    applyGunStyle(gunPreviewMesh, currentGunEditorWeapon, gunEditorLiveModel);
+    updateGunPreviewCameraZoom();
+    renderGunEditorFrame();
+}
+
+function setGunEditorScrollLock(locked) {
+    const body = document.body;
+    const html = document.documentElement;
+    if (!body || !html) return;
+    if (locked) {
+        gunEditorPrevBodyOverflow = body.style.overflow || '';
+        gunEditorPrevHtmlOverflow = html.style.overflow || '';
+        body.style.overflow = 'hidden';
+        html.style.overflow = 'hidden';
+    } else {
+        body.style.overflow = gunEditorPrevBodyOverflow || '';
+        html.style.overflow = gunEditorPrevHtmlOverflow || '';
+    }
+}
+
+function requestGunEditorLandscapeFullscreen() {
+    const gunEditorScreen = document.getElementById('gun-editor-screen');
+    const target = gunEditorScreen || document.documentElement;
+    try {
+        if (target.requestFullscreen) {
+            const result = target.requestFullscreen();
+            if (result && typeof result.catch === 'function') {
+                result.catch(err => console.warn('Gun editor fullscreen error:', err));
+            }
+        } else if (target.webkitRequestFullscreen) {
+            target.webkitRequestFullscreen();
+        }
+    } catch (e) {
+        console.warn('Error trying to enter gun editor fullscreen:', e);
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+            const lockResult = window.screen.orientation.lock('landscape');
+            if (lockResult && typeof lockResult.catch === 'function') {
+                lockResult.catch(err => console.warn('Gun editor orientation lock failed:', err));
+            }
+        }
+    } catch (e) {
+        console.warn('Error trying to lock gun editor orientation:', e);
+    }
+    setTimeout(resizeGunPreviewRenderer, 80);
+    setTimeout(resizeGunPreviewRenderer, 260);
+    setTimeout(resizeGunPreviewRenderer, 520);
+}
+
+function exitGunEditorFullscreen() {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) {
+        try {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(err => console.warn('Exit fullscreen error:', err));
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        } catch (e) {
+            console.warn('Error trying to exit fullscreen:', e);
+        }
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.unlock) {
+            window.screen.orientation.unlock();
+        }
+    } catch (e) {
+        console.warn('Error trying to unlock orientation:', e);
+    }
+}
+
+function requestSettingsLandscapeFullscreen() {
+    if (!shouldShowTouchControls()) return;
+    const target = document.documentElement;
+    try {
+        if (target.requestFullscreen) {
+            const result = target.requestFullscreen();
+            if (result && typeof result.catch === 'function') {
+                result.catch(err => console.warn('Settings fullscreen error:', err));
+            }
+        } else if (target.webkitRequestFullscreen) {
+            target.webkitRequestFullscreen();
+        }
+    } catch (e) {
+        console.warn('Error trying to enter settings fullscreen:', e);
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+            const lockResult = window.screen.orientation.lock('landscape');
+            if (lockResult && typeof lockResult.catch === 'function') {
+                lockResult.catch(err => console.warn('Settings orientation lock failed:', err));
+            }
+        }
+    } catch (e) {
+        console.warn('Error trying to lock settings orientation:', e);
+    }
+}
+
+function openGunEditor() {
+    const screen = document.getElementById('gun-editor-screen');
+    if (!screen) return;
+    screen.style.display = 'block';
+    setGunEditorScrollLock(true);
+    destroyGunPreview();
+    initGunPreview();
+    gunPreviewZoomLevel = 1.0;
+    updateGunPreviewCameraZoom();
+    requestAnimationFrame(resizeGunPreviewRenderer);
+    setTimeout(resizeGunPreviewRenderer, 200);
+    setTimeout(resizeGunPreviewRenderer, 550);
+    startGunEditorAnimation();
+    gunEditorLiveModel = sanitizeGunModel(getEffectiveGunModel(currentGunEditorWeapon), currentGunEditorWeapon);
+    refreshGunEditorInputValues();
+    updateGunEditorPreview();
+}
+
+function closeGunEditor() {
+    const screen = document.getElementById('gun-editor-screen');
+    if (screen) screen.style.display = 'none';
+    exitGunEditorFullscreen();
+    setTimeout(requestSettingsLandscapeFullscreen, 40);
+    setTimeout(requestSettingsLandscapeFullscreen, 220);
+    setGunEditorScrollLock(false);
+    stopGunEditorAnimation();
+}
+
+function initGunEditor() {
+    loadWeaponCustomization();
+    const screen = document.getElementById('gun-editor-screen');
+    if (screen) screen.style.display = 'none';
+    buildGunEditorControls();
+
+    const openBtn = document.getElementById('open-gun-editor');
+    const closeBtn = document.getElementById('close-gun-editor');
+    const fullscreenBtn = document.getElementById('gun-editor-fullscreen');
+    const fullscreenTopBtn = document.getElementById('gun-editor-fullscreen-top');
+    const saveBtn = document.getElementById('gun-editor-save');
+    const resetWeaponBtn = document.getElementById('gun-editor-reset-weapon');
+    const resetAllBtn = document.getElementById('gun-editor-reset-all');
+    const weaponSelect = document.getElementById('gun-editor-weapon-select');
+
+    if (weaponSelect) {
+        currentGunEditorWeapon = weaponSelect.value || WEAPON_PISTOL;
+        gunEditorLiveModel = sanitizeGunModel(getEffectiveGunModel(currentGunEditorWeapon), currentGunEditorWeapon);
+        refreshGunEditorInputValues();
+        weaponSelect.addEventListener('change', () => {
+            currentGunEditorWeapon = weaponSelect.value;
+            gunEditorLiveModel = sanitizeGunModel(getEffectiveGunModel(currentGunEditorWeapon), currentGunEditorWeapon);
+            refreshGunEditorInputValues();
+            updateGunEditorPreview();
+        });
+    }
+
+    if (openBtn) {
+        openBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            openGunEditor();
+        });
+    }
+    if (!gunPreviewResizeBound) {
+        gunPreviewResizeBound = true;
+        window.addEventListener('resize', () => {
+            const screen = document.getElementById('gun-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                resizeGunPreviewRenderer();
+            }
+        });
+        window.addEventListener('orientationchange', () => {
+            const screen = document.getElementById('gun-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeGunPreviewRenderer, 120);
+                setTimeout(resizeGunPreviewRenderer, 420);
+            }
+        });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                const screen = document.getElementById('gun-editor-screen');
+                if (screen && screen.style.display !== 'none') {
+                    setTimeout(resizeGunPreviewRenderer, 50);
+                    setTimeout(resizeGunPreviewRenderer, 200);
+                }
+            });
+        }
+        document.addEventListener('fullscreenchange', () => {
+            const screen = document.getElementById('gun-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeGunPreviewRenderer, 60);
+                setTimeout(resizeGunPreviewRenderer, 220);
+                setTimeout(resizeGunPreviewRenderer, 480);
+            }
+        });
+        document.addEventListener('webkitfullscreenchange', () => {
+            const screen = document.getElementById('gun-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeGunPreviewRenderer, 60);
+                setTimeout(resizeGunPreviewRenderer, 220);
+                setTimeout(resizeGunPreviewRenderer, 480);
+            }
+        });
+    }
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeGunEditor();
+        });
+    }
+    if (fullscreenBtn) {
+        fullscreenBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            requestGunEditorLandscapeFullscreen();
+        });
+    }
+    if (fullscreenTopBtn) {
+        fullscreenTopBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            requestGunEditorLandscapeFullscreen();
+        });
+    }
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            if (!gunEditorLiveModel) return;
+            weaponCustomization[currentGunEditorWeapon] = sanitizeGunModel(gunEditorLiveModel, currentGunEditorWeapon);
+            saveWeaponCustomization();
+            applyGunStylesToActiveCharacters();
+            const original = saveBtn.textContent;
+            saveBtn.textContent = 'Saved!';
+            setTimeout(() => {
+                saveBtn.textContent = original;
+            }, 1200);
+        });
+    }
+    if (resetWeaponBtn) {
+        resetWeaponBtn.addEventListener('click', () => {
+            delete weaponCustomization[currentGunEditorWeapon];
+            weaponCustomizationRevision++;
+            for (const key in runtimeGunModelCache) {
+                delete runtimeGunModelCache[key];
+            }
+            gunEditorLiveModel = sanitizeGunModel(getEffectiveGunModel(currentGunEditorWeapon), currentGunEditorWeapon);
+            refreshGunEditorInputValues();
+            updateGunEditorPreview();
+        });
+    }
+    if (resetAllBtn) {
+        resetAllBtn.addEventListener('click', () => {
+            weaponCustomization = {};
+            weaponCustomizationRevision++;
+            for (const key in runtimeGunModelCache) {
+                delete runtimeGunModelCache[key];
+            }
+            gunEditorLiveModel = sanitizeGunModel(getEffectiveGunModel(currentGunEditorWeapon), currentGunEditorWeapon);
+            refreshGunEditorInputValues();
+            updateGunEditorPreview();
+            saveWeaponCustomization();
+            applyGunStylesToActiveCharacters();
+        });
+    }
+}
+
 function initCharacterEditor() {
     // Ensure editor is closed on initialization
     const editorScreen = document.getElementById('character-editor-screen');
@@ -14037,6 +15104,8 @@ function initCharacterEditor() {
     
     const openButton = document.getElementById('open-character-editor');
     const closeButton = document.getElementById('close-character-editor');
+    const fullscreenButton = document.getElementById('character-editor-fullscreen');
+    const fullscreenTopButton = document.getElementById('character-editor-fullscreen-top');
     const saveButton = document.getElementById('save-character-settings');
     
     if (openButton) {
@@ -14048,6 +15117,20 @@ function initCharacterEditor() {
     
     if (closeButton) {
         closeButton.addEventListener('click', e => { e.preventDefault(); closeCharacterEditor(); });
+    }
+
+    if (fullscreenButton) {
+        fullscreenButton.addEventListener('click', e => {
+            e.preventDefault();
+            requestCharacterEditorLandscapeFullscreen();
+        });
+    }
+
+    if (fullscreenTopButton) {
+        fullscreenTopButton.addEventListener('click', e => {
+            e.preventDefault();
+            requestCharacterEditorLandscapeFullscreen();
+        });
     }
     
     if (saveButton) {
@@ -14120,6 +15203,48 @@ function initCharacterEditor() {
     if (previewContainer) {
         setupZoomControls(previewContainer);
     }
+
+    if (!characterPreviewResizeBound) {
+        characterPreviewResizeBound = true;
+        window.addEventListener('resize', () => {
+            const screen = document.getElementById('character-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                resizeCharacterPreviewRenderer();
+            }
+        });
+        window.addEventListener('orientationchange', () => {
+            const screen = document.getElementById('character-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeCharacterPreviewRenderer, 120);
+                setTimeout(resizeCharacterPreviewRenderer, 420);
+            }
+        });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                const screen = document.getElementById('character-editor-screen');
+                if (screen && screen.style.display !== 'none') {
+                    setTimeout(resizeCharacterPreviewRenderer, 50);
+                    setTimeout(resizeCharacterPreviewRenderer, 200);
+                }
+            });
+        }
+        document.addEventListener('fullscreenchange', () => {
+            const screen = document.getElementById('character-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeCharacterPreviewRenderer, 60);
+                setTimeout(resizeCharacterPreviewRenderer, 220);
+                setTimeout(resizeCharacterPreviewRenderer, 480);
+            }
+        });
+        document.addEventListener('webkitfullscreenchange', () => {
+            const screen = document.getElementById('character-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeCharacterPreviewRenderer, 60);
+                setTimeout(resizeCharacterPreviewRenderer, 220);
+                setTimeout(resizeCharacterPreviewRenderer, 480);
+            }
+        });
+    }
     
     // Add event listeners for all customization controls
     setupCustomizationListeners();
@@ -14162,7 +15287,13 @@ function setupZoomControls(container) {
             characterEditorCamera.position.z = 5 / zoomLevel;
         }
     });
-    
+
+    // Keep mobile scrolling usable in the split preview pane.
+    // Character editor touch zoom is disabled so vertical swipe scroll works.
+    if (container.id === 'character-preview-container') {
+        return;
+    }
+
     // Touch pinch zoom for mobile
     let initialDistance = 0;
     
@@ -14275,6 +15406,8 @@ function openCharacterEditor() {
         initCharacterPreview();
         loadCharacterSettingsToUI();
         updatePreviewCharacter();
+        setTimeout(resizeCharacterPreviewRenderer, 80);
+        setTimeout(resizeCharacterPreviewRenderer, 260);
     }
 }
 
@@ -14283,6 +15416,70 @@ function closeCharacterEditor() {
     if (editorScreen) {
         editorScreen.style.display = 'none';
         cleanupCharacterPreview();
+    }
+    exitCharacterEditorFullscreen();
+}
+
+function resizeCharacterPreviewRenderer() {
+    const container = document.getElementById('character-preview-container');
+    if (!container || !characterEditorRenderer || !characterEditorCamera) return;
+    const width = Math.max(1, Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1));
+    const height = Math.max(1, Math.floor(container.clientHeight || container.getBoundingClientRect().height || 1));
+    characterEditorRenderer.setSize(width, height, false);
+    characterEditorCamera.aspect = width / height;
+    characterEditorCamera.updateProjectionMatrix();
+}
+
+function requestCharacterEditorLandscapeFullscreen() {
+    const editorScreen = document.getElementById('character-editor-screen');
+    const target = editorScreen || document.documentElement;
+    try {
+        if (target.requestFullscreen) {
+            const result = target.requestFullscreen();
+            if (result && typeof result.catch === 'function') {
+                result.catch(err => console.warn('Character editor fullscreen error:', err));
+            }
+        } else if (target.webkitRequestFullscreen) {
+            target.webkitRequestFullscreen();
+        }
+    } catch (e) {
+        console.warn('Error trying to enter character editor fullscreen:', e);
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+            const lockResult = window.screen.orientation.lock('landscape');
+            if (lockResult && typeof lockResult.catch === 'function') {
+                lockResult.catch(err => console.warn('Character editor orientation lock failed:', err));
+            }
+        }
+    } catch (e) {
+        console.warn('Error trying to lock character editor orientation:', e);
+    }
+    setTimeout(resizeCharacterPreviewRenderer, 80);
+    setTimeout(resizeCharacterPreviewRenderer, 260);
+    setTimeout(resizeCharacterPreviewRenderer, 520);
+}
+
+function exitCharacterEditorFullscreen() {
+    const editorScreen = document.getElementById('character-editor-screen');
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl && (!editorScreen || fsEl === editorScreen || editorScreen.contains(fsEl))) {
+        try {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(err => console.warn('Exit fullscreen error:', err));
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        } catch (e) {
+            console.warn('Error trying to exit character fullscreen:', e);
+        }
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.unlock) {
+            window.screen.orientation.unlock();
+        }
+    } catch (e) {
+        console.warn('Error trying to unlock character orientation:', e);
     }
 }
 
@@ -14649,6 +15846,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize editor after a small delay to ensure all elements are ready
     setTimeout(() => {
         initCharacterEditor();
+        initGunEditor();
     }, 100);
 }); // End of second DOMContentLoaded event listener
 
