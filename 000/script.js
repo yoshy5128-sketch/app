@@ -292,6 +292,7 @@ let characterEditorRenderer = null;
 let previewCharacter = null;
 let currentPreviewCharacter = 'player';
 let characterEditorAnimationId = null;
+let characterPreviewResizeBound = false;
 
 // Gun editor state
 let weaponCustomization = {};
@@ -15074,6 +15075,8 @@ function initCharacterEditor() {
     
     const openButton = document.getElementById('open-character-editor');
     const closeButton = document.getElementById('close-character-editor');
+    const fullscreenButton = document.getElementById('character-editor-fullscreen');
+    const fullscreenTopButton = document.getElementById('character-editor-fullscreen-top');
     const saveButton = document.getElementById('save-character-settings');
     
     if (openButton) {
@@ -15085,6 +15088,20 @@ function initCharacterEditor() {
     
     if (closeButton) {
         closeButton.addEventListener('click', e => { e.preventDefault(); closeCharacterEditor(); });
+    }
+
+    if (fullscreenButton) {
+        fullscreenButton.addEventListener('click', e => {
+            e.preventDefault();
+            requestCharacterEditorLandscapeFullscreen();
+        });
+    }
+
+    if (fullscreenTopButton) {
+        fullscreenTopButton.addEventListener('click', e => {
+            e.preventDefault();
+            requestCharacterEditorLandscapeFullscreen();
+        });
     }
     
     if (saveButton) {
@@ -15156,6 +15173,48 @@ function initCharacterEditor() {
     const previewContainer = document.getElementById('character-preview-container');
     if (previewContainer) {
         setupZoomControls(previewContainer);
+    }
+
+    if (!characterPreviewResizeBound) {
+        characterPreviewResizeBound = true;
+        window.addEventListener('resize', () => {
+            const screen = document.getElementById('character-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                resizeCharacterPreviewRenderer();
+            }
+        });
+        window.addEventListener('orientationchange', () => {
+            const screen = document.getElementById('character-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeCharacterPreviewRenderer, 120);
+                setTimeout(resizeCharacterPreviewRenderer, 420);
+            }
+        });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', () => {
+                const screen = document.getElementById('character-editor-screen');
+                if (screen && screen.style.display !== 'none') {
+                    setTimeout(resizeCharacterPreviewRenderer, 50);
+                    setTimeout(resizeCharacterPreviewRenderer, 200);
+                }
+            });
+        }
+        document.addEventListener('fullscreenchange', () => {
+            const screen = document.getElementById('character-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeCharacterPreviewRenderer, 60);
+                setTimeout(resizeCharacterPreviewRenderer, 220);
+                setTimeout(resizeCharacterPreviewRenderer, 480);
+            }
+        });
+        document.addEventListener('webkitfullscreenchange', () => {
+            const screen = document.getElementById('character-editor-screen');
+            if (screen && screen.style.display !== 'none') {
+                setTimeout(resizeCharacterPreviewRenderer, 60);
+                setTimeout(resizeCharacterPreviewRenderer, 220);
+                setTimeout(resizeCharacterPreviewRenderer, 480);
+            }
+        });
     }
     
     // Add event listeners for all customization controls
@@ -15312,6 +15371,8 @@ function openCharacterEditor() {
         initCharacterPreview();
         loadCharacterSettingsToUI();
         updatePreviewCharacter();
+        setTimeout(resizeCharacterPreviewRenderer, 80);
+        setTimeout(resizeCharacterPreviewRenderer, 260);
     }
 }
 
@@ -15320,6 +15381,70 @@ function closeCharacterEditor() {
     if (editorScreen) {
         editorScreen.style.display = 'none';
         cleanupCharacterPreview();
+    }
+    exitCharacterEditorFullscreen();
+}
+
+function resizeCharacterPreviewRenderer() {
+    const container = document.getElementById('character-preview-container');
+    if (!container || !characterEditorRenderer || !characterEditorCamera) return;
+    const width = Math.max(1, Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1));
+    const height = Math.max(1, Math.floor(container.clientHeight || container.getBoundingClientRect().height || 1));
+    characterEditorRenderer.setSize(width, height, false);
+    characterEditorCamera.aspect = width / height;
+    characterEditorCamera.updateProjectionMatrix();
+}
+
+function requestCharacterEditorLandscapeFullscreen() {
+    const editorScreen = document.getElementById('character-editor-screen');
+    const target = editorScreen || document.documentElement;
+    try {
+        if (target.requestFullscreen) {
+            const result = target.requestFullscreen();
+            if (result && typeof result.catch === 'function') {
+                result.catch(err => console.warn('Character editor fullscreen error:', err));
+            }
+        } else if (target.webkitRequestFullscreen) {
+            target.webkitRequestFullscreen();
+        }
+    } catch (e) {
+        console.warn('Error trying to enter character editor fullscreen:', e);
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+            const lockResult = window.screen.orientation.lock('landscape');
+            if (lockResult && typeof lockResult.catch === 'function') {
+                lockResult.catch(err => console.warn('Character editor orientation lock failed:', err));
+            }
+        }
+    } catch (e) {
+        console.warn('Error trying to lock character editor orientation:', e);
+    }
+    setTimeout(resizeCharacterPreviewRenderer, 80);
+    setTimeout(resizeCharacterPreviewRenderer, 260);
+    setTimeout(resizeCharacterPreviewRenderer, 520);
+}
+
+function exitCharacterEditorFullscreen() {
+    const editorScreen = document.getElementById('character-editor-screen');
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl && (!editorScreen || fsEl === editorScreen || editorScreen.contains(fsEl))) {
+        try {
+            if (document.exitFullscreen) {
+                document.exitFullscreen().catch(err => console.warn('Exit fullscreen error:', err));
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        } catch (e) {
+            console.warn('Error trying to exit character fullscreen:', e);
+        }
+    }
+    try {
+        if (window.screen && window.screen.orientation && window.screen.orientation.unlock) {
+            window.screen.orientation.unlock();
+        }
+    } catch (e) {
+        console.warn('Error trying to unlock character orientation:', e);
     }
 }
 
