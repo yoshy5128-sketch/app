@@ -15258,7 +15258,13 @@ function setupZoomControls(container) {
             characterEditorCamera.position.z = 5 / zoomLevel;
         }
     });
-    
+
+    // Keep mobile scrolling usable in the split preview pane.
+    // Character editor touch zoom is disabled so vertical swipe scroll works.
+    if (container.id === 'character-preview-container') {
+        return;
+    }
+
     // Touch pinch zoom for mobile
     let initialDistance = 0;
     
