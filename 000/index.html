@@ -283,7 +283,7 @@
         <div style="padding: 20px; background-color: rgba(0,0,0,0.8); border-radius: 10px; text-align: left; max-width: 90%; max-height: 90vh; overflow-y: auto;">
             <h1 style="text-align: center;">Gun Fight Settings</h1>
 
-            <h2 style="margin-top: 20px;">HP Settings</h2>
+            <h2 style="margin-top: 20px;">HP Settings(体力)</h2>
             <label for="player-hp">Player HP:</label>
             <select id="player-hp" style="font-size: 1em; padding: 5px;">
                 <option value="3">3</option>
@@ -300,7 +300,7 @@
                 <option value="Infinity">Infinite</option>
             </select>
 
-            <h2 style="margin-top: 20px;">Projectile Speed</h2>
+            <h2 style="margin-top: 20px;">Projectile Speed(弾丸速度)</h2>
             <div id="projectile-speed-setting" style="margin-top: 10px;">
                 <input type="range" id="projectile-speed" min="0.5" max="2.0" step="0.05" value="2.0" style="width: 100%;">
                 <span id="projectile-speed-value">2.0x</span>
@@ -316,7 +316,7 @@
                 </button>
             </div>
 
-            <h2 style="margin-top: 20px;">Weapon Count</h2>
+            <h2 style="margin-top: 20px;">Weapon Count(配置数)</h2>
             <label for="mg-count">Machine Guns (MG):</label>
             <select id="mg-count" style="font-size: 1em; padding: 5px;">
                 <option value="0">0</option>
@@ -392,11 +392,11 @@
             </label>
 
 
-            <h2 style="margin-top: 20px;">AI Shotlevel</h2>
+            <h2 style="margin-top: 20px;">AI Shotlevel(AIの射撃精度)</h2>
             <div style="margin-bottom: 5px;">
                 <input type="range" id="ai-shot-slider" min="0" max="100" step="1" value="55" style="width: 100%;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.8em; color: #ccc; margin-top: 2px;">
-                    <span>甘い</span>
+                    <span>狙い甘</span>
                     <span>超正確</span>
                 </div>
                 <div style="text-align: right; font-size: 0.85em; color: #9fe6ff;">
@@ -404,7 +404,7 @@
                 </div>
             </div>
 
-            <h2 style="margin-top: 20px;">AI Count</h2>
+            <h2 style="margin-top: 20px;">AI Count(参加人数）</h2>
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="ai-count" value="1"> 1 AI
             </label>
@@ -445,7 +445,7 @@
                 <input type="radio" name="game-mode" value="billbattle"> INDOOR COMBAT (室内バトル)
             </label>
             <div id="billbattle-options" style="margin-top: 10px; padding-left: 10px;">
-                <label style="display: block; margin-bottom: 4px;">INDOOR COMBAT Roomsize:</label>
+                <label style="display: block; margin-bottom: 4px;">Roomsize:(部屋の大きさ)</label>
                 <select id="billbattle-size" style="margin-bottom: 8px;">
                     <option value="100">100 (Default)</option>
                     <option value="90">90</option>
@@ -455,7 +455,7 @@
                     <option value="50">50</option>
                     <option value="random">SIZE RANDOM</option>
                 </select>
-                <label style="display: block; margin-bottom: 4px;">INDOOR COMBAT Lighting:</label>
+                <label style="display: block; margin-bottom: 4px;">Lighting:(照明の数)</label>
                 <select id="billbattle-lighting">
                     <option value="12" selected>12 (ALL ON)</option>
                     <option value="11">11</option>
@@ -497,7 +497,7 @@
                 <input type="radio" name="killcam-mode" value="off"> OFF（キルカメラなし プレイヤー死亡時のみ再生）
             </label>
             
-            <h2 style="margin-top: 20px;">Barrel Respawn</h2>
+            <h2 style="margin-top: 20px;">Barrel Respawn(爆発するドラム缶)</h2>
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="barrel-respawn" value="true"> ON（30秒後に同じ場所へ復活）
             </label>
@@ -513,15 +513,15 @@
                 <input type="radio" name="auto-aim" value="false"> OFF
             </label>
             
-            <h2 style="margin-top: 20px;">Night Mode</h2>
+            <h2 style="margin-top: 20px;">Night Mode(夜戦)</h2>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="checkbox" id="time-lapse-mode"> Time Lapse Mode (Auto day/night cycle every minute)
+                <input type="checkbox" id="time-lapse-mode"> Time Lapse Mode (昼→夜→昼)
             </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="checkbox" id="night-mode"> Night Mode
+                <input type="checkbox" id="night-mode"> Night Mode(常に夜)
             </label>
             <div id="night-mode-intensity-setting" style="margin-top: 10px;">
-                <label for="night-mode-intensity">Night Mode Light Intensity:</label>
+                <label for="night-mode-intensity">Night Mode Light Intensity:(照明の明るさ)</label>
                 <input type="range" id="night-mode-intensity" min="0" max="2" step="0.1" value="2" style="width: 100%;">
                 <span id="night-mode-intensity-value">0.8</span>
             </div>
@@ -630,6 +630,7 @@
     <audio id="ai2mGunSound" src="ai2m.mp3" preload="auto"></audio>
     <audio id="aiGunSound" src="aigun.mp3" preload="auto"></audio>
     <audio id="explosionSound" src="bom2.mp3" preload="auto"></audio>
+    <audio id="impactSound" src="impact.mp3" preload="auto"></audio>
     <audio id="setSound" src="set.mp3" preload="auto"></audio>
     <audio id="aiSrGunSound" src="ss.mp3" preload="auto"></audio>
     <audio id="playerSgSound" src="sgun.mp3" preload="auto"></audio>

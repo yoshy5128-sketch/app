@@ -366,6 +366,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
         ai2mGunSound = document.getElementById('ai2mGunSound');
         aiGunSound = document.getElementById('aiGunSound');
         explosionSound = document.getElementById('explosionSound');
+        impactSound = document.getElementById('impactSound');
         bgmAudio = document.getElementById('bgm-opm');
         relAudio = document.getElementById('rel-audio');
         startScreen = document.getElementById('start-screen');
@@ -2555,6 +2556,7 @@ let ai1mGunSound;
 let ai2mGunSound;
 let aiGunSound;
 let explosionSound;
+let impactSound;
 let bgmAudio;
 let startScreen;
 let relAudio;
@@ -7945,7 +7947,13 @@ function explodeBarrel(barrel, source = 'unknown', shooter = null) {
         });
     }
     destroyBarrel(barrel, explosionPos);
-    if (explosionSound) playSpatialSound(explosionSound, explosionPos);
+    if (explosionSound) {
+        playSpatialSound(explosionSound, explosionPos, {
+            distanceScale: 48,
+            gainBoost: 1.35,
+            behindGain: 1.0
+        });
+    }
     createExplosionEffect(explosionPos);
     applyExplosionEffectsToBillLights(explosionPos, BARREL_EXPLOSION_RADIUS);
     const allowBarrelDamage = !isBillBattleMode() || canApplyBillBattleDamage();
@@ -10495,6 +10503,9 @@ function forceResetTouchState() {
 
 function startPlayerDeathSequence(projectile) {
     if (isPlayerDeathPlaying || playerHP > 0) return;
+    if (shouldPlayKillCamImpactSound(projectile) && impactSound) {
+        playSound(impactSound);
+    }
     forceResetTouchState(); // 入力状態をリセット
     isPlayerDeathPlaying = true;
     syncKillCamLighting();
@@ -10814,9 +10825,11 @@ function createWindows(obstacleMesh, buildingWidth, buildingHeight, buildingDept
 function shouldPlayAIDeathKillCam(ai, killerSource) {
     const mode = gameSettings.killCamMode || 'playerOnly';
     if (mode === 'off') return false;
+    // AI同士/環境キルはキルカメラ対象外（通常の倒れ演出を優先）
+    if (killerSource !== 'player') return false;
     if (mode === 'all') return true;
     if (mode === 'playerOnly') {
-        if (killerSource !== 'player' || !ai) return false;
+        if (!ai) return false;
         if (gameSettings.gameMode === 'ffa') return true;
         return ai.team === 'enemy';
     }
@@ -10911,8 +10924,8 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         }, 2700);
         return;
     }
-    if (gameSettings.killCamMode === 'off') {
-        console.log('Executing killcam OFF death sequence for AI, gameMode:', gameSettings.gameMode);
+    if (gameSettings.killCamMode === 'off' || killerSource !== 'player') {
+        console.log('Executing non-killcam death sequence for AI, gameMode:', gameSettings.gameMode, 'killerSource:', killerSource);
         if (killerSource === 'player') {
             showEnemyKilledMessage();
         }
@@ -10963,7 +10976,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
     ai.userData.isDying = false;
 }
 
-function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown') {
+function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown', killerProjectile = null) {
     if (!ai) return;
     if (!ai.userData) ai.userData = {};
     ai.userData.isDying = true;
@@ -10983,6 +10996,9 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
         finalizeAIDeathWithoutKillCam(ai, killerSource);
         return;
     }
+      if (shouldPlayKillCamImpactSound(killerProjectile) && impactSound) {
+          playSound(impactSound);
+      }
       isAIDeathPlaying = true;
       syncKillCamLighting();
       if (!ai.userData) ai.userData = {};
@@ -13726,7 +13742,7 @@ function animate() {
                             if (gameSettings.gameMode === 'ffa' || gameSettings.gameMode === 'arcade') {
                                 playerKills++;
                             }
-                            aiFallDownCinematicSequence(p.velocity, ai, 'player');
+                            aiFallDownCinematicSequence(p.velocity, ai, 'player', p);
                         } else {
                             findEvasionSpot(ai);
                         }
@@ -13793,7 +13809,7 @@ function animate() {
                                 if (shooterTeam === 'enemy' && ai.team === 'player') enemyTeamKills++;
                             }
 
-                            aiFallDownCinematicSequence(p.velocity, ai, 'ai');
+                            aiFallDownCinematicSequence(p.velocity, ai, 'ai', p);
                         } else {
                             findEvasionSpot(ai);
                         }
@@ -13918,7 +13934,13 @@ function animate() {
                     queueExplosionClear(hitObject.position, BARREL_EXPLOSION_RADIUS);
                 } else if (p.isRocket) {
                     const explosionPos = p.mesh.position.clone();
-                    if (explosionSound) playSpatialSound(explosionSound, explosionPos);
+                    if (explosionSound) {
+                        playSpatialSound(explosionSound, explosionPos, {
+                            distanceScale: 48,
+                            gainBoost: 1.35,
+                            behindGain: 1.0
+                        });
+                    }
                     createExplosionEffect(explosionPos);
                     applyExplosionEffectsToBillLights(explosionPos, ROCKET_EXPLOSION_RADIUS);
                     queueExplosionClear(explosionPos, ROCKET_EXPLOSION_RADIUS);
@@ -15962,6 +15984,13 @@ function resetCharacterVisualPose(character, weaponType) {
     }
     applyWeaponPose(parts, weaponType);
     if (parts.gun) parts.gun.visible = true;
+}
+
+function shouldPlayKillCamImpactSound(projectile) {
+    if (!projectile) return false;
+    if (projectile.isRocket) return false;
+    if (projectile.weaponType === WEAPON_RR) return false;
+    return true;
 }
 
 function getPlayerDeathLookAt() {
