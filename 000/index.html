@@ -373,6 +373,9 @@
                 </select>
             </div>
             <label style="display: block; margin-bottom: 5px;">
+                <input type="checkbox" id="default-weapon-pistol" name="default-weapon" value="pistol"> Pistol
+            </label>
+            <label style="display: block; margin-bottom: 5px;">
                 <input type="checkbox" id="default-weapon-mg" name="default-weapon" value="machinegun"> Machine Gun
             </label>
             <label style="display: block; margin-bottom: 5px;">
@@ -390,12 +393,16 @@
 
 
             <h2 style="margin-top: 20px;">AI Shotlevel</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-shot" value="ama" checked> Amature
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-shot" value="pro"> Professional
-            </label>
+            <div style="margin-bottom: 5px;">
+                <input type="range" id="ai-shot-slider" min="0" max="100" step="1" value="55" style="width: 100%;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.8em; color: #ccc; margin-top: 2px;">
+                    <span>甘い</span>
+                    <span>超正確</span>
+                </div>
+                <div style="text-align: right; font-size: 0.85em; color: #9fe6ff;">
+                    Precision: <span id="ai-shot-value">55</span>
+                </div>
+            </div>
 
             <h2 style="margin-top: 20px;">AI Count</h2>
             <label style="display: block; margin-bottom: 5px;">
@@ -450,8 +457,19 @@
                 </select>
                 <label style="display: block; margin-bottom: 4px;">INDOOR COMBAT Lighting:</label>
                 <select id="billbattle-lighting">
-                    <option value="all">ALL ON</option>
-                    <option value="random">RANDOM</option>
+                    <option value="12" selected>12 (ALL ON)</option>
+                    <option value="11">11</option>
+                    <option value="10">10</option>
+                    <option value="9">9</option>
+                    <option value="8">8</option>
+                    <option value="7">7</option>
+                    <option value="6">6</option>
+                    <option value="5">5</option>
+                    <option value="4">4</option>
+                    <option value="3">3</option>
+                    <option value="2">2</option>
+                    <option value="1">1</option>
+                    <option value="0">0</option>
                 </select>
             </div>
 
@@ -617,6 +635,7 @@
     <audio id="playerSgSound" src="sgun.mp3" preload="auto"></audio>
     <audio id="aiSgSound" src="aisgun.mp3" preload="auto"></audio>
     <audio id="rel-audio" src="rel.mp3" preload="auto" volume="1.0"></audio>
+    <audio id="pistol-reload-audio" src="r1911.mp3" preload="auto"></audio>
     <audio id="clipSound" src="clip.mp3" preload="auto"></audio>
     <audio id="bgm-opm" src="opm.mp3" preload="auto" loop></audio>
     

@@ -25,7 +25,8 @@
       mapType: 'default',
       aiCount: 3,
       autoAim: true,
-      aiShotLevel: 'Amature',
+      aiShotLevel: 'ama',
+      aiAimPrecision: 55,
       bgmMute: false,
       bgmVolume: 0.7,
       bgmMode: 'order',
@@ -37,7 +38,7 @@
     customMapName: 'Default Custom Map',
     gameMode: 'battle',
     billBattleSize: '100',
-    billBattleLighting: 'all',
+    billBattleLighting: '12',
     killCamMode: 'playerOnly',
     barrelRespawn: false,
     gameDuration: 180, // 3分間 (180秒)
@@ -97,10 +98,10 @@ let characterCustomization = {
 let timeLapseInterval = null;
 let timeLapseStartTime = null;
 let isTimeLapseMode = false;
-let currentTransitionProgress = 0; // 0 = fully day, 1 = fully night
+let currentTransitionProgress = 0; // 0=完全に昼、1=完全に夜
 let targetTransitionProgress = 0;
-const TIME_LAPSE_CYCLE_TIME = 100000; // 100 seconds in milliseconds (夜を80秒に拡大)
-const TRANSITION_DURATION = 5000; // 5 seconds for smooth transition
+const TIME_LAPSE_CYCLE_TIME = 100000; // 100秒（ミリ秒単位。夜時間を80秒へ拡大）
+const TRANSITION_DURATION = 5000; // なめらかな遷移のため5秒
 
 // タイムラプスモード関数
 function startTimeLapseMode() {
@@ -294,7 +295,7 @@ let currentPreviewCharacter = 'player';
 let characterEditorAnimationId = null;
 let characterPreviewResizeBound = false;
 
-// Gun editor state
+// Gunエディタの状態
 let weaponCustomization = {};
 let gunEditorScene = null;
 let gunEditorCamera = null;
@@ -314,7 +315,7 @@ let weaponCustomizationRevision = 0;
 const runtimeGunModelCache = {};
 
 const GUN_CUSTOMIZATION_STORAGE_KEY = 'weaponCustomization';
-// Recovery preset captured from the user's previous local customization state.
+// ユーザーの以前のローカルカスタマイズ状態から取得した復元プリセット。
 const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
     machinegun: {
         body: { shape: 'box', length: 1.1, thickness: 0.1, color: '#111111', metalness: 0.81, roughness: 0.1 },
@@ -346,7 +347,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
 
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize textures first
+        // 先にテクスチャを初期化
         initializeTextures();
         loadWeaponCustomization();
         
@@ -356,6 +357,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
         rrGunSound = document.getElementById('rrGunSound');
         srGunSound = document.getElementById('srGunSound');
         m1GunSound = document.getElementById('m1GunSound');
+        pistolReloadSound = document.getElementById('pistol-reload-audio');
         aiM1GunSound = document.getElementById('aiM1GunSound');
         aiM1GunSound2 = document.getElementById('aiM1GunSound2');
         aiM1GunSound3 = document.getElementById('aiM1GunSound3');
@@ -416,7 +418,8 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
         const mrCountSelect = document.getElementById('mr-count');
         const aiCountRadios = document.querySelectorAll('input[name="ai-count"]');
         const autoAimRadios = document.querySelectorAll('input[name="auto-aim"]');
-        const aiShotRadios = document.querySelectorAll('input[name="ai-shot"]');
+        const aiShotSlider = document.getElementById('ai-shot-slider');
+        const aiShotValue = document.getElementById('ai-shot-value');
         const nightModeRadios = document.querySelectorAll('input[name="night-mode"]');
         const gameModeRadios = document.querySelectorAll('input[name="game-mode"]');
         const killCamModeRadios = document.querySelectorAll('input[name="killcam-mode"]');
@@ -477,7 +480,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
         if (sgCountSelect) sgCountSelect.addEventListener('change', () => { gameSettings.sgCount = parseInt(sgCountSelect.value, 10); saveSettings(); });
         if (mrCountSelect) mrCountSelect.addEventListener('change', () => { gameSettings.mrCount = parseInt(mrCountSelect.value, 10); saveSettings(); });
         if (billBattleSizeSelect) billBattleSizeSelect.addEventListener('change', () => { gameSettings.billBattleSize = billBattleSizeSelect.value; saveSettings(); });
-        if (billBattleLightingSelect) billBattleLightingSelect.addEventListener('change', () => { gameSettings.billBattleLighting = billBattleLightingSelect.value; saveSettings(); });
+        if (billBattleLightingSelect) billBattleLightingSelect.addEventListener('change', () => { gameSettings.billBattleLighting = normalizeBillBattleLightingCount(billBattleLightingSelect.value); saveSettings(); });
         const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
         const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
         const syncDefaultWeaponChecks = () => {
@@ -535,14 +538,14 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
                 }
             });
         });
-        aiShotRadios.forEach(radio => {
-            radio.addEventListener('change', () => {
-                if (radio.checked) {
-                    gameSettings.aiShotLevel = radio.value;
-                    saveSettings();
-                }
+        if (aiShotSlider) {
+            aiShotSlider.addEventListener('input', () => {
+                gameSettings.aiAimPrecision = normalizeAIAimPrecision(aiShotSlider.value);
+                gameSettings.aiShotLevel = gameSettings.aiAimPrecision >= 75 ? 'pro' : 'ama';
+                if (aiShotValue) aiShotValue.textContent = String(gameSettings.aiAimPrecision);
+                saveSettings();
             });
-        });
+        }
         nightModeRadios.forEach(radio => {
             radio.addEventListener('change', () => {
                 if (radio.checked) {
@@ -590,7 +593,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
                 applyBillBattleLightIntensityScale();
             });
         }
-        // Initialize unified map selector
+        // 統合マップセレクターを初期化
         const unifiedMapSelector = document.getElementById('unified-map-selector');
         if (unifiedMapSelector) {
             unifiedMapSelector.addEventListener('change', () => {
@@ -600,7 +603,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
                     gameSettings.mapType = 'default';
                     gameSettings.customMapName = '';
                 } else if (selectedValue && selectedValue !== '---') {
-                    // Custom map selected
+                    // カスタムマップが選択された場合
                     gameSettings.mapType = 'custom';
                     gameSettings.customMapName = selectedValue;
                 }
@@ -669,7 +672,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
                 let selectedMapName = '';
                 
                 if (selectedValue === 'default' || selectedValue === '---') {
-                    // For built-in maps, use a generic name or skip saving
+                    // 内蔵マップの場合は汎用名を使うか保存をスキップする
                     selectedMapName = selectedValue === 'default' ? 'DefaultMap' : '';
                 } else {
                     selectedMapName = selectedValue;
@@ -831,7 +834,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
             updateMenuBGM();
         });
     }
-    }); // Close first DOMContentLoaded event listener
+    }); // 最初のDOMContentLoadedイベントリスナーを閉じる
 })();
 
 function updateUnifiedMapSelector() {
@@ -839,13 +842,13 @@ function updateUnifiedMapSelector() {
     if (!unifiedMapSelector) return;
     unifiedMapSelector.innerHTML = '';
     
-    // Add built-in maps at the top
+    // 内蔵マップを先頭に追加
     const defaultOption = document.createElement('option');
     defaultOption.value = 'default';
     defaultOption.textContent = 'DefaultMap';
     unifiedMapSelector.appendChild(defaultOption);
     
-    // Add separator
+    // 区切りを追加
     const separator = document.createElement('option');
     separator.value = '---';
     separator.textContent = '--- Custom Maps ---';
@@ -854,7 +857,7 @@ function updateUnifiedMapSelector() {
     separator.style.color = '#666';
     unifiedMapSelector.appendChild(separator);
     
-    // Add custom maps
+    // カスタムマップを追加
     const allCustomMaps = JSON.parse(localStorage.getItem('allCustomMaps') || '{}');
     const mapNames = Object.keys(allCustomMaps);
     
@@ -874,23 +877,23 @@ function updateUnifiedMapSelector() {
         });
     }
     
-    // Set current selection
-    let currentValue = 'default'; // Always default to DefaultMap on first launch
+    // 現在の選択を設定
+    let currentValue = 'default'; // 初回起動時は常にDefaultMapを既定にする
     
-    // Check if we have saved settings and valid custom map
+    // 保存済み設定と有効なカスタムマップがあるか確認
     if (gameSettings.mapType === 'custom' && gameSettings.customMapName && allCustomMaps[gameSettings.customMapName]) {
         currentValue = gameSettings.customMapName;
     } else {
-        // If mapType is not set or invalid, default to 'default'
+        // mapTypeが未設定または無効な場合は'default'にする
         gameSettings.mapType = 'default';
         gameSettings.customMapName = '';
         saveSettings();
     }
     
-    // Try to set the value
+    // 値の設定を試みる
     unifiedMapSelector.value = currentValue;
     
-    // If the value wasn't set (e.g., custom map no longer exists), default to 'default'
+    // 値を設定できなかった場合（例: カスタムマップが存在しない）は'default'にする
     if (unifiedMapSelector.value !== currentValue) {
         unifiedMapSelector.value = 'default';
         gameSettings.mapType = 'default';
@@ -899,10 +902,10 @@ function updateUnifiedMapSelector() {
     }
 }
 
-// Texture variables (declare before initialization)
+// テクスチャ変数（初期化前に宣言）
 let brickTexture, concreteTexture;
 
-// Initialize textures early for better performance
+// パフォーマンス向上のため早めにテクスチャを初期化
 function initializeTextures() {
     if (!brickTexture) {
         brickTexture = createBrickTexture();
@@ -985,15 +988,18 @@ let ammoMG = 0;
   let ammoSG = 0;
   let ammoMR = 0;
   let ammoMRClip = 0;
+  let ammoPistolClip = 8;
+  let playerPistolReloadUntil = 0;
   let playerMGReloadUntil = 0;
   let playerMRReloadUntil = 0;
+const MAX_AMMO_PISTOL_CLIP = 8;
 const MAX_AMMO_MG = 50;
 const MAX_AMMO_RR = 3;
   const MAX_AMMO_SR = 5;
   const MAX_AMMO_SG = 10;
   const MAX_AMMO_MR = 8;
   const PICKUP_AMMO_MR = 24;
-const FIRE_RATE_PISTOL = 0.3;
+const FIRE_RATE_PISTOL = 0.18;
 const FIRE_RATE_MG = 0.1;
 const FIRE_RATE_RR = 0.8;
 const FIRE_RATE_SR = 1.0;
@@ -1005,6 +1011,9 @@ let BILL_BATTLE_HALF = BILL_BATTLE_SIZE / 2;
 const BILL_BATTLE_SIZE_OPTIONS = [50, 60, 70, 80, 90, 100];
 const BILL_BATTLE_CORRIDOR_WIDTH = 8;
 const BILL_BATTLE_CORRIDOR_HALF = BILL_BATTLE_CORRIDOR_WIDTH / 2;
+const BILL_BATTLE_LIGHT_COUNT_MIN = 0;
+const BILL_BATTLE_LIGHT_COUNT_MAX = 12;
+const BILL_BATTLE_LIGHT_COUNT_DEFAULT = 12;
 const BILL_BATTLE_WALL_THICKNESS = 0.5;
 const BILL_BATTLE_WALL_HEIGHT = 6;
 const BILL_BATTLE_CEILING_THICKNESS = 0.4;
@@ -1015,7 +1024,7 @@ const BILL_BATTLE_OBSTACLE_COLOR = 0x9e9e9e;
 let billBattleRoomStyle = null;
 
 function getBillBattleCeilingClearHeight() {
-    // Obstacle height that visually reaches the ceiling underside.
+    // 見た目上で天井裏まで届く障害物の高さ。
     return BILL_BATTLE_WALL_HEIGHT - (BILL_BATTLE_CEILING_THICKNESS * 1.5) + FLOOR_HEIGHT;
 }
 
@@ -1027,7 +1036,7 @@ function createBillBattleRoomStyle() {
     };
     const wallTop = gray(0.56, 0.72);
     const floor = gray(0.30, 0.42);
-    const wallBottomColor = 0x5a5a5a; // dark gray only
+    const wallBottomColor = 0x5a5a5a; // 濃いグレー固定
     return {
         wallTopColor: wallTop.getHex(),
         floorColor: floor.getHex(),
@@ -1046,7 +1055,7 @@ function applyBillBattleWallTwoTone(mesh) {
     const depth = params.depth ?? 1;
     const halfH = height / 2;
 
-    // Clear previous visuals to avoid stacking.
+    // 重複表示を避けるため既存の表示をクリア
     if (mesh.userData && mesh.userData.twoToneBuilt) {
         const toRemove = [];
         for (const child of mesh.children) {
@@ -1074,7 +1083,7 @@ function applyBillBattleWallTwoTone(mesh) {
     mesh.add(bottomMesh);
     mesh.add(topMesh);
 
-    // Keep collider mesh but make it invisible.
+    // コライダーメッシュは保持しつつ不可視にする
     mesh.material = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false });
     mesh.material.needsUpdate = true;
     mesh.userData = mesh.userData || {};
@@ -1093,6 +1102,7 @@ const BILL_BATTLE_USE_ELEVATOR = false;
 const BILL_BATTLE_PLAYER_HEIGHT = 2.35;
 const FIRE_RATE_SG = 0.8;
 const FIRE_RATE_MR = 0.3;
+const FIRE_RATE_MR_PLAYER = 0.18;
 const MR_PROJECTILE_SPEED_MULT = 1.6;
 const SHOTGUN_PELLET_COUNT = 7;
 const SHOTGUN_SPREAD_ANGLE = Math.PI / 16;
@@ -1101,7 +1111,7 @@ const SHOTGUN_PELLET_DAMAGE = 2;
 const WEAPON_SG_SOUND = 'sgun.mp3';
 const AI_WEAPON_SG_SOUND = 'aisgun.mp3';
 const ENABLE_EXPERIMENTAL_AI_FLOW = false;
-// Enable rooftop logic so AI can find ladders, climb to rooftops and engage players there.
+// AIが梯子を見つけて屋上へ登り、そこで交戦できる屋上ロジックを有効化。
 // 家の屋根には登れないようにする - 完全に無効化
 const ENABLE_AI_ROOFTOP_LOGIC = true; // デフォルトマップでもAIが塔に登れるように有効化
 const FORCE_AI_ROOFTOP_TEST = false; // テスト用: AIを強制的に塔へ向かわせる
@@ -1182,12 +1192,27 @@ function applyBillBattleSizeSettings(forNewRoom = false) {
     BILL_BATTLE_HALF = BILL_BATTLE_SIZE / 2;
 }
 
+function normalizeBillBattleLightingCount(value) {
+    const raw = String(value ?? '').trim().toLowerCase();
+    if (raw === 'all') return String(BILL_BATTLE_LIGHT_COUNT_MAX);
+    if (raw === 'random') return '6';
+    const parsed = parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return String(BILL_BATTLE_LIGHT_COUNT_DEFAULT);
+    const clamped = Math.max(BILL_BATTLE_LIGHT_COUNT_MIN, Math.min(BILL_BATTLE_LIGHT_COUNT_MAX, parsed));
+    return String(clamped);
+}
+
+function getBillBattleLightingCount() {
+    return parseInt(normalizeBillBattleLightingCount(gameSettings.billBattleLighting), 10);
+}
+
 function getMedikitHealAmount() {
     return isBillBattleMode() ? 20 : 1;
 }
 
   function applyBillBattleModeConstraints() {
     if (!isBillBattleMode()) return;
+    gameSettings.billBattleLighting = normalizeBillBattleLightingCount(gameSettings.billBattleLighting);
     if (gameSettings.playerHP !== 'Infinity') {
         gameSettings.playerHP = 20;
     }
@@ -1357,7 +1382,7 @@ function switchAIToFallbackWeapon(ai) {
     if (fallback === WEAPON_MR && ai.ammoMR <= 0) ai.ammoMR = MAX_AMMO_MR;
 }
 
-function showReloadingText() {
+function showReloadingText(reloadSound = relAudio) {
     let el = document.getElementById('reloading-text');
     if (!el) {
         el = document.createElement('div');
@@ -1378,9 +1403,9 @@ function showReloadingText() {
     
     // 0.5秒遅らせてリロード音を鳴らす
     setTimeout(() => {
-        if (relAudio) {
-            relAudio.cloneNode(true).play().catch(e => {
-                // Reload sound play failed:
+        if (reloadSound) {
+            reloadSound.cloneNode(true).play().catch(e => {
+                // リロード音の再生に失敗:
             });
         }
     }, 500);
@@ -1417,9 +1442,9 @@ function playSound(sound, options = {}) {
 
 
 let audioCtx;
-const audioBufferCache = new Map(); // id -> AudioBuffer
-const audioMetaById = new Map(); // id -> { url, baseGain }
-const audioLoadPromises = new Map(); // id -> Promise<AudioBuffer>
+const audioBufferCache = new Map(); // ID -> オーディオバッファ
+const audioMetaById = new Map(); // ID -> { URL, 基本ゲイン }
+const audioLoadPromises = new Map(); // ID -> Promise<AudioBuffer>（非同期ロード）
 let audioListenerPos = new THREE.Vector3();
 let audioListenerForward = new THREE.Vector3();
 let audioListenerRight = new THREE.Vector3();
@@ -1546,7 +1571,7 @@ function getRooftopObstacleUnder(position, objectBodyHeight) {
 
     const safe = findSafePositionNear(target, 6, 1, 1.2, objectBodyHeight, 1.2);
       const groundY = forAI ? getGroundSurfaceY(safe) : getGroundY(safe, objectBodyHeight);
-      const clearance = forAI ? 0.4 : 0.25; // keep bodies from sinking into the ground during killcam
+      const clearance = forAI ? 0.4 : 0.25; // キルカメラ中に倒れた体が地面へ沈み込まないようにする
       safe.y = groundY + clearance;
       if (isBillBattleMode() && billBattleCeiling) {
           const ceilingGeom = billBattleCeiling.geometry;
@@ -1568,7 +1593,7 @@ function isProbablyMobileDevice() {
 }
 
 function shouldShowTouchControls() {
-    // Only show touch controls on mobile devices
+    // タッチ操作UIはモバイル端末のみ表示
     if (!isProbablyMobileDevice()) return false;
     if (window.matchMedia) {
         return window.matchMedia('(pointer: coarse)').matches && window.matchMedia('(hover: none)').matches;
@@ -1741,9 +1766,9 @@ let playerBreadcrumbs = [];
 let timeSinceLastBreadcrumb = 0;
 const AUTO_AIM_RANGE = 160;
 const AUTO_AIM_ANGLE = Math.PI / 8;
-const AUTO_AIM_STRENGTH = 0.4; // Increased from 0.3 for easier aiming
-const AUTO_AIM_SCOPE_ACQUIRE_RADIUS_NDC = 0.55; // 中心付近に入れば積極的に取得 (increased from 0.40)
-const AUTO_AIM_SCOPE_KEEP_RADIUS_NDC = 0.75;    // ロック後は広めに維持して追随 (increased from 0.62)
+const AUTO_AIM_STRENGTH = 0.4; // 0.3から増加（狙いやすくするため）
+const AUTO_AIM_SCOPE_ACQUIRE_RADIUS_NDC = 0.55; // 中心付近に入れば積極的に取得（0.40から拡大）
+const AUTO_AIM_SCOPE_KEEP_RADIUS_NDC = 0.75;    // ロック後は広めに維持して追随（0.62から拡大）
 let sniperAutoAimLockedAI = null;
 let sniperAutoAimSmoothedPoint = null;
 
@@ -1877,7 +1902,7 @@ function updateSniperScopeAutoAim(delta) {
     }
 }
 
-// Add camera rotation limits
+// カメラ回転の制限を追加
 camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x, -Math.PI / 2 + 0.1, Math.PI / 2 - 0.1);
 let font;
 const fontLoader = new THREE.FontLoader();
@@ -1893,9 +1918,10 @@ fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.
 function saveSettings() {
     gameSettings.autoAim = document.querySelector('input[name="auto-aim"]:checked').value;
     gameSettings.killCamMode = document.querySelector('input[name="killcam-mode"]:checked').value;
-    const aiShotRadio = document.querySelector('input[name="ai-shot"]:checked');
-    if (aiShotRadio) {
-        gameSettings.aiShotLevel = aiShotRadio.value;
+    const aiShotSlider = document.getElementById('ai-shot-slider');
+    if (aiShotSlider) {
+        gameSettings.aiAimPrecision = normalizeAIAimPrecision(aiShotSlider.value);
+        gameSettings.aiShotLevel = gameSettings.aiAimPrecision >= 75 ? 'pro' : 'ama';
     }
     const barrelRespawnRadio = document.querySelector('input[name="barrel-respawn"]:checked');
     if (barrelRespawnRadio) {
@@ -1910,9 +1936,9 @@ function saveSettings() {
     }
     const billBattleLightingSelect = document.getElementById('billbattle-lighting');
     if (billBattleLightingSelect) {
-        gameSettings.billBattleLighting = billBattleLightingSelect.value;
+        gameSettings.billBattleLighting = normalizeBillBattleLightingCount(billBattleLightingSelect.value);
     }
-    // Keep legacy field aligned
+    // 旧フィールドとの整合性を維持
     gameSettings.defaultWeapon = gameSettings.defaultWeaponPlayer || WEAPON_MG;
     gameSettings.defaultWeaponAI = gameSettings.defaultWeaponAI1 || WEAPON_MG;
     applyBillBattleModeConstraints();
@@ -1920,8 +1946,29 @@ function saveSettings() {
     localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
 }
 
+function normalizeAIShotLevel(level) {
+    const raw = String(level ?? '').trim().toLowerCase();
+    if (raw === 'pro' || raw === 'professional') return 'pro';
+    if (raw === 'ama' || raw === 'amature' || raw === 'amateur') return 'ama';
+    return 'ama';
+}
+
+function normalizeAIAimPrecision(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 55;
+    return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function getAIAimPrecision01() {
+    return normalizeAIAimPrecision(gameSettings.aiAimPrecision) / 100;
+}
+
+function isAIAimAmatureLevel() {
+    return getAIAimPrecision01() < 0.72;
+}
+
 function loadSettings() {
-    // loadSettings() called
+    // loadSettings() が呼び出された
     const savedSettings = localStorage.getItem('gameSettings');
     if (savedSettings) {
         const parsedSavedSettings = JSON.parse(savedSettings);
@@ -1934,6 +1981,11 @@ function loadSettings() {
         if (parsedSavedSettings.aiShotLevel === undefined) {
             parsedSavedSettings.aiShotLevel = 'ama';
         }
+        parsedSavedSettings.aiShotLevel = normalizeAIShotLevel(parsedSavedSettings.aiShotLevel);
+        if (parsedSavedSettings.aiAimPrecision === undefined) {
+            parsedSavedSettings.aiAimPrecision = parsedSavedSettings.aiShotLevel === 'pro' ? 85 : 55;
+        }
+        parsedSavedSettings.aiAimPrecision = normalizeAIAimPrecision(parsedSavedSettings.aiAimPrecision);
         if (parsedSavedSettings.bgmMute === undefined) {
             parsedSavedSettings.bgmMute = false;
         }
@@ -1985,8 +2037,9 @@ function loadSettings() {
             parsedSavedSettings.billBattleSize = '100';
         }
         if (parsedSavedSettings.billBattleLighting === undefined) {
-            parsedSavedSettings.billBattleLighting = 'all';
+            parsedSavedSettings.billBattleLighting = String(BILL_BATTLE_LIGHT_COUNT_DEFAULT);
         }
+        parsedSavedSettings.billBattleLighting = normalizeBillBattleLightingCount(parsedSavedSettings.billBattleLighting);
         if (parsedSavedSettings.defaultWeaponPlayer === undefined) {
             parsedSavedSettings.defaultWeaponPlayer = parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
@@ -2006,7 +2059,10 @@ function loadSettings() {
             parsedSavedSettings.mrCount = gameSettings.mrCount;
         }
         Object.assign(gameSettings, parsedSavedSettings);
-        // Add default for buttonPositions if it doesn't exist
+        gameSettings.aiShotLevel = normalizeAIShotLevel(gameSettings.aiShotLevel);
+        gameSettings.aiAimPrecision = normalizeAIAimPrecision(gameSettings.aiAimPrecision);
+        gameSettings.billBattleLighting = normalizeBillBattleLightingCount(gameSettings.billBattleLighting);
+        // buttonPositionsが存在しない場合の既定値を追加
         if (parsedSavedSettings.buttonPositions === undefined) {
             parsedSavedSettings.buttonPositions = {
                 fire: { right: '20px', bottom: '120px' },
@@ -2021,7 +2077,8 @@ function loadSettings() {
         }
 
         Object.assign(gameSettings, parsedSavedSettings);
-        // Add default for buttonPositions if it doesn't exist
+        gameSettings.aiShotLevel = normalizeAIShotLevel(gameSettings.aiShotLevel);
+        // buttonPositionsが存在しない場合の既定値を追加
         document.querySelectorAll('input[name="game-mode"]').forEach(radio => {
             radio.checked = (radio.value === gameSettings.gameMode);
         });
@@ -2030,9 +2087,10 @@ function loadSettings() {
         document.querySelectorAll('input[name="killcam-mode"]').forEach(radio => {
             radio.checked = (radio.value === gameSettings.killCamMode);
         });
-        document.querySelectorAll('input[name="ai-shot"]').forEach(radio => {
-            radio.checked = (radio.value === gameSettings.aiShotLevel);
-        });
+        const aiShotSlider = document.getElementById('ai-shot-slider');
+        const aiShotValue = document.getElementById('ai-shot-value');
+        if (aiShotSlider) aiShotSlider.value = String(gameSettings.aiAimPrecision);
+        if (aiShotValue) aiShotValue.textContent = String(gameSettings.aiAimPrecision);
         document.querySelectorAll('input[name="barrel-respawn"]').forEach(radio => {
             radio.checked = (radio.value === String(gameSettings.barrelRespawn));
         });
@@ -2061,29 +2119,29 @@ function loadSettings() {
         const billBattleSizeSelect = document.getElementById('billbattle-size');
         if (billBattleSizeSelect) billBattleSizeSelect.value = gameSettings.billBattleSize || '100';
         const billBattleLightingSelect = document.getElementById('billbattle-lighting');
-        if (billBattleLightingSelect) billBattleLightingSelect.value = gameSettings.billBattleLighting || 'all';
+        if (billBattleLightingSelect) billBattleLightingSelect.value = normalizeBillBattleLightingCount(gameSettings.billBattleLighting);
         
-        // Time Lapse Mode
+        // タイムラプスモード
         const timeLapseCheckbox = document.getElementById('time-lapse-mode');
         if (timeLapseCheckbox) {
             timeLapseCheckbox.checked = gameSettings.timeLapseMode || false;
             
-            // Start Time Lapse mode if it was enabled
+            // 有効化されている場合はタイムラプスモードを開始
             if (gameSettings.timeLapseMode) {
                 setTimeout(() => {
                     startTimeLapseMode();
-                }, 1000); // Delay to ensure everything is loaded
+                }, 1000); // すべての読込完了を待つための遅延
             }
         }
         
-        // Night Mode checkbox initialization
+        // ナイトモードのチェックボックス初期化
         const nightModeCheckbox = document.getElementById('night-mode');
         if (nightModeCheckbox) {
             nightModeCheckbox.checked = gameSettings.nightModeEnabled || false;
             applyNightMode(gameSettings.nightModeEnabled);
         }
 
-        // Apply button positions
+        // ボタン位置を適用
         if (gameSettings.buttonPositions) {
             const fireButton = document.getElementById('fire-button');
             const crouchButton = document.getElementById('crouch-button');
@@ -2192,6 +2250,11 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.aiShotLevel === undefined) {
             parsedSavedSettings.aiShotLevel = 'ama';
         }
+        parsedSavedSettings.aiShotLevel = normalizeAIShotLevel(parsedSavedSettings.aiShotLevel);
+        if (parsedSavedSettings.aiAimPrecision === undefined) {
+            parsedSavedSettings.aiAimPrecision = parsedSavedSettings.aiShotLevel === 'pro' ? 85 : 55;
+        }
+        parsedSavedSettings.aiAimPrecision = normalizeAIAimPrecision(parsedSavedSettings.aiAimPrecision);
         if (parsedSavedSettings.nightModeLightIntensity === undefined) {
             parsedSavedSettings.nightModeLightIntensity = 0.8;
         }
@@ -2248,6 +2311,10 @@ function loadMapSettings(mapName) {
         if (parsedSavedSettings.defaultWeaponAI3 === undefined) {
             parsedSavedSettings.defaultWeaponAI3 = parsedSavedSettings.defaultWeaponAI || parsedSavedSettings.defaultWeapon || WEAPON_MG;
         }
+                if (parsedSavedSettings.billBattleLighting === undefined) {
+                    parsedSavedSettings.billBattleLighting = String(BILL_BATTLE_LIGHT_COUNT_DEFAULT);
+                }
+                parsedSavedSettings.billBattleLighting = normalizeBillBattleLightingCount(parsedSavedSettings.billBattleLighting);
                 if (parsedSavedSettings.buttonPositions === undefined) {
                     parsedSavedSettings.buttonPositions = {
                         fire: { right: '20px', bottom: '120px' },
@@ -2266,6 +2333,9 @@ function loadMapSettings(mapName) {
                 
                 // gameSettingsに適用
                 Object.assign(gameSettings, parsedSavedSettings);
+                gameSettings.aiShotLevel = normalizeAIShotLevel(gameSettings.aiShotLevel);
+                gameSettings.aiAimPrecision = normalizeAIAimPrecision(gameSettings.aiAimPrecision);
+                gameSettings.billBattleLighting = normalizeBillBattleLightingCount(gameSettings.billBattleLighting);
                 
                 // UIに反映
                 document.getElementById('player-hp').value = gameSettings.playerHP;
@@ -2304,15 +2374,16 @@ function loadMapSettings(mapName) {
                 const billBattleSizeSelect = document.getElementById('billbattle-size');
                 if (billBattleSizeSelect) billBattleSizeSelect.value = gameSettings.billBattleSize || '100';
                 const billBattleLightingSelect = document.getElementById('billbattle-lighting');
-                if (billBattleLightingSelect) billBattleLightingSelect.value = gameSettings.billBattleLighting || 'all';
-                // Update unified map selector
+                if (billBattleLightingSelect) billBattleLightingSelect.value = normalizeBillBattleLightingCount(gameSettings.billBattleLighting);
+                // 統合マップセレクターを更新
                 updateUnifiedMapSelector();
                 document.querySelectorAll('input[name="auto-aim"]').forEach(radio => {
                     radio.checked = (radio.value === String(gameSettings.autoAim));
                 });
-                document.querySelectorAll('input[name="ai-shot"]').forEach(radio => {
-                    radio.checked = (radio.value === gameSettings.aiShotLevel);
-                });
+                const aiShotSlider = document.getElementById('ai-shot-slider');
+                const aiShotValue = document.getElementById('ai-shot-value');
+                if (aiShotSlider) aiShotSlider.value = String(gameSettings.aiAimPrecision);
+                if (aiShotValue) aiShotValue.textContent = String(gameSettings.aiAimPrecision);
                 document.querySelectorAll('input[name="night-mode"]').forEach(radio => {
                     radio.checked = (radio.value === String(gameSettings.nightModeEnabled));
                 });
@@ -2359,11 +2430,11 @@ function loadMapSettings(mapName) {
                                 fireButton.style.left = '';
                                 fireButton.style.top = '';
                                 fireButton.style.display = 'flex'; // モバイルなら表示
-                                // loadSettings(): fireButton display set to flex (mobile)
+                                // loadSettings(): fireButtonをflex表示（モバイル）
                             }
                         } else {
                             fireButton.style.display = 'none'; // PCなら非表示
-                            // loadSettings(): fireButton display set to none (PC)
+                            // loadSettings(): fireButtonを非表示（PC）
                         }
                     }
                     if (crouchButton) {
@@ -2374,11 +2445,11 @@ function loadMapSettings(mapName) {
                                 crouchButton.style.left = '';
                                 crouchButton.style.top = '';
                                 crouchButton.style.display = 'flex'; // モバイルなら表示
-                                // loadSettings(): crouchButton display set to flex (mobile)
+                                // loadSettings(): crouchButtonをflex表示（モバイル）
                             }
                         } else {
                             crouchButton.style.display = 'none'; // PCなら非表示
-                            // loadSettings(): crouchButton display set to none (PC)
+                            // loadSettings(): crouchButtonを非表示（PC）
                         }
                     }
                     if (zoomButton) {
@@ -2402,11 +2473,11 @@ function loadMapSettings(mapName) {
                                 joystickZone.style.right = '';
                                 joystickZone.style.top = '';
                                 joystickZone.style.display = 'block'; // モバイルなら表示
-                                // loadSettings(): joystickZone display set to block (mobile)
+                                // loadSettings(): joystickZoneをblock表示（モバイル）
                             }
                         } else {
                             joystickZone.style.display = 'none'; // PCなら非表示
-                            // loadSettings(): joystickZone display set to none (PC)
+                            // loadSettings(): joystickZoneを非表示（PC）
                         }
                     }
                     if (followButton) { // 追加
@@ -2416,12 +2487,12 @@ function loadMapSettings(mapName) {
                                 followButton.style.bottom = gameSettings.buttonPositions.follow.bottom;
                                 followButton.style.left = '';
                                 followButton.style.top = '';
-                                // loadSettings(): followButton display updated (mobile)
+                                // loadSettings(): followButton表示を更新（モバイル）
                                 // followButtonの表示/非表示はstartGame()内のゲームモード判定に任せる
                             }
                         } else {
                             followButton.style.display = 'none'; // PCなら非表示
-                            // loadSettings(): followButton display set to none (PC)
+                            // loadSettings(): followButtonを非表示（PC）
                         }
                     }
         
@@ -2475,6 +2546,7 @@ let mgGunSound;
 let rrGunSound;
 let srGunSound;
 let m1GunSound;
+let pistolReloadSound;
 let aiM1GunSound;
 let aiM1GunSound2;
 let aiM1GunSound3;
@@ -2561,7 +2633,7 @@ function startTimer() {
                         playerIsWinner = false;
                     }
                 }
-                // Check for ties where player is not the sole winner
+                // プレイヤー単独勝利でない同点を確認
                 if(playerIsWinner) {
                     for (const ai of ais) {
                         if (ai.kills === maxKills) {
@@ -2739,14 +2811,25 @@ const defaultObstaclesConfig = [
     { x: -10, z: -35, width: 2, height: 1.8, depth: 2 },
     { x: 20, z: -25, width: 3, height: 1.8, depth: 3 },
     { x: -20, z: -25, width: 3, height: 1.8, depth: 3 },
-    { x: 30, z: -15, width: 2, height: 1.8, depth: 2 }
+    { x: 30, z: -15, width: 2, height: 1.8, depth: 2 },
+    // デフォルトマップ用の爆発ドラム缶（深緑）
+    { type: 'barrel', x: 32, z: 22, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: -32, z: 18, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: 28, z: -18, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: -28, z: -22, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: 12, z: 28, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: -14, z: 30, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: 22, z: 6, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: -24, z: 4, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: 6, z: -28, color: 0x1f5d2e, radius: 0.75, height: 2.4 },
+    { type: 'barrel', x: -8, z: -32, color: 0x1f5d2e, radius: 0.75, height: 2.4 }
 ];
 
 function getRandomSafePosition(itemWidth = 1, itemHeight = 1, itemDepth = 2) {
     const MAX_ATTEMPTS = 500;
     const MIN_DISTANCE_FROM_PLAYER = 15;
     const MIN_DISTANCE_BETWEEN_PICKUPS = 5;
-    const PLACEMENT_PADDING = 2.5; // Padding from obstacles
+    const PLACEMENT_PADDING = 2.5; // 障害物からの余白
 
     const WEAPON_PLACEMENT_RADIUS = ARENA_PLAY_AREA_RADIUS - Math.max(itemWidth, itemDepth) / 2;
 
@@ -2785,7 +2868,7 @@ function getRandomSafePosition(itemWidth = 1, itemHeight = 1, itemDepth = 2) {
     }
     
     console.warn("getRandomSafePosition: Failed to find a safe position after all attempts, returning (0,0,0).");
-    return new THREE.Vector3(0, 0, 0); // Fallback
+    return new THREE.Vector3(0, 0, 0); // フォールバック
 }
 
 function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5, itemWidth = 1, itemHeight = 1, itemDepth = 2) {
@@ -2858,7 +2941,7 @@ function findSafePositionNear(centerPoint, searchRadius = 10, minDistance = 5, i
     const boxGeometry = new THREE.BoxGeometry(boxWidth, boxHeight, boxDepth);
     const boxMaterial = new THREE.MeshLambertMaterial({ color: 0x006400 });
     const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-    // boxMesh.position.y = boxHeight / 2; // This was causing the item to float
+    // boxMesh.position.y = boxHeight / 2; // これがアイテム浮きの原因になっていた
     pickupGroup.add(boxMesh);
 
     if (font) {
@@ -2910,7 +2993,7 @@ function createWeaponPickups(aiList = []) {
 
     const availableAis = [...aiList];
 
-    // Define weapon box size here, as it's constant for all weapon pickups
+    // すべての武器ピックアップで共通のため、武器ボックスサイズをここで定義
     const weaponBoxWidth = 1;
     const weaponBoxHeight = 0.8;
     const weaponBoxDepth = 2;
@@ -2948,7 +3031,7 @@ function createMedikitPickup(position) {
     const boxGeometry = new THREE.BoxGeometry(MEDIKIT_WIDTH, MEDIKIT_HEIGHT, MEDIKIT_DEPTH);
     const boxMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
     const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-    // boxMesh.position.y = MEDIKIT_HEIGHT / 2; // This was causing the item to float
+    // boxMesh.position.y = MEDIKIT_HEIGHT / 2; // これがアイテム浮きの原因になっていた
     medikitGroup.add(boxMesh);
     const crossThickness = 0.25;
     const crossLength = MEDIKIT_HEIGHT * 0.8;
@@ -2963,11 +3046,11 @@ function createMedikitPickup(position) {
     // horizontalBar.position.y = 0;
     crossGroup.add(horizontalBar);
     const crossGroup1 = crossGroup.clone();
-    crossGroup1.position.set(MEDIKIT_WIDTH / 2 - crossThickness / 2, 0, 0); // Y-offset removed
+    crossGroup1.position.set(MEDIKIT_WIDTH / 2 - crossThickness / 2, 0, 0); // Yオフセットを削除
     crossGroup1.rotation.y = Math.PI / 2;
     medikitGroup.add(crossGroup1);
     const crossGroup2 = crossGroup.clone();
-    crossGroup2.position.set(-MEDIKIT_WIDTH / 2 + crossThickness / 2, 0, 0); // Y-offset removed
+    crossGroup2.position.set(-MEDIKIT_WIDTH / 2 + crossThickness / 2, 0, 0); // Yオフセットを削除
     crossGroup2.rotation.y = -Math.PI / 2;
     medikitGroup.add(crossGroup2);
     medikitGroup.position.copy(position);
@@ -3043,7 +3126,7 @@ function createAndAttachLadder(obstacle, ladderFace = -1) {
     sensorArea.position.y = (sensorAreaHeight / 2) - FLOOR_HEIGHT;
     sensorArea.userData.obstacle = obstacle;
     sensorArea.userData.ladderPos = ladderWorldPosition;
-    sensorArea.visible = true; // Make visible for debugging
+    sensorArea.visible = true; // デバッグ用に可視化
     scene.add(sensorArea);
     ladderSwitches.push(sensorArea);
     return face;
@@ -3071,7 +3154,7 @@ function addRooftopFeatures(obstacle, ladderFace) {
     
     const rooftopY = obstacle.position.y + (buildingHeight / 2);
     
-    // Initialize textures if not done yet
+    // テクスチャ未初期化なら初期化
     initializeTextures();
     
     const wallHeight = 1.0;
@@ -3196,7 +3279,7 @@ function createFrontWallWithDoor(building, width, height, thickness, zPos, mater
     debugLog('FRONT WALL: door width =', doorWidth, 'door height =', doorHeight);
     debugLog('Building width =', width, 'height =', height);
     
-    // TOP PIECE - ドアの上
+    // 上部パーツ - ドア上部
     const topHeight = height - doorHeight;
     if (topHeight > 0) {
         const topGeometry = new THREE.BoxGeometry(width, topHeight, thickness);
@@ -3208,7 +3291,7 @@ function createFrontWallWithDoor(building, width, height, thickness, zPos, mater
         debugLog('Top piece: height =', topHeight, 'y =', doorHeight + topHeight/2);
     }
     
-    // LEFT PIECE - ドアの左
+    // 左パーツ - ドア左側
     const leftWidth = (width - doorWidth) / 2;
     if (leftWidth > 0) {
         const leftGeometry = new THREE.BoxGeometry(leftWidth, doorHeight, thickness);
@@ -3220,7 +3303,7 @@ function createFrontWallWithDoor(building, width, height, thickness, zPos, mater
         debugLog('Left piece: width =', leftWidth, 'y =', doorHeight/2);
     }
     
-    // RIGHT PIECE - ドアの右
+    // 右パーツ - ドア右側
     if (leftWidth > 0) {
         const rightGeometry = new THREE.BoxGeometry(leftWidth, doorHeight, thickness);
         const rightPiece = new THREE.Mesh(rightGeometry, material);
@@ -3243,7 +3326,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
     
     debugLog('BACK WALL: window width =', windowWidth, 'height =', windowHeight, 'y =', windowY);
     
-    // TOP PIECE - 窓の上
+    // 上部パーツ - 窓上部
     const topHeight = height - windowY - windowHeight;
     if (topHeight > 0) {
         const topGeometry = new THREE.BoxGeometry(width, topHeight, thickness);
@@ -3255,7 +3338,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
         debugLog('Back top piece: height =', topHeight, 'y =', windowY + windowHeight + topHeight/2);
     }
     
-    // BOTTOM PIECE - 窓の下
+    // 下部パーツ - 窓下部
     const bottomHeight = windowY;
     if (bottomHeight > 0) {
         const bottomGeometry = new THREE.BoxGeometry(width, bottomHeight, thickness);
@@ -3267,7 +3350,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
         debugLog('Back bottom piece: height =', bottomHeight, 'y =', bottomHeight/2);
     }
     
-    // LEFT PIECE - 左の窓の左
+    // 左パーツ - 左窓の左側
     const leftWidth = (width - windowWidth*2 - windowSpacing) / 2;
     if (leftWidth > 0) {
         const leftGeometry = new THREE.BoxGeometry(leftWidth, windowHeight, thickness);
@@ -3279,7 +3362,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
         debugLog('Back left piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
     }
     
-    // MIDDLE PIECE - 窓の間
+    // 中央パーツ - 窓の間
     const middleGeometry = new THREE.BoxGeometry(windowSpacing, windowHeight, thickness);
     const middlePiece = new THREE.Mesh(middleGeometry, material);
     middlePiece.position.set(0, windowY + windowHeight/2, zPos);
@@ -3288,7 +3371,7 @@ function createBackWallWithWindows(building, width, height, thickness, zPos, mat
     obstacles.push(middlePiece);
     debugLog('Back middle piece: width =', windowSpacing, 'y =', windowY + windowHeight/2);
     
-    // RIGHT PIECE - 右の窓の右
+    // 右パーツ - 右窓の右側
     if (leftWidth > 0) {
         const rightGeometry = new THREE.BoxGeometry(leftWidth, windowHeight, thickness);
         const rightPiece = new THREE.Mesh(rightGeometry, material);
@@ -3310,7 +3393,7 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
     
     debugLog('SIDE WALL: window width =', windowWidth, 'height =', windowHeight, 'y =', windowY);
     
-    // TOP PIECE - 窓の上
+    // 上部パーツ - 窓上部
     const topHeight = height - windowY - windowHeight;
     if (topHeight > 0) {
         const topGeometry = new THREE.BoxGeometry(thickness, topHeight, wallDepth);
@@ -3322,7 +3405,7 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
         debugLog('Side top piece: height =', topHeight, 'y =', windowY + windowHeight + topHeight/2);
     }
     
-    // BOTTOM PIECE - 窓の下
+    // 下部パーツ - 窓下部
     const bottomHeight = windowY;
     if (bottomHeight > 0) {
         const bottomGeometry = new THREE.BoxGeometry(thickness, bottomHeight, wallDepth);
@@ -3334,7 +3417,7 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
         debugLog('Side bottom piece: height =', bottomHeight, 'y =', bottomHeight/2);
     }
     
-    // LEFT PIECE - 窓の左
+    // 左パーツ - 窓左側
     const leftWidth = (wallDepth - windowWidth) / 2;
     if (leftWidth > 0) {
         const leftGeometry = new THREE.BoxGeometry(thickness, windowHeight, leftWidth);
@@ -3346,7 +3429,7 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
         debugLog('Side left piece: width =', leftWidth, 'y =', windowY + windowHeight/2);
     }
     
-    // RIGHT PIECE - 窓の右
+    // 右パーツ - 窓右側
     if (leftWidth > 0) {
         const rightGeometry = new THREE.BoxGeometry(thickness, windowHeight, leftWidth);
         const rightPiece = new THREE.Mesh(rightGeometry, material);
@@ -3361,12 +3444,12 @@ function createSideWallWithWindow(building, wallDepth, height, thickness, xPos, 
 }
 
 function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth = 2, color = 0xff0000, hp = 1) {
-    // Initialize textures if not done yet
+    // テクスチャ未初期化なら初期化
     initializeTextures();
     
     const boxGeometry = new THREE.BoxGeometry(width, height, depth);
     
-    // Choose texture based on obstacle type or randomly
+    // 障害物タイプまたはランダムでテクスチャを選択
     let material;
     if (Math.random() > 0.5) {
         material = new THREE.MeshLambertMaterial({ 
@@ -3389,7 +3472,7 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     let ladderFace = -1;
     if (height > 6) {
         ladderFace = createAndAttachLadder(box);
-        // Ensure tall obstacles (towers) always get rooftop cover.
+        // 背の高い障害物（塔）には必ず屋上カバーを付与する。
         addRooftopFeatures(box, ladderFace);
     }
     // 家の屋根には登れないようにする - 屋上機能を無効化
@@ -3401,23 +3484,146 @@ function createObstacle(x, z, width = 2, height = DEFAULT_OBSTACLE_HEIGHT, depth
     HIDING_SPOTS.push({ position: new THREE.Vector3(x - HIDING_DISTANCE, 0, z - HIDING_DISTANCE), obstacle: box });
 }
 
+const BARREL_HAZARD_ICON_SRC = 'barrel_hazard.png';
+let barrelHazardBaseTexture = null;
+let barrelHazardLoadStarted = false;
+
+function createFallbackRadiationTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const r = 190;
+    const inner = 40;
+    const sectorOuter = r * 0.92;
+    const sectorInner = r * 0.38;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#f4cf00';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#111111';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#f4cf00';
+    for (let i = 0; i < 3; i++) {
+        const start = -Math.PI / 2 + i * (Math.PI * 2 / 3) - 0.28;
+        const end = start + 0.56;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos((start + end) / 2) * sectorInner, cy + Math.sin((start + end) / 2) * sectorInner);
+        ctx.arc(cx, cy, sectorOuter, start, end);
+        ctx.arc(cx, cy, sectorInner, end, start, true);
+        ctx.closePath();
+        ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(cx, cy, inner, 0, Math.PI * 2);
+    ctx.fill();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+}
+
+function requestBarrelHazardTexture() {
+    if (barrelHazardLoadStarted || barrelHazardBaseTexture) return;
+    barrelHazardLoadStarted = true;
+    const loader = new THREE.TextureLoader();
+    loader.load(
+        BARREL_HAZARD_ICON_SRC,
+        (tex) => {
+            if ('colorSpace' in tex && THREE.SRGBColorSpace) {
+                tex.colorSpace = THREE.SRGBColorSpace;
+            } else if ('encoding' in tex && THREE.sRGBEncoding) {
+                tex.encoding = THREE.sRGBEncoding;
+            }
+            barrelHazardBaseTexture = tex;
+            scene.traverse((obj) => {
+                if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isBarrelLabel) return;
+                const mat = obj.material;
+                if (!mat) return;
+                if (mat.map && mat.map.userData && mat.map.userData.isFallbackHazard) {
+                    mat.map.dispose();
+                }
+                const replacement = barrelHazardBaseTexture.clone();
+                replacement.needsUpdate = true;
+                mat.map = replacement;
+                mat.needsUpdate = true;
+            });
+        },
+        undefined,
+        () => {
+            // PNG未配置時はフォールバックマークを使い続ける
+        }
+    );
+}
+
+function createBarrelHazardLabel(radius, height) {
+    let texture = null;
+    if (barrelHazardBaseTexture) {
+        texture = barrelHazardBaseTexture.clone();
+        texture.needsUpdate = true;
+    } else {
+        texture = createFallbackRadiationTexture();
+        if (texture) {
+            texture.userData = texture.userData || {};
+            texture.userData.isFallbackHazard = true;
+        }
+        requestBarrelHazardTexture();
+    }
+    if (!texture) return null;
+
+    // ドラム缶のRに沿う曲面ラベル（前面側のみ）
+    const labelRadius = radius * 1.003; // z-fighting回避の最小オフセット
+    const labelHeight = Math.max(0.26, height * 0.24);
+    // 横方向が広がり過ぎないよう、ラベル高さ基準で円周方向の幅を決める
+    const desiredAspect = 1.05;
+    const thetaLength = THREE.MathUtils.clamp(
+        (labelHeight * desiredAspect) / Math.max(0.001, labelRadius),
+        Math.PI * 0.22,
+        Math.PI * 0.42
+    );
+    const thetaStart = (Math.PI / 2) - (thetaLength / 2); // +Z方向を中心に配置
+    const label = new THREE.Mesh(
+        new THREE.CylinderGeometry(labelRadius, labelRadius, labelHeight, 48, 1, true, thetaStart, thetaLength),
+        new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        })
+    );
+    // 横面の中央より少し上に配置
+    label.position.set(0, height * 0.12, 0);
+    label.userData.isBarrelLabel = true;
+    return label;
+}
+
 function createExplosiveBarrel(x, z, color = 0xe74c3c, radius = 0.75, height = 2.4) {
     if (isBillBattleMode()) {
         const clamped = clampBillBattleInside(new THREE.Vector3(x, 0, z), Math.max(1.5, radius + 0.5));
         x = clamped.x;
         z = clamped.z;
     }
+    const resolvedColor = (color !== undefined && color !== null) ? color : 0xe74c3c;
     const geometry = new THREE.CylinderGeometry(radius, radius, height, 20);
-    const material = new THREE.MeshLambertMaterial({ color: color });
+    const material = new THREE.MeshLambertMaterial({ color: resolvedColor });
     const barrel = new THREE.Mesh(geometry, material);
     barrel.position.set(x, (height / 2) - FLOOR_HEIGHT, z);
     barrel.userData.type = 'barrel';
-    barrel.userData.color = color;
+    barrel.userData.color = material.color.getHex();
     barrel.userData.radius = radius;
     barrel.userData.height = height;
     barrel.userData.spawnPos = new THREE.Vector3(x, barrel.position.y, z);
     barrel.userData.hp = 1;
     barrel.castShadow = false;
+    const hazardLabel = createBarrelHazardLabel(radius, height);
+    if (hazardLabel) barrel.add(hazardLabel);
     scene.add(barrel);
     obstacles.push(barrel);
     const HIDING_DISTANCE = radius + 0.6;
@@ -3518,13 +3724,13 @@ function createBillBattleOuterWalls() {
     const t = BILL_BATTLE_WALL_THICKNESS;
     const half = BILL_BATTLE_HALF;
 
-    // Back wall
+    // 背面の壁
     createBillBattleWall(0, half, BILL_BATTLE_SIZE, h, t);
-    // Left wall
+    // 左側の壁
     createBillBattleWall(-half, 0, t, h, BILL_BATTLE_SIZE);
-    // Right wall
+    // 右側の壁
     createBillBattleWall(half, 0, t, h, BILL_BATTLE_SIZE);
-    // Front wall (no entrance)
+    // 正面の壁（入口なし）
     createBillBattleWall(0, -half, BILL_BATTLE_SIZE, h, t);
 }
 
@@ -3594,7 +3800,7 @@ function applyBillBattleLightIntensityScale() {
 
 function updateBillBattleLightFlicker(timeElapsed) {
     if (!isBillBattleMode()) return;
-    if (gameSettings.billBattleLighting !== 'random') return;
+    if (getBillBattleLightingCount() >= billBattleTotalLightCount) return;
     let changed = false;
     for (const entry of billBattleLights) {
         if (!entry || !entry.mesh || !entry.mesh.parent || !entry.userData) continue;
@@ -3616,7 +3822,7 @@ function createBillBattleCeilingLights() {
     const lightY = -FLOOR_HEIGHT + BILL_BATTLE_WALL_HEIGHT - BILL_BATTLE_CEILING_THICKNESS - 0.2;
     const rowSpan = BILL_BATTLE_HALF - 6;
     const rows = [-rowSpan, 0, rowSpan];
-    const lightingMode = (gameSettings.billBattleLighting || 'all');
+    const litCountSetting = getBillBattleLightingCount();
     const lightIntensityScale = getBillBattleLightIntensityScale();
     const baseIntensityRaw = 1.9;
     const baseEmissiveRaw = 0.45;
@@ -3625,12 +3831,7 @@ function createBillBattleCeilingLights() {
     const totalLights = rows.length * count;
     billBattleTotalLightCount = totalLights;
     let remainingLights = totalLights;
-    let remainingLit = totalLights;
-    if (lightingMode === 'random') {
-        const minRatio = 0.35;
-        const maxRatio = 0.65;
-        remainingLit = Math.max(1, Math.round(totalLights * (minRatio + Math.random() * (maxRatio - minRatio))));
-    }
+    let remainingLit = Math.max(0, Math.min(totalLights, litCountSetting));
     const now = clock ? clock.getElapsedTime() : 0;
     for (const x of rows) {
         for (let i = 0; i < count; i++) {
@@ -3659,17 +3860,12 @@ function createBillBattleCeilingLights() {
             entry.userData.baseEmissiveRaw = baseEmissiveRaw;
             entry.userData.baseIntensity = baseIntensity;
             entry.userData.baseEmissive = baseEmissive;
-            let isLit = true;
-            if (lightingMode === 'random') {
-                const chance = remainingLit / Math.max(1, remainingLights);
-                isLit = Math.random() < chance;
-                if (isLit) remainingLit -= 1;
-                remainingLights -= 1;
-                entry.userData.flicker = Math.random() < 0.35;
-                entry.userData.nextFlickerAt = now + 0.2 + Math.random() * 0.8;
-            } else {
-                entry.userData.flicker = false;
-            }
+            const chance = remainingLit / Math.max(1, remainingLights);
+            const isLit = Math.random() < chance;
+            if (isLit) remainingLit -= 1;
+            remainingLights -= 1;
+            entry.userData.flicker = false;
+            entry.userData.nextFlickerAt = now + 99999;
             setBillBattleLightState(entry, isLit);
             billBattleLights.push(entry);
         }
@@ -3828,7 +4024,7 @@ function ensureBillBattleAIIntegrity(ai) {
         ai.hp = reviveHP;
     }
     if (ai.hp <= 0) {
-        return; // Dead AI should stay inactive until respawn logic handles it
+        return; // 死亡したAIはリスポーン処理が行うまで非アクティブのままにする
     }
     ai.visible = true;
     if (!ai.parent) scene.add(ai);
@@ -3937,7 +4133,7 @@ function ensureBillBattleAIIntegrity(ai) {
           if (isBillBattleBoxBlocked(box)) continue;
           return clampBillBattleInside(pos, 2.5);
       }
-    // Better fallback: try to find a safe position well inside the building
+    // 改善フォールバック: 建物内のより安全な位置を探す
       const safePositions = [
           new THREE.Vector3(halfX - 3, baseY, 0),
           new THREE.Vector3(-halfX + 3, baseY, 0),
@@ -3951,7 +4147,7 @@ function ensureBillBattleAIIntegrity(ai) {
           new THREE.Vector3(-halfX / 2, baseY, halfZ / 2)
       ];
     
-    // Try each safe position
+    // 各安全位置を試す
       for (const pos of safePositions) {
           const box = new THREE.Box3().setFromCenterAndSize(pos, new THREE.Vector3(itemWidth, itemHeight, itemDepth));
           if (!isBillBattleBoxBlocked(box)) {
@@ -3959,7 +4155,7 @@ function ensureBillBattleAIIntegrity(ai) {
           }
       }
     
-    // Final fallback - center of the arena
+    // 最終フォールバック - アリーナ中央
       return new THREE.Vector3(0, baseY, 0);
   }
 
@@ -4167,15 +4363,15 @@ function getBillBattlePlayerSpawn() {
           return;
       }
 
-      // Center back wall barrier + spawn (central back)
+      // 背面中央のバリア＋スポーン（中央背面）
       createBillBattleSolidBox(0, backBarrierZ, barrierLength, barrierHeight, barrierDepth, BILL_BATTLE_OBSTACLE_COLOR, 2);
       billBattleAISpawnPoints.push(new THREE.Vector3(0, -FLOOR_HEIGHT, innerWallZ - spawnInset));
 
-      // Right wall barrier + spawn (right central)
+      // 右壁のバリア＋スポーン（中央右）
       createBillBattleSolidBox(sideBarrierX, 0, barrierDepth, barrierHeight, barrierLength, BILL_BATTLE_OBSTACLE_COLOR, 2);
       billBattleAISpawnPoints.push(new THREE.Vector3(innerWallX - spawnInset, -FLOOR_HEIGHT, 0));
 
-      // Left wall barrier + spawn (left central)
+      // 左壁のバリア＋スポーン（中央左）
       createBillBattleSolidBox(-sideBarrierX, 0, barrierDepth, barrierHeight, barrierLength, BILL_BATTLE_OBSTACLE_COLOR, 2);
       billBattleAISpawnPoints.push(new THREE.Vector3(-(innerWallX - spawnInset), -FLOOR_HEIGHT, 0));
   }
@@ -4256,7 +4452,7 @@ function applyExplosionEffectsToBillLights(explosionPos, radius) {
 }
 
 function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, hp = 8, rotation = 0) {
-    // Initialize textures if not done yet
+    // テクスチャ未初期化なら初期化
     initializeTextures();
     
     const house = new THREE.Group();
@@ -4387,13 +4583,13 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
         // obstacles.push(roof); // 個別に追加しない
     }
 
-    // House collision-only walls (respect windows/door openings)
+    // 家の衝突専用壁（窓/ドア開口を反映）
     function addHouseWallCollider(w, h, t, pos, rotY = 0, blocksProjectiles = true, face = '') {
         const collider = new THREE.Mesh(
             new THREE.BoxGeometry(w, h, t),
             new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.0, depthWrite: false })
         );
-        collider.visible = true; // Raycaster hit needs visible objects
+        collider.visible = true; // Raycaster判定には可視オブジェクトが必要
         collider.position.copy(pos);
         collider.rotation.y = rotY;
         collider.userData.isWall = true;
@@ -4422,7 +4618,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
             addHouseWallSegmentMesh(span, topHeight, t, pos, rotY);
         }
 
-        // Vertical strips between windows
+        // 窓の間の縦ストリップ
         const halfSpan = span / 2;
         const segments = [];
         let prev = -halfSpan;
@@ -4451,11 +4647,11 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
         }
     }
 
-    // Front wall: left/right colliders (door opening remains)
+    // 正面壁: 左右コライダー（ドア開口は維持）
     addHouseWallCollider(leftWallWidth, height, thickness, new THREE.Vector3(-width / 2 + leftWallWidth / 2, 0, depth / 2), 0, true, 'front');
     addHouseWallCollider(leftWallWidth, height, thickness, new THREE.Vector3(width / 2 - leftWallWidth / 2, 0, depth / 2), 0, true, 'front');
 
-    // Back wall windows (two)
+    // 背面壁の窓（2つ）
     addWindowWallVisuals(
         width,
         height,
@@ -4467,7 +4663,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
         0
     );
 
-    // Left wall window (rotated)
+    // 左壁の窓（回転あり）
     addWindowWallVisuals(
         depth,
         height,
@@ -4479,7 +4675,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
         0
     );
 
-    // Right wall window (rotated)
+    // 右壁の窓（回転あり）
     addWindowWallVisuals(
         depth,
         height,
@@ -4491,12 +4687,12 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
         0
     );
 
-    // Solid colliders for window walls (bullets will pass through windows via analytic check)
+    // 窓付き壁用の実体コライダー（弾は解析チェックで窓を通過）
     addHouseWallCollider(width, height, thickness, new THREE.Vector3(0, 0, -depth / 2), 0, true, 'back');
     addHouseWallCollider(depth, height, thickness, new THREE.Vector3(-width / 2, 0, 0), Math.PI / 2, true, 'left');
     addHouseWallCollider(depth, height, thickness, new THREE.Vector3(width / 2, 0, 0), Math.PI / 2, true, 'right');
 
-    // Store window specs for analytic projectile pass-through
+    // 弾の解析的な窓通過判定用に窓仕様を保持
     house.userData.windowSpec = {
         back: [
             { x: -width / 4, y: 1.5, w: 1.5, h: 1.5 },
@@ -4526,7 +4722,7 @@ function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, h
 }
 
 function createSniperTower(x, z) {
-    // Initialize textures if not done yet
+    // テクスチャ未初期化なら初期化
     initializeTextures();
     
     const TOWER_WIDTH = 6;
@@ -4557,7 +4753,7 @@ function createSniperTower(x, z) {
         ladderFace = z > 0 ? 0 : 1;
     }
     ladderFace = createAndAttachLadder(tower, ladderFace);
-    // createWindows(tower, TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH); // Removed windows for performance
+    // createWindows(tower, TOWER_WIDTH, TOWER_HEIGHT, TOWER_DEPTH); // パフォーマンスのため窓を削除
     // すべてのマップで屋上機能を有効化
     addRooftopFeatures(tower, ladderFace);
 }
@@ -4706,7 +4902,7 @@ function generateObstaclePositions(count) {
           clearBillBattleState();
       }
     
-    // Clean up all obstacles including rooftop parts
+    // 屋上パーツを含む全障害物をクリーンアップ
     for (const obstacle of obstacles) {
         // 家の場合は、すべての子オブジェクトを明示的に削除
         if (obstacle && obstacle.userData.type === 'house') {
@@ -4733,7 +4929,7 @@ function generateObstaclePositions(count) {
             }
         }
         
-        // Clean up rooftop parts first
+        // 先に屋上パーツをクリーンアップ
         if (obstacle.userData.rooftopParts && Array.isArray(obstacle.userData.rooftopParts)) {
             for (const part of obstacle.userData.rooftopParts) {
                 scene.remove(part);
@@ -4741,16 +4937,16 @@ function generateObstaclePositions(count) {
                 disposeMaterial(part.material); // 安全なマテリアル破棄を使用
             }
         }
-        // Clean up ladders
+        // 梯子をクリーンアップ
         const ladderGroup = obstacle.children.find(child => child.name === 'ladder');
         if (ladderGroup) {
             obstacle.remove(ladderGroup);
         }
-        // Remove the main obstacle
+        // メイン障害物を削除
         if (obstacle.parent) {
             obstacle.parent.remove(obstacle);
         }
-        // Dispose geometry and materials
+        // ジオメトリとマテリアルを破棄
         if (obstacle.geometry) obstacle.geometry.dispose();
         disposeMaterial(obstacle.material); // 安全なマテリアル破棄を使用
     }
@@ -4842,9 +5038,9 @@ let killCamPhysics = {
     clearance: 0.25,
     lastBounceAt: 0
 };
-playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
-resetCharacterPose(playerModel); // Reset to default pose
-// Show gun for gameplay
+playerModel = createCharacterModel(0xff3333, characterCustomization.player); // プレイヤーのカスタマイズ設定
+resetCharacterPose(playerModel); // 既定ポーズへリセット
+// ゲームプレイ中は銃を表示
 if (playerModel.userData.parts && playerModel.userData.parts.gun) {
     playerModel.userData.parts.gun.visible = true;
 }
@@ -4865,15 +5061,15 @@ const EXPLOSION_FORCE = 50;
 
 function cleanupAI(aiObject) {
     if (aiObject) {
-        // Remove children (body, head, etc.) and dispose their geometries/materials
+        // 子要素（体・頭など）を削除し、ジオメトリ/マテリアルを破棄
         while (aiObject.children.length > 0) {
             const child = aiObject.children[0];
             aiObject.remove(child);
             if (child.geometry) child.geometry.dispose();
             disposeMaterial(child.material); // 安全なマテリアル破棄を使用
-            if (child.texture) child.texture.dispose(); // Also dispose textures if any
+            if (child.texture) child.texture.dispose(); // テクスチャがあればそれも破棄
         }
-        // Remove the main AI group from the scene
+        // シーンからAI本体グループを削除
         if (aiObject.parent) {
             aiObject.parent.remove(aiObject);
         }
@@ -4883,7 +5079,7 @@ function cleanupAI(aiObject) {
 const ais = [];
 
 function createCharacterModel(color, customization = null) {
-    // Use customization if provided, otherwise use defaults
+    // カスタマイズがあれば使用し、なければ既定値を使用
     const custom = customization || {
         hairStyle: 'default',
         hairColor: '#D2691E',
@@ -4900,7 +5096,7 @@ function createCharacterModel(color, customization = null) {
     const shoeMaterial = new THREE.MeshLambertMaterial({ color: custom.shoesColor });
     const hairMaterial = new THREE.MeshLambertMaterial({ color: custom.hairColor });
 
-    // Use rag.html proportions, scaled to current game height (visual only; collisions unchanged)
+    // rag.htmlの比率を使用し、現在のゲーム高さへスケール（見た目のみ・当たり判定は不変）
     const targetHeight = BODY_HEIGHT + HEAD_RADIUS * 2;
     const ragTotalHeight = 2.5; // 0.6 + 0.6 + 0.9 + 0.4
     const s = targetHeight / ragTotalHeight;
@@ -4910,43 +5106,43 @@ function createCharacterModel(color, customization = null) {
     const torsoY = (legSegmentHeight * 2) + (torsoHeight / 2);
     const headY = (legSegmentHeight * 2) + torsoHeight + (headSize / 2);
 
-    // Body and Head
+    // 体と頭
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6 * s, torsoHeight, 0.3 * s), clothingMaterial);
     body.position.y = torsoY;
     const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize, headSize), skinMaterial);
     head.position.y = headY;
     
-    // Add eyes (horizontal lines) to all characters - make them 2x thicker
-    const eyeLineGeom = new THREE.BoxGeometry(headSize * 0.6, headSize * 0.04, headSize * 0.04); // 2x thicker (0.02→0.04)
+    // すべてのキャラに目（横線）を追加 - 太さを2倍にする
+    const eyeLineGeom = new THREE.BoxGeometry(headSize * 0.6, headSize * 0.04, headSize * 0.04); // 太さ2倍（0.02→0.04）
     const eyeLineMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
     
-    // Left eye line
+    // 左目のライン
     const leftEyeLine = new THREE.Mesh(eyeLineGeom, eyeLineMaterial);
-    leftEyeLine.position.set(-headSize * 0.15, headY + headSize * 0.2, headSize * 0.5); // Move forward to be visible
+    leftEyeLine.position.set(-headSize * 0.15, headY + headSize * 0.2, headSize * 0.5); // 見えるように前方へ移動
     
-    // Right eye line  
+    // 右目のライン  
     const rightEyeLine = new THREE.Mesh(eyeLineGeom, eyeLineMaterial);
-    rightEyeLine.position.set(headSize * 0.15, headY + headSize * 0.2, headSize * 0.5); // Move forward to be visible
+    rightEyeLine.position.set(headSize * 0.15, headY + headSize * 0.2, headSize * 0.5); // 見えるように前方へ移動
 
-    // Add nose to all characters - positioned below eye lines
-    const noseGeom = new THREE.BoxGeometry(headSize * 0.12, headSize * 0.3, headSize * 0.12); // Much longer (0.08→0.12)
-    const noseMaterial = new THREE.MeshBasicMaterial({ color: custom.skinColor }); // Same color as skin
+    // すべてのキャラに鼻を追加 - 目線の下に配置
+    const noseGeom = new THREE.BoxGeometry(headSize * 0.12, headSize * 0.3, headSize * 0.12); // 大きく延長（0.08→0.12）
+    const noseMaterial = new THREE.MeshBasicMaterial({ color: custom.skinColor }); // 肌と同色
     const nose = new THREE.Mesh(noseGeom, noseMaterial);
-    nose.position.set(0, headY + headSize * 0.05, headSize * 0.54); // Below eye lines (0.12→0.05)
+    nose.position.set(0, headY + headSize * 0.05, headSize * 0.54); // 目線より下（0.12→0.05）
 
-    // Add ears to all characters - make them bigger
-    const earGeom = new THREE.BoxGeometry(headSize * 0.1, headSize * 0.25, headSize * 0.05); // Bigger (0.08→0.1, 0.2→0.25, 0.04→0.05)
-    const earMaterial = new THREE.MeshBasicMaterial({ color: custom.skinColor }); // Same color as skin
+    // すべてのキャラに耳を追加 - 大きくする
+    const earGeom = new THREE.BoxGeometry(headSize * 0.1, headSize * 0.25, headSize * 0.05); // 大型化（0.08→0.1, 0.2→0.25, 0.04→0.05）
+    const earMaterial = new THREE.MeshBasicMaterial({ color: custom.skinColor }); // 肌と同色
     
-    // Left ear
+    // 左耳
     const leftEar = new THREE.Mesh(earGeom, earMaterial);
-    leftEar.position.set(-headSize * 0.55, headY, 0); // Side of head
+    leftEar.position.set(-headSize * 0.55, headY, 0); // 頭の側面
     
-    // Right ear
+    // 右耳
     const rightEar = new THREE.Mesh(earGeom, earMaterial);
-    rightEar.position.set(headSize * 0.55, headY, 0); // Side of head
+    rightEar.position.set(headSize * 0.55, headY, 0); // 頭の側面
 
-    // Hair - Different styles based on customization
+    // 髪 - カスタマイズに応じたスタイル
     let hairParts = [];
     
     switch (custom.hairStyle) {
@@ -4955,7 +5151,7 @@ function createCharacterModel(color, customization = null) {
             const shortHair = new THREE.Mesh(shortHairGeom, hairMaterial);
             shortHair.position.set(0, headSize * 0.4, 0); // 頭を基準とした相対位置
             
-            // Add back hair to cover half of the back head
+            // 後頭部の半分を覆う後ろ髪を追加
             const shortBackHairGeom = new THREE.BoxGeometry(headSize * 1.0, headSize * 0.4, headSize * 0.5);
             const shortBackHair = new THREE.Mesh(shortBackHairGeom, hairMaterial);
             shortBackHair.position.set(0, headSize * 0.2, -headSize * 0.25); // 頭を基準とした相対位置
@@ -4964,19 +5160,19 @@ function createCharacterModel(color, customization = null) {
             break;
             
         case 'long':
-            // Afro style - spherical hair from back-top, leaving more face exposed
+            // アフロスタイル - 後頭上部から球状にし、顔の露出を増やす
             const afroRadius = headSize * 0.8;
             const afroGeom = new THREE.SphereGeometry(afroRadius, 16, 12);
             const afro = new THREE.Mesh(afroGeom, hairMaterial);
             afro.position.set(0, headSize * 0.6, -headSize * 0.4); // 頭を基準とした相対位置
-            afro.scale.set(1.4, 1.2, 1.3); // Wider and taller to expose more face
+            afro.scale.set(1.4, 1.2, 1.3); // 顔をより見せるため横幅と高さを拡大
             
             hairParts.push(afro);
             break;
             
         case 'spiky':
-            // Mohawk style - connected hair from top back to neck (raised and vertical)
-            const mohawkGeom = new THREE.BoxGeometry(headSize * 0.33, headSize * 0.7, headSize * 1.2); // Taller and more vertical
+            // モヒカンスタイル - 後頭頂から首までつながる髪（高く縦長）
+            const mohawkGeom = new THREE.BoxGeometry(headSize * 0.33, headSize * 0.7, headSize * 1.2); // より高く、より縦方向に
             const mohawk = new THREE.Mesh(mohawkGeom, hairMaterial);
             mohawk.position.set(0, headSize * 0.6, -headSize * 0.15); // 頭を基準とした相対位置
             
@@ -4984,25 +5180,25 @@ function createCharacterModel(color, customization = null) {
             break;
             
         case 'bald':
-            // Cap style - cap covering top 1/3 of head with extended visor
-            const capMainGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.3, headSize * 1.2); // Larger front-back (1.0→1.2)
-            const capMain = new THREE.Mesh(capMainGeom, hairMaterial); // Use hair material for cap color
+            // キャップスタイル - 頭頂1/3を覆い、つばを延長
+            const capMainGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.3, headSize * 1.2); // 前後方向を拡大（1.0→1.2）
+            const capMain = new THREE.Mesh(capMainGeom, hairMaterial); // キャップ色に髪マテリアルを使用
             capMain.position.set(0, headSize * 0.5, 0); // 頭を基準とした相対位置
             
-            const capVisorGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.05, headSize * 0.8); // Extend visor forward (0.6→0.8)
+            const capVisorGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.05, headSize * 0.8); // つばを前方へ延長（0.6→0.8）
             const capVisor = new THREE.Mesh(capVisorGeom, hairMaterial);
-            capVisor.position.set(0, headSize * 0.35, headSize * 0.55); // Move visor further forward (0.45→0.55)
+            capVisor.position.set(0, headSize * 0.35, headSize * 0.55); // つばをさらに前へ移動（0.45→0.55）
             
             hairParts.push(capMain, capVisor);
             break;
             
         case 'default':
         default:
-            const hairBackGeom = new THREE.BoxGeometry(headSize * 1.15, headSize * 0.85, headSize * 0.75); // Thinner back hair
+            const hairBackGeom = new THREE.BoxGeometry(headSize * 1.15, headSize * 0.85, headSize * 0.75); // 薄めの後ろ髪
             const hairBack = new THREE.Mesh(hairBackGeom, hairMaterial);
             hairBack.position.set(0, 0, -headSize * 0.45); // 頭を基準とした相対位置
             
-            const hairTopGeom = new THREE.BoxGeometry(headSize * 1.05, headSize * 0.35, headSize * 1.15); // Thinner top hair
+            const hairTopGeom = new THREE.BoxGeometry(headSize * 1.05, headSize * 0.35, headSize * 1.15); // 薄めの頭頂髪
             const hairTop = new THREE.Mesh(hairTopGeom, hairMaterial);
             hairTop.position.set(0, headSize * 0.45, -headSize * 0.1); // 頭を基準とした相対位置
             
@@ -5010,7 +5206,7 @@ function createCharacterModel(color, customization = null) {
             const hairBangs = new THREE.Mesh(hairBangsGeom, hairMaterial);
             hairBangs.position.set(0, headSize * 0.15, headSize * 0.35); // 頭を基準とした相対位置
             
-            // Cut the back hair to align with top hair
+            // 後ろ髪を切り揃えて頭頂髪と整列
             const backHairCutGeom = new THREE.BoxGeometry(headSize * 1.2, headSize * 0.9, headSize * 0.3);
             const backHairCut = new THREE.Mesh(backHairCutGeom, new THREE.MeshBasicMaterial({ color: 0x000000 }));
             backHairCut.position.set(0, headSize * 0.4, -headSize * 0.45);
@@ -5019,14 +5215,14 @@ function createCharacterModel(color, customization = null) {
             break;
     }
 
-    // Arms and Gun
+    // 腕と銃
     const aimGroup = new THREE.Group();
     const gunLength = 2.0;
     const gun = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, gunLength), gunMaterial);
     gun.position.z = gunLength / 2;
-    gun.visible = true; // Show gun for gameplay (will be hidden only in preview reset)
-    aimGroup.position.y = (legSegmentHeight * 2) + torsoHeight * 0.7; // Restore original arm position
-    // Arms (upper + forearm)
+    gun.visible = true; // ゲームプレイ中は銃を表示（プレビューのリセット時のみ非表示）
+    aimGroup.position.y = (legSegmentHeight * 2) + torsoHeight * 0.7; // 元の腕位置に戻す
+    // 腕（上腕＋前腕）
     const upperArmLen = 0.5 * s;
     const foreArmLen = 0.5 * s;
     const upperArmGeom = new THREE.BoxGeometry(0.2 * s, 0.2 * s, upperArmLen);
@@ -5064,7 +5260,7 @@ function createCharacterModel(color, customization = null) {
     aimGroup.add(gunGrip);
     aimGroup.add(leftArm, rightArm);
 
-    // Legs (Thigh + Shin)
+    // 脚（太もも＋すね）
     const legWidth = 0.25 * s;
     const thighGeom = new THREE.BoxGeometry(legWidth, legSegmentHeight, legWidth);
     const shinGeom = new THREE.BoxGeometry(legWidth * 0.88, legSegmentHeight * 0.85, legWidth * 0.88);
@@ -5091,13 +5287,13 @@ function createCharacterModel(color, customization = null) {
     rightShin.position.y = -legSegmentHeight / 2;
     rightKnee.add(rightShin);
 
-    // Waist/Hips (integrated with torso)
+    // 腰/ヒップ（胴体と一体）
     const waistLength = 0.15 * s;
     const waistGeom = new THREE.BoxGeometry(0.65 * s, waistLength, 0.35 * s);
     const waist = new THREE.Mesh(waistGeom, pantsMaterial);
     waist.position.y = torsoY - torsoHeight / 2 - waistLength / 2;
 
-    // Feet (Shoes)
+    // 足（靴）
     const footLength = 0.3 * s;
     const footWidth = 0.25 * s; // 脚の横幅に合わせる（0.35→0.25）
     const footHeight = 0.12 * s;
@@ -5111,7 +5307,7 @@ function createCharacterModel(color, customization = null) {
     rightFoot.position.set(0, -legSegmentHeight * 0.85 + footHeight / 2 - 0.06 * s, footLength / 10);
     rightKnee.add(rightFoot);
 
-    // Add hair parts to head (not to character model directly)
+    // 髪パーツはキャラ全体ではなく頭に追加
     hairParts.forEach(hairPart => {
         head.add(hairPart);
     });
@@ -5120,7 +5316,7 @@ function createCharacterModel(color, customization = null) {
     const allParts = [body, head, leftEyeLine, rightEyeLine, nose, leftEar, rightEar, aimGroup, leftHip, rightHip, waist];
     characterModel.add(...allParts);
     
-    // Store hair parts for potential later updates
+    // 後で更新できるよう髪パーツを保持
     characterModel.userData.hairParts = hairParts;
     characterModel.userData.parts = {
         body: body,
@@ -5354,7 +5550,7 @@ function loadWeaponCustomization() {
                 next[type] = sanitizeGunModel(parsed[type], type);
             }
         }
-        // Force-restore the previously used custom look for these weapons.
+        // これらの武器で以前使っていたカスタム外観を強制復元する。
         for (const type of [WEAPON_MG, WEAPON_SR, WEAPON_SG, WEAPON_MR]) {
             if (WEAPON_CUSTOMIZATION_RECOVERY_PRESET[type]) {
                 next[type] = sanitizeGunModel(WEAPON_CUSTOMIZATION_RECOVERY_PRESET[type], type);
@@ -5440,17 +5636,17 @@ function addDefaultWeaponFurniture(gunMesh, model, weaponType) {
             -(bodyThickness * 0.5 + gripHeight * 0.5 - 0.01),
             -bodyLength * 0.33
         );
-        // Match reference: lean in the opposite direction from previous version.
+        // 参照画像に合わせ、前バージョンと逆方向へ傾ける。
         grip.rotation.x = THREE.MathUtils.degToRad(18);
         gunMesh.add(grip);
     }
 
     if (weaponType === WEAPON_MR || weaponType === WEAPON_SR) {
         const stockShape = new THREE.Shape();
-        // Larger isosceles triangle stock: starts near rear-bottom and extends backward/downward.
-        stockShape.moveTo(0.2, 0.0);      // apex (toward gun body)
-        stockShape.lineTo(-0.44, -0.3);   // rear-bottom
-        stockShape.lineTo(-0.44, 0.06);   // rear-top
+        // 大きい二等辺三角ストック: 後端下部付近から後方/下方へ延長。
+        stockShape.moveTo(0.2, 0.0);      // 頂点（銃本体側）
+        stockShape.lineTo(-0.44, -0.3);   // 後方下端
+        stockShape.lineTo(-0.44, 0.06);   // 後方上端
         stockShape.lineTo(0.2, 0.0);
         const stockGeometry = new THREE.ExtrudeGeometry(stockShape, {
             depth: 0.08,
@@ -5475,7 +5671,7 @@ function applyGunStyle(gunMesh, weaponType, overrideModel = null) {
         return;
     }
 
-    // Remove old attachments (magazine/scope etc.)
+    // 既存のアタッチメント（マガジン/スコープ等）を削除
     while (gunMesh.children.length > 0) {
         const child = gunMesh.children[0];
         gunMesh.remove(child);
@@ -5614,7 +5810,7 @@ function resolveKillCamObstacleBounce(actor, velocity, obstacle) {
     const separationPadding = 0.04;
     let collided = false;
 
-    // Resolve penetration repeatedly to avoid remaining inside an obstacle.
+    // 障害物内部に残らないよう、貫通解消を繰り返す。
     for (let i = 0; i < 3; i++) {
         const actorBox = new THREE.Box3().setFromObject(actor);
         const obstacleBox = new THREE.Box3().setFromObject(obstacle);
@@ -5713,9 +5909,9 @@ function applyAimConstraints(parts, ownerYaw, targetWorldPos) {
     const desiredYaw = Math.atan2(flat.x, flat.z);
     const desiredPitch = Math.atan2(dir.y, flat.length());
     const relYaw = normalizeAngle(desiredYaw - ownerYaw);
-    const clampedRelYaw = clampAngle(relYaw, -Math.PI / 3, Math.PI / 3); // +/- 60 deg
-    // In this rig, +X pitch rotates the muzzle downward, so invert the sign.
-    // Downward allowance is wider to prevent aiming above target.
+    const clampedRelYaw = clampAngle(relYaw, -Math.PI / 3, Math.PI / 3); // ±60度
+    // このリグでは+Xピッチで銃口が下を向くため、符号を反転する。
+    // 目標の上を狙いにくくするため、下方向の許容幅を広くする。
     const clampedPitch = clampAngle(-desiredPitch, -0.6, 1.2);
     parts.aimGroup.rotation.y = clampedRelYaw;
     parts.aimGroup.rotation.x = clampedPitch;
@@ -5792,14 +5988,14 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving, lowerBodyYaw
     if (isCrouching && isMoving) {
         resetLegBasePositions(parts);
         resetLowerBodyYaw(parts);
-        // Crouch walking animation
+        // しゃがみ歩行アニメーション
         const hipBend = Math.PI / 4.2;
         const kneeBend = Math.PI / 2.6;
-        const walkSpeed = 8; // Slower walking while crouched
-        const hipAmplitude = Math.PI / 8; // Reduced amplitude for crouch walking
-        const kneeAmplitude = Math.PI / 6; // Reduced amplitude for crouch walking
+        const walkSpeed = 8; // しゃがみ中は歩行を遅くする
+        const hipAmplitude = Math.PI / 8; // しゃがみ歩行用に振幅を小さくする
+        const kneeAmplitude = Math.PI / 6; // しゃがみ歩行用に振幅を小さくする
         
-        // Base crouch pose
+        // しゃがみ基本ポーズ
         parts.leftHip.rotation.x = -hipBend;
         parts.rightHip.rotation.x = -hipBend;
         parts.leftKnee.rotation.x = kneeBend;
@@ -5807,14 +6003,14 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving, lowerBodyYaw
         parts.body.rotation.x = -0.22;
         parts.head.position.y = parts.baseHeadY - 0.05;
         
-        // Add walking animation on top of crouch pose
+        // しゃがみポーズに歩行アニメを重ねる
         const swing = Math.sin(timeElapsed * walkSpeed) * hipAmplitude;
         parts.leftHip.rotation.x += swing;
         parts.rightHip.rotation.x -= swing;
         parts.leftKnee.rotation.x += Math.max(0, (Math.cos(timeElapsed * walkSpeed) + 1) / 2 * kneeAmplitude);
         parts.rightKnee.rotation.x += Math.max(0, (Math.cos(timeElapsed * walkSpeed + Math.PI) + 1) / 2 * kneeAmplitude);
         
-        // Head movement while crouch walking
+        // しゃがみ歩行中の頭部動作
         const headBobOffset = Math.sin(timeElapsed * walkSpeed) * 0.02;
         parts.head.position.y += headBobOffset;
     } else if (isCrouching) {
@@ -5822,7 +6018,7 @@ function applyCrouchPose(parts, isCrouching, timeElapsed, isMoving, lowerBodyYaw
         resetLowerBodyYaw(parts);
         const hipBend = Math.PI / 4.2;
         const kneeBend = Math.PI / 2.6;
-        // Bend legs toward the forward-hand direction (human-like crouch)
+        // 前に出した手の方向へ脚を曲げる（人間らしいしゃがみ）
         parts.leftHip.rotation.x = -hipBend;
         parts.rightHip.rotation.x = -hipBend;
         parts.leftKnee.rotation.x = kneeBend;
@@ -5889,7 +6085,7 @@ function alignGunGripToRightHand(parts) {
     const localLeft = parts.aimGroup.worldToLocal(leftWorld);
     parts.gunGrip.position.copy(localLeft);
     parts.gunGrip.rotation.set(0, 0, 0);
-    // Let the other hand relax away from the gun for death pose
+    // デス姿勢ではもう片方の手を銃から離して力を抜く
     if (parts.rightArm) {
         parts.rightArm.rotation.set(-0.4, -0.8, 0.2);
     }
@@ -5929,14 +6125,14 @@ function getPlayerUpperTorsoPos() {
 function getPlayerHeadPos() {
     const b = getPlayerCombatBounds();
     const p = player.position.clone();
-    // Slightly below top of hitbox to avoid overshooting above the head.
+    // 頭上へ行き過ぎないようヒットボックス上端より少し下にする。
     p.y = b.topY - b.height * 0.16;
     return p;
 }
 
 function getPlayerCombatBounds() {
-    // Use the actual gameplay body range (top = player.position.y, bottom = top - playerTargetHeight)
-    // and add a tiny margin to reduce tunneling near edges.
+    // 実際のゲーム中の体範囲を使う（上端=player.position.y、下端=上端-playerTargetHeight）
+    // さらに小さなマージンを加えて端付近のすり抜けを減らす。
     const topY = player.position.y + 0.06;
     let bottomY = player.position.y - playerTargetHeight - 0.06;
     if (bottomY < -FLOOR_HEIGHT) bottomY = -FLOOR_HEIGHT;
@@ -5944,32 +6140,32 @@ function getPlayerCombatBounds() {
     return { topY, bottomY, height };
 }
 
-// Reusable temporary vectors for performance optimization
+// パフォーマンス最適化用の再利用テンポラリベクトル
 const tempVector1 = new THREE.Vector3();
 const tempVector2 = new THREE.Vector3();
 const tempVector3 = new THREE.Vector3();
 const tempBox1 = new THREE.Box3();
 
-// Lightweight texture cache and loader
+// 軽量テクスチャキャッシュとローダー
 const textureCache = new Map();
 const textureLoader = new THREE.TextureLoader();
 
-// Create procedural textures for better performance
+// パフォーマンス向上のため手続き型テクスチャを生成
 function createBrickTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
     const ctx = canvas.getContext('2d');
     
-    // Base brick color
+    // レンガの基本色
     ctx.fillStyle = '#8B4513';
     ctx.fillRect(0, 0, 256, 256);
     
-    // Brick pattern
+    // レンガパターン
     ctx.strokeStyle = '#654321';
     ctx.lineWidth = 2;
     
-    // Draw bricks
+    // レンガを描画
     for (let y = 0; y < 256; y += 32) {
         for (let x = 0; x < 256; x += 64) {
             const offsetX = (y / 32) % 2 === 0 ? 0 : 32;
@@ -5990,11 +6186,11 @@ function createConcreteTexture() {
     canvas.height = 256;
     const ctx = canvas.getContext('2d');
     
-    // Base concrete color
+    // コンクリートの基本色
     ctx.fillStyle = '#808080';
     ctx.fillRect(0, 0, 256, 256);
     
-    // Add noise for texture
+    // テクスチャ用ノイズを追加
     for (let i = 0; i < 1000; i++) {
         const x = Math.random() * 256;
         const y = Math.random() * 256;
@@ -6066,7 +6262,7 @@ function getAILowerTorsoPos(targetAI) {
 
 function applyWeaponPose(parts, weaponType) {
     if (!parts || !parts.leftArm || !parts.rightArm || !parts.gun || !parts.aimGroup) return;
-    // Reset to defaults
+    // 既定値へリセット
     parts.aimGroup.position.y = parts.baseAimY;
     parts.leftArm.position.copy(parts.baseLeftArmPos || new THREE.Vector3(-0.28, 0, 0.2));
     parts.rightArm.position.copy(parts.baseRightArmPos || new THREE.Vector3(0.28, 0, 0.7));
@@ -6089,20 +6285,20 @@ function applyWeaponPose(parts, weaponType) {
     }
 
     if (weaponType === WEAPON_PISTOL) {
-        // JSON slot: pistol
+        // JSONスロット: ピストル
         parts.aimGroup.position.y = parts.baseAimY;
         parts.leftArm.position.set(-0.45, 0.3132, 0.0);
         parts.rightArm.position.set(0.45, 0.3132, 0.0);
-        // Bring both hands more tightly together for pistol grip
+        // ピストル握りに合わせて両手をより近づける
         parts.leftArm.rotation.set(-0.06, 0.44, 0.0021478930549691387);
         parts.rightArm.rotation.set(-0.05, -0.44, -0.003943059002281813);
         if (parts.leftElbow) parts.leftElbow.rotation.set(0.06, 0.0020761553815649442, 0.05233736454354215);
         if (parts.rightElbow) parts.rightElbow.rotation.set(-0.02, 0.0, -0.017453292519943295);
-        // Keep pistol close to joined hands (grip centered).
+        // ピストルを両手の中心付近に寄せる（グリップ中心）。
         parts.gun.position.set(0.0, 0.18, 0.36);
         parts.gun.rotation.set(0.0, 0.0, 0.0);
     } else if (weaponType === WEAPON_SR) {
-        // JSON slot: sniper
+        // JSONスロット: スナイパー
         parts.aimGroup.position.y = parts.baseAimY;
         parts.leftArm.position.set(-0.45, 0.3132, 0.0);
         parts.rightArm.position.set(0.45, 0.3132, 0.0);
@@ -6110,11 +6306,11 @@ function applyWeaponPose(parts, weaponType) {
         parts.rightArm.rotation.set(0.24274440027514796, -0.5401874416309049, 0.024265044376310912);
         if (parts.leftElbow) parts.leftElbow.rotation.set(1.753517159651292, 0.2856199806570641, -0.4952400535591467);
         if (parts.rightElbow) parts.rightElbow.rotation.set(-0.23748038772965996, -0.09328549730483378, 0.6873193048891241);
-        // Pull sniper back toward shoulder/cheek.
+        // スナイパーを肩/頬側へ引き寄せる。
         parts.gun.position.set(-0.12, 0.22, 0.44);
         parts.gun.rotation.set(0.0, 0.0, 0.0);
     } else if (weaponType === WEAPON_RR) {
-        // JSON slot: rocket
+        // JSONスロット: ロケット
         parts.aimGroup.position.y = parts.baseAimY;
         parts.leftArm.position.set(-0.45, 0.3132, 0.0);
         parts.rightArm.position.set(0.45, 0.3132, 0.0);
@@ -6122,11 +6318,11 @@ function applyWeaponPose(parts, weaponType) {
         parts.rightArm.rotation.set(0.27004295572984904, -0.27777150302432024, -0.23935315585356648);
         if (parts.leftElbow) parts.leftElbow.rotation.set(-2.951909014214923, 0.9012344301742208, 2.6785501380109666);
         if (parts.rightElbow) parts.rightElbow.rotation.set(-0.0887078442944804, -0.8044137392457578, 2.695042877288731);
-        // Rocket sits around shoulder, not floating in front.
+        // ロケットは肩周辺に配置し、前方へ浮かせない。
         parts.gun.position.set(-0.22, 0.24, 0.34);
         parts.gun.rotation.set(0.0, 0.0, 0.0);
     } else if (weaponType === WEAPON_SG || weaponType === WEAPON_MG || weaponType === WEAPON_MR) {
-        // JSON slot: rifle (used for MG/SG)
+        // JSONスロット: ライフル（MG/SGで使用）
         parts.aimGroup.position.y = parts.baseAimY;
         parts.leftArm.position.set(-0.45, 0.22, 0.0);
         parts.rightArm.position.set(0.45, 0.3132, 0.0);
@@ -6134,7 +6330,7 @@ function applyWeaponPose(parts, weaponType) {
         parts.rightArm.rotation.set(0.3611548453545697, -0.521485165467918, -0.09787351043009526);
         if (parts.leftElbow) parts.leftElbow.rotation.set(-2.9325187133696122, 0.9525931111876489, 3.0153732832397564);
         if (parts.rightElbow) parts.rightElbow.rotation.set(-0.30553800194860886, -0.2667850827551789, 1.604154961353316);
-        // Rifle/MG/SG grip near center between hands.
+        // ライフル/MG/SGのグリップを両手の中央付近へ。
         parts.gun.position.set(-0.16, 0.18, 0.44);
         parts.gun.rotation.set(0.0, 0.0, 0.06981317007977318);
     }
@@ -6143,8 +6339,8 @@ function applyWeaponPose(parts, weaponType) {
 function createAI(color, customization = null) {
     const aiObject = createCharacterModel(color, customization);
 
-    // AI-specific properties
-    aiObject.position.y = -FLOOR_HEIGHT + 0.2; // Raise character more to prevent shoes sinking
+    // AI専用プロパティ
+    aiObject.position.y = -FLOOR_HEIGHT + 0.2; // 靴の沈み込み防止のためキャラを少し高くする
     aiObject.lastHiddenTime = 0;
     aiObject.lastAttackTime = 0;
     aiObject.currentAttackTime = 0;
@@ -6174,6 +6370,8 @@ function createAI(color, customization = null) {
     aiObject.isElevating = false;
     aiObject.userData.baseColor = color;
     aiObject.userData.customization = customization;
+    aiObject.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
+    aiObject.userData.pistolReloadUntil = 0;
     aiObject.userData.rooftopIntent = false;
     aiObject.userData.onRooftop = false;
     aiObject.userData.rooftopSensor = null;
@@ -6476,25 +6674,25 @@ function checkHouseCollisionBox(objectBox) {
             localMax.max(lc);
         }
         const t = 0.15;
-        // Front wall (door opening allowed)
+        // 前面壁（ドア開口あり）
         if (localMax.z >= d / 2 - t && localMin.z <= d / 2 + t &&
             localMax.y >= -h / 2 && localMin.y <= h / 2 &&
             localMax.x >= -w / 2 && localMin.x <= w / 2) {
             if (localMin.x < -doorHalf || localMax.x > doorHalf) return true;
         }
-        // Back wall
+        // 背面の壁
         if (localMax.z >= -d / 2 - t && localMin.z <= -d / 2 + t &&
             localMax.y >= -h / 2 && localMin.y <= h / 2 &&
             localMax.x >= -w / 2 && localMin.x <= w / 2) {
             return true;
         }
-        // Left wall
+        // 左側の壁
         if (localMax.x >= -w / 2 - t && localMin.x <= -w / 2 + t &&
             localMax.y >= -h / 2 && localMin.y <= h / 2 &&
             localMax.z >= -d / 2 && localMin.z <= d / 2) {
             return true;
         }
-        // Right wall
+        // 右側の壁
         if (localMax.x >= w / 2 - t && localMin.x <= w / 2 + t &&
             localMax.y >= -h / 2 && localMin.y <= h / 2 &&
             localMax.z >= -d / 2 && localMin.z <= d / 2) {
@@ -6549,7 +6747,7 @@ function findNearestLadder(ai, playerPosition) {
 
 function getAIRooftopClimbChance(ai, distanceToLadder = Infinity, isTower = false) {
     if (!ai || !ai.currentWeapon) return 0.0;
-    // Trigger only when AI naturally approaches a ladder building.
+    // AIが自然に梯子付き建物へ近づいたときのみ発動。
     if (!Number.isFinite(distanceToLadder) || distanceToLadder > 12.0) return 0.0;
     let distanceChance = 0.0;
     if (distanceToLadder <= 5.0) distanceChance = 0.92;
@@ -6635,7 +6833,7 @@ function canTeamAssignAnotherRooftopAI(requesterAI) {
     const aliveTeamAIs = ais.filter(other => other && other.hp > 0 && other.team === requesterAI.team);
     if (aliveTeamAIs.length <= 0) return false;
     const activeTeamRooftop = getActiveRooftopAIs(requesterAI).filter(other => other.team === requesterAI.team).length;
-    // If player team has a living human player, the ground-role requirement can be satisfied by player.
+    // プレイヤーチームに生存中の人間プレイヤーがいれば、地上担当要件はプレイヤーで満たせる。
     const playerCanHoldGround = requesterAI.team === 'player' && playerHP > 0;
     const maxTeamRooftopAI = playerCanHoldGround
         ? aliveTeamAIs.length
@@ -6665,9 +6863,9 @@ function chooseLadderForAI(ai, maxDistance = 12.0) {
         const dAI = ai.position.distanceTo(ladderPos);
         if (dAI > maxDistance) continue;
         const activeOnObstacle = countActiveRooftopAIsOnObstacle(obstacle, ai);
-        // Hard limit: max 2 AIs per building rooftop flow.
+        // 強制上限: 建物ごとの屋上フローは最大2AI。
         if (activeOnObstacle >= 2) continue;
-        // Teammates must not stack on the same building simultaneously.
+        // 味方AIは同じ建物に同時集中しない。
         if (hasSameTeamRooftopAIOnObstacle(ai, obstacle)) continue;
         const dEnemy = targetPos.distanceTo(obstacle.position);
         const towerBias = isTowerObstacle(obstacle) ? 0.8 : 1.0;
@@ -6725,7 +6923,7 @@ function findSafeRooftopLanding(ai, obstacle, ladderPos) {
     dir.normalize();
 
     const candidates = [];
-    // Center-first landing to avoid pushing off the rooftop.
+    // 屋上から押し出されないよう中央優先で着地する。
     candidates.push(center.clone());
     const base = (ladderPos ? ladderPos.clone() : center.clone()).add(dir.clone().multiplyScalar(0.8));
     base.x = THREE.MathUtils.clamp(base.x, center.x - halfW, center.x + halfW);
@@ -6774,10 +6972,10 @@ function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate, isAISee
     if (isFollowLockedTeammate) return false;
     if (ai.userData.onRooftop || ai.userData.rooftopIntent || ai.isElevating) return false;
     if ((ai.userData.rooftopPhase || 'none') !== 'none') return false;
-    // Keep rooftop planning from interrupting tight combat/utility states.
+    // 屋上計画が近接戦闘/ユーティリティ状態を妨げないようにする。
     if (ai.state !== 'ATTACKING' && ai.state !== 'MOVING') return false;
     if (isAISeen && ai.state === 'ATTACKING') return false;
-    // Global cap: max 2 AIs in rooftop flow at once.
+    // 全体上限: 屋上フローへ同時参加できるAIは最大2体。
     if (getActiveRooftopAIs(ai).length >= 2) return false;
     if (!canTeamAssignAnotherRooftopAI(ai)) return false;
     if (!FORCE_AI_ROOFTOP_TEST) {
@@ -6807,7 +7005,7 @@ function tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate, isAISee
     ai.userData.rooftopIntent = true;
     ai.userData.rooftopSensor = sensor;
     ai.userData.rooftopObstacle = obstacle;
-    // Move to the sensor area (outside wall), then snap to ladder line when climbing starts.
+    // センサー領域（壁外）へ移動し、登攀開始時に梯子ラインへスナップする。
     ai.userData.rooftopLadderPos = sensor.position.clone();
     ai.userData.rooftopLadderSnap = ladderPos.clone();
     // 空洞建物の場合、床のジオメトリーから高さを取得
@@ -7553,7 +7751,7 @@ function cleanupFloatingRooftopParts() {
     
     if (!isRooftopPart) return;
 
-    // Only remove truly orphaned rooftop parts.
+    // 本当に孤立した屋上パーツのみ削除する。
     const parentRef = child.userData.parentBuildingRef;
     if (parentRef) {
         const parentAlive = parentRef.parent && obstacles.includes(parentRef);
@@ -7563,7 +7761,7 @@ function cleanupFloatingRooftopParts() {
         return;
     }
 
-    // No parent reference: treat as valid by default to avoid deleting active rooftops.
+    // 親参照がない場合でも、稼働中屋上の誤削除を防ぐため既定で有効扱いにする。
         }
     });
     
@@ -7694,6 +7892,20 @@ function destroyBarrel(barrel, explosionPosition) {
         const angularVelocity = new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12);
         debris.push({ mesh: fragment, velocity: velocity, angularVelocity: angularVelocity, life: 2 + Math.random() * 2 });
     }
+    // ドラム缶ラベル等の子メッシュを明示的に破棄
+    barrel.traverse((child) => {
+        if (!child || child === barrel || !child.isMesh) return;
+        if (child.geometry) child.geometry.dispose();
+        const material = child.material;
+        if (Array.isArray(material)) {
+            material.forEach((mat) => {
+                if (mat && mat.map) mat.map.dispose();
+            });
+        } else if (material && material.map) {
+            material.map.dispose();
+        }
+        disposeMaterial(material);
+    });
     if (barrel.geometry) barrel.geometry.dispose();
     disposeMaterial(barrel.material);
 }
@@ -7726,7 +7938,7 @@ function explodeBarrel(barrel, source = 'unknown', shooter = null) {
         respawningBarrels.push({
             x: spawnPos.x,
             z: spawnPos.z,
-            color: barrel.userData?.color ?? 0xe74c3c,
+            color: barrel.userData?.color ?? barrel.material?.color?.getHex?.() ?? 0xe74c3c,
             radius: barrel.userData?.radius ?? 0.75,
             height: barrel.userData?.height ?? 2.4,
             respawnTime: clock.getElapsedTime() + 30
@@ -7896,10 +8108,13 @@ function removeAIProjectiles(ai, removeAllAI = false) {
         }
         rocketTrails.splice(i, 1);
     }
-    // Safety net: remove any stray projectile meshes that aren't tracked anymore.
+    // 安全策: 追跡されていない弾メッシュを除去する。
     const toRemove = [];
     scene.traverse((obj) => {
-        if (!obj || !obj.isMesh || !obj.userData || !obj.userData.isProjectile) return;
+        if (!obj || !obj.isMesh || !obj.userData) return;
+        const isProjectileMesh = !!obj.userData.isProjectile;
+        const isRocketTrailMesh = !!obj.userData.isRocketTrail;
+        if (!isProjectileMesh && !isRocketTrailMesh) return;
         if (!removeAllAI && obj.userData.shooter !== ai) return;
         if (removeAllAI && obj.userData.source !== 'ai') return;
         toRemove.push(obj);
@@ -7945,7 +8160,7 @@ function clearProjectileArtifacts() {
         }
     }
     rocketTrails.length = 0;
-    // Safety net: remove any stray projectile/rocket trail meshes that aren't tracked anymore.
+    // 安全策: 追跡されていない弾/ロケット軌跡メッシュを除去する。
     const toRemove = [];
     scene.traverse((obj) => {
         if (!obj || !obj.isMesh || !obj.userData) return;
@@ -8180,6 +8395,11 @@ function shoot() {
         ammoMG = MAX_AMMO_MG;
         hideReloadingText();
     }
+    if (playerPistolReloadUntil > 0 && now >= playerPistolReloadUntil) {
+        playerPistolReloadUntil = 0;
+        ammoPistolClip = MAX_AMMO_PISTOL_CLIP;
+        hideReloadingText();
+    }
     if (playerMRReloadUntil > 0 && now >= playerMRReloadUntil) {
         playerMRReloadUntil = 0;
         const nextClip = isDefaultM1Weapon() ? MAX_AMMO_MR : Math.min(MAX_AMMO_MR, ammoMR);
@@ -8194,7 +8414,16 @@ function shoot() {
     let weaponType = null;
     let isSniperShot = false;
     switch (currentWeapon) {
-        case WEAPON_PISTOL: canFire = true; fireRate = FIRE_RATE_PISTOL; break;
+        case WEAPON_PISTOL:
+            if (playerPistolReloadUntil > 0 && now < playerPistolReloadUntil) {
+                canFire = false;
+                break;
+            }
+            if (ammoPistolClip > 0) {
+                canFire = true;
+                fireRate = FIRE_RATE_PISTOL;
+            }
+            break;
         case WEAPON_MG:
             if (gameSettings.defaultWeaponPlayer === WEAPON_MG && now < playerMGReloadUntil) {
                 canFire = false;
@@ -8216,7 +8445,7 @@ function shoot() {
             if (getPlayerMRClipAmmo() > 0) {
                 canFire = true;
                 projectileColor = 0xffff00;
-                fireRate = FIRE_RATE_MR;
+                fireRate = FIRE_RATE_MR_PLAYER;
                 projectileSpeedOverride = projectileSpeed * MR_PROJECTILE_SPEED_MULT;
                 weaponType = WEAPON_MR;
             }
@@ -8235,8 +8464,8 @@ function shoot() {
           const safeFire = getPlayerSafeFireData(baseDirection);
           createMuzzleFlash(safeFire.muzzlePosition, 100, 2.2, 100, 0xffff00);
           tryHitBillBattleLight(safeFire.startPosition, baseDirection);
-          // Legacy global auto-aim removed.
-        // Auto-aim now works only for scoped sniper by moving the scope in animate().
+          // 旧グローバルオートエイムは削除済み。
+        // オートエイムは現在、animate()でスコープを動かす狙撃スコープ時のみ有効。
         if (safeFire.blocked) {
             createSmokeEffect(safeFire.impactPoint || safeFire.muzzlePosition);
         } else if (currentWeapon === WEAPON_SG) {
@@ -8269,6 +8498,12 @@ function shoot() {
                     hideReloadingText();
                     switchPlayerToFallbackWeapon();
                 }
+            }
+        } else if (currentWeapon === WEAPON_PISTOL) {
+            ammoPistolClip = Math.max(0, ammoPistolClip - 1);
+            if (ammoPistolClip <= 0) {
+                playerPistolReloadUntil = now + 2.0;
+                showReloadingText(pistolReloadSound || relAudio);
             }
         } else if (currentWeapon === WEAPON_RR) {
             if (!isInfiniteDefaultWeaponActive(WEAPON_RR) && --ammoRR === 0) switchPlayerToFallbackWeapon();
@@ -8323,6 +8558,13 @@ function applyAIAimSpread(direction, maxAngleRad) {
 function aiShoot(ai, timeElapsed) {
     if (!isGameRunning) return;
     if (isBillBattleMode() && !billBattleAttackActivated) return;
+    if (ai && ai.userData && !Number.isFinite(ai.userData.pistolClipAmmo)) {
+        ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
+    }
+    if (ai && ai.userData && ai.userData.pistolReloadUntil && timeElapsed >= ai.userData.pistolReloadUntil) {
+        ai.userData.pistolReloadUntil = 0;
+        ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
+    }
     if (ai && ai.userData && ai.userData.mgReloadUntil && timeElapsed >= ai.userData.mgReloadUntil) {
         ai.userData.mgReloadUntil = 0;
         ai.ammoMG = MAX_AMMO_MG;
@@ -8476,7 +8718,7 @@ function aiShoot(ai, timeElapsed) {
     }
     
     if (targetPosition === null) return;
-    // Strict rule: do not fire if obstacle blocks muzzle -> target.
+    // 厳格ルール: 銃口→目標が障害物で遮られている場合は発砲しない。
     {
         const clearOrigin = getClearShotOrigin(targetPosition, startPosition);
         if (!clearOrigin) return;
@@ -8485,7 +8727,7 @@ function aiShoot(ai, timeElapsed) {
         }
         startPosition = clearOrigin;
     }
-    // Re-aim right before firing so muzzle direction matches the intended target.
+    // 発砲直前に再照準し、銃口方向を狙いに一致させる。
     let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
     if (ai.userData && ai.userData.parts) {
         ai.rotation.y = desiredYaw;
@@ -8496,7 +8738,7 @@ function aiShoot(ai, timeElapsed) {
             muzzleDirection = freshMuzzleInfo.direction.clone().normalize();
         }
     }
-    // Recheck LOS after final pose/muzzle update (prevents wall-through on AI-vs-AI).
+    // 最終ポーズ/銃口更新後にLOSを再確認（AI同士の壁抜け防止）。
     {
         const clearOrigin = getClearShotOrigin(targetPosition, startPosition);
         if (!clearOrigin) return;
@@ -8515,12 +8757,24 @@ function aiShoot(ai, timeElapsed) {
         if (muzzleToTargetAngle > THREE.MathUtils.degToRad(45)) return;
     }
     direction.normalize();
-    if (gameSettings.aiShotLevel === 'ama') {
+    {
+        const p = getAIAimPrecision01();
+        const lerp = (a, b, t) => a + (b - a) * t;
         let spreadDeg = 0;
-        if (ai.currentWeapon === WEAPON_SR) spreadDeg = 2.0;
-        else if (ai.currentWeapon === WEAPON_MR) spreadDeg = 2.5;
-        else if (ai.currentWeapon === WEAPON_RR) spreadDeg = 3.5;
-        if (spreadDeg > 0) {
+        if (ai.currentWeapon === WEAPON_SR) {
+            spreadDeg = lerp(3.0, 0.15, p);
+        } else if (ai.currentWeapon === WEAPON_MR) {
+            spreadDeg = lerp(14.0, 1.4, p);
+            const distMul = lerp(0.08, 0.012, p);
+            const distCap = lerp(6.5, 1.2, p);
+            spreadDeg += Math.min(distCap, Math.max(0, distanceToPlayer * distMul));
+        } else if (ai.currentWeapon === WEAPON_RR) {
+            spreadDeg = lerp(22.0, 2.0, p);
+            const distMul = lerp(0.11, 0.015, p);
+            const distCap = lerp(9.0, 1.5, p);
+            spreadDeg += Math.min(distCap, Math.max(0, distanceToPlayer * distMul));
+        }
+        if (spreadDeg > 0.0001) {
             direction = applyAIAimSpread(direction, THREE.MathUtils.degToRad(spreadDeg));
         }
     }
@@ -8530,7 +8784,18 @@ function aiShoot(ai, timeElapsed) {
     let aiFireRate = FIRING_RATE;
     let aiProjectileSpeed = projectileSpeed;
     switch (ai.currentWeapon) {
-        case WEAPON_PISTOL: canAIShoot = true; aiFireRate = FIRING_RATE * (4.0 - ai.aggression * 3.0); break;
+        case WEAPON_PISTOL:
+            if (ai.userData && ai.userData.pistolReloadUntil && timeElapsed < ai.userData.pistolReloadUntil) {
+                canAIShoot = false;
+                break;
+            }
+            if (!ai.userData) ai.userData = {};
+            if (!Number.isFinite(ai.userData.pistolClipAmmo)) ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
+            if (ai.userData.pistolClipAmmo > 0) {
+                canAIShoot = true;
+                aiFireRate = FIRING_RATE * (4.0 - ai.aggression * 3.0);
+            }
+            break;
         case WEAPON_MG:
             if (ai.userData && ai.userData.mgReloadUntil && timeElapsed < ai.userData.mgReloadUntil) {
                 canAIShoot = false;
@@ -8638,7 +8903,14 @@ function aiShoot(ai, timeElapsed) {
             createProjectile(startPosition, direction, aiProjectileColor, aiProjectileSize, ai.currentWeapon === WEAPON_RR, 'ai', aiProjectileSpeed, ai.currentWeapon === WEAPON_SR, aiWeaponType, ai);
         }
         ai.lastAttackTime = timeElapsed;
-        if (ai.currentWeapon === WEAPON_MG) {
+        if (ai.currentWeapon === WEAPON_PISTOL) {
+            if (!ai.userData) ai.userData = {};
+            if (!Number.isFinite(ai.userData.pistolClipAmmo)) ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
+            ai.userData.pistolClipAmmo = Math.max(0, ai.userData.pistolClipAmmo - 1);
+            if (ai.userData.pistolClipAmmo <= 0) {
+                ai.userData.pistolReloadUntil = timeElapsed + 2.0;
+            }
+        } else if (ai.currentWeapon === WEAPON_MG) {
             if (!isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_MG) && --ai.ammoMG === 0) {
                 ai.ammoMG = 0;
                 if (ai.userData) ai.userData.mgReloadUntil = timeElapsed + 2.0;
@@ -8986,9 +9258,9 @@ function onMouseMove(event) {
 
 document.addEventListener('mousedown', (event) => {
     if (!isGameRunning) return;
-    if (event.button === 0) { // Left click
+    if (event.button === 0) { // 左クリック
         handleFirePress();
-    } else if (event.button === 2) { // Right click
+    } else if (event.button === 2) { // 右クリック
         if (canUseRifleZoom(currentWeapon)) {
             setRifleZoom(!isRifleZoomed);
         } else if (isScoping) {
@@ -9429,7 +9701,7 @@ function startGame() {
     if (playerHPDisplay) playerHPDisplay.style.display = 'block';
     if (playerWeaponDisplay) playerWeaponDisplay.style.display = 'block';
     
-    // Start Time Lapse mode if enabled
+    // 有効時はタイムラプスモードを開始
     if (gameSettings.timeLapseMode) {
         startTimeLapseMode();
     }
@@ -9462,7 +9734,7 @@ function restartGame() {
     if (isBillBattleMode()) {
         billBattleFloor = 1;
     }
-    playerBreadcrumbs = []; // Reset the breadcrumb trail
+    playerBreadcrumbs = []; // 軌跡配列をリセット
     
     // 屋根ゴーストと建築物を先にクリーンアップ
     forceHouseCleanup();
@@ -9576,7 +9848,7 @@ function restartGame() {
     player.position.copy(playerSpawnPos);
     if (isBillBattleMode()) {
         enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
-        // Reset crouch/height to normal on indoor combat start
+        // インドアコンバット開始時にしゃがみ/身長を通常値へ戻す
         isCrouchingToggle = false;
         playerTargetHeight = BILL_BATTLE_PLAYER_HEIGHT;
         player.position.y = playerTargetHeight;
@@ -9584,7 +9856,7 @@ function restartGame() {
             playerModel.position.set(0, -playerTargetHeight, 0);
         }
     }
-    // If spawn overlaps obstacles/explosives, relocate to a safe spot to avoid input lock.
+    // スポーン位置が障害物/爆発物と重なる場合、入力不能を防ぐため安全地点へ再配置する。
     if (checkCollision(player, obstacles)) {
         const pushDistance = 0.2;
         const resolved = resolvePlayerCollision(player, obstacles, pushDistance);
@@ -9634,7 +9906,7 @@ function restartGame() {
         finalAICount = 3; // チームモードおよびチームアーケードモードでは常に3体（1体味方 + 2体敵）
     }
     for (const ai of ais) {
-        cleanupAI(ai); // Use cleanupAI to properly remove AI and its resources
+        cleanupAI(ai); // AIと関連リソースを正しく削除するためcleanupAIを使用
     }
     ais.length = 0;
     const aiColors = [0x00ff00, 0x00ffff, 0x0FFa500];
@@ -9644,7 +9916,7 @@ function restartGame() {
     };
     for (let i = 0; i < finalAICount; i++) {
         let aiColor;
-        let aiTeam = null; // FFA and Battle mode have no teams initially
+        let aiTeam = null; // FFA/Battleモードは初期状態でチームなし
         if (isBillBattleMode()) {
             aiTeam = 'enemy';
         }
@@ -9657,10 +9929,10 @@ function restartGame() {
                 aiTeam = 'enemy'; // 残り2体は敵
                 aiColor = teamColors.enemy[i - 1];
             }
-        } else { // Battle, Arcade, FFA
+        } else { // Battle / Arcade / FFA
             aiColor = aiColors[i] || 0xff00ff;
         }
-        // Determine AI customization based on index
+        // インデックスに基づいてAIのカスタムを決定
         let aiCustomization = null;
         if (i === 0) {
             aiCustomization = characterCustomization.enemy1;
@@ -9671,8 +9943,8 @@ function restartGame() {
         }
         
         const ai = createAI(aiColor, aiCustomization);
-        resetCharacterPose(ai); // Reset to default pose
-        // Show gun for gameplay
+        resetCharacterPose(ai); // 既定ポーズへリセット
+        // ゲームプレイ中は銃を表示
         if (ai.userData.parts && ai.userData.parts.gun) {
             ai.userData.parts.gun.visible = true;
         }
@@ -9702,7 +9974,7 @@ function restartGame() {
             aiSpawnPos = getNearbyTeammateSpawnPosition(ai);
         } else if (isBillBattleMode()) {
             aiSpawnPos = getBillBattleAISpawn();
-            // Ensure spawn position is valid
+            // スポーン位置が有効であることを保証
             if (!aiSpawnPos || !Number.isFinite(aiSpawnPos.x) || !Number.isFinite(aiSpawnPos.y) || !Number.isFinite(aiSpawnPos.z)) {
                 console.warn('Invalid initial AI spawn position, using fallback');
                 aiSpawnPos = new THREE.Vector3(0, -FLOOR_HEIGHT, 0);
@@ -9716,21 +9988,21 @@ function restartGame() {
         }
         ai.position.copy(aiSpawnPos);
         ai.position.y = getGroundSurfaceY(ai.position);
-        // Make AI face center of stage (like player logic)
+        // プレイヤーと同様にAIをステージ中央へ向ける
         const lookAtPoint = new THREE.Vector3(0, ai.position.y, 0);
         const direction = new THREE.Vector3().subVectors(lookAtPoint, ai.position);
         ai.rotation.y = Math.atan2(direction.x, direction.z);
           if (isBillBattleMode()) {
-              ai.state = 'ATTACKING'; // Start in attacking mode
+              ai.state = 'ATTACKING'; // 攻撃モードで開始
               ai.isCrouching = false;
               ai.scale.y = 1.0;
               ai.crouchUntilTime = null;
               if (!ai.userData) ai.userData = {};
-              // No dormant state in build battle - AI should be active from start
+              // Build Battleでは休眠状態なし。AIは開始時からアクティブにする。
               ai.userData.billBattleFixedSpawnPos = ai.position.clone();
-              ai.visible = true; // Make AI visible immediately
+              ai.visible = true; // AIを即時表示する
           }
-        // Initialize lastPosition to current position to avoid immediate 'stuck' watchdog triggers
+        // 即時のスタック監視発火を防ぐため、lastPositionを現在位置で初期化する
         if (ai.lastPosition) ai.lastPosition.copy(ai.position);
         if (finalAICount === 3 && !isTeamMode) {
             if (i === 0) { ai.aggression = 0.7; ai.flankAggression = 0.1; }
@@ -9895,8 +10167,8 @@ function restartGame() {
         }
     }
     debris.length = 0;
-    resetObstacles();
-    // resetWeaponPickups(); // Moved to after AI creation
+    // ここで地形を再生成すると、既に配置したプレイヤー/AIと地形が不整合になるため再生成しない。
+    // resetWeaponPickups(); // AI生成後へ移動済み
     if (shouldSpawnMedikits()) {
         for (let i = 0; i < gameSettings.medikitCount; i++) {
             createMedikitPickup(getMedikitSpawnPosition());
@@ -9904,8 +10176,10 @@ function restartGame() {
     }
     clock.start();
     lastFireTime = -1;
+    playerPistolReloadUntil = 0;
     playerMGReloadUntil = 0;
     playerMRReloadUntil = 0;
+    ammoPistolClip = MAX_AMMO_PISTOL_CLIP;
     hideReloadingText();
     keySet.clear();
     joystickMoveVector.set(0, 0);
@@ -9921,7 +10195,7 @@ function restartGame() {
     if (playerModel && playerModel.parent) {
         player.remove(playerModel);
     }
-    playerModel = createCharacterModel(0xff3333, characterCustomization.player); // Player's customization
+    playerModel = createCharacterModel(0xff3333, characterCustomization.player); // プレイヤーのカスタマイズ設定
     player.add(playerModel);
     playerModel.position.set(0, -playerTargetHeight, 0);
     if (playerModel) { // 念のためnullチェック
@@ -10009,7 +10283,7 @@ function respawnAI(ai) {
     if (ai.userData) ai.userData.isDying = false;
   if (isBillBattleMode()) {
       let spawnPos = getBillBattleAISpawn();
-      // Ensure spawn position is valid
+      // スポーン位置が有効であることを保証
         if (!spawnPos || !Number.isFinite(spawnPos.x) || !Number.isFinite(spawnPos.y) || !Number.isFinite(spawnPos.z)) {
             console.warn('Invalid AI spawn position, using fallback');
             spawnPos = new THREE.Vector3(0, -FLOOR_HEIGHT, 0);
@@ -10018,12 +10292,12 @@ function respawnAI(ai) {
         ai.position.y = getGroundSurfaceY(ai.position);
         enforceBillBattleInsideActor(ai, 1.2, true, BODY_HEIGHT);
       ai.rotation.set(0, Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z), 0);
-      ai.state = 'ATTACKING'; // Start in attacking mode
+      ai.state = 'ATTACKING'; // 攻撃モードで開始
       ai.isCrouching = false;
       ai.scale.y = 1.0;
       ai.crouchUntilTime = null;
       if (!ai.userData) ai.userData = {};
-      // No dormant state in build battle
+      // Build Battleでは休眠状態なし
       ai.userData.billBattleFixedSpawnPos = ai.position.clone();
       applyAIDefaultWeaponLoadout(ai);
       resetCharacterVisualPose(ai, ai.currentWeapon);
@@ -10032,6 +10306,8 @@ function respawnAI(ai) {
         ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false;
         ai.isElevating = false;
         if (ai.userData) ai.userData.mgReloadUntil = 0;
+        if (ai.userData) ai.userData.pistolReloadUntil = 0;
+        if (ai.userData) ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
         ai.visible = true;
         scene.add(ai);
         return;
@@ -10057,6 +10333,8 @@ function respawnAI(ai) {
         ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false; ai.isCrouching = false;
         ai.isElevating = false;
         if (ai.userData) ai.userData.mgReloadUntil = 0;
+        if (ai.userData) ai.userData.pistolReloadUntil = 0;
+        if (ai.userData) ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
         ai.userData.rooftopIntent = false;
         ai.userData.onRooftop = false;
         ai.userData.rooftopSensor = null;
@@ -10091,6 +10369,8 @@ function respawnAI(ai) {
     ai.lastAttackTime = 0; ai.currentAttackTime = 0; ai.avoiding = false; ai.isCrouching = false;
     ai.isElevating = false;
     if (ai.userData) ai.userData.mgReloadUntil = 0;
+    if (ai.userData) ai.userData.pistolReloadUntil = 0;
+    if (ai.userData) ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
     if (ai.userData) ai.userData.mrReloadUntil = 0;
     if (ai.userData) ai.userData.mrReloadUntil = 0;
     ai.userData.rooftopIntent = false;
@@ -10155,7 +10435,7 @@ function respawnPlayer() {
           player.position.copy(safePos);
           if (isBillBattle) {
               enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
-              // Ensure normal standing height on indoor combat respawn
+              // インドアコンバットのリスポーン時に立ち姿の通常身長を保証
               isCrouchingToggle = false;
               playerTargetHeight = BILL_BATTLE_PLAYER_HEIGHT;
               player.position.y = playerTargetHeight;
@@ -10170,7 +10450,7 @@ function respawnPlayer() {
         const playerSpawnPos = new THREE.Vector3(0, 0, 0);
         player.position.copy(playerSpawnPos);
         const groundYAtDefaultSpawn = getGroundY(player.position, playerTargetHeight * 2);
-        player.position.y = groundYAtDefaultSpawn + 0.2; // Raise player more to prevent shoes sinking
+        player.position.y = groundYAtDefaultSpawn + 0.2; // 靴のめり込み防止のためプレイヤーをやや高めに配置
     }
 
     const respawnLookAt = new THREE.Vector3(0, player.position.y, 0);
@@ -10215,7 +10495,7 @@ function forceResetTouchState() {
 
 function startPlayerDeathSequence(projectile) {
     if (isPlayerDeathPlaying || playerHP > 0) return;
-    forceResetTouchState(); // Reset input states
+    forceResetTouchState(); // 入力状態をリセット
     isPlayerDeathPlaying = true;
     syncKillCamLighting();
     isGameRunning = false; // 一時的にゲームを停止
@@ -10442,6 +10722,20 @@ function checkTeamAlive(team) {
     return false;
 }
 
+function isAnyRelevantAIDyingForVictory() {
+    if (!Array.isArray(ais) || ais.length === 0) return false;
+    if (gameSettings.gameMode === 'team') {
+        return ais.some(ai => ai && ai.team === 'enemy' && ai.hp <= 0 && ai.userData && ai.userData.isDying);
+    }
+    if (gameSettings.gameMode === 'battle' || gameSettings.gameMode === 'ffa') {
+        return ais.some(ai => ai && ai.hp <= 0 && ai.userData && ai.userData.isDying);
+    }
+    if (isBillBattleMode()) {
+        return ais.some(ai => ai && ai.team === 'enemy' && ai.hp <= 0 && ai.userData && ai.userData.isDying);
+    }
+    return false;
+}
+
 function findFlankingSpot(ai, timeElapsed) {
     const playerPos = player.position.clone();
     const playerDir = new THREE.Vector3();
@@ -10562,6 +10856,8 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
     if (!ai) return;
     if (!ai.userData) ai.userData = {};
     syncKillCamLighting();
+    // AI死亡処理では常に発射済み弾とロケット軌跡を回収して残像を防ぐ。
+    removeAIProjectiles(ai, true);
     console.log('finalizeAIDeathWithoutKillCam called, killCamMode:', gameSettings.killCamMode, 'gameMode:', gameSettings.gameMode, 'isBillBattle:', isBillBattleMode(), 'killerSource:', killerSource);
     if (isBillBattleMode() && killerSource !== 'player') {
         const reviveHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
@@ -10647,6 +10943,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
             } else {
                 ai.visible = false;
             }
+            ai.userData.isDying = false;
         }, 2700);
         return;
     }
@@ -10663,15 +10960,15 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
     } else {
         ai.visible = false;
     }
+    ai.userData.isDying = false;
 }
 
 function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown') {
     if (!ai) return;
     if (!ai.userData) ai.userData = {};
     ai.userData.isDying = true;
-    if (gameSettings.aiShotLevel === 'ama') {
-        removeAIProjectiles(ai, true);
-    }
+    // AIM設定に関係なく、死亡開始時点でAI弾を即時回収する。
+    removeAIProjectiles(ai, true);
     if (isBillBattleMode() && killerSource !== 'player') {
         finalizeAIDeathWithoutKillCam(ai, killerSource);
         return;
@@ -10690,7 +10987,7 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
       syncKillCamLighting();
       if (!ai.userData) ai.userData = {};
       ai.userData.isDying = true;
-      ai.targetWeaponPickup = null; // Clear target weapon pickup when AI dies
+      ai.targetWeaponPickup = null; // AI死亡時に目標武器ピックアップをクリア
       cinematicTargetAI = ai;
       if (player) player.visible = false; // AI死亡時はプレイヤーを非表示
       const joy = document.getElementById('joystick-move');
@@ -10909,9 +11206,9 @@ function applyAIMovementWithSweep(ai, moveVec, ignoreObstacle = null) {
     const moveLen = moveVec.length();
     if (moveLen < 1e-6) return false;
     
-    // FORCE HORIZONTAL MOVEMENT ONLY in build battle mode
+    // Build Battleでは水平方向移動のみに強制
     if (isBillBattleMode()) {
-        moveVec.y = 0; // No vertical movement allowed
+        moveVec.y = 0; // 垂直移動を禁止
     }
     
     const origin = ai.position.clone().add(new THREE.Vector3(0, 1.0, 0));
@@ -10932,7 +11229,7 @@ function applyAIMovementWithSweep(ai, moveVec, ignoreObstacle = null) {
     const oldPos = ai.position.clone();
     ai.position.add(moveVec);
     
-    // Force AI to stay on ground in build battle mode
+    // Build BattleではAIを地面に固定する
     if (isBillBattleMode()) {
         ai.position.y = getGroundSurfaceY(ai.position);
     }
@@ -11287,7 +11584,7 @@ function getGroundY(position, objectBodyHeight) {
     return currentGroundY + objectBodyHeight / 2; // オブジェクトの中心Y座標としての着地位置
 }
 
-// Feet-based ground Y (for rigs whose origin is at the feet, e.g. AI/character groups)
+// 足元基準の地面Y（原点が足元のリグ向け。例: AI/キャラグループ）
 function getGroundSurfaceY(position) {
     let currentGroundY = -FLOOR_HEIGHT;
     const horizontalBox = new THREE.Box2(
@@ -11430,7 +11727,7 @@ function showSettingsAndPause() {
     document.getElementById('restart-pause-btn').style.display = 'inline-block';
     applySettingsScreenLighting(true);
     
-    // Update unified map selector to show current map
+    // 統合マップセレクターを更新して現在マップを表示
     updateUnifiedMapSelector();
     updateMenuBGM();
 }
@@ -11463,7 +11760,7 @@ function resumeGame() {
                 if (ai.hp > 0) {
                     display.style.display = 'block';
                 } else {
-                    // Keep it hidden or show as dead based on existing logic
+                    // 既存ロジックに従い、非表示または死亡表示を維持する
                      display.style.display = 'block'; 
                 }
             }
@@ -11474,7 +11771,7 @@ function resumeGame() {
         }
 
         if (shouldShowTouchControls()) {
-            // resumeGame(): Mobile device detected. Setting UI to block/flex.
+            // resumeGame(): モバイル端末を検出。UIをblock/flexに設定。
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
@@ -11487,7 +11784,7 @@ function resumeGame() {
             if (pause) { pause.style.display = 'block'; }
             initJoystick();
         } else {
-            // resumeGame(): PC device detected.
+            // resumeGame(): PC端末を検出。
             const joy = document.getElementById('joystick-move');
             const fire = document.getElementById('fire-button');
             const crouch = document.getElementById('crouch-button');
@@ -11545,13 +11842,13 @@ function animate() {
         lastClimbedTower = null;
     }
 
-    // Breadcrumb dropping logic
+    // 軌跡ドロップ処理
     if (isGameRunning) {
         timeSinceLastBreadcrumb += delta;
         if (timeSinceLastBreadcrumb > 0.25) {
             playerBreadcrumbs.push(player.position.clone());
             if (playerBreadcrumbs.length > 100) {
-                playerBreadcrumbs.shift(); // Keep the array size limited
+                playerBreadcrumbs.shift(); // 配列サイズの上限を維持
             }
             timeSinceLastBreadcrumb = 0;
         }
@@ -11588,13 +11885,18 @@ function animate() {
         }
     }
 
-    // Player MG reload completion (needs to run even when not firing)
+    // プレイヤーMGのリロード完了処理（非射撃中でも実行が必要）
     if (playerMGReloadUntil > 0 && timeElapsed >= playerMGReloadUntil) {
         playerMGReloadUntil = 0;
         if (gameSettings.defaultWeaponPlayer === WEAPON_MG) {
             ammoMG = MAX_AMMO_MG;
             hideReloadingText();
         }
+    }
+    if (playerPistolReloadUntil > 0 && timeElapsed >= playerPistolReloadUntil) {
+        playerPistolReloadUntil = 0;
+        ammoPistolClip = MAX_AMMO_PISTOL_CLIP;
+        hideReloadingText();
     }
     if (playerMRReloadUntil > 0 && timeElapsed >= playerMRReloadUntil) {
         playerMRReloadUntil = 0;
@@ -11603,16 +11905,16 @@ function animate() {
         hideReloadingText();
     }
     
-    // Crouching state change adjustment
+    // しゃがみ状態変化時の補正
     const oldPlayerTargetHeight = playerTargetHeight;
     // プレイヤー当たり判定/拾得判定が崩れない高さに固定
       const baseStandingHeight = isBillBattleMode() ? BILL_BATTLE_PLAYER_HEIGHT : 2.2;
       const baseCrouchHeight = 0.9;
       playerTargetHeight = isCrouchingToggle ? baseCrouchHeight : baseStandingHeight;
     // しゃがむ/立つときに高さを即座に反映させる
-    if (playerTargetHeight < oldPlayerTargetHeight) { // Crouching down
+    if (playerTargetHeight < oldPlayerTargetHeight) { // しゃがみ開始
         player.position.y -= oldPlayerTargetHeight - playerTargetHeight;
-    } else if (playerTargetHeight > oldPlayerTargetHeight) { // Standing up
+    } else if (playerTargetHeight > oldPlayerTargetHeight) { // 立ち上がり
         player.position.y += playerTargetHeight - oldPlayerTargetHeight;
     }
 
@@ -11715,7 +12017,7 @@ function animate() {
             case WEAPON_SR: weaponName = 'Sniper'; ammoCount = ammoSR; break;
             case WEAPON_SG: weaponName = 'Shotgun'; ammoCount = ammoSG; break;
             case WEAPON_MR: weaponName = 'M1 Rifle'; ammoCount = getPlayerMRDisplayAmmo(); break;
-            case WEAPON_PISTOL: weaponName = 'Pistol'; ammoCount = '∞'; break;
+            case WEAPON_PISTOL: weaponName = 'Pistol'; ammoCount = playerPistolReloadUntil > 0 ? `Reloading (${MAX_AMMO_PISTOL_CLIP}/∞)` : `${ammoPistolClip}/∞`; break;
         }
         const displayHTML = `Weapon: ${weaponName}<br>Ammo: ${ammoCount}`;
         if (displayHTML !== lastPlayerWeaponDisplayHTML) {
@@ -11726,7 +12028,7 @@ function animate() {
     if (isRifleZoomed && !canUseRifleZoom(currentWeapon)) {
         setRifleZoom(false);
     }
-    if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG || currentWeapon === WEAPON_MR)) {
+    if (isMouseButtonDown && (currentWeapon === WEAPON_MG || currentWeapon === WEAPON_SG)) {
         shoot();
     }
     if (lastCrosshairWeaponType !== currentWeapon) {
@@ -11779,19 +12081,19 @@ function animate() {
             isElevating = false;
             // debugLog('isElevating set to false');
             isIgnoringTowerCollision = true;
-            ignoreTowerTimer = 5.0; // Extended to 5.0s for permanent rooftop safety
+            ignoreTowerTimer = 5.0; // 屋上安全性確保のため5.0秒へ延長
             lastClimbedTower = elevatingTargetObstacle;
             isCrouchingToggle = false; // 強制的に立ち状態に
             
-            // Let player drop naturally to rooftop - no forward push
+            // 前方押し出しなしで自然落下させて屋上へ着地させる
             // debugLog('Dropping from height to rooftop');
             
-            // Mark player as being on rooftop for permanent collision ignoring
+            // 屋上判定フラグを立て、恒久的な衝突無視対象として扱う
             player.userData.onRooftop = true;
             player.userData.lastClimbedTower = elevatingTargetObstacle;
             
-            // Enable gravity to drop naturally
-            playerVelocityY = 0; // Reset velocity and let gravity take over
+            // 重力を有効化して自然落下させる
+            playerVelocityY = 0; // 速度をリセットし、以後は重力に任せる
         }    } else {
         let inSensorArea = false;
         const playerBoundingBox = new THREE.Box3().setFromCenterAndSize(player.position.clone().add(new THREE.Vector3(0, playerTargetHeight / 2, 0)), new THREE.Vector3(1, playerTargetHeight, 1));
@@ -11805,7 +12107,7 @@ function animate() {
                 // 空洞建物の場合、床のジオメトリーから高さを取得
                 const geometry = obs.geometry || (obs.children && obs.children[0] ? obs.children[0].geometry : null);
                 const height = geometry ? geometry.parameters.height : 4;
-                elevatingTargetY = (obs.position.y + height / 2) + 4.0; // Increased from 2.0 to 4.0
+                elevatingTargetY = (obs.position.y + height / 2) + 4.0; // 2.0から4.0へ増加
                 const ladderPos = sensorArea.userData.ladderPos;
                 if (ladderPos) {
                     player.position.x = ladderPos.x;
@@ -11919,7 +12221,7 @@ function animate() {
             let groundY = 0;
             const playerFeetY = player.position.y - playerTargetHeight;
 
-            // Use a lenient tolerance after climbing or on a rooftop, otherwise use a strict one.
+            // 登坂直後または屋上では許容値を緩め、それ以外は厳しめにする。
             let yTolerance = 0.5;
             if (isIgnoringTowerCollision || (currentGroundObstacle && currentGroundObstacle.userData.isRooftop && !currentGroundObstacle.userData.isHouseRoof)) {
                 yTolerance = 2.0;
@@ -12077,7 +12379,7 @@ function animate() {
             if (isBillBattleMode()) {
                 ensureBillBattleAIIntegrity(ai);
               
-              // In build battle mode, AI should be active from the start
+              // Build BattleではAIを開始時からアクティブにする
                 if (ai.hp <= 0 && !isBillBattlePlayerKillWindow(ai, timeElapsed)) {
                     ai.visible = false;
                     if (ai.userData) ai.userData.isDying = false;
@@ -12089,35 +12391,35 @@ function animate() {
                   return;
               }
               
-              // Make sure AI is visible and active
+              // AIが可視かつアクティブであることを保証
               if (!ai.visible) {
                   ai.visible = true;
               }
               
-                // AGGRESSIVE Y-AXIS LOCK FOR BUILD BATTLE - Force AI to ground
+                // Build Battle向け強制Y軸ロック - AIを地面へ固定
                 if (isBillBattleMode()) {
                     ai.position.y = getGroundSurfaceY(ai.position);
                     ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
-                  // Disable all rooftop logic
+                  // 屋上関連ロジックをすべて無効化
                   ai.userData.onRooftop = false;
                   ai.userData.rooftopIntent = false;
                   ai.userData.rooftopPhase = 'none';
                   ai.isElevating = false;
               }
               
-              // Ensure AI has proper state
+              // AI状態が正しいことを保証
               if (!ai.state || ai.state === 'IDLE') {
                   ai.state = 'ATTACKING';
               }
               
-              // Ensure AI stays inside building bounds
+              // AIが建物境界内に留まることを保証
                 enforceBillBattleInsideActor(ai, 1.2, true, BODY_HEIGHT);
-                // Force AI to stay on floor in build battle mode
+                // Build BattleではAIを床面に固定する
                 ai.position.y = BODY_HEIGHT;
                 ai.targetPosition.y = 0;
               }
 
-            // Non-build battle mode AI processing
+            // Build Battle以外のAI処理
             if (!isBillBattleMode()) {
               if (ai.hp <= 0 && gameSettings.gameMode !== 'arcade') {
                   ai.visible = false;
@@ -12127,10 +12429,14 @@ function animate() {
           
         const aiStartPos = ai.position.clone();
 
-        // AI MG reload completion
+        // AI MGリロード完了処理
         if (ai.userData && ai.userData.mgReloadUntil && timeElapsed >= ai.userData.mgReloadUntil) {
             ai.userData.mgReloadUntil = 0;
             ai.ammoMG = MAX_AMMO_MG;
+        }
+        if (ai.userData && ai.userData.pistolReloadUntil && timeElapsed >= ai.userData.pistolReloadUntil) {
+            ai.userData.pistolReloadUntil = 0;
+            ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
         }
         if (ai.userData && ai.userData.mrReloadUntil && timeElapsed >= ai.userData.mrReloadUntil) {
             ai.userData.mrReloadUntil = 0;
@@ -12139,7 +12445,7 @@ function animate() {
         }
 
         if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.hp > 0) {
-            // Start-of-match combat enforcement: keep all AIs (ally + enemies) in combat immediately.
+            // 開始直後の戦闘強制: すべてのAI（味方+敵）を即時交戦状態にする。
             if (timeElapsed < 2.5 && (ai.state === 'HIDING' || ai.state === 'FOLLOWING')) {
                 ai.state = 'ATTACKING';
                 ai.currentAttackTime = timeElapsed;
@@ -12150,7 +12456,7 @@ function animate() {
                     ai.userData.cachedIsAISeen = false;
                 }
             }
-            // Also correct initial facing so AIs don't start looking outward.
+            // 初期向きも補正し、AIが外側を向いて開始しないようにする。
             if (timeElapsed < 1.2) {
                 const initTarget = getClosestOpponentPosition(ai);
                 if (initTarget) {
@@ -12205,8 +12511,8 @@ function animate() {
                 if (ai.userData) ai.userData.avoidUntil = 0;
             }
 
-            // --- Aiming and Shooting Logic ---
-            let targetToLookAt = player.position.clone(); // Default to looking at player
+            // --- 照準・射撃ロジック ---
+            let targetToLookAt = player.position.clone(); // 既定ではプレイヤー方向を向く
             let foundVisibleEnemy = false;
             
             for (const enemyAI of ais) {
@@ -12300,7 +12606,7 @@ function animate() {
             const distance = ai.position.distanceTo(otherAI.position);
             if (distance < MIN_DISTANCE_BETWEEN_AIS_AT_SPOT) {
                 const repulsion = new THREE.Vector3().subVectors(ai.position, otherAI.position);
-                if (repulsion.lengthSq() > 0) { // Prevent NaN from normalize() if distance is 0
+                if (repulsion.lengthSq() > 0) { // 距離0時のnormalize()でNaN発生を防ぐ
                     const strength = (MIN_DISTANCE_BETWEEN_AIS_AT_SPOT - distance) / MIN_DISTANCE_BETWEEN_AIS_AT_SPOT;
                     separation_vec.add(repulsion.normalize().multiplyScalar(strength));
                 }
@@ -12311,7 +12617,7 @@ function animate() {
         let visibleOpponentInfo = ai.userData.cachedVisibleOpponentInfo;
         let isAISeen = !!ai.userData.cachedIsAISeen;
             if (timeElapsed >= (ai.userData.nextPerceptionTime || 0)) {
-            // Reduce frequency of LOS checks to lower CPU by spacing updates (~180-240ms)
+            // LOSチェック間隔を約180-240msに広げ、CPU負荷を低減
             visibleOpponentInfo = getVisibleOpponentInfo(ai);
             isAISeen = !!visibleOpponentInfo;
             ai.userData.cachedVisibleOpponentInfo = visibleOpponentInfo;
@@ -12323,15 +12629,15 @@ function animate() {
             ai.lastKnownEnemyPos = visibleOpponentInfo.targetPos.clone();
         }
 
-        // Make teammates more proactive: if a teammate is idle (HIDING or FOLLOWING when not following),
-        // pulse them to search/move toward the nearest opponent or patrol point.
+        // 味方をより積極化: 味方が待機状態（非追従時のHIDING/FOLLOWING）なら、
+        // 近傍の敵または巡回点へ探索/移動するパルスを与える。
         if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && (ai.state === 'HIDING' || ai.state === 'FOLLOWING') && timeElapsed >= (ai.userData.searchPulseAt || 0)) {
             const close = getClosestOpponentPosition(ai);
             if (close) {
                 ai.state = 'MOVING';
                 ai.targetPosition.copy(close);
             } else {
-                // No nearby opponent: pick a short patrol near player
+                // 近くに敵がいない場合は、プレイヤー近傍の短距離巡回を選ぶ
                 const ang = Math.random() * Math.PI * 2;
                 const r = 6 + Math.random() * 6;
                 const patrol = player.position.clone().add(new THREE.Vector3(Math.cos(ang) * r, 0, Math.sin(ang) * r));
@@ -12339,11 +12645,11 @@ function animate() {
                 ai.state = 'MOVING';
                 ai.targetPosition.copy(patrol);
             }
-            ai.userData.searchPulseAt = timeElapsed + 0.6; // pulse every 0.6s
+            ai.userData.searchPulseAt = timeElapsed + 0.6; // 0.6秒ごとにパルス
         }
 
-        // Fallback: if a teammate remains HIDING/FOLLOWING (not following player) for too long,
-        // force them to move to a nearby opponent or patrol point to avoid staying idle.
+        // フォールバック: 味方が長時間HIDING/FOLLOWING（プレイヤー非追従）を続ける場合、
+        // 長時間待機を避けるため、近傍の敵または巡回点への移動を強制する。
         if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && (ai.state === 'HIDING' || ai.state === 'FOLLOWING')) {
             const stuckDuration = timeElapsed - (ai.lastHiddenTime || 0);
             if (stuckDuration > 2.5) {
@@ -12360,7 +12666,7 @@ function animate() {
                     ai.targetPosition.copy(patrol);
                 }
                 ai.userData.searchPulseAt = timeElapsed + 0.9;
-                ai.lastHiddenTime = timeElapsed - 0.1; // reset a little to avoid immediate re-trigger
+                ai.lastHiddenTime = timeElapsed - 0.1; // 即時再発火を避けるため少しだけリセット
             }
         }
 
@@ -12368,7 +12674,7 @@ function animate() {
         const isFollowLockedTeammate = isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false;
 
         if (ENABLE_EXPERIMENTAL_AI_FLOW) {
-            // Proactive search: prevents "standing still until shot".
+            // 先行探索: 「撃たれるまで棒立ち」を防止する。
             if (!isFollowLockedTeammate && !isAISeen && !ai.isElevating) {
                 const lockedRooftopState = ai.state === 'MOVING_TO_LADDER' || ai.state === 'CLIMBING' || ai.state === 'ROOFTOP_COMBAT' || ai.state === 'DESCENDING';
                 if (!lockedRooftopState && timeElapsed >= (ai.userData.searchPulseAt || 0)) {
@@ -12392,7 +12698,7 @@ function animate() {
             }
         }
 
-        // Rooftop behavior decision (weapon-based probability; both enemy and teammate AI)
+        // 屋上行動の判定（武器別確率。敵AI/味方AIの両方に適用）
         if (ENABLE_AI_ROOFTOP_LOGIC) {
             tryAssignAIRooftopGoal(ai, timeElapsed, isFollowLockedTeammate, isAISeen);
         }
@@ -12444,7 +12750,7 @@ function animate() {
                     c.z + (Math.random() - 0.5) * halfD
                 );
             }
-            // If AI runs out of ammo while on rooftop, force a descent.
+            // 屋上で弾切れしたAIは強制的に降下させる。
             if (isAIWeaponOutOfAmmo(ai) && !ai.userData.rooftopDecisionMade) {
                 ai.userData.rooftopDecisionMade = true;
                 ai.userData.rooftopPhase = 'to_ground';
@@ -12482,7 +12788,7 @@ function animate() {
             }
         }
 
-        // AI vertical climb/descend animation via ladder
+        // 梯子によるAIの上下移動アニメーション
         if (ENABLE_AI_ROOFTOP_LOGIC && ai.isElevating) {
             const vDir = ai.userData.elevatingDirection || 1;
             const climbSpeed = 3.6;
@@ -12721,7 +13027,7 @@ function animate() {
                             ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
                         } else { // プレイヤーが見えない場合
                             let effectiveHideDuration = HIDE_DURATION * (1.0 + (1.0 - ai.aggression) * 1.5);
-                            // Teammates should hide far less; make them aggressive.
+                            // 味方の隠れ行動を大幅に減らし、攻撃的にする。
                             if (isTeammateInTeamModeOrArcade) effectiveHideDuration *= 0.35;
                             if ((timeElapsed - ai.lastHiddenTime) >= effectiveHideDuration) {
                                 if (!findNewHidingSpot(ai)) { // 新しい隠れ場所を探すのに失敗した場合
@@ -12757,7 +13063,7 @@ function animate() {
                 if (moveVectorDelta_follow.lengthSq() < 1e-8) {
                     break;
                 }
-                moveDirection_follow = moveVectorDelta_follow.normalize(); // Normalize after adding separation_vec
+                moveDirection_follow = moveVectorDelta_follow.normalize(); // separation_vec加算後に正規化する
 
                 raycaster.set(oldAIPosition_follow.clone().add(new THREE.Vector3(0, 1.0, 0)), moveDirection_follow);
                 const intersects = raycaster.intersectObjects(obstacles, true);
@@ -12774,7 +13080,7 @@ function animate() {
                         findObstacleAvoidanceSpot(ai, moveDirection_follow, ai.targetPosition);
                     }
                     
-                    // Force AI to stay on ground in build battle mode
+                    // Build BattleではAIを地面に固定する
                     if (isBillBattleMode()) {
                         ai.position.y = getGroundSurfaceY(ai.position);
                         ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
@@ -12839,7 +13145,7 @@ function animate() {
                         ai.targetPosition.y = 0;
                     }
                 }
-                // Vertical movement is handled by ai.isElevating block above.
+                // 垂直移動は上側のai.isElevatingブロックで処理する。
                 break;
 
             case 'ROOFTOP_COMBAT':
@@ -12863,7 +13169,7 @@ function animate() {
                         ai.position.add(move);
                     }
                 }
-                // If rooftop weapon is out of ammo, immediately start descending.
+                // 屋上武器が弾切れなら即座に降下を開始する。
                 if (isAIWeaponOutOfAmmo(ai) && !ai.userData.rooftopDecisionMade) {
                     ai.userData.rooftopDecisionMade = true;
                     ai.state = 'DESCENDING';
@@ -12981,7 +13287,7 @@ function animate() {
                 moveVectorDelta_attack.add(separation_vec);
                 ai.position.add(moveVectorDelta_attack);
                 
-                // Force AI to stay on ground in build battle mode
+                // Build BattleではAIを地面に固定する
                 if (isBillBattleMode()) {
                     ai.position.y = getGroundSurfaceY(ai.position);
                     ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
@@ -12993,7 +13299,7 @@ function animate() {
                 }
                 aiShoot(ai, timeElapsed);
                 if (ENABLE_EXPERIMENTAL_AI_FLOW) {
-                    // If AI keeps seeing an opponent but doesn't fire, force tactical reposition.
+                    // 敵を視認し続けても発砲しない場合、戦術的再配置を強制する。
                     const attackStall = isAISeen && (timeElapsed - ai.lastAttackTime) > 1.2;
                     if (attackStall) {
                         if (Math.random() < 0.65 && findFlankingSpot(ai, timeElapsed)) {
@@ -13034,7 +13340,7 @@ function animate() {
         }
 
         if (ENABLE_AI_ROOFTOP_LOGIC) {
-            // Ground anti-idle: prevent standing still on the ground when rooftop logic is enabled.
+            // 地上アンチアイドル: 屋上ロジック有効時でも地上で棒立ちしないようにする。
             const groundRooftopStates = ['MOVING_TO_LADDER', 'CLIMBING', 'ROOFTOP_COMBAT', 'DESCENDING'];
             const isInRooftopFlow = groundRooftopStates.includes(ai.state) || ai.isElevating || ai.userData.onRooftop;
             const movedNow = ai.position.distanceTo(ai.lastPosition) > 0.02;
@@ -13061,7 +13367,7 @@ function animate() {
         }
 
         if (ENABLE_EXPERIMENTAL_AI_FLOW) {
-            // Hard watchdog: any prolonged freeze (seen or unseen) must break into motion.
+            // 強制監視: 視認有無を問わず長時間停止したら必ず移動へ移行させる。
             const movedSinceLastFrame = ai.position.distanceTo(ai.lastPosition) > 0.03;
             const protectedStates = ['CLIMBING', 'DESCENDING', 'FOLLOWING'];
             const canWatchdog = !protectedStates.includes(ai.state) && !ai.isElevating;
@@ -13101,7 +13407,7 @@ function animate() {
             }
         }
 
-        // Anti-stall: if AI keeps hiding without LOS, advance toward nearest opponent's last known area.
+        // ストール防止: LOSなしで隠れ続ける場合、最寄り敵の最終既知地点へ前進させる。
         if (ai.state === 'HIDING' && !isAISeen) {
             const isFollowLockedTeammate = isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false;
             if (!isFollowLockedTeammate && (timeElapsed - ai.lastHiddenTime) > 1.2) {
@@ -13116,7 +13422,7 @@ function animate() {
             const oldAIPosition = ai.position.clone();
             let moveDirection = new THREE.Vector3().subVectors(ai.targetPosition, ai.position).normalize();
             
-            // FORCE HORIZONTAL MOVEMENT in build battle mode
+            // Build Battleで水平方向移動を強制
             if (isBillBattleMode()) {
                 moveDirection.y = 0;
                 ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
@@ -13137,7 +13443,7 @@ function animate() {
                     findObstacleAvoidanceSpot(ai, moveDirection, ai.targetPosition);
                 }
                 
-                // Force AI to stay on ground in build battle mode
+                // Build BattleではAIを地面に固定する
                 if (isBillBattleMode()) {
                     ai.position.y = getGroundSurfaceY(ai.position);
                     ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
@@ -13169,11 +13475,11 @@ function animate() {
             }
         }
         
-        // FINAL Y-AXIS LOCK - Ensure AI never floats in build battle mode
+        // 最終Y軸ロック - Build BattleでAIが浮かないよう保証
         if (isBillBattleMode()) {
             ai.position.y = getGroundSurfaceY(ai.position);
             ai.targetPosition.y = getGroundSurfaceY(ai.targetPosition);
-            // Disable any rooftop states that might have been set
+            // 設定済みの可能性がある屋上状態を無効化
             if (ai.state === 'ROOFTOP_COMBAT' || ai.state === 'CLIMBING' || ai.state === 'MOVING_TO_LADDER' || ai.state === 'DESCENDING') {
                 ai.state = 'ATTACKING';
             }
@@ -13188,14 +13494,14 @@ function animate() {
             }
         }
 
-        // Animate AI limbs
+        // AI四肢のアニメーション
         if (ai.userData.parts) {
             const parts = ai.userData.parts;
 
             applyGunStyle(parts.gun, ai.currentWeapon);
             applyWeaponPose(parts, ai.currentWeapon);
 
-            // Aiming: Make the aimGroup look at the target
+            // 照準: aimGroupをターゲットへ向ける
             let targetHeadPos = new THREE.Vector3();
             if (isTeamModeOrTeamArcade && ai.team === 'player') { // isTeamModeOrTeamArcadeを使用
                 // 味方AIは最も近い敵AIを向く
@@ -13233,10 +13539,10 @@ function animate() {
             }
             applyAimConstraints(parts, ai.rotation.y, targetHeadPos);
 
-            // Keep gun aligned to the midpoint between hands
+            // 銃を両手の中間点へ整列させる
             alignGunGripToHands(parts, 0.8);
 
-            // Leg Animation
+            // 脚アニメーション
             const moveDirWorld = ai.position.clone().sub(ai.lastPosition);
             const moveSpeed = moveDirWorld.length();
             const actuallyMoving = moveSpeed > 0.001; // 実際に動いているかを判定
@@ -13291,7 +13597,8 @@ function animate() {
                 if (p.life <= 0) {
                     scene.remove(p.mesh);
                     clearAIRocketInFlight(p);
-                    projectiles.splice(i, 1);
+                    const removeIndex = projectiles.indexOf(p);
+                    if (removeIndex !== -1) projectiles.splice(removeIndex, 1);
                     continue;
                 }
         }
@@ -13344,9 +13651,9 @@ function animate() {
               createRocketTrail(p.mesh.position.clone(), p.source, p.shooter);
           }
           const bulletSphere = new THREE.Sphere(p.mesh.position, p.isRocket ? 0.5 : 0.1);
-          // Obstacle hit is already handled by the segment raycast above.
-          // Avoid doing another full obstacle scan per projectile per frame.
-          // For AI bullets, defer floor hit test until after player hit test.
+          // 障害物ヒットは上のセグメントレイキャストで処理済み。
+          // 弾ごと・フレームごとの全障害物再走査を避ける。
+          // AI弾の床ヒット判定はプレイヤーヒット判定後に遅延実行する。
           if (!hitSomething && isBillBattleMode() && billBattleLights.length > 0) {
               for (const entry of billBattleLights) {
                   if (!entry || !entry.mesh || !entry.mesh.parent) continue;
@@ -13426,7 +13733,8 @@ function animate() {
                         if (p.weaponType === WEAPON_SG) {
                             scene.remove(p.mesh);
                             clearAIRocketInFlight(p);
-                            projectiles.splice(i, 1);
+                            const removeIndex = projectiles.indexOf(p);
+                            if (removeIndex !== -1) projectiles.splice(removeIndex, 1);
                         }
                     }
                 }
@@ -13492,7 +13800,8 @@ function animate() {
                         if (p.weaponType === WEAPON_SG) {
                             scene.remove(p.mesh);
                             clearAIRocketInFlight(p);
-                            projectiles.splice(i, 1);
+                            const removeIndex = projectiles.indexOf(p);
+                            if (removeIndex !== -1) projectiles.splice(removeIndex, 1);
                         }
                         break;
                     }
@@ -13522,7 +13831,7 @@ function animate() {
                     }
                 }
                 if (!hitPlayer) {
-                    // Fallback: capsule-like center sphere check to avoid crouch edge misses.
+                    // フォールバック: しゃがみ時の境界ミスを避けるため、カプセル風の中心球チェックを行う。
                     const centerY = (playerTopY + playerBottomY) * 0.5;
                     const center = new THREE.Vector3(playerPos.x, centerY, playerPos.z);
                     const seg = new THREE.Vector3().subVectors(p.mesh.position, prevProjectilePos);
@@ -13589,13 +13898,14 @@ function animate() {
                     if (p.weaponType === WEAPON_SG) {
                         scene.remove(p.mesh);
                         clearAIRocketInFlight(p);
-                        projectiles.splice(i, 1);
+                        const removeIndex = projectiles.indexOf(p);
+                        if (removeIndex !== -1) projectiles.splice(removeIndex, 1);
                     }
                     break;
                 }
             }
         }
-        // Deferred floor test for AI bullets (after player/AI hit checks).
+        // AI弾の床判定を遅延実行（プレイヤー/AIヒット判定後）。
         if (!hitSomething && p.source === 'ai' && new THREE.Box3().setFromObject(floor).intersectsSphere(bulletSphere)) {
             hitSomething = true;
             hitObject = floor;
@@ -13678,9 +13988,9 @@ function animate() {
                         destroyObstacle(hitObject, p.mesh.position);
                     } else 
                     if (hitObject.userData && hitObject.userData.isHouseWall) {
-                        // Do not damage house walls
+                        // 家の壁にはダメージを与えない
                     } else if (hitObject.userData && hitObject.userData.type === 'barrel') {
-                        // Barrel already exploded above
+                        // 樽の爆発処理は上で実行済み
                     } else {
                     if (hitObject.userData.hp === undefined) {
                         hitObject.userData.hp = 1;
@@ -13697,7 +14007,8 @@ function animate() {
             if (p.weaponType !== WEAPON_SG) {
                 scene.remove(p.mesh);
                 clearAIRocketInFlight(p);
-                projectiles.splice(i, 1);
+                const removeIndex = projectiles.indexOf(p);
+                if (removeIndex !== -1) projectiles.splice(removeIndex, 1);
             }
             continue;
         }
@@ -13723,7 +14034,8 @@ function animate() {
                     if (p.mesh.geometry) p.mesh.geometry.dispose();
                     if (p.mesh.material) disposeMaterial(p.mesh.material);
                 }
-                projectiles.splice(i, 1);
+                const removeIndex = projectiles.indexOf(p);
+                if (removeIndex !== -1) projectiles.splice(removeIndex, 1);
                 continue;
             }
         }
@@ -13731,7 +14043,8 @@ function animate() {
         if (projArenaR > ARENA_PLAY_AREA_RADIUS) {
             scene.remove(p.mesh);
             clearAIRocketInFlight(p);
-            projectiles.splice(i, 1);
+            const removeIndex = projectiles.indexOf(p);
+            if (removeIndex !== -1) projectiles.splice(removeIndex, 1);
         }
     }
     applyExplosionClears();
@@ -13795,20 +14108,21 @@ function animate() {
             display.style.display = 'none';
         }
     }
-    // Indoor combat (bill battle) win condition
+    // インドアコンバット（build battle）の勝利条件
+    const hasPendingAIDeathForWin = isAnyRelevantAIDyingForVictory();
     if (isBillBattleMode()) {
-        if (isBillBattleFloorCleared() && isGameRunning && !isAIDeathPlaying) {
+        if (isBillBattleFloorCleared() && isGameRunning && !isAIDeathPlaying && !hasPendingAIDeathForWin) {
             showWinScreen();
         }
     } else if (gameSettings.gameMode === 'team') {
         // チームモードの場合、敵チーム全滅で勝利
         const enemyAIsDefeated = ais.filter(ai => ai.team === 'enemy').every(ai => ai.hp <= 0);
-        if (enemyAIsDefeated && ais.filter(ai => ai.team === 'enemy').length > 0 && isGameRunning && !isAIDeathPlaying) {
+        if (enemyAIsDefeated && ais.filter(ai => ai.team === 'enemy').length > 0 && isGameRunning && !isAIDeathPlaying && !hasPendingAIDeathForWin) {
             showWinScreen();
         }
     } else {
         const allAIsDefeated = ais.every(ai => ai.hp <= 0);
-        if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && (gameSettings.gameMode === 'battle' || gameSettings.gameMode === 'ffa') && !isBillBattleMode()) {
+        if (allAIsDefeated && ais.length > 0 && isGameRunning && !isAIDeathPlaying && !hasPendingAIDeathForWin && (gameSettings.gameMode === 'battle' || gameSettings.gameMode === 'ffa') && !isBillBattleMode()) {
             showWinScreen();
         }
     }
@@ -13837,14 +14151,14 @@ function animate() {
     } else camera.position.set(0, 0, 0);
     TWEEN.update();
     
-    // Apply smooth time lapse transitions in the animation loop
+    // アニメーションループ内でタイムラプスの滑らか遷移を適用
       if (isTimeLapseMode) {
           applySmoothNightMode();
       }
       
       if (isBillBattleMode()) {
           enforceBillBattleInsideActor(player, 1.2, true, playerTargetHeight);
-          // Keep player locked to floor in indoor combat to prevent rooftop warps
+          // インドアコンバットでは屋上ワープ防止のためプレイヤーを床面に固定
           if (player && player.position) {
               player.position.y = playerTargetHeight;
           }
@@ -13872,7 +14186,7 @@ if (startBtn) {
         if (mrCountEl) {
             gameSettings.mrCount = parseInt(mrCountEl.value, 10);
         }
-        // Get map selection from unified selector
+        // 統合セレクターからマップ選択を取得
         const unifiedMapSelectorOnStart = document.getElementById('unified-map-selector');
         if (unifiedMapSelectorOnStart && unifiedMapSelectorOnStart.value) {
             const selectedValue = unifiedMapSelectorOnStart.value;
@@ -13914,7 +14228,7 @@ rButtons.forEach(button => button.addEventListener('click', () => {
     }
     restartGame();
     if (!(shouldShowTouchControls())) canvas.requestPointerLock();
-})); // End of rButtons.forEach callback
+})); // rButtons.forEachコールバック終了
     
     const settingsLinks = document.querySelectorAll('.settings-link');
 settingsLinks.forEach(link => {
@@ -13942,7 +14256,7 @@ document.addEventListener('pointerdown', tryInitMenuAudio, { passive: true });
 document.addEventListener('touchstart', tryInitMenuAudio, { passive: true });
 document.addEventListener('keydown', tryInitMenuAudio);
 
-// --- Button Settings Logic ---
+// --- ボタン設定ロジック ---
 const buttonSettingsScreen = document.getElementById('button-settings-screen');
 const startScreenElement = document.getElementById('start-screen');
 const openButtonSettingsBtn = document.getElementById('button-setting-btn');
@@ -13953,7 +14267,7 @@ const feedbackDiv = document.getElementById('button-setting-feedback');
 openButtonSettingsBtn.addEventListener('click', () => {
     startScreenElement.style.display = 'none';
     buttonSettingsScreen.style.display = 'block';
-    feedbackDiv.style.display = 'none'; // Hide feedback on open
+    feedbackDiv.style.display = 'none'; // 開いた時はフィードバックを非表示
     updateMenuBGM();
 });
 
@@ -13963,7 +14277,7 @@ backToSettingsBtn.addEventListener('click', () => {
     updateMenuBGM();
 });
 
-// --- BGM Settings Logic ---
+// --- BGM設定ロジック ---
 const bgmSettingsScreen = document.getElementById('bgm-settings-screen');
 const bgmSettingsBackBtn = document.getElementById('bgm-settings-back-btn');
 const bgmReloadBtn = document.getElementById('bgm-reload-btn');
@@ -14031,7 +14345,7 @@ async function fetchBgmTrackList() {
                 if (normalized.length > 0) return normalized;
             }
         } catch {
-            // ignore
+            // 無視
         }
     }
     try {
@@ -14066,12 +14380,12 @@ async function fetchBgmTrackList() {
                         if (normalized.length > 0) return normalized;
                     }
                 } catch {
-                    // ignore
+                    // 無視
                 }
             }
         }
     } catch {
-        // ignore
+        // 無視
     }
     try {
         const resp = await fetch(`bgm/?t=${Date.now()}`, { cache: 'no-store' });
@@ -14354,7 +14668,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
 
     saveSettings();
     
-    // Apply to actual buttons immediately
+    // 実ボタンへ即時反映
     const fireButton = document.getElementById('fire-button');
     const crouchButton = document.getElementById('crouch-button');
     const zoomButton = document.getElementById('zoom-button');
@@ -14400,7 +14714,7 @@ saveButtonPositionsBtn.addEventListener('click', () => {
         if(joystickZone) joystickZone.style.display = 'none';
         if (followButton) followButton.style.display = 'none';
     }
-}); // End of saveButtonPositionsBtn.addEventListener callback
+}); // saveButtonPositionsBtn.addEventListenerコールバック終了
 
 function makeDraggable(element, isJoystick = false) {
     if (!element) return;
@@ -14486,7 +14800,7 @@ if (resumeGameBtn) {
     resumeGameBtn.addEventListener('click', resumeGame);
 }
 
-// Character Editor Functions
+// キャラクターエディタ関数群
 function getGunEditorFieldDefs() {
     return [
         { key: 'body.shape', label: 'Body Shape', type: 'select', options: ['box', 'cylinder'] },
@@ -15096,7 +15410,7 @@ function initGunEditor() {
 }
 
 function initCharacterEditor() {
-    // Ensure editor is closed on initialization
+    // 初期化時にエディタを閉じた状態にする
     const editorScreen = document.getElementById('character-editor-screen');
     if (editorScreen) {
         editorScreen.style.display = 'none';
@@ -15137,13 +15451,13 @@ function initCharacterEditor() {
         saveButton.addEventListener('click', e => { e.preventDefault(); saveCharacterSettings(); });
     }
     
-    // Export JSON button
+    // JSONエクスポートボタン
     const exportButton = document.getElementById('export-character-json');
     if (exportButton) {
         exportButton.addEventListener('click', e => { e.preventDefault(); exportCharacterDataToJSON(); });
     }
     
-    // Import JSON button
+    // JSONインポートボタン
     const importButton = document.getElementById('import-character-json');
     const fileInput = document.getElementById('json-file-input');
     
@@ -15158,12 +15472,12 @@ function initCharacterEditor() {
             if (file) {
                 importCharacterDataFromJSON(file);
             }
-            // Reset file input
+            // ファイル入力をリセット
             fileInput.value = '';
         });
     }
     
-    // Preview buttons
+    // プレビューボタン
     const previewButtons = [
         { id: 'preview-player', character: 'player' },
         { id: 'preview-enemy1', character: 'enemy1' },
@@ -15181,7 +15495,7 @@ function initCharacterEditor() {
         }
     });
     
-    // Default buttons
+    // デフォルトボタン
     const defaultButtons = [
         { id: 'default-player', character: 'player' },
         { id: 'default-enemy1', character: 'enemy1' },
@@ -15198,7 +15512,7 @@ function initCharacterEditor() {
         }
     });
     
-    // Add zoom functionality to preview container
+    // プレビューコンテナにズーム機能を追加
     const previewContainer = document.getElementById('character-preview-container');
     if (previewContainer) {
         setupZoomControls(previewContainer);
@@ -15246,7 +15560,7 @@ function initCharacterEditor() {
         });
     }
     
-    // Add event listeners for all customization controls
+    // すべてのカスタム操作にイベントリスナーを追加
     setupCustomizationListeners();
 }
 
@@ -15269,14 +15583,14 @@ function setupCustomizationListeners() {
     });
 }
 
-// Zoom functionality for character preview
+// キャラプレビューのズーム機能
 function setupZoomControls(container) {
     let zoomLevel = 1;
     const minZoom = 0.5;
     const maxZoom = 3;
     const zoomSpeed = 0.1;
     
-    // Mouse wheel zoom for PC
+    // PC向けマウスホイールズーム
     container.addEventListener('wheel', (e) => {
         e.preventDefault();
         
@@ -15288,13 +15602,13 @@ function setupZoomControls(container) {
         }
     });
 
-    // Keep mobile scrolling usable in the split preview pane.
-    // Character editor touch zoom is disabled so vertical swipe scroll works.
+    // 分割プレビューペインでモバイルスクロールを有効に保つ。
+    // 縦スワイプスクロールを優先するため、キャラエディタのタッチズームは無効化。
     if (container.id === 'character-preview-container') {
         return;
     }
 
-    // Touch pinch zoom for mobile
+    // モバイル向けピンチズーム
     let initialDistance = 0;
     
     container.addEventListener('touchstart', (e) => {
@@ -15327,7 +15641,7 @@ function getTouchDistance(touches) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-// Reset character to default settings
+// キャラ設定をデフォルトへリセット
 function resetCharacterToDefault(character) {
     const defaultSettings = {
         player: {
@@ -15364,14 +15678,14 @@ function resetCharacterToDefault(character) {
         }
     };
     
-    // Update the character customization
+    // キャラカスタマイズを更新
     if (defaultSettings[character]) {
         characterCustomization[character] = { ...defaultSettings[character] };
         
-        // Update UI to reflect the changes
+        // 変更内容をUIへ反映
         loadCharacterSettingsToUI();
         
-        // Update preview if this character is currently selected
+        // このキャラが選択中ならプレビューを更新
         if (currentPreviewCharacter === character) {
             updatePreviewCharacter();
         }
@@ -15383,7 +15697,7 @@ function resetCharacterToDefault(character) {
 function updateCharacterCustomization(character, property, value) {
     if (!characterCustomization[character]) return;
     
-    // Convert property names to match the data structure
+    // データ構造に合わせてプロパティ名を変換
     const propertyMap = {
         'hair-style': 'hairStyle',
         'hair-color': 'hairColor',
@@ -15487,30 +15801,30 @@ function initCharacterPreview() {
     const container = document.getElementById('character-preview-container');
     if (!container) return;
     
-    // Create scene
+    // シーンを作成
     characterEditorScene = new THREE.Scene();
     characterEditorScene.background = new THREE.Color(0x111111);
     
-    // Create camera
+    // カメラを作成
     const width = container.clientWidth;
     const height = container.clientHeight;
     characterEditorCamera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     characterEditorCamera.position.set(0, 2, 5);
     characterEditorCamera.lookAt(0, 2, 0);
     
-    // Create renderer
+    // レンダラーを作成
     characterEditorRenderer = new THREE.WebGLRenderer({ antialias: true });
     characterEditorRenderer.setSize(width, height);
     characterEditorRenderer.shadowMap.enabled = true;
     characterEditorRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
     
-    // Clear container and add renderer
+    // コンテナをクリアしてレンダラーを追加
     while (container.firstChild) {
         container.removeChild(container.firstChild);
     }
     container.appendChild(characterEditorRenderer.domElement);
     
-    // Add lights
+    // ライトを追加
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     characterEditorScene.add(ambientLight);
     
@@ -15521,7 +15835,7 @@ function initCharacterPreview() {
     directionalLight.shadow.mapSize.height = 2048;
     characterEditorScene.add(directionalLight);
     
-    // Add ground
+    // 地面を追加
     const groundGeometry = new THREE.PlaneGeometry(10, 10);
     const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
@@ -15530,7 +15844,7 @@ function initCharacterPreview() {
     ground.receiveShadow = true;
     characterEditorScene.add(ground);
     
-    // Start animation loop
+    // アニメーションループを開始
     animateCharacterPreview();
 }
 
@@ -15567,7 +15881,7 @@ function cleanupCharacterPreview() {
 function updatePreviewCharacter() {
     if (!characterEditorScene) return;
     
-    // Remove existing preview character
+    // 既存プレビューキャラを削除
     if (previewCharacter) {
         characterEditorScene.remove(previewCharacter);
         previewCharacter.traverse(child => {
@@ -15576,11 +15890,11 @@ function updatePreviewCharacter() {
         });
     }
     
-    // Create new preview character with current customization
+    // 現在のカスタム内容で新しいプレビューキャラを作成
     const customization = characterCustomization[currentPreviewCharacter];
     previewCharacter = createCharacterModel(0xffffff, customization);
     
-    // Reset pose to default standing position
+    // ポーズをデフォルトの立ち姿へリセット
     resetCharacterPose(previewCharacter);
     
     previewCharacter.position.set(0, 0, 0);
@@ -15595,7 +15909,7 @@ function resetCharacterPose(character) {
     
     const parts = character.userData.parts;
     
-    // Reset all body parts to default positions
+    // 全身パーツをデフォルト位置へリセット
     if (parts.body) {
         parts.body.rotation.set(0, 0, 0);
     }
@@ -15630,7 +15944,7 @@ function resetCharacterPose(character) {
         parts.rightKnee.rotation.set(0, 0, 0);
     }
     applyIdleLegStance(parts);
-    // Hide gun only for preview characters
+    // プレビューキャラのみ銃を非表示
     if (parts.gun) {
         parts.gun.visible = false;
     }
@@ -15716,10 +16030,10 @@ function loadCharacterSettingsToUI() {
 }
 
 function saveCharacterSettings() {
-    // Save to localStorage
+    // localStorageへ保存
     localStorage.setItem('characterCustomization', JSON.stringify(characterCustomization));
     
-    // Show feedback
+    // フィードバック表示
     const saveButton = document.getElementById('save-character-settings');
     if (saveButton) {
         const originalText = saveButton.textContent;
@@ -15744,7 +16058,7 @@ function loadCharacterSettings() {
     }
 }
 
-// Export character data to JSON
+// キャラデータをJSONへエクスポート
 function exportCharacterDataToJSON() {
     const characterData = {
         timestamp: new Date().toISOString(),
@@ -15759,7 +16073,7 @@ function exportCharacterDataToJSON() {
     
     const jsonString = JSON.stringify(characterData, null, 2);
     
-    // Create and download JSON file
+    // JSONファイルを生成してダウンロード
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -15773,7 +16087,7 @@ function exportCharacterDataToJSON() {
     debugLog('Character data exported to JSON:', characterData);
 }
 
-// Import character data from JSON
+// JSONからキャラデータをインポート
 function importCharacterDataFromJSON(file) {
     const reader = new FileReader();
     
@@ -15781,24 +16095,24 @@ function importCharacterDataFromJSON(file) {
         try {
             const characterData = JSON.parse(e.target.result);
             
-            // Validate JSON structure
+            // JSON構造を検証
             if (!characterData.characters || !characterData.characters.player) {
                 throw new Error('Invalid character data format');
             }
             
-            // Update character customization
+            // キャラカスタマイズを更新
             characterCustomization.player = characterData.characters.player || characterCustomization.player;
             characterCustomization.enemy1 = characterData.characters.enemy1 || characterCustomization.enemy1;
             characterCustomization.enemy2 = characterData.characters.enemy2 || characterCustomization.enemy2;
             characterCustomization.enemy3 = characterData.characters.enemy3 || characterCustomization.enemy3;
             
-            // Update UI with loaded data
+            // 読み込みデータでUIを更新
             loadCharacterSettingsToUI();
             
-            // Save to localStorage
+            // localStorageへ保存
             saveCharacterSettings();
             
-            // Update preview if currently showing
+            // 表示中ならプレビューを更新
             if (previewCharacter) {
                 updatePreviewCharacter();
             }
@@ -15815,12 +16129,12 @@ function importCharacterDataFromJSON(file) {
     reader.readAsText(file);
 }
 
-// Initialize character editor when DOM is loaded
+// DOM読み込み時にキャラクターエディタを初期化
 document.addEventListener('DOMContentLoaded', function() {
-    // Load settings first
+    // 先に設定を読み込む
     loadCharacterSettings();
     
-    // Time Lapse Mode event listener
+    // タイムラプスモードのイベントリスナー
     const timeLapseCheckbox = document.getElementById('time-lapse-mode');
     if (timeLapseCheckbox) {
         timeLapseCheckbox.addEventListener('change', function() {
@@ -15832,7 +16146,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Night Mode event listener
+    // Night Modeのイベントリスナー
     const nightModeCheckbox = document.getElementById('night-mode');
     if (nightModeCheckbox) {
         nightModeCheckbox.addEventListener('change', function() {
@@ -15843,11 +16157,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Initialize editor after a small delay to ensure all elements are ready
+    // 全要素の準備完了を待つため、短い遅延後にエディタを初期化
     setTimeout(() => {
         initCharacterEditor();
         initGunEditor();
     }, 100);
-}); // End of second DOMContentLoaded event listener
+}); // 2つ目のDOMContentLoadedイベントリスナー終了
 
 animate();
+
+
+
+
+
