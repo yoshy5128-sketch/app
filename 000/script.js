@@ -10565,6 +10565,8 @@ function startPlayerDeathSequence(projectile) {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
+    // キルカメラ中にジョイスティック内部状態が壊れたまま残るのを防ぐ
+    destroyJoystick();
 
     // プレイヤーモデルは足元基準で配置
     playerModel.position.set(0, -playerTargetHeight, 0);
@@ -11056,6 +11058,8 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
       if (followBtn) followBtn.style.display = 'none';
       if (zoomBtn) zoomBtn.style.display = 'none';
       if (crouchBtn) crouchBtn.style.display = 'none';
+      // キルカメラ中にジョイスティック内部状態が壊れたまま残るのを防ぐ
+      destroyJoystick();
     createRedSmokeEffect(ai.position);
     const aiDeathLocation = ai.position.clone();
     const aiLookAt = aiDeathLocation.clone().add(new THREE.Vector3(0, 1.2, 0));
