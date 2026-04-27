@@ -9048,6 +9048,20 @@ const lookSpeed = 0.006;
           joystickMoveVector.set(0, 0);
       });
   }
+
+  function ensureJoystickReady(forceReinit = false) {
+      if (!shouldShowTouchControls()) return;
+      const joystickZone = document.getElementById('joystick-move');
+      if (!joystickZone) return;
+      if (joystickZone.style.display === 'none') return;
+      if (!isGameRunning) return;
+
+      const rect = joystickZone.getBoundingClientRect();
+      const invalidRect = rect.width < 40 || rect.height < 40;
+      if (forceReinit || !moveManager || invalidRect) {
+          initJoystick();
+      }
+  }
   
   initJoystick();
   window.addEventListener('resize', () => {
@@ -9075,6 +9089,28 @@ const lookSpeed = 0.006;
           initJoystick();
       }
   });
+  document.addEventListener('touchend', (event) => {
+      if (!isGameRunning || !shouldShowTouchControls()) return;
+      if (event.touches && event.touches.length === 0) {
+          joystickMoveVector.set(0, 0);
+          requestAnimationFrame(() => ensureJoystickReady(true));
+      }
+  }, { passive: true });
+  document.addEventListener('touchcancel', (event) => {
+      if (!isGameRunning || !shouldShowTouchControls()) return;
+      if (!event.touches || event.touches.length === 0) {
+          joystickMoveVector.set(0, 0);
+          requestAnimationFrame(() => ensureJoystickReady(true));
+      }
+  }, { passive: true });
+  if (window.visualViewport) {
+      const reflowJoystick = () => {
+          if (!isGameRunning || !shouldShowTouchControls()) return;
+          requestAnimationFrame(() => ensureJoystickReady(true));
+      };
+      window.visualViewport.addEventListener('resize', reflowJoystick);
+      window.visualViewport.addEventListener('scroll', reflowJoystick);
+  }
 const keySet = new Set();
 
 function getNearestLivingEnemyPosition(originPosition) {
@@ -10667,6 +10703,7 @@ function startPlayerDeathSequence(projectile) {
                     const el = document.getElementById(id);
                     if (el) el.style.display = 'block';
                 });
+                if (shouldShowTouchControls()) ensureJoystickReady(true);
                 const followBtn = document.getElementById('follow-button');
                 if (followBtn) {
                     const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
@@ -10704,6 +10741,7 @@ function startPlayerDeathSequence(projectile) {
                         const el = document.getElementById(id);
                         if (el) el.style.display = 'block';
                     });
+                    if (shouldShowTouchControls()) ensureJoystickReady(true);
                     const followBtn = document.getElementById('follow-button');
                     if (followBtn) {
                         const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
@@ -11053,22 +11091,23 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     const aiInitialVelocity = aiKick.clone();
     aiInitialVelocity.y += 2.4;
     startKillCamPhysics(ai, ai.userData ? ai.userData.parts : null, aiInitialVelocity, 0.4);
-        setTimeout(() => {
-            isAIDeathPlaying = false;
-            syncKillCamLighting();
-            cinematicTargetAI = null;
-            stopKillCamPhysics();
+          setTimeout(() => {
+              isAIDeathPlaying = false;
+              syncKillCamLighting();
+              cinematicTargetAI = null;
+              stopKillCamPhysics();
             restoreRightButtonsDefault();
             finalizeAIDeathWithoutKillCam(ai, killerSource);
             if (player) player.visible = true;
-          if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
-              if (joy) joy.style.display = 'block';
-              if (fire) fire.style.display = 'block';
-            if (cross) cross.style.display = 'block';
-            if (followBtn) {
-                const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
-                followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
-            }
+            if (ais.length > 0 || gameSettings.gameMode === 'arcade') {
+                if (joy) joy.style.display = 'block';
+                if (fire) fire.style.display = 'block';
+              if (cross) cross.style.display = 'block';
+              if (shouldShowTouchControls()) ensureJoystickReady(true);
+              if (followBtn) {
+                  const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                  followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
+              }
             if (player) {
                 player.traverse((object) => { object.visible = true; }); // AI死亡演出終了時はプレイヤーを再表示
                 if (playerModel) {
