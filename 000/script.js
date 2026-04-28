@@ -202,15 +202,7 @@ function applySmoothNightMode() {
     }
     
     // 街灯を処理 - 通常の夜モードの動作に合わせる
-    if (streetLights && streetLights.length > 0) {
-        streetLights.forEach(light => {
-            const pointLight = light.children.find(child => child.isPointLight);
-            if (pointLight) {
-                // スムーズな遷移ではなく、通常の夜モードのように直接強度を使用
-                pointLight.intensity = nightIntensity * gameSettings.nightModeLightIntensity;
-            }
-        });
-    }
+    setStreetLightsIntensity(nightIntensity * gameSettings.nightModeLightIntensity);
     
     // UIチェックボックスを更新（最も近い状態にスナップ）
     const shouldBeNightMode = nightIntensity > 0.5;
@@ -239,13 +231,7 @@ function applyNightMode(isNight) {
             renderer.setClearColor(0x111122);
             // renderer clear colorを夜の色に設定
         }
-        if (streetLights && streetLights.length > 0) {
-            streetLights.forEach(light => {
-                const pointLight = light.children.find(child => child.isPointLight);
-                if (pointLight) pointLight.intensity = gameSettings.nightModeLightIntensity;
-            });
-            // 街灯をオン
-        }
+        setStreetLightsIntensity(gameSettings.nightModeLightIntensity);
     } else {
         // 昼モードを適用
         // 昼モードを適用中
@@ -261,13 +247,7 @@ function applyNightMode(isNight) {
             renderer.setClearColor(0x87CEEB);
             // renderer clear colorを昼の色に設定
         }
-        if (streetLights && streetLights.length > 0) {
-            streetLights.forEach(light => {
-                const pointLight = light.children.find(child => child.isPointLight);
-                if (pointLight) pointLight.intensity = 0;
-            });
-            // 街灯をオフ
-        }
+        setStreetLightsIntensity(0);
     }
 }
 
@@ -2756,6 +2736,21 @@ edge.position.y = 0;
 scene.add(edge);
 const streetLights = [];
 
+function setStreetLightsIntensity(level) {
+    const intensity = Math.max(0, Number(level) || 0);
+    if (!streetLights || streetLights.length === 0) return;
+    streetLights.forEach(lightGroup => {
+        if (!lightGroup) return;
+        const pointLight = lightGroup.children.find(child => child.isPointLight);
+        if (pointLight) pointLight.intensity = intensity;
+        const glowMesh = lightGroup.userData ? lightGroup.userData.glowMesh : null;
+        if (glowMesh && glowMesh.material && glowMesh.material.emissive) {
+            glowMesh.material.emissiveIntensity = intensity > 0 ? Math.min(2.2, 0.55 + intensity * 0.42) : 0;
+            glowMesh.material.opacity = intensity > 0 ? Math.min(0.92, 0.28 + intensity * 0.18) : 0;
+        }
+    });
+}
+
 function createStreetLight(position) {
     const lightGroup = new THREE.Group();
     const poleGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10, 8);
@@ -2768,9 +2763,23 @@ function createStreetLight(position) {
     const shade = new THREE.Mesh(shadeGeometry, shadeMaterial);
     shade.position.y = pole.position.y + (poleGeometry.parameters.height / 2) + (shadeGeometry.parameters.height / 2);
     lightGroup.add(shade);
+    // 傘の下のぼんやり発光（夜間に強くする）
+    const glowMaterial = new THREE.MeshLambertMaterial({
+        color: 0xffcc88,
+        emissive: 0xffcc88,
+        emissiveIntensity: 0,
+        transparent: true,
+        opacity: 0
+    });
+    const glowMesh = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 12), glowMaterial);
+    // 傘の内側（下側）に配置
+    glowMesh.position.y = shade.position.y - (shadeGeometry.parameters.height * 0.28);
+    lightGroup.add(glowMesh);
     const pointLight = new THREE.PointLight(0xffddaa, 0, 50, 2);
-    pointLight.position.y = shade.position.y + (shadeGeometry.parameters.height / 2) - 0.5;
+    pointLight.position.y = shade.position.y - (shadeGeometry.parameters.height * 0.32);
     lightGroup.add(pointLight);
+    lightGroup.userData = lightGroup.userData || {};
+    lightGroup.userData.glowMesh = glowMesh;
     lightGroup.position.copy(position);
     scene.add(lightGroup);
     streetLights.push(lightGroup);
@@ -9640,18 +9649,12 @@ function startGame() {
         ambientLight.intensity = 0.05;
         directionalLight.intensity = 0.05;
         renderer.setClearColor(0x111122);
-        streetLights.forEach(light => {
-            const pointLight = light.children.find(child => child.isPointLight);
-            if (pointLight) pointLight.intensity = gameSettings.nightModeLightIntensity;
-        });
+        setStreetLightsIntensity(gameSettings.nightModeLightIntensity);
     } else {
         ambientLight.intensity = 0.5;
         directionalLight.intensity = 0.5;
         renderer.setClearColor(0x87CEEB);
-        streetLights.forEach(light => {
-            const pointLight = light.children.find(child => child.isPointLight);
-            if (pointLight) pointLight.intensity = 0;
-        });
+        setStreetLightsIntensity(0);
     }
     const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display']; // 共通UI
 
