@@ -2748,6 +2748,11 @@ function setStreetLightsIntensity(level) {
             glowMesh.material.emissiveIntensity = intensity > 0 ? Math.min(2.2, 0.55 + intensity * 0.42) : 0;
             glowMesh.material.opacity = intensity > 0 ? Math.min(0.92, 0.28 + intensity * 0.18) : 0;
         }
+        const haloMesh = lightGroup.userData ? lightGroup.userData.haloMesh : null;
+        if (haloMesh && haloMesh.material) {
+            haloMesh.material.opacity = intensity > 0 ? Math.min(0.06, 0.008 + intensity * 0.012) : 0;
+            haloMesh.visible = intensity > 0;
+        }
     });
 }
 
@@ -2775,11 +2780,24 @@ function createStreetLight(position) {
     // 傘の内側（下側）に配置
     glowMesh.position.y = shade.position.y - (shadeGeometry.parameters.height * 0.28);
     lightGroup.add(glowMesh);
+    // うっすら広がるグロー（雰囲気用）
+    const haloMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffd39a,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+    const haloMesh = new THREE.Mesh(new THREE.SphereGeometry(1.1, 14, 14), haloMaterial);
+    haloMesh.position.copy(glowMesh.position);
+    haloMesh.visible = false;
+    lightGroup.add(haloMesh);
     const pointLight = new THREE.PointLight(0xffddaa, 0, 50, 2);
     pointLight.position.y = shade.position.y - (shadeGeometry.parameters.height * 0.32);
     lightGroup.add(pointLight);
     lightGroup.userData = lightGroup.userData || {};
     lightGroup.userData.glowMesh = glowMesh;
+    lightGroup.userData.haloMesh = haloMesh;
     lightGroup.position.copy(position);
     scene.add(lightGroup);
     streetLights.push(lightGroup);
