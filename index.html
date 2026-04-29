@@ -1,767 +1,242 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gun Fight Arena</title>
-    <style>
-        /* スマホ対応 */
-        @media (max-width: 768px) {
-            #character-editor-screen {
-                padding: 10px !important;
-                font-size: 0.8em !important;
-                max-height: 100vh !important;
-                overflow-y: auto !important;
-            }
-            
-            #character-editor-screen h2 {
-                font-size: 1em !important;
-                margin-bottom: 10px !important;
-            }
-            
-            #character-editor-screen h3 {
-                font-size: 0.8em !important;
-            }
-            
-            #character-preview-container {
-                height: 250px !important;
-            }
-            
-            .character-section {
-                min-width: 100% !important;
-                margin-bottom: 8px !important;
-                padding: 8px !important;
-            }
-            
-            #character-editor-screen label {
-                font-size: 0.7em !important;
-                margin-bottom: 2px !important;
-            }
-            
-            #character-editor-screen select,
-            #character-editor-screen input[type="color"] {
-                height: 25px !important;
-                padding: 2px !important;
-                font-size: 0.7em !important;
-            }
-            
-            #character-editor-screen button {
-                padding: 6px 12px !important;
-                font-size: 0.7em !important;
-                margin: 2px !important;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            #character-editor-screen {
-                padding: 5px !important;
-                font-size: 0.7em !important;
-            }
-            
-            #character-preview-container {
-                height: 200px !important;
-            }
-            
-            #character-editor-screen label {
-                font-size: 0.6em !important;
-            }
-            
-            #character-editor-screen select,
-            #character-editor-screen input[type="color"] {
-                height: 20px !important;
-                font-size: 0.6em !important;
-            }
-            
-            #character-editor-screen button {
-                padding: 4px 8px !important;
-                font-size: 0.6em !important;
-            }
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>APPLABO</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 2em;
+      text-align: center;
+    }
+    h1 {
+      color: #333;
+      font-size: 3em;
+      margin-bottom: 0.2em;
+    }
+    p {
+      color: #666;
+      font-size: 1.2em;
+      margin-bottom: 2em;
+    }
+    .apps-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 1200px; /* 全体の最大幅を設定 */
+      margin: 0 auto;
+      text-align: center;
+    }
+    .apps-title {
+      font-size: 1.6em;
+      color: #444;
+      border-bottom: 2px solid #e0e0e0;
+      margin-bottom: 1em;
+      padding-bottom: 0.2em;
+      font-weight: 700;
+      width: 100%;
+    }
+    .app-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5em;
+      list-style: none;
+      padding: 0;
+      justify-content: center;
+      margin: 0;
+      width: 100%;
+    }
+    .app-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+      padding: 1.5em;
+      width: 280px; /* 固定幅にすることで列を安定させる */
+      display: flex;
+      flex-direction: column; /* 中身を縦に並べる */
+      text-align: center;
+      transition: box-shadow 0.2s, transform 0.2s;
+      box-sizing: border-box;
+    }
+    .app-card:hover {
+      box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+      transform: translateY(-2px);
+    }
+    .app-name {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #222;
+      margin-bottom: 0.5em;
+      min-height: 2.4em; /* タイトルの高さを最低2行分確保して揃える */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .app-desc {
+      color: #555;
+      font-size: 0.95em;
+      margin-bottom: 1.5em;
+      flex-grow: 1; /* ここが重要：説明文が短くても余白を埋めてボタンを下に押し下げる */
+      line-height: 1.4;
+    }
+    .app-link {
+      display: inline-block;
+      padding: 0.6em 1.2em;
+      border-radius: 6px;
+      background: #007acc;
+      color: #fff;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.2s;
+      margin-top: auto; /* ボタンを常に一番下に配置 */
+    }
+    .app-link:hover {
+      background: #005fa3;
+    }
 
-        .gun-editor-shell {
-            display: grid;
-            grid-template-columns: 420px 1fr;
-            gap: 16px;
-            align-items: stretch;
-            min-height: calc(100vh - 120px);
-        }
-        .gun-editor-pane {
-            background-color: #222;
-            border-radius: 6px;
-            padding: 12px;
-            box-sizing: border-box;
-            min-height: 0;
-        }
-        .gun-editor-preview-pane {
-            display: flex;
-            flex-direction: column;
-            position: sticky;
-            top: 12px;
-            height: calc(100vh - 150px);
-        }
-        .gun-editor-settings-pane {
-            overflow-y: auto;
-            height: calc(100vh - 150px);
-        }
-        .gun-editor-controls-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-        @media (max-width: 980px) {
-            .gun-editor-shell {
-                grid-template-columns: 1fr;
-            }
-            .gun-editor-preview-pane,
-            .gun-editor-settings-pane {
-                position: static;
-                height: auto;
-                overflow: visible;
-            }
-            .gun-editor-controls-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-    
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="./manifest.json">
-
-    <script src="https://unpkg.com/nipplejs@0.8.4/dist/nipplejs.js"></script> 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
+    /* レスポンシブ対応 */
+    @media (max-width: 650px) {
+      body {
+        padding: 1em;
+      }
+      .app-card {
+        width: 100%; /* スマホでは1列にする */
+        max-width: 350px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div id="start-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 500; display: flex; justify-content: center; align-items: center; overflow-y: auto;">
-        <div style="padding: 20px; background-color: rgba(0,0,0,0.8); border-radius: 10px; text-align: left; max-width: 90%; max-height: 90vh; overflow-y: auto;">
-            <h1 style="text-align: center;">Gun Fight Settings</h1>
 
-            <h2 style="margin-top: 20px;">HP Settings</h2>
-            <label for="player-hp">Player HP:</label>
-            <select id="player-hp" style="font-size: 1em; padding: 5px;">
-                <option value="3">3</option>
-                <option value="10">10</option>
-                <option value="20" selected>20</option>
-                <option value="Infinity">Infinite</option>
-            </select>
-            <br>
-            <label for="ai-hp" style="margin-top: 10px; display: inline-block;">AI HP:</label>
-            <select id="ai-hp" style="font-size: 1em; padding: 5px;">
-                <option value="3">3</option>
-                <option value="10">10</option>
-                <option value="20" selected>20</option>
-                <option value="Infinity">Infinite</option>
-            </select>
+  <h1>APPLABO</h1>
+  <p>ここにあるのはスマホ向けのWEBアプリです。<br>※一部PC対応もあり</p>
 
-            <h2 style="margin-top: 20px;">Projectile Speed</h2>
-            <div id="projectile-speed-setting" style="margin-top: 10px;">
-                <input type="range" id="projectile-speed" min="0.5" max="2.0" step="0.05" value="2.0" style="width: 100%;">
-                <span id="projectile-speed-value">2.0x</span>
-            </div>
+  <div style="text-align: center; margin-bottom: 2em;">
+    <img src="qr.png" alt="QRコード" style="width: 45vw; max-width: 200px;">
+    <p style="color:#555; font-size:0.9em; margin-top:0.5em;">このQRコードをスマホで読み取ってください</p>
+  </div>
 
-            <h2 style="margin-top: 20px;">Character Customization</h2>
-            <button id="open-character-editor" style="padding: 10px 20px; font-size: 1em; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">
-                Open Character Editor
-            </button>
-            <div style="margin-top: 8px;">
-                <button id="open-gun-editor" style="padding: 10px 20px; font-size: 1em; background-color: #ff7b00; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 10px;">
-                    Open Gun Editor
-                </button>
-            </div>
+  <section class="apps-section">
+    <div class="apps-title">アプリ一覧</div>
+    <ul class="app-list">
+      
+      <li class="app-card">
+        <div class="app-name">GunFightArena</div>
+        <div class="app-desc">シンプルでスピーディーかつ、エキサイティングなFPSシューティング PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/gfa/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+      
+<li class="app-card">
+        <div class="app-name">Descent Maze</div>
+        <div class="app-desc">出口を探して…宙に浮く階段を降りてゆく恐怖… PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/down/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
+      
+      <li class="app-card">
+        <div class="app-name">Everest Simulator</div>
+        <div class="app-desc">あなたは生命を賭けてエベレストを制覇できるか？！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/eve/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Weapon Count</h2>
-            <label for="mg-count">Machine Guns (MG):</label>
-            <select id="mg-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-            </select>
-            <br>
-            <label for="rr-count" style="margin-top: 10px; display: inline-block;">Rocket Launchers (RL):</label>
-            <select id="rr-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-            </select>
-            <br>
-            <label for="sr-count" style="margin-top: 10px; display: inline-block;">Sniper Rifles (SR):</label>
-            <select id="sr-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-            </select>
-            <br>
-            <label for="sg-count" style="margin-top: 10px; display: inline-block;">Shotguns (SG):</label>
-            <select id="sg-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-            </select>
-            <br>
-            <label for="mr-count" style="margin-top: 10px; display: inline-block;">M1 Rifles (MR):</label>
-            <select id="mr-count" style="font-size: 1em; padding: 5px;">
-                <option value="0">0</option>
-                <option value="1" selected>1</option>
-                <option value="3">3</option>
-                <option value="5">5</option>
-                <option value="10">10</option>
-            </select>
+      <li class="app-card">
+        <div class="app-name">GO MP3</div>
+        <div class="app-desc">複数のフォルダにあるMP3データをソングリスト形式で管理可能。Chromeのみ対応 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/gomp3/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Default Weapon (Infinite Ammo)</h2>
-            <div style="margin-bottom: 8px;">
-                <label for="default-weapon-target" style="margin-right: 6px;">Target:</label>
-                <select id="default-weapon-target" style="font-size: 1em; padding: 4px 6px;">
-                    <option value="player" selected>Player</option>
-                    <option value="ai1">AI 1</option>
-                    <option value="ai2">AI 2</option>
-                    <option value="ai3">AI 3</option>
-                </select>
-            </div>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="checkbox" id="default-weapon-mg" name="default-weapon" value="machinegun"> Machine Gun
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="checkbox" id="default-weapon-rr" name="default-weapon" value="rocketlauncher"> Rocket Launcher
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="checkbox" id="default-weapon-sr" name="default-weapon" value="sniperrifle"> Sniper Rifle
-            </label>
-            <label style="display: block;">
-                <input type="checkbox" id="default-weapon-sg" name="default-weapon" value="shotgun"> Shotgun
-            </label>
-            <label style="display: block;">
-                <input type="checkbox" id="default-weapon-mr" name="default-weapon" value="m1rifle"> M1 Rifle
-            </label>
+      <li class="app-card">
+        <div class="app-name">CutMP3</div>
+        <div class="app-desc">MP3ファイルのトリミング加工が可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/cutmp3/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
+      <li class="app-card">
+        <div class="app-name">区間リピート動画プレイヤー</div>
+        <div class="app-desc">区間リピート再生が可能な動画プレイヤー 再生スピード変更可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/vrp/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">AI Shotlevel</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-shot" value="ama" checked> Amature
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-shot" value="pro"> Professional
-            </label>
+      <li class="app-card">
+        <div class="app-name">Excelいらづ</div>
+        <div class="app-desc">Excelファイルの編集・保存が可能 PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/excel/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">AI Count</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-count" value="1"> 1 AI
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="ai-count" value="2"> 2 AIs
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="ai-count" value="3" checked> 3 AIs
-            </label>
+      <li class="app-card">
+        <div class="app-name">宅配DEATH</div>
+        <div class="app-desc">ギリギリのガソリンを使って最短ルートで宅配せよ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/takuhai/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Map Selection</h2>
-            <select id="unified-map-selector" style="font-size: 1em; padding: 5px; width: 100%; max-width: 300px; margin-bottom: 10px;"></select>
-            <div style="text-align: center;">
-                <button id="map-editor-button" style="padding: 10px 20px; font-size: 1em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Open Map Editor</button>
-            </div>
-            <div style="text-align: center; margin-top: 10px;">
-                <button id="save-map-settings-btn" style="padding: 10px 20px; font-size: 1em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Save Setting</button>
-            </div>
+      <li class="app-card">
+        <div class="app-name">Shapes Fight</div>
+        <div class="app-desc">いつでもどこでもサクッと気軽にShooting FPS PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/shapesfight/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
+      <li class="app-card">
+        <div class="app-name">MARZ HELL</div>
+        <div class="app-desc">ここは絶望に苛まれた迷宮MARZ。門番たちの目を掻い潜りながらエリアからの脱出を目指せ！PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/marz/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Game Mode</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="battle" checked> Battle Mode (AIを全滅させたら勝利)
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="arcade"> Arcade Mode (AIを倒したキル数を競う - AIのみ無限復活)
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="ffa"> Free For All (全員が敵同士 - 全員無限復活)
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="game-mode" value="team"> Team Deathmatch (2V2 プレイヤー&AI1体 VS AI2体)
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (2V2 チーム戦でキル数を競う - 全員無限復活)
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="billbattle"> INDOOR COMBAT (室内バトル)
-            </label>
-            <div id="billbattle-options" style="margin-top: 10px; padding-left: 10px;">
-                <label style="display: block; margin-bottom: 4px;">INDOOR COMBAT Roomsize:</label>
-                <select id="billbattle-size" style="margin-bottom: 8px;">
-                    <option value="100">100 (Default)</option>
-                    <option value="90">90</option>
-                    <option value="80">80</option>
-                    <option value="70">70</option>
-                    <option value="60">60</option>
-                    <option value="50">50</option>
-                    <option value="random">SIZE RANDOM</option>
-                </select>
-                <label style="display: block; margin-bottom: 4px;">INDOOR COMBAT Lighting:</label>
-                <select id="billbattle-lighting">
-                    <option value="all">ALL ON</option>
-                    <option value="random">RANDOM</option>
-                </select>
-            </div>
+      <li class="app-card">
+        <div class="app-name">バッティングマシン・シミュレーター</div>
+        <div class="app-desc">スピードの緩急から変化球まで自由自在に投げてくるバッティングマシンに挑め！ PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/batt" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <div id="medikit-setting" style="margin-top: 20px;">
-                <div style="font-size: 1.2em; font-weight: bold;">Medikit</div>
-                <div style="font-size: 1em;">ArcadeMode＆IndoorCombatOnly</div>
-                <select id="medikit-count" style="font-size: 1em; padding: 5px; margin-top: 6px;">
-                    <option value="0">0</option>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                    <option value="5" selected>5</option>
-                </select>
-            </div>
+      <li class="app-card">
+        <div class="app-name">ピッチング・シミュレーター</div>
+        <div class="app-desc">豪腕投手となり、さまざまな球種を投げ分けてAI打者と対戦！PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/pitch/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Kill Camera</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="killcam-mode" value="all"> 全員のキルで再生
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="killcam-mode" value="playerOnly" checked> プレイヤーが倒した敵のみ再生
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="killcam-mode" value="off"> OFF（キルカメラなし プレイヤー死亡時のみ再生）
-            </label>
-            
-            <h2 style="margin-top: 20px;">Barrel Respawn</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="barrel-respawn" value="true"> ON（30秒後に同じ場所へ復活）
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="barrel-respawn" value="false" checked> OFF
-            </label>
+      <li class="app-card">
+        <div class="app-name">Life Simulater</div>
+        <div class="app-desc">あなたは人生という道を寿命が尽きるまで歩みはじめます。PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/life/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Auto-Aim（Sniper Rifle）</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="auto-aim" value="true" checked> ON
-            </label>
-            <label style="display: block;">
-                <input type="radio" name="auto-aim" value="false"> OFF
-            </label>
-            
-            <h2 style="margin-top: 20px;">Night Mode</h2>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="checkbox" id="time-lapse-mode"> Time Lapse Mode (Auto day/night cycle every minute)
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="checkbox" id="night-mode"> Night Mode
-            </label>
-            <div id="night-mode-intensity-setting" style="margin-top: 10px;">
-                <label for="night-mode-intensity">Night Mode Light Intensity:</label>
-                <input type="range" id="night-mode-intensity" min="0" max="2" step="0.1" value="2" style="width: 100%;">
-                <span id="night-mode-intensity-value">0.8</span>
-            </div>
+      <li class="app-card">
+        <div class="app-name">石切りゲーム</div>
+        <div class="app-desc">平たい石を川に投げて何回ジャンプさせられるか？！ PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/stone/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <h2 style="margin-top: 20px;">Button Setting (For-SmartPhone)</h2>
-            <div style="text-align: center; margin-top: 10px;">
-                <button id="button-setting-btn" style="padding: 10px 20px; font-size: 1em; background-color: #00aaff; color: white; border: none; border-radius: 5px; cursor: pointer;">Open Button Settings</button>
-            </div>
+      <li class="app-card">
+        <div class="app-name">あっちむいてホイ！</div>
+        <div class="app-desc">じゃんけんして指先で方向を指すアレ。スワイプで方向を指せ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/hoi/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-            <div style="text-align: center; margin-top: 30px;">
-                <button id="start-game-btn" style="padding: 15px 30px; font-size: 1.5em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Start Game</button>
-                <button id="resume-game-btn" style="padding: 15px 30px; font-size: 1.5em; background-color: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; display: none;">Resume Game</button>
-                <button id="restart-pause-btn" style="padding: 15px 30px; font-size: 1.5em; background-color: lightblue; color: black; border: none; border-radius: 5px; cursor: pointer; display: none; margin-top: 10px;">Restart</button>
-            </div>
-        </div>
-    </div>
+      <li class="app-card">
+        <div class="app-name">Bomber Simulater</div>
+        <div class="app-desc">爆撃シミュレーター 地上の物体をすべて破壊せよ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/bomber/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-    <div id="button-settings-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 200;">
-        <h1 style="color: white; text-align: center; margin-top: 50px;">Button Positions</h1>
-        <p style="color: white; text-align: center;">Drag the buttons to your desired positions.</p>
-        
-        <div id="button-setting-feedback" style="color: limegreen; text-align: center; margin-bottom: 10px; font-size: 1.2em; display: none;"></div>
+      <li class="app-card">
+        <div class="app-name">マニュアル車シミュレーター</div>
+        <div class="app-desc">マニュアル車のギアチェンジを楽しめる（まだ未完成）PC不可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/manual/" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-        <div id="preview-joystick-zone" style="position: absolute; left: 10%; bottom: 10%; width: 150px; height: 150px; background-color: rgba(0, 150, 255, 0.4); border-radius: 50%; cursor: move; border: 2px dashed white;">
-            <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: white; text-align: center;">Move</div>
-        </div>
-        <div id="preview-fire-button" style="position: absolute; right: 20px; bottom: 120px; width: 80px; height: 80px; z-index: 10; background-color: rgba(255, 0, 0, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 18px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">Shoot</div>
-        <div id="preview-crouch-button" style="position: absolute; right: 20px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(100, 100, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">Crouch</div>
-        <div id="preview-zoom-button" style="position: absolute; right: 90px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(0, 200, 150, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">Zoom</div>
-        <!-- Add this new preview follow button -->
-        <div id="preview-follow-button" style="position: absolute; right: 20px; bottom: 190px; width: 60px; height: 60px; z-index: 10; background-color: rgba(0, 150, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: move;">FOLLOW</div>
+      <li class="app-card">
+        <div class="app-name">積み木爆破シミュレーター</div>
+        <div class="app-desc">積み木を爆破して粉々にせよ！3秒で爆発する通常爆弾と4連鎖爆弾で壊しまくれ！ PC可</div>
+        <a href="https://yoshy5128-sketch.github.io/app/tsumi" class="app-link" target="_blank" rel="noopener">GitHubで見る</a>
+      </li>
 
-        <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);">
-            <button id="save-button-positions" style="padding: 15px 30px; font-size: 1.5em; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Save</button>
-            <button id="back-to-settings" style="padding: 15px 30px; font-size: 1.5em; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">Back</button>
-        </div>
-    </div>
+    </ul>
+  </section>
 
-    <div id="bgm-settings-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.9); color: white; z-index: 1000; overflow-y: auto; padding: 20px; box-sizing: border-box; flex-direction: column; align-items: center;">
-        <div style="max-width: 500px; width: 100%; text-align: left; margin: 0 auto; padding: 0 10px; box-sizing: border-box;">
-            <h2 style="color: white; text-align: center; margin-bottom: 20px;">BGM Setting</h2>
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px;">Volume: <span id="bgm-volume-value">100%</span></label>
-                <input id="bgm-volume" type="range" min="0" max="100" value="100" style="width: 100%; display: block; margin: 0 auto;">
-            </div>
-            <div style="margin-bottom: 20px;">
-                <label style="margin-right: 15px;"><input type="radio" name="bgm-mode" id="bgm-mode-order" value="order"> 通常</label>
-                <label><input type="radio" name="bgm-mode" id="bgm-mode-random" value="random"> ランダム</label>
-            </div>
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; color: #aaa;">再生モード:</label>
-                <label style="display: block; margin-bottom: 5px;">
-                    <input type="radio" name="bgm-play-mode" id="bgm-play-mode-stage" value="stage" checked> ステージごとに曲を変える
-                </label>
-                <label style="display: block;">
-                    <input type="radio" name="bgm-play-mode" id="bgm-play-mode-continuous" value="continuous"> 曲が終わるまで同じ曲を流し続ける
-                </label>
-            </div>
-            <div id="bgm-track-list" style="display: flex; flex-direction: column; gap: 6px; width: 100%; margin: 0 auto;"></div>
-            <div style="text-align: center; margin-top: 20px;">
-                <button id="bgm-reload-btn" style="padding: 8px 18px; font-size: 1.0em; background-color: #666; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">Song Reload</button>
-                <button id="bgm-settings-back-btn" style="padding: 10px 20px; font-size: 1.0em; background-color: #444; color: white; border: none; border-radius: 5px; cursor: pointer;">Back</button>
-            </div>
-        </div>
-    </div>
-
-
-    <div id="joystick-move"></div>
-    <div id="fire-button">Shoot</div>
-    <!-- Add this new crouch button -->
-    <div id="crouch-button" style="position: fixed; right: 20px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(100, 100, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(100, 100, 255, 0.5);">Crouch</div>
-    <div id="zoom-button" style="position: fixed; right: 90px; bottom: 55px; width: 60px; height: 60px; z-index: 10; background-color: rgba(0, 200, 150, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(0, 200, 150, 0.5);">Zoom</div>
-    <!-- Add this new follow button for smartphones -->
-    <div id="follow-button" style="position: fixed; right: 20px; bottom: 190px; width: 60px; height: 60px; z-index: 10; background-color: rgba(0, 150, 255, 0.7); border-radius: 50%; border: 2px solid #fff; color: white; font-size: 14px; font-weight: bold; justify-content: center; align-items: center; cursor: pointer; box-shadow: 0 0 10px rgba(0, 150, 255, 0.5);">FOLLOW</div>
-    
-    <div id="crosshair">
-        <div class="cross-line" id="line-h"></div>
-        <div class="cross-line" id="line-v"></div>
-        <div class="crosshair-circle" id="crosshair-circle"></div>
-        <div class="crosshair-plus-h" id="crosshair-plus-h"></div>
-        <div class="crosshair-plus-v" id="crosshair-plus-v"></div>
-    </div>
-
-    <div id="scope-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: transparent; z-index: 150; display: none; pointer-events: none;">
-        <div id="night-vision-overlay"></div>
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100vmin; height: 100vmin; border-radius: 50%; box-shadow: 0 0 0 100vmax rgba(0,0,0,0.95);"></div>
-        <div style="position: absolute; background-color: black; width: 2px; height: 30%; top: 10%; left: 50%; transform: translateX(-50%);"></div>
-        <div style="position: absolute; background-color: black; width: 2px; height: 30%; bottom: 10%; left: 50%; transform: translateX(-50%);"></div>
-        <div style="position: absolute; background-color: black; height: 2px; width: 30%; left: 10%; top: 50%; transform: translateY(-50%);"></div>
-        <div style="position: absolute; background-color: black; height: 2px; width: 30%; right: 10%; top: 50%; transform: translateY(-50%);"></div>
-        <div id="cancel-scope-button" style="position: absolute; left: 20px; top: 50%; transform: translateY(-50%); width: 60px; height: 60px; border-radius: 50%; background-color: rgba(255, 255, 255, 0.5); color: black; font-size: 30px; display: flex; justify-content: center; align-items: center; cursor: pointer; pointer-events: auto; display: none;">
-            ×
-        </div>
-    </div>
-    
-    <audio id="playerGunSound" src="pgun.mp3" preload="auto"></audio>
-    <audio id="mgGunSound" src="mg.mp3" preload="auto"></audio>
-    <audio id="rrGunSound" src="rr.mp3" preload="auto"></audio>
-    <audio id="srGunSound" src="pss.mp3" preload="auto"></audio>
-    <audio id="m1GunSound" src="m1.mp3" preload="auto"></audio>
-    <audio id="aiM1GunSound" src="m1_.mp3" preload="auto"></audio>
-    <audio id="aiM1GunSound2" src="m1_2.mp3" preload="auto"></audio>
-    <audio id="aiM1GunSound3" src="m1_3.mp3" preload="auto"></audio>
-    <audio id="aimgGunSound" src="aimg.mp3" preload="auto"></audio>
-    <audio id="ai1mGunSound" src="ai1m.mp3" preload="auto"></audio>
-    <audio id="ai2mGunSound" src="ai2m.mp3" preload="auto"></audio>
-    <audio id="aiGunSound" src="aigun.mp3" preload="auto"></audio>
-    <audio id="explosionSound" src="bom2.mp3" preload="auto"></audio>
-    <audio id="setSound" src="set.mp3" preload="auto"></audio>
-    <audio id="aiSrGunSound" src="ss.mp3" preload="auto"></audio>
-    <audio id="playerSgSound" src="sgun.mp3" preload="auto"></audio>
-    <audio id="aiSgSound" src="aisgun.mp3" preload="auto"></audio>
-    <audio id="rel-audio" src="rel.mp3" preload="auto" volume="1.0"></audio>
-    <audio id="clipSound" src="clip.mp3" preload="auto"></audio>
-    <audio id="bgm-opm" src="opm.mp3" preload="auto" loop></audio>
-    
-    <div id="character-editor-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto;">
-        <div style="padding: 20px; min-height: 100%; max-width: 1200px; margin: 0 auto;">
-            <h2 style="color: white; text-align: center; margin-bottom: 20px;">Character Editor</h2>
-            
-            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-                <!-- プレビュー画面 -->
-                <div style="flex: 1; background-color: #222; padding: 15px; border-radius: 5px;">
-                    <h3 style="color: white; margin-bottom: 10px;">Preview</h3>
-                    <div id="character-preview-container" style="width: 100%; height: 300px; background-color: #111; border-radius: 3px;">
-                        <!-- 3Dプレビュー -->
-                    </div>
-                    <div style="margin-top: 10px; text-align: center;">
-                        <button id="preview-player" style="margin: 5px; padding: 5px 10px; background-color: #ff3333; color: white; border: none; border-radius: 3px; cursor: pointer;">Player</button>
-                        <button id="preview-enemy1" style="margin: 5px; padding: 5px 10px; background-color: #3333ff; color: white; border: none; border-radius: 3px; cursor: pointer;">Enemy 1</button>
-                        <button id="preview-enemy2" style="margin: 5px; padding: 5px 10px; background-color: #00ff00; color: white; border: none; border-radius: 3px; cursor: pointer;">Enemy 2</button>
-                        <button id="preview-enemy3" style="margin: 5px; padding: 5px 10px; background-color: #ff8800; color: white; border: none; border-radius: 3px; cursor: pointer;">Enemy 3</button>
-                    </div>
-                    <div style="margin-top: 5px; text-align: center;">
-                        <button id="default-player" style="margin: 5px; padding: 3px 8px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Default.PL</button>
-                        <button id="default-enemy1" style="margin: 5px; padding: 3px 8px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Default.E1</button>
-                        <button id="default-enemy2" style="margin: 5px; padding: 3px 8px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Default.E2</button>
-                        <button id="default-enemy3" style="margin: 5px; padding: 3px 8px; background-color: #666; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em;">Default.E3</button>
-                    </div>
-                </div>
-                
-                <!-- カスタマイズ設定 -->
-                <div style="flex: 2; background-color: #222; padding: 15px; border-radius: 5px;">
-                    <h3 style="color: white; margin-bottom: 10px;">Settings</h3>
-                    <div id="customization-forms" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <!-- Player Character Customization -->
-                        <div class="character-section" style="background-color: #333; padding: 15px; border-radius: 5px;">
-                            <h4 style="color: #ff3333; margin-bottom: 10px;">Player Character</h4>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Hair Style:</label>
-                                <select id="player-hair-style" style="width: 100%; padding: 5px;">
-                                    <option value="default">Default</option>
-                                    <option value="short">Short</option>
-                                    <option value="long">Afro</option>
-                                    <option value="spiky">Spiky</option>
-                                    <option value="bald">Cap</option>
-                                </select>
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Hair Color:</label>
-                                <input type="color" id="player-hair-color" value="#D2691E" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Skin Color:</label>
-                                <input type="color" id="player-skin-color" value="#ffd1b0" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Clothing Color:</label>
-                                <input type="color" id="player-clothing-color" value="#ff3333" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Pants Color:</label>
-                                <input type="color" id="player-pants-color" value="#111111" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Shoes Color:</label>
-                                <input type="color" id="player-shoes-color" value="#8B4513" style="width: 100%; height: 30px;">
-                            </div>
-                        </div>
-                        
-                        <!-- Enemy 1 Character Customization -->
-                        <div class="character-section" style="background-color: #333; padding: 15px; border-radius: 5px;">
-                            <h4 style="color: #3333ff; margin-bottom: 10px;">Enemy 1</h4>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Hair Style:</label>
-                                <select id="enemy1-hair-style" style="width: 100%; padding: 5px;">
-                                    <option value="default">Default</option>
-                                    <option value="short">Short</option>
-                                    <option value="long">Afro</option>
-                                    <option value="spiky">Spiky</option>
-                                    <option value="bald">Cap</option>
-                                </select>
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Hair Color:</label>
-                                <input type="color" id="enemy1-hair-color" value="#D2691E" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Skin Color:</label>
-                                <input type="color" id="enemy1-skin-color" value="#ffd1b0" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Clothing Color:</label>
-                                <input type="color" id="enemy1-clothing-color" value="#3333ff" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Pants Color:</label>
-                                <input type="color" id="enemy1-pants-color" value="#111111" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Shoes Color:</label>
-                                <input type="color" id="enemy1-shoes-color" value="#8B4513" style="width: 100%; height: 30px;">
-                            </div>
-                        </div>
-                        
-                        <!-- Enemy 2 Character Customization -->
-                        <div class="character-section" style="background-color: #333; padding: 15px; border-radius: 5px;">
-                            <h4 style="color: #00ff00; margin-bottom: 10px;">Enemy 2</h4>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Hair Style:</label>
-                                <select id="enemy2-hair-style" style="width: 100%; padding: 5px;">
-                                    <option value="default">Default</option>
-                                    <option value="short">Short</option>
-                                    <option value="long">Afro</option>
-                                    <option value="spiky">Spiky</option>
-                                    <option value="bald">Cap</option>
-                                </select>
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Hair Color:</label>
-                                <input type="color" id="enemy2-hair-color" value="#D2691E" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Skin Color:</label>
-                                <input type="color" id="enemy2-skin-color" value="#ffd1b0" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Clothing Color:</label>
-                                <input type="color" id="enemy2-clothing-color" value="#00ff00" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Pants Color:</label>
-                                <input type="color" id="enemy2-pants-color" value="#111111" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Shoes Color:</label>
-                                <input type="color" id="enemy2-shoes-color" value="#8B4513" style="width: 100%; height: 30px;">
-                            </div>
-                        </div>
-                        
-                        <!-- Enemy 3 Character Customization -->
-                        <div class="character-section" style="background-color: #333; padding: 15px; border-radius: 5px;">
-                            <h4 style="color: #ff8800; margin-bottom: 10px;">Enemy 3</h4>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Hair Style:</label>
-                                <select id="enemy3-hair-style" style="width: 100%; padding: 5px;">
-                                    <option value="default">Default</option>
-                                    <option value="short">Short</option>
-                                    <option value="long">Afro</option>
-                                    <option value="spiky">Spiky</option>
-                                    <option value="bald">Cap</option>
-                                </select>
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Hair Color:</label>
-                                <input type="color" id="enemy3-hair-color" value="#D2691E" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Skin Color:</label>
-                                <input type="color" id="enemy3-skin-color" value="#ffd1b0" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Clothing Color:</label>
-                                <input type="color" id="enemy3-clothing-color" value="#ff8800" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Pants Color:</label>
-                                <input type="color" id="enemy3-pants-color" value="#111111" style="width: 100%; height: 30px;">
-                            </div>
-                            
-                            <div style="margin-bottom: 10px;">
-                                <label style="color: white; display: block; margin-bottom: 5px;">Shoes Color:</label>
-                                <input type="color" id="enemy3-shoes-color" value="#8B4513" style="width: 100%; height: 30px;">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="text-align: center;">
-                <button id="save-character-settings" style="width: 100%; padding: 10px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-bottom: 10px;">Save Settings</button>
-                <button id="export-character-json" style="width: 100%; padding: 10px; background-color: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-bottom: 10px;">Export All Characters (JSON)</button>
-                <button id="import-character-json" style="width: 100%; padding: 10px; background-color: #FF9800; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; margin-bottom: 10px;">Import All Characters (JSON)</button>
-                <input type="file" id="json-file-input" accept=".json" style="display: none;">
-                <button id="close-character-editor" style="padding: 10px 20px; margin: 0 10px; background-color: #f44336; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="gun-editor-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); z-index: 9999; overflow-y: auto;">
-        <div style="padding: 16px; min-height: 100%; max-width: 1200px; margin: 0 auto; box-sizing: border-box;">
-            <h2 style="color: white; text-align: center; margin-bottom: 14px;">Gun Editor</h2>
-            <div class="gun-editor-shell">
-                <div class="gun-editor-pane gun-editor-preview-pane">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: white;">
-                        <label for="gun-editor-weapon-select">Weapon:</label>
-                        <select id="gun-editor-weapon-select" style="font-size: 1em; padding: 5px;">
-                            <option value="pistol">Pistol</option>
-                            <option value="machinegun">Machine Gun</option>
-                            <option value="rocketlauncher">Rocket Launcher</option>
-                            <option value="sniperrifle">Sniper Rifle</option>
-                            <option value="shotgun">Shotgun</option>
-                            <option value="m1rifle">M1 Rifle</option>
-                        </select>
-                    </div>
-                    <div id="gun-preview-container" style="width: 100%; flex: 1; min-height: 300px; background-color: #111; border-radius: 4px;"></div>
-                    <p style="color: #bbb; font-size: 0.9em; margin-top: 8px;">Preview updates live while editing.</p>
-                </div>
-                <div class="gun-editor-pane gun-editor-settings-pane">
-                    <h3 style="color: white; margin-top: 0; margin-bottom: 8px;">Parameters</h3>
-                    <div id="gun-editor-controls" class="gun-editor-controls-grid"></div>
-                </div>
-            </div>
-            <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;">
-                <button id="gun-editor-save" style="padding: 10px 16px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Save Gun Settings</button>
-                <button id="gun-editor-reset-weapon" style="padding: 10px 16px; background-color: #888; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset Current Weapon</button>
-                <button id="gun-editor-reset-all" style="padding: 10px 16px; background-color: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">Reset All Weapons</button>
-                <button id="close-gun-editor" style="padding: 10px 16px; background-color: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="game-over-screen" class="end-screen">
-        YOU LOSE
-        <button class="restart-button">RESTART</button>
-        <a href="#" class="settings-link" data-screen-to-hide="game-over-screen" style="margin-top: 10px; color: white; font-size: 0.8em;">Setting</a>
-    </div>
-    
-    <div id="win-screen" class="end-screen">
-        YOU WIN
-        <button class="restart-button">RESTART</button>
-        <a href="#" class="settings-link" data-screen-to-hide="win-screen" style="margin-top: 10px; color: white; font-size: 0.8em;">Setting</a>
-    </div>
-
-    <div id="kill-count-display" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); color: yellow; font-size: 1.2em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 5px; z-index: 20; display: none;">KILLS: 0</div>
-    <div id="game-timer-display" style="position: fixed; top: 10px; left: 10px; color: white; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">TIME: 03:00</div>
-    <!-- KILLS表示をまとめるコンテナ -->
-    <div id="team-kills-container" style="position: fixed; top: 10px; left: 50%; transform: translateX(-50%); display: flex; justify-content: center; z-index: 20;">
-        <div id="player-team-kills-display" style="color: cyan; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-right: 10px;">PLAYER TEAM KILLS: 0</div>
-        <div id="enemy-team-kills-display" style="color: red; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none;">ENEMY TEAM KILLS: 0</div>
-    </div>
-    <div id="follow-status-display" style="position: fixed; top: 50px; left: 50%; transform: translateX(-50%); color: limegreen; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 5px 10px; border-radius: 5px; z-index: 20; display: none;">FOLLOW</div>
-    <!-- AI HP表示をまとめるコンテナ -->
-    <div id="ai-hp-container" style="position: fixed; top: 50px; left: 10px; z-index: 20;">
-        <div id="ai-hp-display" style="color: limegreen; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none;">AI 1 HP: 3</div>
-        <div id="ai2-hp-display" style="color: cyan; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 2 HP: 3</div>
-        <div id="ai3-hp-display" style="color: orange; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; display: none; margin-top: 5px;">AI 3 HP: 3</div>
-    </div>
-    <div id="floor-start-display" style="position: fixed; top: 35%; left: 50%; transform: translateX(-50%); color: white; font-size: 3em; font-weight: bold; background-color: rgba(0, 0, 0, 0.6); padding: 12px 20px; border-radius: 10px; z-index: 1200; display: none; text-shadow: 0 0 10px #fff;"></div>
-    <div id="red-flash-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0); pointer-events: none; opacity: 0;"></div>
-    <div id="fade-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0); pointer-events: none; opacity: 0; z-index: 1190;"></div>
-<div id="weapon-get-display" style="position: fixed; top: 80%; left: 50%; transform: translateX(-50%); color: white; font-size: 2em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 10px 20px; border-radius: 10px; z-index: 1100; display: none; text-shadow: 0 0 10px #0ff;"></div>
-    <div id="pause-button" style="position: fixed; top: 10px; left: 180px; color: white; font-size: 2em; z-index: 101; cursor: pointer; display: none; background-color: rgba(0,0,0,0.5); border-radius: 50%; width: 40px; height: 40px; text-align: center; line-height: 40px; -webkit-user-select: none; user-select: none;">★</div>
-
-    <div id="player-hp-display" style="position: fixed; top: 10px; right: 10px; color: white; font-size: 1.0em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">HP: </div>
-    <div id="player-weapon-display" style="position: fixed; top: 50px; right: 10px; color: white; font-size: 0.9em; font-weight: bold; background-color: rgba(0, 0, 0, 0.5); padding: 3px; z-index: 20; display: none;">Weapon: <br>Ammo: </div>
-
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
-    <script src="script.js?v=20260406a"></script>
-    <script>
-        // Disable and clear ServiceWorker caches to avoid stale script.js during development
-        if ('serviceWorker' in navigator) {
-          window.addEventListener('load', () => {
-            navigator.serviceWorker.getRegistrations().then(regs => {
-              regs.forEach(reg => reg.unregister());
-            });
-            if (window.caches && caches.keys) {
-              caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
-            }
-          });
-        }
-    </script>
 </body>
+
 </html>
+
+
+
