@@ -3217,12 +3217,14 @@ function addRooftopFeatures(obstacle, ladderFace) {
             }
             wall1.userData.isWall = true;
             wall1.userData.isRooftop = true;
+            wall1.userData.isRooftopCover = true;
             wall1.userData.parentBuildingRef = obstacle;
             scene.add(wall1);
             obstacles.push(wall1);
             obstacle.userData.rooftopParts.push(wall1);
             wall2.userData.isWall = true;
             wall2.userData.isRooftop = true;
+            wall2.userData.isRooftopCover = true;
             wall2.userData.parentBuildingRef = obstacle;
             scene.add(wall2);
             obstacles.push(wall2);
@@ -3233,6 +3235,7 @@ function addRooftopFeatures(obstacle, ladderFace) {
             wall.position.set(obstacle.position.x + def.ox, rooftopY + (def.h / 2), obstacle.position.z + def.oz);
             wall.userData.isWall = true;
             wall.userData.isRooftop = true;
+            wall.userData.isRooftopCover = true;
             wall.userData.parentBuildingRef = obstacle;
             scene.add(wall);
             obstacles.push(wall);
@@ -8868,10 +8871,7 @@ function aiShoot(ai, timeElapsed) {
             }
             break;
     }
-    if (isTeamModeOrTeamArcade && ai.team === 'player' && ai.currentWeapon !== WEAPON_MG) {
-        // 味方AIはやや高頻度で攻撃（ただしMGは敵と同じレートにするため除外）
-        aiFireRate *= 0.7;
-    }
+    // 味方AIも敵AIと同じ発射レートを使う（速度差を作らない）
     if (timeElapsed - ai.lastAttackTime < aiFireRate) return;
     if (canAIShoot) {
         const safeAIShot = getAISafeFireData(startPosition, direction);
@@ -10106,8 +10106,8 @@ function restartGame() {
             ai.state = 'ATTACKING';
             ai.currentAttackTime = 0;
             ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
-            ai.aggression = 0.9; // 味方AIは高攻撃性
-            ai.flankAggression = 0.8;
+            ai.aggression = 0.98; // 味方AIは最大寄りの攻撃性
+            ai.flankAggression = 0.9;
             // 味方AIは開始時から近い敵を追いかける
             const closestEnemy = getClosestOpponentPosition(ai);
             if (closestEnemy) ai.targetPosition.copy(closestEnemy);
@@ -10592,7 +10592,9 @@ function startPlayerDeathSequence(projectile) {
     // プレイヤーモデルは足元基準で配置
     playerModel.position.set(0, -playerTargetHeight, 0);
     const playerBodyHeight = playerTargetHeight * 2;
-    const rooftopObstacle = getRooftopObstacleUnder(player.position.clone(), playerBodyHeight);
+    const rooftopObstacle = (player.userData && player.userData.onRooftop && player.userData.lastClimbedTower)
+        ? player.userData.lastClimbedTower
+        : getRooftopObstacleUnder(player.position.clone(), playerBodyHeight);
     const deathTargetPos = getDeathTargetPosition(player.position.clone(), playerBodyHeight, false, rooftopObstacle);
     const fallDuration = 1.0;
 
@@ -10632,7 +10634,13 @@ function startPlayerDeathSequence(projectile) {
     if (checkCollision(player, obstacles)) {
         player.position.copy(deathTargetPos);
     }
-    const impactKick = impactDir.clone().setY(0.4);
+    let rooftopFallDir = null;
+    if (rooftopObstacle) {
+        rooftopFallDir = new THREE.Vector3().subVectors(player.position, rooftopObstacle.position).setY(0);
+        if (rooftopFallDir.lengthSq() < 1e-6) rooftopFallDir.set((Math.random() > 0.5 ? 1 : -1), 0, (Math.random() > 0.5 ? 1 : -1));
+        rooftopFallDir.normalize();
+    }
+    const impactKick = (rooftopFallDir || impactDir).clone().setY(0.4);
     if (impactKick.lengthSq() < 1e-6) impactKick.set(0.2, 0.4, 0.1);
     impactKick.normalize().multiplyScalar(6.5);
     const initialVelocity = impactKick.clone();
@@ -10969,12 +10977,14 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         const finalAIRotation = ai.rotation.clone();
         finalAIRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
         new TWEEN.Tween(ai.rotation).to({ x: finalAIRotation.x }, 1200).easing(TWEEN.Easing.Quadratic.Out).start();
-        const aiKick = new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
+        const aiKick = (ai.userData && ai.userData.onRooftop && ai.userData.rooftopObstacle)
+            ? new THREE.Vector3().subVectors(ai.position, ai.userData.rooftopObstacle.position).setY(0.3)
+            : new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
         aiKick.normalize().multiplyScalar(3.0);
         aiKick.y += 1.5;
         const aiInitialVelocity = aiKick.clone();
         aiInitialVelocity.y += 1.2;
-        startKillCamPhysics(ai, parts, aiInitialVelocity, 0.4);
+        startKillCamPhysics(ai, parts, aiInitialVelocity, 0.55);
         setTimeout(() => {
             stopKillCamPhysicsForActor(ai);
             ai.visible = false;
@@ -11004,12 +11014,14 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         const finalAIRotation = ai.rotation.clone();
         finalAIRotation.x += (Math.random() > 0.5 ? 1 : -1) * fallRotationAxisAngle;
         new TWEEN.Tween(ai.rotation).to({ x: finalAIRotation.x }, 1200).easing(TWEEN.Easing.Quadratic.Out).start();
-        const aiKick = new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
+        const aiKick = (ai.userData && ai.userData.onRooftop && ai.userData.rooftopObstacle)
+            ? new THREE.Vector3().subVectors(ai.position, ai.userData.rooftopObstacle.position).setY(0.3)
+            : new THREE.Vector3((Math.random() - 0.5) * 2, 0.3, (Math.random() - 0.5) * 2);
         aiKick.normalize().multiplyScalar(3.0);
         aiKick.y += 1.5;
         const aiInitialVelocity = aiKick.clone();
         aiInitialVelocity.y += 1.2;
-        startKillCamPhysics(ai, parts, aiInitialVelocity, 0.35);
+        startKillCamPhysics(ai, parts, aiInitialVelocity, 0.5);
         setTimeout(() => {
             stopKillCamPhysicsForActor(ai);
             if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
@@ -11109,9 +11121,17 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
     if (checkCollision(ai, obstacles)) {
         ai.position.copy(deathTargetPos);
     }
-    const aiKick = (impactVelocity && impactVelocity.lengthSq() > 1e-6)
-        ? impactVelocity.clone().setY(0.4)
-        : new THREE.Vector3(0.2, 0.4, 0.1);
+    let rooftopFallDir = null;
+    if (rooftopObstacle) {
+        rooftopFallDir = new THREE.Vector3().subVectors(ai.position, rooftopObstacle.position).setY(0);
+        if (rooftopFallDir.lengthSq() < 1e-6) rooftopFallDir.set((Math.random() > 0.5 ? 1 : -1), 0, (Math.random() > 0.5 ? 1 : -1));
+        rooftopFallDir.normalize();
+    }
+    const aiKick = rooftopFallDir
+        ? rooftopFallDir.clone().setY(0.4)
+        : ((impactVelocity && impactVelocity.lengthSq() > 1e-6)
+            ? impactVelocity.clone().setY(0.4)
+            : new THREE.Vector3(0.2, 0.4, 0.1));
     aiKick.normalize().multiplyScalar(6.0);
     const aiInitialVelocity = aiKick.clone();
     aiInitialVelocity.y += 2.4;
@@ -11224,8 +11244,8 @@ function checkCollision(object, obstacles, ignoreObstacle = null) {
         if (obstacle === ignoreObstacle) continue;
         if (obstacle === object) continue;
         
-        // 屋上の床は衝突判定から除外（家の屋根は強力な衝突判定）
-        if (obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof) continue;
+        // 屋上床のみ除外。屋上遮蔽物（カバー）は衝突対象にする。
+        if (obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof && !obstacle.userData.isRooftopCover) continue;
         
         // 家の屋根はAIに対して強力な衝突判定を適用
         if (obstacle.userData.isHouseRoof && ais.includes(object)) {
@@ -11299,7 +11319,7 @@ function applyAIMovementWithSweep(ai, moveVec, ignoreObstacle = null) {
     for (const hit of hits) {
         const obj = hit.object;
         if (obj === ignoreObstacle) continue;
-        if (obj.userData && obj.userData.isRooftop && !obj.userData.isHouseRoof) continue;
+        if (obj.userData && obj.userData.isRooftop && !obj.userData.isHouseRoof && !obj.userData.isRooftopCover) continue;
         const safeLen = Math.max(0, hit.distance - 0.35);
         if (safeLen < moveLen) {
             moveVec.multiplyScalar(safeLen / moveLen);
@@ -11726,8 +11746,8 @@ function resolvePlayerCollision(playerObj, obstaclesArray, pushOutDistance = 0.0
     let resolved = false;
 
     for (const obstacle of obstaclesArray) {
-        // 梯子昇降中のタワーや、屋上床は衝突判定から除外（家の屋根は含めない）
-        if (obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof) continue;
+        // 梯子昇降中は屋上床のみ除外。遮蔽物は除外しない。
+        if (obstacle.userData.isRooftop && !obstacle.userData.isHouseRoof && !obstacle.userData.isRooftopCover) continue;
         // 梯子を登っている最中は、そのタワーとは衝突しないようにする
         if (obstacle.userData.isTower && playerObj === player && isIgnoringTowerCollision && obstacle === lastClimbedTower) {
             continue;
@@ -12234,7 +12254,7 @@ function animate() {
                 let blockingHit = null;
                 for (const hit of hits) {
                     const obj = hit.object;
-                    if (obj.userData && obj.userData.isRooftop && !obj.userData.isHouseRoof) continue;
+                    if (obj.userData && obj.userData.isRooftop && !obj.userData.isHouseRoof && !obj.userData.isRooftopCover) continue;
                     if (obj.userData && obj.userData.isLadder && player.userData.onRooftop) continue;
                     if (obj === ignoreObstacle) continue;
                     blockingHit = hit;
@@ -12725,14 +12745,14 @@ function animate() {
                 ai.state = 'MOVING';
                 ai.targetPosition.copy(patrol);
             }
-            ai.userData.searchPulseAt = timeElapsed + 0.6; // 0.6秒ごとにパルス
+            ai.userData.searchPulseAt = timeElapsed + 0.35; // 味方はより短い周期で前進判断
         }
 
         // フォールバック: 味方が長時間HIDING/FOLLOWING（プレイヤー非追従）を続ける場合、
         // 長時間待機を避けるため、近傍の敵または巡回点への移動を強制する。
         if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && (ai.state === 'HIDING' || ai.state === 'FOLLOWING')) {
             const stuckDuration = timeElapsed - (ai.lastHiddenTime || 0);
-            if (stuckDuration > 2.5) {
+            if (stuckDuration > 1.2) {
                 const close = getClosestOpponentPosition(ai);
                 if (close) {
                     ai.state = 'MOVING';
@@ -12745,7 +12765,7 @@ function animate() {
                     ai.state = 'MOVING';
                     ai.targetPosition.copy(patrol);
                 }
-                ai.userData.searchPulseAt = timeElapsed + 0.9;
+                ai.userData.searchPulseAt = timeElapsed + 0.4;
                 ai.lastHiddenTime = timeElapsed - 0.1; // 即時再発火を避けるため少しだけリセット
             }
         }
@@ -12771,10 +12791,14 @@ function animate() {
                         ai.currentAttackTime = timeElapsed;
                         ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
                     }
-                    ai.userData.searchPulseAt = timeElapsed + 1.1 + Math.random() * 0.8;
+                    if (isTeammateInTeamModeOrArcade) {
+                        ai.userData.searchPulseAt = timeElapsed + 0.45 + Math.random() * 0.2;
+                    } else {
+                        ai.userData.searchPulseAt = timeElapsed + 1.1 + Math.random() * 0.8;
+                    }
                 }
             } else if (isAISeen) {
-                ai.userData.searchPulseAt = timeElapsed + 1.4;
+                ai.userData.searchPulseAt = isTeammateInTeamModeOrArcade ? (timeElapsed + 0.55) : (timeElapsed + 1.4);
             }
         }
 
@@ -16258,6 +16282,8 @@ document.addEventListener('DOMContentLoaded', function() {
 }); // 2つ目のDOMContentLoadedイベントリスナー終了
 
 animate();
+
+
 
 
 
