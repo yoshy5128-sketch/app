@@ -427,22 +427,19 @@
 
             <h2 style="margin-top: 20px;">Game Mode</h2>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="battle" checked> Battle Mode (AIを全滅させたら勝利)
-            </label>
-            <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="arcade"> Arcade Mode (AIを倒したキル数を競う - AIのみ無限復活)
+                <input type="radio" name="game-mode" value="arcade" checked> Outdoor PvAI (時間内にキル数を競う - 全員無限復活)
             </label>
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="game-mode" value="ffa"> Free For All (全員が敵同士 - 全員無限復活)
             </label>
-            <label style="display: block;">
-                <input type="radio" name="game-mode" value="team"> Team Deathmatch (2V2 プレイヤー&AI1体 VS AI2体)
-            </label>
             <label style="display: block; margin-bottom: 5px;">
-                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch (2V2 チーム戦でキル数を競う - 全員無限復活)
+                <input type="radio" name="game-mode" value="teamArcade"> Team Deathmatch Outdoor (2V2 チーム戦でキル数を競う - 全員無限復活)
             </label>
             <label style="display: block; margin-bottom: 5px;">
                 <input type="radio" name="game-mode" value="billbattle"> INDOOR COMBAT (室内バトル)
+            </label>
+            <label style="display: block; margin-bottom: 5px;">
+                <input type="radio" name="game-mode" value="billbattleTdm"> INDOOR COMBAT TDM (2V2・時間制限・全員無限復活)
             </label>
             <div id="billbattle-options" style="margin-top: 10px; padding-left: 10px;">
                 <label style="display: block; margin-bottom: 4px;">Roomsize:(部屋の大きさ)</label>
@@ -620,6 +617,7 @@
     <audio id="playerGunSound" src="pgun.mp3" preload="auto"></audio>
     <audio id="mgGunSound" src="mg.mp3" preload="auto"></audio>
     <audio id="rrGunSound" src="rr.mp3" preload="auto"></audio>
+    <audio id="rr2GunSound" src="rr2.mp3" preload="auto"></audio>
     <audio id="srGunSound" src="pss.mp3" preload="auto"></audio>
     <audio id="m1GunSound" src="m1.mp3" preload="auto"></audio>
     <audio id="aiM1GunSound" src="m1_.mp3" preload="auto"></audio>

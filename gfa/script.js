@@ -36,7 +36,7 @@
     nightModeLightIntensity: 3.0,
     timeLapseMode: false,
     customMapName: 'Default Custom Map',
-    gameMode: 'battle',
+    gameMode: 'arcade',
     billBattleSize: '100',
     billBattleLighting: '12',
     killCamMode: 'playerOnly',
@@ -335,6 +335,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
         playerGunSound = document.getElementById('playerGunSound');
         mgGunSound = document.getElementById('mgGunSound');
         rrGunSound = document.getElementById('rrGunSound');
+        rr2GunSound = document.getElementById('rr2GunSound');
         srGunSound = document.getElementById('srGunSound');
         m1GunSound = document.getElementById('m1GunSound');
         pistolReloadSound = document.getElementById('pistol-reload-audio');
@@ -538,7 +539,7 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
         gameModeRadios.forEach(radio => {
             radio.addEventListener('change', () => {
                 if (radio.checked) {
-                    gameSettings.gameMode = radio.value;
+                    gameSettings.gameMode = normalizeGameMode(radio.value);
                     applyBillBattleModeConstraints();
                     updateSettingsAvailabilityForMode();
                     saveSettings();
@@ -986,6 +987,7 @@ const FIRE_RATE_RR = 0.8;
 const FIRE_RATE_SR = 1.0;
 
 const GAME_MODE_BILLBATTLE = 'billbattle';
+const GAME_MODE_BILLBATTLE_TDM = 'billbattleTdm';
 const BUILD_ID = '2026-03-22-warehouse-v33';
 let BILL_BATTLE_SIZE = 100;
 let BILL_BATTLE_HALF = BILL_BATTLE_SIZE / 2;
@@ -1138,7 +1140,32 @@ function getAIDefaultWeapon(ai) {
 }
 
 function isBillBattleMode() {
+    return gameSettings.gameMode === GAME_MODE_BILLBATTLE || gameSettings.gameMode === GAME_MODE_BILLBATTLE_TDM;
+}
+
+function isClassicBillBattleMode() {
     return gameSettings.gameMode === GAME_MODE_BILLBATTLE;
+}
+
+function isIndoorTeamDeathmatchMode() {
+    return gameSettings.gameMode === GAME_MODE_BILLBATTLE_TDM;
+}
+
+function normalizeGameMode(mode) {
+    const raw = String(mode ?? '').trim();
+    if (raw === 'battle') return 'arcade';
+    if (raw === 'team') return 'teamArcade';
+    if (raw === 'arcade' || raw === 'ffa' || raw === 'teamArcade' || raw === GAME_MODE_BILLBATTLE || raw === GAME_MODE_BILLBATTLE_TDM) {
+        return raw;
+    }
+    return 'arcade';
+}
+
+function isTimedRespawnMode() {
+    return gameSettings.gameMode === 'arcade'
+        || gameSettings.gameMode === 'ffa'
+        || gameSettings.gameMode === 'teamArcade'
+        || isIndoorTeamDeathmatchMode();
 }
 
 function getBillBattleAICount() {
@@ -1244,11 +1271,12 @@ function getMedikitHealAmount() {
     setDisabled(timeLapseCheckbox, isBill);
     setDisabled(billBattleSizeSelect, !isBill);
     setDisabled(billBattleLightingSelect, !isBill);
+    const disableGameDuration = isBill && !isIndoorTeamDeathmatchMode();
     gameDurationRadios.forEach(radio => {
-        radio.disabled = isBill;
+        radio.disabled = disableGameDuration;
         const container = radio.closest && radio.closest('label') ? radio.closest('label') : radio;
         if (container && container.style) {
-            container.style.opacity = isBill ? 0.5 : 1.0;
+            container.style.opacity = disableGameDuration ? 0.5 : 1.0;
         }
     });
     const medikitEnabled = gameSettings.gameMode === 'arcade' || isBill;
@@ -1755,7 +1783,7 @@ let sniperAutoAimSmoothedPoint = null;
 
 function getPlayerAutoAimCandidateForAI(ai, maxScreenRadius) {
     if (!ai || ai.hp <= 0) return null;
-    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    const isTeamModeOrTeamArcade = isTeamBasedAIMode();
     if (isTeamModeOrTeamArcade && ai.team === 'player') return null;
 
     const origin = new THREE.Vector3();
@@ -1954,8 +1982,9 @@ function loadSettings() {
     if (savedSettings) {
         const parsedSavedSettings = JSON.parse(savedSettings);
         if (parsedSavedSettings.gameMode === undefined) {
-            parsedSavedSettings.gameMode = 'battle';
+            parsedSavedSettings.gameMode = 'arcade';
         }
+        parsedSavedSettings.gameMode = normalizeGameMode(parsedSavedSettings.gameMode);
         if (parsedSavedSettings.killCamMode === undefined) {
             parsedSavedSettings.killCamMode = 'playerOnly';
         }
@@ -2041,6 +2070,7 @@ function loadSettings() {
         }
         Object.assign(gameSettings, parsedSavedSettings);
         gameSettings.aiShotLevel = normalizeAIShotLevel(gameSettings.aiShotLevel);
+        gameSettings.gameMode = normalizeGameMode(gameSettings.gameMode);
         gameSettings.aiAimPrecision = normalizeAIAimPrecision(gameSettings.aiAimPrecision);
         gameSettings.billBattleLighting = normalizeBillBattleLightingCount(gameSettings.billBattleLighting);
         // buttonPositionsが存在しない場合の既定値を追加
@@ -2223,8 +2253,9 @@ function loadMapSettings(mapName) {
         
         // デフォルト値の設定
         if (parsedSavedSettings.gameMode === undefined) {
-            parsedSavedSettings.gameMode = 'battle';
+            parsedSavedSettings.gameMode = 'arcade';
         }
+        parsedSavedSettings.gameMode = normalizeGameMode(parsedSavedSettings.gameMode);
         if (parsedSavedSettings.killCamMode === undefined) {
             parsedSavedSettings.killCamMode = 'playerOnly';
         }
@@ -2315,6 +2346,7 @@ function loadMapSettings(mapName) {
                 // gameSettingsに適用
                 Object.assign(gameSettings, parsedSavedSettings);
                 gameSettings.aiShotLevel = normalizeAIShotLevel(gameSettings.aiShotLevel);
+                gameSettings.gameMode = normalizeGameMode(gameSettings.gameMode);
                 gameSettings.aiAimPrecision = normalizeAIAimPrecision(gameSettings.aiAimPrecision);
                 gameSettings.billBattleLighting = normalizeBillBattleLightingCount(gameSettings.billBattleLighting);
                 
@@ -2525,6 +2557,7 @@ function loadMapSettings(mapName) {
 let playerGunSound;
 let mgGunSound;
 let rrGunSound;
+let rr2GunSound;
 let srGunSound;
 let m1GunSound;
 let pistolReloadSound;
@@ -2631,6 +2664,12 @@ function startTimer() {
                     showGameOver();
                 }
 
+            } else if (gameSettings.gameMode === 'arcade') {
+                if (playerKills > enemyTeamKills) {
+                    showWinScreen();
+                } else {
+                    showGameOver();
+                }
             } else if (playerTeamKills > enemyTeamKills) {
                 showWinScreen();
             } else if (enemyTeamKills > playerTeamKills) {
@@ -3954,8 +3993,8 @@ function updateBillBattleGlobalLighting() {
       return el;
   }
 
-  function updateBillBattleKillDisplay() {
-      if (!isBillBattleMode()) return;
+function updateBillBattleKillDisplay() {
+      if (!isClassicBillBattleMode()) return;
       const el = ensureBillBattleKillDisplay();
       el.textContent = `REMAINING KILLS: ${billBattleKillsRemaining}`;
       el.style.display = 'block';
@@ -4435,15 +4474,22 @@ function getBillBattlePlayerSpawn() {
           createBillBattleElevatorDoors();
       }
       ensurePauseButtonVisible();
-    const billBattleCount = getBillBattleAICount();
-    billBattleTotalKills = billBattleCount * Math.pow(2, Math.max(0, billBattleFloor - 1));
-    billBattleKillsRemaining = billBattleTotalKills;
-    billBattleRemainingSpawns = 0;
-      updateBillBattleKillDisplay();
-      if (showMessage) {
-          showFloorStartMessage(billBattleFloor);
-      }
-  }
+    if (isClassicBillBattleMode()) {
+        const billBattleCount = getBillBattleAICount();
+        billBattleTotalKills = billBattleCount * Math.pow(2, Math.max(0, billBattleFloor - 1));
+        billBattleKillsRemaining = billBattleTotalKills;
+        billBattleRemainingSpawns = 0;
+        updateBillBattleKillDisplay();
+        if (showMessage) {
+            showFloorStartMessage(billBattleFloor);
+        }
+    } else {
+        billBattleTotalKills = 0;
+        billBattleKillsRemaining = 0;
+        billBattleRemainingSpawns = 0;
+        hideBillBattleKillDisplay();
+    }
+}
 
 // マテリアルを安全に破棄する関数（配列対応）
 function disposeMaterial(material) {
@@ -5821,7 +5867,7 @@ function restoreRightButtonsDefault() {
     if (fire) fire.style.display = 'flex';
     if (crouch) crouch.style.display = 'flex';
     if (zoom) zoom.style.display = 'flex';
-    const shouldShowFollow = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+    const shouldShowFollow = isTeamBasedAIMode();
     if (followBtn) followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
     if (isRifleZoomed) setRifleZoom(false);
     cancelScope();
@@ -5947,6 +5993,16 @@ function applyAimConstraints(parts, ownerYaw, targetWorldPos) {
     const clampedPitch = clampAngle(-desiredPitch, -0.6, 1.2);
     parts.aimGroup.rotation.y = clampedRelYaw;
     parts.aimGroup.rotation.x = clampedPitch;
+}
+
+function syncHeadToAimDirection(parts) {
+    if (!parts || !parts.head || !parts.aimGroup) return;
+    // 顔向きは常に銃口方向（aimGroup）へ追従させる。
+    const yaw = THREE.MathUtils.clamp(parts.aimGroup.rotation.y * 0.95, -0.95, 0.95);
+    const pitch = THREE.MathUtils.clamp(-parts.aimGroup.rotation.x * 0.6, -0.55, 0.45);
+    parts.head.rotation.x = pitch;
+    parts.head.rotation.y = yaw;
+    parts.head.rotation.z = 0;
 }
 
 function clampArmJoints(parts) {
@@ -6453,8 +6509,7 @@ function getOpponentTargetsForAI(ai) {
         if (playerHP > 0) targets.push(player);
         return targets;
     }
-    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
-    if (isTeamModeOrTeamArcade) {
+    if (isTeamBasedAIMode()) {
         if (ai.team === 'player') {
             for (const other of ais) {
                 if (other !== ai && other.team === 'enemy' && other.hp > 0) targets.push(other);
@@ -6474,7 +6529,12 @@ function getOpponentTargetsForAI(ai) {
         }
         return targets;
     }
-    // 非チームモード(battle等)ではプレイヤーだけでなく近くのAIも標的候補に含める
+    if (gameSettings.gameMode === 'arcade') {
+        // Outdoor PvAI: AI同士は敵対せず、プレイヤーのみを狙う。
+        if (playerHP > 0) targets.push(player);
+        return targets;
+    }
+    // 非チームモードではプレイヤーだけでなく近くのAIも標的候補に含める
     if (playerHP > 0) targets.push(player);
     for (const other of ais) {
         if (other !== ai && other.hp > 0) targets.push(other);
@@ -6815,7 +6875,7 @@ function isAIWeaponOutOfAmmo(ai) {
 }
 
 function isTeamBasedAIMode() {
-    return gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    return gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade' || isIndoorTeamDeathmatchMode();
 }
 
 function isAIRooftopFlowActive(ai) {
@@ -7363,7 +7423,7 @@ function findObstacleAvoidanceSpot(ai, currentMoveDirection, originalTargetPosit
 
 function findAndTargetWeapon(ai) {
     // 全AIが武器をより積極的に拾う
-    const isTeammate = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player';
+    const isTeammate = isTeamBasedAIMode() && ai.team === 'player';
     const isFollowTeammate = isTeammate && isFollowingPlayerMode && ai.userData && ai.userData.followActive !== false;
     const lowAmmo = isTeammate
         ? ((ai.currentWeapon === WEAPON_MG && ai.ammoMG < 30)
@@ -7450,7 +7510,9 @@ function createProjectile(startPos, direction, color, size = 0.1, isRocket = fal
         shooter: shooter,
         spawnTime: now,
         lastPos: bullet.position.clone(),
-        stuckTime: 0
+        stuckTime: 0,
+        nearMissPlayed: false,
+        prevPlayerDist: Infinity
     });
 }
 
@@ -7944,7 +8006,7 @@ function destroyBarrel(barrel, explosionPosition) {
 
 function applyBarrelKillScoring(victimAI, source, shooter) {
     if (source === 'player') {
-        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        if (isTeamBasedAIMode()) {
             if (victimAI.team === 'enemy') playerTeamKills++;
             if (victimAI.team === 'player') enemyTeamKills++;
         } else if (gameSettings.gameMode === 'ffa' || gameSettings.gameMode === 'arcade') {
@@ -7954,7 +8016,7 @@ function applyBarrelKillScoring(victimAI, source, shooter) {
     }
     if (source === 'ai' && shooter) {
         if (shooter.kills !== undefined) shooter.kills++;
-        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        if (isTeamBasedAIMode()) {
             if (shooter.team === 'player' && victimAI.team === 'enemy') playerTeamKills++;
             if (shooter.team === 'enemy' && victimAI.team === 'player') enemyTeamKills++;
         }
@@ -8030,7 +8092,9 @@ function explodeBarrel(barrel, source = 'unknown', shooter = null) {
                 if (playerHP <= 0 && !isPlayerDeathPlaying) {
                     if (source === 'ai' && shooter && shooter.kills !== undefined) {
                         shooter.kills++;
-                        if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                        if (isTeamBasedAIMode()) {
+                            enemyTeamKills++;
+                        } else if (gameSettings.gameMode === 'arcade') {
                             enemyTeamKills++;
                         }
                     }
@@ -8626,6 +8690,7 @@ function aiShoot(ai, timeElapsed) {
     const canSeeFrom = (origin, target) => getClearShotOrigin(target, origin) !== null;
     const muzzleInfo = (ai.userData && ai.userData.parts) ? getGunMuzzleInfo(ai.userData.parts) : null;
     let muzzleDirection = muzzleInfo ? muzzleInfo.direction.clone().normalize() : null;
+    let muzzlePositionForEffects = muzzleInfo ? muzzleInfo.position.clone() : startPosition.clone();
     let targetIsPlayer = false;
     if (muzzleInfo) {
         startPosition = muzzleInfo.position.clone();
@@ -8634,7 +8699,7 @@ function aiShoot(ai, timeElapsed) {
     let targetPosition = null;
     let distanceToTarget = 0;
     
-    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    const isTeamModeOrTeamArcade = isTeamBasedAIMode();
 
     // チームモードまたはチームアーケードモードの場合
     if (isTeamModeOrTeamArcade && ai.team === 'player') {
@@ -8774,6 +8839,7 @@ function aiShoot(ai, timeElapsed) {
         if (freshMuzzleInfo) {
             startPosition = freshMuzzleInfo.position.clone();
             muzzleDirection = freshMuzzleInfo.direction.clone().normalize();
+            muzzlePositionForEffects = freshMuzzleInfo.position.clone();
         }
     }
     // 最終ポーズ/銃口更新後にLOSを再確認（AI同士の壁抜け防止）。
@@ -8903,7 +8969,9 @@ function aiShoot(ai, timeElapsed) {
     if (window.DEBUG_SPATIAL_AUDIO && soundToPlay) {
         console.log('[aiShoot] sound', soundToPlay.id || soundToPlay.src);
     }
-        const aiMuzzlePosition = startPosition.clone().add(direction.clone().multiplyScalar(1.0));
+        const aiMuzzlePosition = (muzzlePositionForEffects && Number.isFinite(muzzlePositionForEffects.x))
+            ? muzzlePositionForEffects.clone()
+            : startPosition.clone().add(direction.clone().multiplyScalar(0.18));
         createMuzzleFlash(aiMuzzlePosition, 150, 3.0, 90, 0xffffff);
         createGroundFlash(aiMuzzlePosition, 0xffffff, 1.5, 150);
         const sparkGeometry = new THREE.SphereGeometry(0.6, 8, 8);
@@ -9011,8 +9079,8 @@ function aiCheckPickup(ai) {
             if (ai.targetWeaponPickup === pickup) {
                 ai.targetWeaponPickup = null;
                 // 味方AIで追従モードONの場合、ai.stateを変更しない
-                if (!((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player' && isFollowingPlayerMode)) {
-                    if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player') {
+                if (!(isTeamBasedAIMode() && ai.team === 'player' && isFollowingPlayerMode)) {
+                    if (isTeamBasedAIMode() && ai.team === 'player') {
                         ai.state = 'ATTACKING';
                         ai.currentAttackTime = clock.getElapsedTime();
                         ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
@@ -9228,7 +9296,7 @@ function getNearbyTeammateSpawnPosition(ai) {
 }
 
 function warpTeammatesInFrontForFollow() {
-    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    const isTeamModeOrTeamArcade = isTeamBasedAIMode();
     if (!isTeamModeOrTeamArcade) return;
     const teammates = ais.filter(ai => ai && ai.team === 'player');
     if (teammates.length === 0) return;
@@ -9535,6 +9603,43 @@ function applyBgmVolume() {
     bgmAudio.volume = normalizeBgmVolume(gameSettings.bgmVolume);
 }
 
+function isTrackLoaded(track) {
+    if (!bgmAudio || !track) return false;
+    const currentSrc = (bgmAudio.currentSrc || bgmAudio.src || '').split('?')[0];
+    return currentSrc.endsWith('/' + track) || currentSrc.endsWith('\\\\' + track) || currentSrc.endsWith(track);
+}
+
+function setBgmTrack(track, resetTime = true) {
+    if (!bgmAudio || !track) return;
+    if (!isTrackLoaded(track)) {
+        bgmAudio.src = track;
+        bgmAudio.load();
+    }
+    if (resetTime) {
+        bgmAudio.currentTime = 0;
+    }
+}
+
+function ensureContinuousBgmEndedHandler() {
+    if (!bgmAudio || bgmAudio._continuousEndedHandler) return;
+    const onBgmEnded = function onBgmEnded() {
+        if (gameSettings.bgmPlayMode !== 'continuous' || !isGameRunning || isSettingsScreenVisible()) return;
+        currentBgmTrack = pickNextBgmTrack();
+        if (!currentBgmTrack) return;
+        setBgmTrack(currentBgmTrack, true);
+        applyBgmVolume();
+        bgmAudio.play().catch(() => {});
+    };
+    bgmAudio._continuousEndedHandler = onBgmEnded;
+    bgmAudio.addEventListener('ended', onBgmEnded);
+}
+
+function removeContinuousBgmEndedHandler() {
+    if (!bgmAudio || !bgmAudio._continuousEndedHandler) return;
+    bgmAudio.removeEventListener('ended', bgmAudio._continuousEndedHandler);
+    bgmAudio._continuousEndedHandler = null;
+}
+
 function playGameBGM(forceNewTrack = false) {
     if (!bgmAudio || gameSettings.bgmMute) return;
     const enabledTracks = getEnabledBgmTracks();
@@ -9548,29 +9653,14 @@ function playGameBGM(forceNewTrack = false) {
             stopGameBGM(true);
             return;
         }
-        if (bgmAudio.getAttribute('src') !== currentBgmTrack) {
-            bgmAudio.src = currentBgmTrack;
-            bgmAudio.load();
-        }
-        bgmAudio.currentTime = 0;
+        setBgmTrack(currentBgmTrack, true);
     }
     if (gameSettings.bgmPlayMode === 'continuous') {
         bgmAudio.loop = false;
-        if (!bgmAudio._hasContinuousEndedListener) {
-            bgmAudio._hasContinuousEndedListener = true;
-            bgmAudio.addEventListener('ended', function onBgmEnded() {
-                if (gameSettings.bgmPlayMode === 'continuous' && isGameRunning && !isSettingsScreenVisible()) {
-                    currentBgmTrack = pickNextBgmTrack();
-                    if (currentBgmTrack) {
-                        bgmAudio.src = currentBgmTrack;
-                        bgmAudio.load();
-                        bgmAudio.play().catch(() => {});
-                    }
-                }
-            });
-        }
+        ensureContinuousBgmEndedHandler();
     } else {
         bgmAudio.loop = true;
+        removeContinuousBgmEndedHandler();
     }
     applyBgmVolume();
     bgmAudio.play().catch(() => {});
@@ -9579,7 +9669,7 @@ function playGameBGM(forceNewTrack = false) {
 function stopGameBGM(resetTime = false) {
     if (!bgmAudio) return;
     bgmAudio.pause();
-    bgmAudio._hasContinuousEndedListener = false;
+    removeContinuousBgmEndedHandler();
     if (resetTime) {
         bgmAudio.currentTime = 0;
     }
@@ -9587,10 +9677,8 @@ function stopGameBGM(resetTime = false) {
 
 function playMenuBGM() {
     if (!bgmAudio || gameSettings.bgmMute) return;
-    if (bgmAudio.getAttribute('src') !== MENU_BGM_TRACK) {
-        bgmAudio.src = MENU_BGM_TRACK;
-        bgmAudio.load();
-    }
+    removeContinuousBgmEndedHandler();
+    setBgmTrack(MENU_BGM_TRACK, false);
     bgmAudio.loop = true;
     applyBgmVolume();
     bgmAudio.play().catch(() => {});
@@ -9678,12 +9766,13 @@ function startGame() {
 
     if (gameSettings.gameMode === 'arcade') {
         gameUI.push('kill-count-display', 'ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // アーケードモードのAI HP表示も追加
-    } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+        gameUI.push('game-timer-display');
+    } else if (isTeamBasedAIMode() || gameSettings.gameMode === 'ffa') {
         gameUI.push('ai-hp-display', 'ai2-hp-display', 'ai3-hp-display'); // チームモードのAI HP表示
-        if (gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+        if (isTeamBasedAIMode() || gameSettings.gameMode === 'ffa') {
             gameUI.push('game-timer-display');
         }
-        if (gameSettings.gameMode === 'teamArcade') {
+        if (isTeamBasedAIMode()) {
             gameUI.push('player-team-kills-display', 'enemy-team-kills-display');
         }
     }
@@ -9695,7 +9784,7 @@ function startGame() {
     const teamKillsContainer = document.getElementById('team-kills-container');
     const aiHpContainer = document.getElementById('ai-hp-container');
 
-    if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+    if (isTeamBasedAIMode()) {
         if (teamKillsContainer) teamKillsContainer.style.display = 'flex';
         if (aiHpContainer) aiHpContainer.style.display = 'block';
     } else if (gameSettings.gameMode === 'ffa') {
@@ -9723,7 +9812,7 @@ function startGame() {
         if (pause) { pause.style.display = 'block'; debugLog('startGame(): pause-button display set to block'); }
 
           if (followBtn) { 
-              if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+              if (isTeamBasedAIMode()) {
                   followBtn.style.display = 'flex'; debugLog('startGame(): follow-button display set to flex (team mode)');
               } else {
                   followBtn.style.display = 'none'; debugLog('startGame(): follow-button display set to none (non-team mode)');
@@ -9825,9 +9914,6 @@ function restartGame() {
     if (gameSettings.mapType === 'default') {
         const R = ARENA_PLAY_AREA_RADIUS - 5;
         let currentAICount = gameSettings.aiCount;
-        if (gameSettings.gameMode === 'arcade') {
-            currentAICount = 3;
-        }
         if (currentAICount === 1) {
             availableSpawnPoints.push(new THREE.Vector3(40, 2.0, -40));
             availableSpawnPoints.push(new THREE.Vector3(-40, 2.0, 40));
@@ -9874,19 +9960,23 @@ function restartGame() {
     if (killCountDisplay) killCountDisplay.textContent = `KILLS: ${playerKills}`;
 
     // --- 新しいゲームモードの追加 ---
-    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'team';
+    const isTeamModeOrTeamArcade = isTeamBasedAIMode();
     if (isTeamModeOrTeamArcade) {
         playerTeamKills = 0;
         enemyTeamKills = 0;
         if (playerTeamKillsDisplay) playerTeamKillsDisplay.textContent = `PLAYER TEAM KILLS: ${playerTeamKills}`;
         if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.textContent = `ENEMY TEAM KILLS: ${enemyTeamKills}`;
-        if (gameSettings.gameMode === 'teamArcade') { // teamArcadeモードの場合のみタイマーを開始
-            gameTimer = gameSettings.gameDuration; // gameDurationを初期タイマー値に設定
-            updateTimerDisplay(); // タイマー表示を初期化
-            startTimer(); // タイマー開始
-        } else {
-            stopTimer(); // teamモードではタイマーを停止
-        }
+        gameTimer = gameSettings.gameDuration;
+        updateTimerDisplay();
+        startTimer();
+    } else if (gameSettings.gameMode === 'arcade') {
+        playerTeamKills = 0;
+        enemyTeamKills = 0;
+        gameTimer = gameSettings.gameDuration;
+        updateTimerDisplay();
+        startTimer();
+        if (playerTeamKillsDisplay) playerTeamKillsDisplay.style.display = 'none';
+        if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.style.display = 'none';
     } else if (gameSettings.gameMode === 'ffa') {
         if (killCountDisplay) killCountDisplay.style.display = 'block';
         gameTimer = gameSettings.gameDuration;
@@ -9964,10 +10054,8 @@ function restartGame() {
     camera.rotation.x = 0;
     applyPlayerDefaultWeaponLoadout();
     let finalAICount = isBillBattleMode() ? getBillBattleAICount() : gameSettings.aiCount;
-    const isTeamMode = gameSettings.gameMode === 'team';
-    const isTeamArcadeMode = gameSettings.gameMode === 'teamArcade';
-
-    if (isTeamMode || isTeamArcadeMode) { // 変更
+    const isTeamMode = isTeamBasedAIMode();
+    if (isTeamMode) {
         finalAICount = 3; // チームモードおよびチームアーケードモードでは常に3体（1体味方 + 2体敵）
     }
     for (const ai of ais) {
@@ -9986,7 +10074,7 @@ function restartGame() {
             aiTeam = 'enemy';
         }
 
-        if (isTeamMode || isTeamArcadeMode) { // 変更
+        if (isTeamMode) {
             if (i === 0) {
                 aiTeam = 'player'; // 最初の1体は味方
                 aiColor = teamColors.player;
@@ -10016,7 +10104,7 @@ function restartGame() {
         ai.team = aiTeam; // チームプロパティを設定 (null for non-team modes)
         if (!ai.userData) ai.userData = {};
         ai.userData.slotIndex = i + 1;
-        if (isTeamMode || isTeamArcadeMode) {
+        if (isTeamMode) {
             if (aiTeam === 'enemy') {
                 ai.userData.mgSound = (i === 1) ? ai1mGunSound : ai2mGunSound;
                 ai.userData.m1Sound = aiM1GunSound;
@@ -10035,7 +10123,7 @@ function restartGame() {
         }
         ai.kills = 0; // キル数を初期化
         let aiSpawnPos;
-        if ((isTeamMode || isTeamArcadeMode) && aiTeam === 'player') {
+        if (isTeamMode && aiTeam === 'player') {
             aiSpawnPos = getNearbyTeammateSpawnPosition(ai);
         } else if (isBillBattleMode()) {
             aiSpawnPos = getBillBattleAISpawn();
@@ -10102,7 +10190,7 @@ function restartGame() {
     ais.forEach((ai, index) => {
         ai.hp = aiHP;
         // 味方AIは積極的に攻撃するため、初期状態をATTACKINGにする
-        if ((isTeamMode || isTeamArcadeMode) && ai.team === 'player') {
+        if (isTeamMode && ai.team === 'player') {
             ai.state = 'ATTACKING';
             ai.currentAttackTime = 0;
             ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
@@ -10112,7 +10200,7 @@ function restartGame() {
             const closestEnemy = getClosestOpponentPosition(ai);
             if (closestEnemy) ai.targetPosition.copy(closestEnemy);
             ai.userData.nextPerceptionTime = 0;
-        } else if ((isTeamMode || isTeamArcadeMode) && ai.team === 'enemy') {
+        } else if (isTeamMode && ai.team === 'enemy') {
             ai.state = 'ATTACKING';
             ai.currentAttackTime = 0;
             ai.strafeDirection = (Math.random() > 0.5 ? 1 : -1);
@@ -10165,7 +10253,7 @@ function restartGame() {
     });
 
     resetWeaponPickups(ais);
-    if (isBillBattleMode()) {
+    if (isClassicBillBattleMode()) {
         showFloorStartMessage(billBattleFloor);
     }
 
@@ -10174,13 +10262,10 @@ function restartGame() {
     const gameUI = ['crosshair', 'player-hp-display', 'player-weapon-display']; // 共通UI
 
     if (gameSettings.gameMode === 'arcade') {
-        gameUI.push('kill-count-display'); // アーケードモードのキル表示のみ追加
-    } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+        gameUI.push('kill-count-display', 'game-timer-display');
+    } else if (isTeamBasedAIMode()) {
         gameUI.push('player-team-kills-display', 'enemy-team-kills-display'); // 追加
-        // AI HP表示はコンテナで制御するため、gameUI配列には追加しない
-        if (gameSettings.gameMode === 'teamArcade') {
-            gameUI.push('game-timer-display');
-        }
+        gameUI.push('game-timer-display');
     }
     gameUI.forEach(id => {
         const el = document.getElementById(id);
@@ -10190,7 +10275,7 @@ function restartGame() {
     const teamKillsContainer = document.getElementById('team-kills-container');
     const aiHpContainer = document.getElementById('ai-hp-container');
 
-    if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+    if (isTeamBasedAIMode()) {
         if (teamKillsContainer) teamKillsContainer.style.display = 'flex';
         if (aiHpContainer) aiHpContainer.style.display = 'block';
     } else {
@@ -10277,7 +10362,7 @@ function startAIDeathSequence(impactVelocity, ai) {
 
 function getPlayerRespawnHostilePositions() {
     const hostiles = [];
-    const isTeamModeOrArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    const isTeamModeOrArcade = isTeamBasedAIMode();
     if (isTeamModeOrArcade) {
         for (const ai of ais) {
             if (ai && ai.hp > 0 && ai.team === 'enemy') hostiles.push(ai.position.clone());
@@ -10378,7 +10463,7 @@ function respawnAI(ai) {
         return;
     }
     const isTeammate = ai.team === 'player';
-    const isTeamModeOrArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    const isTeamModeOrArcade = isTeamBasedAIMode();
 
     if (isFollowingPlayerMode && isTeamModeOrArcade && isTeammate) {
         const followPos = getSafeFollowSlotPosition(ai);
@@ -10712,7 +10797,7 @@ function startPlayerDeathSequence(projectile) {
             camera.position.set(0, 0, 0); // 相対位置としてリセット
             camera.rotation.set(0, 0, 0); // 相対角度としてリセット
             
-            if (gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+            if (isTimedRespawnMode()) {
                 respawnPlayer(); // プレイヤーをリスポーン地点に移動
                 if (isFollowingPlayerMode) {
                     for (const ai of ais) {
@@ -10724,7 +10809,7 @@ function startPlayerDeathSequence(projectile) {
                 if (player) player.traverse((object) => { object.visible = true; }); // プレイヤーをシーンに再追加
                 // UIを再表示
                 const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
-                if (isBillBattleMode()) uiToShow.push('billbattle-kills-remaining');
+                if (isClassicBillBattleMode()) uiToShow.push('billbattle-kills-remaining');
                 if (shouldShowTouchControls()) {
                     uiToShow.push('joystick-move', 'fire-button', 'crouch-button', 'zoom-button');
                 } else {
@@ -10737,10 +10822,10 @@ function startPlayerDeathSequence(projectile) {
                 if (shouldShowTouchControls()) ensureJoystickReady(true);
                 const followBtn = document.getElementById('follow-button');
                 if (followBtn) {
-                    const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                    const shouldShowFollow = (shouldShowTouchControls()) && isTeamBasedAIMode();
                     followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
                 }
-            } else if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+            } else if (gameSettings.gameMode === 'team') {
                 // チームモード：残りHPを確認
                 const playerTeamAlive = checkTeamAlive('player');
                 const enemyTeamAlive = checkTeamAlive('enemy');
@@ -10762,7 +10847,7 @@ function startPlayerDeathSequence(projectile) {
                     if (player) player.traverse((object) => { object.visible = true; });
                     // UIを再表示
                     const uiToShow = ['crosshair', 'player-hp-display', 'player-weapon-display', 'game-timer-display', 'player-team-kills-display', 'enemy-team-kills-display', 'pause-button'];
-                    if (isBillBattleMode()) uiToShow.push('billbattle-kills-remaining');
+                    if (isClassicBillBattleMode()) uiToShow.push('billbattle-kills-remaining');
                     if (shouldShowTouchControls()) {
                         uiToShow.push('joystick-move', 'fire-button', 'crouch-button', 'zoom-button');
                     } else {
@@ -10775,7 +10860,7 @@ function startPlayerDeathSequence(projectile) {
                     if (shouldShowTouchControls()) ensureJoystickReady(true);
                     const followBtn = document.getElementById('follow-button');
                     if (followBtn) {
-                        const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                        const shouldShowFollow = (shouldShowTouchControls()) && isTeamBasedAIMode();
                         followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
                     }
                 }
@@ -10941,7 +11026,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
     // AI死亡処理では常に発射済み弾とロケット軌跡を回収して残像を防ぐ。
     removeAIProjectiles(ai, true);
     console.log('finalizeAIDeathWithoutKillCam called, killCamMode:', gameSettings.killCamMode, 'gameMode:', gameSettings.gameMode, 'isBillBattle:', isBillBattleMode(), 'killerSource:', killerSource);
-    if (isBillBattleMode() && killerSource !== 'player') {
+    if (isClassicBillBattleMode() && killerSource !== 'player') {
         const reviveHP = gameSettings.aiHP === 'Infinity' ? Infinity : parseInt(gameSettings.aiHP, 10);
         ai.hp = reviveHP;
         ai.visible = true;
@@ -10950,7 +11035,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         return;
     }
     ai.targetWeaponPickup = null;
-    if (isBillBattleMode() && killerSource !== 'player') {
+    if (isClassicBillBattleMode() && killerSource !== 'player') {
         ai.visible = false;
         ai.userData.isDying = false;
         billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
@@ -10958,7 +11043,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         restoreRightButtonsDefault();
         return;
     }
-    if (isBillBattleMode() && killerSource === 'player' && gameSettings.killCamMode === 'off') {
+    if (isClassicBillBattleMode() && killerSource === 'player' && gameSettings.killCamMode === 'off') {
         console.log('Executing death animation in BillBattle mode for player kill');
         if (killerSource === 'player') {
             showEnemyKilledMessage();
@@ -11024,7 +11109,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         startKillCamPhysics(ai, parts, aiInitialVelocity, 0.5);
         setTimeout(() => {
             stopKillCamPhysicsForActor(ai);
-            if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+            if (isTimedRespawnMode()) {
                 respawnAI(ai);
             } else {
                 ai.visible = false;
@@ -11033,7 +11118,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         }, 2700);
         return;
     }
-    if (isBillBattleMode() && killerSource === 'player') {
+    if (isClassicBillBattleMode() && killerSource === 'player') {
         ai.visible = false;
         ai.userData.isDying = false;
         billBattleKillsRemaining = Math.max(0, billBattleKillsRemaining - 1);
@@ -11041,7 +11126,7 @@ function finalizeAIDeathWithoutKillCam(ai, killerSource = 'unknown') {
         restoreRightButtonsDefault();
         return;
     }
-    if (gameSettings.gameMode === 'arcade' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') {
+    if (isTimedRespawnMode()) {
         respawnAI(ai);
     } else {
         ai.visible = false;
@@ -11150,7 +11235,7 @@ function aiFallDownCinematicSequence(impactVelocity, ai, killerSource = 'unknown
               if (cross) cross.style.display = 'block';
               if (shouldShowTouchControls()) ensureJoystickReady(true);
               if (followBtn) {
-                  const shouldShowFollow = (shouldShowTouchControls()) && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade');
+                  const shouldShowFollow = (shouldShowTouchControls()) && isTeamBasedAIMode();
                   followBtn.style.display = shouldShowFollow ? 'flex' : 'none';
               }
             if (player) {
@@ -11186,7 +11271,7 @@ function showWinScreen() {
     document.exitPointerLock();
     const winBtn = winScreen ? winScreen.querySelector('.restart-button') : null;
     if (winBtn) {
-        if (isBillBattleMode()) {
+        if (isClassicBillBattleMode()) {
             winBtn.textContent = 'NEXT ROOM';
             winBtn.dataset.nextRoom = 'true';
         } else {
@@ -11968,7 +12053,7 @@ function animate() {
     updateBillBattleElevator(timeElapsed);
     updateBillBattleLightFlicker(timeElapsed);
     cleanupOrphanProjectiles(timeElapsed);
-    const isTeamModeOrTeamArcade = gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade';
+    const isTeamModeOrTeamArcade = isTeamBasedAIMode();
 
     // 定期的に浮遊屋根パーツをクリーンアップ（ビルバトルは除外）
     if (!isBillBattleMode()) {
@@ -12544,7 +12629,7 @@ function animate() {
             setAIClipAmmo(ai, nextClip);
         }
 
-        if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.hp > 0) {
+        if (isTeamBasedAIMode() && ai.hp > 0) {
             // 開始直後の戦闘強制: すべてのAI（味方+敵）を即時交戦状態にする。
             if (timeElapsed < 2.5 && (ai.state === 'HIDING' || ai.state === 'FOLLOWING')) {
                 ai.state = 'ATTACKING';
@@ -12600,7 +12685,7 @@ function animate() {
         const separation_vec = new THREE.Vector3(0, 0, 0);
 
         // ais.forEachループ内で一度だけ定義
-        const isTeammateInTeamModeOrArcade = (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player';
+        const isTeammateInTeamModeOrArcade = isTeamBasedAIMode() && ai.team === 'player';
 
         // FOLLOWING_PLAYER ロジック
         if (isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false) {
@@ -13642,6 +13727,7 @@ function animate() {
                 else targetHeadPos.copy(pBody);
             }
             applyAimConstraints(parts, ai.rotation.y, targetHeadPos);
+            syncHeadToAimDirection(parts);
 
             // 銃を両手の中間点へ整列させる
             alignGunGripToHands(parts, 0.8);
@@ -13753,6 +13839,25 @@ function animate() {
           }
           if (p.isRocket) {
               createRocketTrail(p.mesh.position.clone(), p.source, p.shooter);
+              if (p.source === 'ai' && rr2GunSound && !p.nearMissPlayed && player && player.position) {
+                  const distanceToPlayer = p.mesh.position.distanceTo(player.position);
+                  const approaching = distanceToPlayer < (Number.isFinite(p.prevPlayerDist) ? p.prevPlayerDist : Infinity);
+                  // プレイヤー近傍を通過する瞬間のみSEを鳴らす（連打防止）。
+                  if (approaching && distanceToPlayer <= 18) {
+                      const t = Math.max(0, Math.min(1, (18 - distanceToPlayer) / 18));
+                      const gainBoost = 0.22 + (t * 0.45);
+                      playSpatialSound(rr2GunSound, p.mesh.position, {
+                          distanceScale: 16,
+                          gainBoost: gainBoost,
+                          panScale: 1.35,
+                          behindGain: 1.0,
+                          frontCutoff: 15000,
+                          behindCutoff: 12000
+                      });
+                      p.nearMissPlayed = true;
+                  }
+                  p.prevPlayerDist = distanceToPlayer;
+              }
           }
           const bulletSphere = new THREE.Sphere(p.mesh.position, p.isRocket ? 0.5 : 0.1);
           // 障害物ヒットは上のセグメントレイキャストで処理済み。
@@ -13781,7 +13886,7 @@ function animate() {
                     const ai = ais[j];
                     if (new THREE.Box3().setFromObject(ai).intersectsSphere(bulletSphere)) {
                         if (ai.hp <= 0) continue;
-                        if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && ai.team === 'player') {
+                        if (isTeamBasedAIMode() && ai.team === 'player') {
                             continue;
                         }
 
@@ -13823,7 +13928,7 @@ function animate() {
 
                         if (ai.hp <= 0) {
                             // 【修正】チームデスマッチ時のスコア加算
-                            if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                            if (isTeamBasedAIMode()) {
                                 playerTeamKills++;
                             }
                             // FFA/Arcade用
@@ -13850,7 +13955,7 @@ function animate() {
             const shooterTeam = shooterAI ? shooterAI.team : 'enemy';
             const allowActorDamage = canApplyBillBattleDamage();
             
-            if (allowActorDamage && (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade' || gameSettings.gameMode === 'ffa') && shooterAI) {
+            if (allowActorDamage && (isTeamBasedAIMode() || gameSettings.gameMode === 'ffa') && shooterAI) {
                 for (let j = ais.length - 1; j >= 0; j--) {
                     const ai = ais[j];
                     if (ai === shooterAI || ai.hp <= 0) continue; 
@@ -13892,7 +13997,7 @@ function animate() {
                                 p.shooter.kills++;
                             }
                             // 【修正】AI同士のキルによるスコア加算
-                            if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+                            if (isTeamBasedAIMode()) {
                                 if (shooterTeam === 'player' && ai.team === 'enemy') playerTeamKills++;
                                 if (shooterTeam === 'enemy' && ai.team === 'player') enemyTeamKills++;
                             }
@@ -13913,7 +14018,7 @@ function animate() {
                 if (hitSomething) break;
             }
             
-            if (allowActorDamage && !hitSomething && (gameSettings.gameMode !== 'team' || shooterTeam === 'enemy')) {
+            if (allowActorDamage && !hitSomething && (!isTeamBasedAIMode() || shooterTeam === 'enemy')) {
                 const playerPos = player.position;
                 const playerBoundingBox = new THREE.Box3();
                 const bounds = getPlayerCombatBounds();
@@ -13994,7 +14099,9 @@ function animate() {
                             p.shooter.kills++;
                         }
                         // 【修正】プレイヤーが倒された時の敵チームスコア加算
-                        if ((gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') && shooterTeam === 'enemy') {
+                        if (isTeamBasedAIMode() && shooterTeam === 'enemy') {
+                            enemyTeamKills++;
+                        } else if (gameSettings.gameMode === 'arcade') {
                             enemyTeamKills++;
                         }
                         startPlayerDeathSequence(p);
@@ -14220,7 +14327,7 @@ function animate() {
     }
     // インドアコンバット（build battle）の勝利条件
     const hasPendingAIDeathForWin = isAnyRelevantAIDyingForVictory();
-    if (isBillBattleMode()) {
+    if (isClassicBillBattleMode()) {
         if (isBillBattleFloorCleared() && isGameRunning && !isAIDeathPlaying && !hasPendingAIDeathForWin) {
             showWinScreen();
         }
@@ -14241,7 +14348,7 @@ function animate() {
     }
 
     // 【修正】チームデスマッチ時のスコア表示更新
-    if (gameSettings.gameMode === 'team' || gameSettings.gameMode === 'teamArcade') {
+    if (isTeamBasedAIMode()) {
         if (playerTeamKillsDisplay) playerTeamKillsDisplay.textContent = `PLAYER TEAM KILLS: ${playerTeamKills}`;
         if (enemyTeamKillsDisplay) enemyTeamKillsDisplay.textContent = `ENEMY TEAM KILLS: ${enemyTeamKills}`;
         if (killCountDisplay) killCountDisplay.style.display = 'none';
@@ -14330,7 +14437,7 @@ rButtons.forEach(button => button.addEventListener('click', () => {
     const parentScreen = button.closest('.end-screen');
     const isWinScreen = parentScreen && parentScreen.id === 'win-screen';
     const nextRoomRequested = button.dataset.nextRoom === 'true';
-    if (isWinScreen && nextRoomRequested && isBillBattleMode()) {
+    if (isWinScreen && nextRoomRequested && isClassicBillBattleMode()) {
         if (winScreen) winScreen.style.display = 'none';
         advanceBillBattleFloor();
         if (!(shouldShowTouchControls())) canvas.requestPointerLock();
