@@ -580,14 +580,21 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
         if (unifiedMapSelector) {
             unifiedMapSelector.addEventListener('change', () => {
                 const selectedValue = unifiedMapSelector.value;
+                let selectedMapName = '';
                 
                 if (selectedValue === 'default') {
                     gameSettings.mapType = 'default';
                     gameSettings.customMapName = '';
+                    selectedMapName = 'DefaultMap';
                 } else if (selectedValue && selectedValue !== '---') {
                     // カスタムマップが選択された場合
                     gameSettings.mapType = 'custom';
                     gameSettings.customMapName = selectedValue;
+                    selectedMapName = selectedValue;
+                }
+                // マップ切り替え時は、そのマップ専用の保存設定を自動適用
+                if (selectedMapName) {
+                    loadMapSettings(selectedMapName);
                 }
                 
                 saveSettings();
@@ -2230,10 +2237,13 @@ function saveMapSettings(mapName) {
         alert('マップが選択されていません。');
         return;
     }
+    // UI上の最新値をgameSettingsへ反映してから保存
+    saveSettings();
     
-    // 現在の設定をコピーして保存（customMapNameは除外）
+    // 現在の設定をコピーして保存（マップ識別情報は除外）
     const settingsToSave = { ...gameSettings };
-    delete settingsToSave.customMapName; // マップ名はキーとして使用するので除外
+    delete settingsToSave.customMapName;
+    delete settingsToSave.mapType;
     
     const key = `mapSettings_${mapName}`;
     localStorage.setItem(key, JSON.stringify(settingsToSave));
@@ -2254,6 +2264,9 @@ function loadMapSettings(mapName) {
     
     try {
         const parsedSavedSettings = JSON.parse(savedSettings);
+        // 現在選択中のマップ情報は保持（マップ設定ロードで上書きしない）
+        const currentMapType = gameSettings.mapType;
+        const currentCustomMapName = gameSettings.customMapName;
         
         // デフォルト値の設定
         if (parsedSavedSettings.gameMode === undefined) {
@@ -2352,6 +2365,8 @@ function loadMapSettings(mapName) {
                 
                 // gameSettingsに適用
                 Object.assign(gameSettings, parsedSavedSettings);
+                gameSettings.mapType = currentMapType;
+                gameSettings.customMapName = currentCustomMapName;
                 gameSettings.aiShotLevel = normalizeAIShotLevel(gameSettings.aiShotLevel);
                 gameSettings.gameMode = normalizeGameMode(gameSettings.gameMode);
                 gameSettings.aiAimPrecision = normalizeAIAimPrecision(gameSettings.aiAimPrecision);
@@ -6512,10 +6527,6 @@ function isVisibleToPlayer(ai) {
 
 function getOpponentTargetsForAI(ai) {
     const targets = [];
-    if (isBillBattleMode()) {
-        if (playerHP > 0) targets.push(player);
-        return targets;
-    }
     if (isTeamBasedAIMode()) {
         if (ai.team === 'player') {
             for (const other of ais) {
@@ -6527,6 +6538,10 @@ function getOpponentTargetsForAI(ai) {
                 if (other !== ai && other.team === 'player' && other.hp > 0) targets.push(other);
             }
         }
+        return targets;
+    }
+    if (isBillBattleMode()) {
+        if (playerHP > 0) targets.push(player);
         return targets;
     }
     if (gameSettings.gameMode === 'ffa') {
@@ -8666,7 +8681,7 @@ function applyAIAimSpread(direction, maxAngleRad) {
 
 function aiShoot(ai, timeElapsed) {
     if (!isGameRunning) return;
-    if (isBillBattleMode() && !billBattleAttackActivated) return;
+    if (isBillBattleMode() && !isIndoorTeamDeathmatchMode() && !billBattleAttackActivated) return;
     if (ai && ai.userData && !Number.isFinite(ai.userData.pistolClipAmmo)) {
         ai.userData.pistolClipAmmo = MAX_AMMO_PISTOL_CLIP;
     }
@@ -8707,30 +8722,23 @@ function aiShoot(ai, timeElapsed) {
     let distanceToTarget = 0;
     
     const isTeamModeOrTeamArcade = isTeamBasedAIMode();
+    const isAggressiveTeammate = isTeamModeOrTeamArcade && ai.team === 'player';
 
     // チームモードまたはチームアーケードモードの場合
     if (isTeamModeOrTeamArcade && ai.team === 'player') {
-        // 最も近い敵AIを探す
-        let closestEnemyAI = null;
-        let closestDistance = Infinity;
-        for (const enemyAI of ais) {
-            if (enemyAI === ai || enemyAI.team !== 'enemy' || enemyAI.hp <= 0) continue;
-            const distance = ai.position.distanceTo(enemyAI.position);
-            if (distance < closestDistance) {
-                closestDistance = distance;
-                closestEnemyAI = enemyAI;
-            }
+        // Outdoorチーム戦と同じく共通の視認ターゲット取得を使う
+        const visibleOpponent = getVisibleOpponentInfo(ai);
+        if (visibleOpponent && visibleOpponent.targetPos) {
+            targetPosition = visibleOpponent.targetPos.clone();
+            distanceToTarget = visibleOpponent.distance;
+            ai.lastKnownEnemyPos = visibleOpponent.targetPos.clone();
+            ai.lastSeenEnemyTime = timeElapsed;
+        } else if (ai.lastKnownEnemyPos) {
+            targetPosition = ai.lastKnownEnemyPos.clone();
+            distanceToTarget = ai.position.distanceTo(targetPosition);
         }
-        if (closestEnemyAI) {
-            const enemyHeadPos = getAIUpperTorsoPos(closestEnemyAI);
-            const enemyBodyPos = getAILowerTorsoPos(closestEnemyAI);
-            if (canSeeFrom(startPosition, enemyHeadPos)) {
-                targetPosition = enemyHeadPos;
-            } else if (canSeeFrom(startPosition, enemyBodyPos)) {
-                targetPosition = enemyBodyPos;
-            }
-            distanceToTarget = closestDistance;
-        }
+        // 味方AIはプレイヤーを絶対に標的にしない（保険）
+        targetIsPlayer = false;
     } else if (isTeamModeOrTeamArcade && ai.team === 'enemy') {
         // 敵AIはプレイヤーと味方AIを状況で選ぶ（味方AI寄り）
         const targets = [];
@@ -8827,10 +8835,13 @@ function aiShoot(ai, timeElapsed) {
         targetIsPlayer = true;
     }
     
+    if (isTeamModeOrTeamArcade && ai.team === 'player' && targetIsPlayer) {
+        return;
+    }
     if (targetPosition === null) {
         // 味方AIは非視認でも最寄り敵へ圧をかけ続ける（マップ差の平準化）
         if (isTeamModeOrTeamArcade && ai.team === 'player') {
-            const fallbackTarget = getClosestOpponentPosition(ai);
+            const fallbackTarget = getClosestEnemyAIPositionForTeammate(ai);
             if (fallbackTarget) {
                 targetPosition = fallbackTarget.clone();
                 distanceToTarget = ai.position.distanceTo(fallbackTarget);
@@ -8842,14 +8853,18 @@ function aiShoot(ai, timeElapsed) {
             return;
         }
     }
+    // 近距離室内では過剰停止を避けるため、位置ベースの追加ガードは使わない。
     // 厳格ルール: 銃口→目標が障害物で遮られている場合は発砲しない。
     {
         const clearOrigin = getClearShotOrigin(targetPosition, startPosition);
-        if (!clearOrigin) return;
-        if (clearOrigin.distanceToSquared(startPosition) > 1e-6) {
-            muzzleDirection = null;
+        if (!clearOrigin) {
+            if (!isAggressiveTeammate) return;
+        } else {
+            if (clearOrigin.distanceToSquared(startPosition) > 1e-6) {
+                muzzleDirection = null;
+            }
+            startPosition = clearOrigin;
         }
-        startPosition = clearOrigin;
     }
     // 発砲直前に再照準し、銃口方向を狙いに一致させる。
     let desiredYaw = Math.atan2(targetPosition.x - ai.position.x, targetPosition.z - ai.position.z);
@@ -8866,11 +8881,14 @@ function aiShoot(ai, timeElapsed) {
     // 最終ポーズ/銃口更新後にLOSを再確認（AI同士の壁抜け防止）。
     {
         const clearOrigin = getClearShotOrigin(targetPosition, startPosition);
-        if (!clearOrigin) return;
-        if (clearOrigin.distanceToSquared(startPosition) > 1e-6) {
-            muzzleDirection = null;
+        if (!clearOrigin) {
+            if (!isAggressiveTeammate) return;
+        } else {
+            if (clearOrigin.distanceToSquared(startPosition) > 1e-6) {
+                muzzleDirection = null;
+            }
+            startPosition = clearOrigin;
         }
-        startPosition = clearOrigin;
     }
 
     const toTarget = new THREE.Vector3().subVectors(targetPosition, startPosition).normalize();
@@ -8944,7 +8962,20 @@ function aiShoot(ai, timeElapsed) {
             }
             break;
         case WEAPON_SR: if (ai.ammoSR > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SR)) { canAIShoot = true; aiFireRate = FIRE_RATE_SR * (1.0 + (1.0 - ai.aggression) * 0.5); aiProjectileColor = 0xffff00; aiProjectileSpeed = projectileSpeed * 2; } break;
-        case WEAPON_SG: if (ai.ammoSG > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG)) { canAIShoot = true; aiFireRate = FIRE_RATE_SG; aiProjectileColor = 0xffa500; aiProjectileSize = 0.05; if (distanceToPlayer < SHOTGUN_RANGE * 1.5) { aiFireRate /= (1 + ai.aggression); } } break;
+        case WEAPON_SG:
+            if (ai.ammoSG > 0 || isInfiniteDefaultWeaponActiveForAI(ai, WEAPON_SG)) {
+                // ショットガンは有効射程内のみ発砲（遠距離の無駄撃ちを防ぐ）
+                if (distanceToPlayer <= SHOTGUN_RANGE) {
+                    canAIShoot = true;
+                    aiFireRate = FIRE_RATE_SG;
+                    aiProjectileColor = 0xffa500;
+                    aiProjectileSize = 0.05;
+                    aiFireRate /= (1 + ai.aggression);
+                } else {
+                    canAIShoot = false;
+                }
+            }
+            break;
         case WEAPON_MR:
             if (ai.userData && ai.userData.mrReloadUntil && timeElapsed < ai.userData.mrReloadUntil) {
                 canAIShoot = false;
@@ -8958,24 +8989,23 @@ function aiShoot(ai, timeElapsed) {
             }
             break;
     }
-    // 味方AIも敵AIと同じ発射レートを使う（速度差を作らない）
+    // 味方AIの発砲頻度を強化（敵AIは変更しない）
+    if (isAggressiveTeammate && !canAIShoot && isAIWeaponOutOfAmmo(ai)) {
+        switchAIToFallbackWeapon(ai);
+    }
     if (timeElapsed - ai.lastAttackTime < aiFireRate) return;
     if (canAIShoot) {
         const safeAIShot = getAISafeFireData(startPosition, direction);
         if (safeAIShot.blocked) {
             createSmokeEffect(safeAIShot.impactPoint || startPosition);
             if (isTeamModeOrTeamArcade && ai.team === 'player') {
-                // 味方AIは遮蔽で止まりにくくする（再試行を速める）
-                ai.lastAttackTime = timeElapsed - (aiFireRate * 0.65);
-                const pushPos = getClosestOpponentPosition(ai);
-                if (pushPos && ai.state !== 'CLIMBING' && ai.state !== 'DESCENDING' && !ai.isElevating) {
-                    ai.state = 'MOVING';
-                    ai.targetPosition.copy(pushPos);
-                }
+                // 味方AIは遮蔽誤判定で沈黙しないよう、停止せずに次処理へ進める
+                // （敵方向への射線は事前LOSチェック済み）
+                ai.lastAttackTime = timeElapsed - (aiFireRate * 0.4);
             } else {
                 ai.lastAttackTime = timeElapsed;
+                return;
             }
-            return;
         }
         let soundToPlay;
         if (ai.currentWeapon === WEAPON_MG) {
@@ -11021,6 +11051,22 @@ function shouldPlayAIDeathKillCam(ai, killerSource) {
     return false;
 }
 
+function getClosestEnemyAIPositionForTeammate(ai) {
+    if (!ai) return null;
+    let bestPos = null;
+    let bestDist = Infinity;
+    for (const other of ais) {
+        if (!other || other === ai || other.hp <= 0) continue;
+        if (other.team !== 'enemy') continue;
+        const d = ai.position.distanceTo(other.position);
+        if (d < bestDist) {
+            bestDist = d;
+            bestPos = other.position.clone();
+        }
+    }
+    return bestPos;
+}
+
 let enemyKilledMessageTimer = null;
 function showEnemyKilledMessage() {
     let el = document.getElementById('enemy-killed-message');
@@ -11653,7 +11699,7 @@ function updateBillBattleEntry() {
 }
 
 function updateBillBattleAttackDelay(timeElapsed) {
-    if (!isBillBattleMode()) return;
+    if (!isBillBattleMode() || isIndoorTeamDeathmatchMode()) return;
     if (billBattleAttackActivated) return;
     if (!Number.isFinite(billBattleAttackDelayUntil)) {
         billBattleAttackDelayUntil = timeElapsed + BILL_BATTLE_ATTACK_DELAY;
@@ -12661,6 +12707,11 @@ function animate() {
         }
 
         if (isTeamBasedAIMode() && ai.hp > 0) {
+            // team欠落個体を補正して、味方誤照準/誤射ロジックを防ぐ
+            if (!ai.team || (ai.team !== 'player' && ai.team !== 'enemy')) {
+                const slot = ai.userData && Number.isFinite(ai.userData.slotIndex) ? ai.userData.slotIndex : 2;
+                ai.team = (slot === 1) ? 'player' : 'enemy';
+            }
             // 開始直後の戦闘強制: すべてのAI（味方+敵）を即時交戦状態にする。
             if (timeElapsed < 2.5 && (ai.state === 'HIDING' || ai.state === 'FOLLOWING')) {
                 ai.state = 'ATTACKING';
@@ -12853,7 +12904,7 @@ function animate() {
         // 味方をより積極化: 味方が待機状態（非追従時のHIDING/FOLLOWING）なら、
         // 近傍の敵または巡回点へ探索/移動するパルスを与える。
         if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && (ai.state === 'HIDING' || ai.state === 'FOLLOWING') && timeElapsed >= (ai.userData.searchPulseAt || 0)) {
-            const close = getClosestOpponentPosition(ai);
+            const close = getClosestEnemyAIPositionForTeammate(ai);
             if (close) {
                 ai.state = 'MOVING';
                 ai.targetPosition.copy(close);
@@ -12874,7 +12925,7 @@ function animate() {
         if (isTeammateInTeamModeOrArcade && !isFollowingPlayerMode && (ai.state === 'HIDING' || ai.state === 'FOLLOWING')) {
             const stuckDuration = timeElapsed - (ai.lastHiddenTime || 0);
             if (stuckDuration > 1.2) {
-                const close = getClosestOpponentPosition(ai);
+                const close = getClosestEnemyAIPositionForTeammate(ai);
                 if (close) {
                     ai.state = 'MOVING';
                     ai.targetPosition.copy(close);
@@ -13228,7 +13279,7 @@ function animate() {
                         if (closestEnemyAI) {
                             targetAngle = Math.atan2(closestEnemyAI.position.x - ai.position.x, closestEnemyAI.position.z - ai.position.z);
                         } else {
-                            targetAngle = Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z);
+                            targetAngle = ai.rotation.y;
                         }
                     } else {
                         targetAngle = Math.atan2(player.position.x - ai.position.x, player.position.z - ai.position.z);
@@ -13488,7 +13539,13 @@ function animate() {
                         break;
                     }
                 }
-                if (isTeammateInTeamModeOrArcade && ai.position.distanceTo(player.position) > 16) {
+                if (isTeammateInTeamModeOrArcade && isFollowingPlayerMode && ai.userData.followActive !== false && ai.position.distanceTo(player.position) > 16) {
+                    const teammateEnemy = getClosestEnemyAIPositionForTeammate(ai);
+                    if (teammateEnemy) {
+                        ai.state = 'MOVING';
+                        ai.targetPosition.copy(teammateEnemy);
+                        break;
+                    }
                     ai.state = 'MOVING';
                     ai.targetPosition.copy(player.position);
                     break;
@@ -13500,7 +13557,9 @@ function animate() {
                         ai.state = 'FOLLOWING';
                         break;
                     }
-                    attackTargetPos = player.position.clone();
+                    attackTargetPos = isTeammateInTeamModeOrArcade
+                        ? (getClosestEnemyAIPositionForTeammate(ai) || ai.lastKnownEnemyPos || ai.position.clone().add(new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize().multiplyScalar(4)))
+                        : player.position.clone();
                 }
                 const directionToTarget = new THREE.Vector3().subVectors(attackTargetPos, ai.position);
                 directionToTarget.y = 0;
@@ -13551,14 +13610,32 @@ function animate() {
                         }
                     }
                 }
-                if ((timeElapsed - ai.currentAttackTime) >= ATTACK_DURATION) {
+                const attackDurationLimit = isTeammateInTeamModeOrArcade ? (ATTACK_DURATION * 2.0) : ATTACK_DURATION;
+                if ((timeElapsed - ai.currentAttackTime) >= attackDurationLimit) {
+                    if (isTeammateInTeamModeOrArcade) {
+                        // 味方AIは攻撃状態を維持して撃ち続ける（MOVING/HIDINGへ落ちにくくする）
+                        ai.currentAttackTime = timeElapsed;
+                        if (Math.random() < 0.35) ai.strafeDirection *= -1;
+                        break;
+                    }
                     if (isAISeen && Math.random() < ai.flankAggression && (timeElapsed - ai.lastFlankTime) > FLANK_COOLDOWN) {
                         if (findFlankingSpot(ai, timeElapsed)) {
                             break;
                         }
                     }
                     if (!findAndTargetWeapon(ai)) {
-                        findEvasionSpot(ai);
+                        if (isTeammateInTeamModeOrArcade) {
+                            const reengagePos = getClosestEnemyAIPositionForTeammate(ai) || ai.lastKnownEnemyPos;
+                            if (reengagePos) {
+                                ai.state = 'MOVING';
+                                ai.targetPosition.copy(reengagePos);
+                            } else {
+                                // 目標喪失時も待たずに再攻撃ループへ戻す
+                                ai.currentAttackTime = timeElapsed;
+                            }
+                        } else {
+                            findEvasionSpot(ai);
+                        }
                     }
                 }
                 break;
@@ -13574,7 +13651,9 @@ function animate() {
                 if (!ai.userData.groundIdleSince) ai.userData.groundIdleSince = timeElapsed;
                 const noFireTooLong = (timeElapsed - (ai.lastAttackTime || 0)) > 1.6;
                 if ((timeElapsed - ai.userData.groundIdleSince) > 1.5 && noFireTooLong) {
-                    const chase = ai.lastKnownEnemyPos || getClosestOpponentPosition(ai) || player.position.clone();
+                    const chase = isTeammateInTeamModeOrArcade
+                        ? (ai.lastKnownEnemyPos || getClosestEnemyAIPositionForTeammate(ai) || ai.position.clone())
+                        : (ai.lastKnownEnemyPos || getClosestOpponentPosition(ai) || player.position.clone());
                     const vec = new THREE.Vector3().subVectors(chase, ai.position);
                     vec.y = 0;
                     if (vec.lengthSq() < 1e-6) vec.set(Math.random() - 0.5, 0, Math.random() - 0.5);
@@ -13611,7 +13690,11 @@ function animate() {
                     }
                     const anchor = (visibleOpponentInfo && visibleOpponentInfo.targetPos)
                         ? visibleOpponentInfo.targetPos
-                        : (ai.lastKnownEnemyPos || getClosestOpponentPosition(ai) || player.position.clone());
+                        : (
+                            isTeammateInTeamModeOrArcade
+                                ? (ai.lastKnownEnemyPos || getClosestEnemyAIPositionForTeammate(ai) || ai.position.clone())
+                                : (ai.lastKnownEnemyPos || getClosestOpponentPosition(ai) || player.position.clone())
+                        );
                     const dir = new THREE.Vector3().subVectors(anchor, ai.position);
                     dir.y = 0;
                     if (dir.lengthSq() < 1e-6) dir.set(Math.random() - 0.5, 0, Math.random() - 0.5);
@@ -13743,14 +13826,15 @@ function animate() {
                 if (closestEnemyAI) {
                     targetHeadPos.copy(getAIUpperTorsoPos(closestEnemyAI));
                 } else {
-                    // 敵AIがいない場合はプレイヤーを向く
-                    const aimOrigin = ai.position.clone().add(new THREE.Vector3(0, BODY_HEIGHT * 0.75, 0));
-                    const pHead = getPlayerHeadPos();
-                    const pUpper = getPlayerUpperTorsoPos();
-                    const pBody = getPlayerBodyPos();
-                    if (checkLineOfSight(aimOrigin, pHead, obstacles)) targetHeadPos.copy(pHead);
-                    else if (checkLineOfSight(aimOrigin, pUpper, obstacles)) targetHeadPos.copy(pUpper);
-                    else targetHeadPos.copy(pBody);
+                    // 味方AIはプレイヤーへ照準を向けない。敵の既知位置へ安定して向ける。
+                    if (ai.lastKnownEnemyPos) {
+                        targetHeadPos.copy(ai.lastKnownEnemyPos);
+                        targetHeadPos.y = ai.position.y + BODY_HEIGHT * 0.75;
+                    } else {
+                        const fwd = new THREE.Vector3(0, 0, 1).applyEuler(ai.rotation);
+                        targetHeadPos.copy(ai.position).add(fwd.multiplyScalar(6));
+                        targetHeadPos.y = ai.position.y + BODY_HEIGHT * 0.75;
+                    }
                 }
             } else {
                 // 通常モードまたは敵AIはプレイヤーを向く

@@ -404,6 +404,7 @@
         let panStart = new THREE.Vector2();
         let initialFrustumSize = FRUSTUM_SIZE;
         let addingMode = 'obstacle'; // 追加: オブジェクト追加モードを管理
+        let pendingImportedLinkedSettings = null;
         
         // --- HOUSE CREATION FUNCTION ---
         function createHouse(x, z, width = 8, height = 5, depth = 8, color = 0xff6666, hp = 8, rotation = 0, isNew = true) {
@@ -1276,6 +1277,54 @@
 
         let allCustomMaps = JSON.parse(localStorage.getItem('allCustomMaps') || '{}');
 
+        function parseJSONSafe(raw, fallback = null) {
+            if (!raw) return fallback;
+            try {
+                return JSON.parse(raw);
+            } catch (e) {
+                return fallback;
+            }
+        }
+
+        function captureLinkedSettings(mapName) {
+            const globalGameSettings = parseJSONSafe(localStorage.getItem('gameSettings'), null);
+            const mapSpecificSettings = mapName
+                ? parseJSONSafe(localStorage.getItem(`mapSettings_${mapName}`), null)
+                : null;
+            return {
+                version: 1,
+                sourceMapName: mapName || '',
+                globalGameSettings,
+                mapSpecificSettings
+            };
+        }
+
+        function applyLinkedSettings(mapName, linkedSettings) {
+            if (!linkedSettings || typeof linkedSettings !== 'object') return false;
+            let applied = false;
+            if (linkedSettings.globalGameSettings && typeof linkedSettings.globalGameSettings === 'object') {
+                try {
+                    localStorage.setItem('gameSettings', JSON.stringify(linkedSettings.globalGameSettings));
+                    applied = true;
+                } catch (e) {}
+            }
+            const mapScoped = (linkedSettings.mapSpecificSettings && typeof linkedSettings.mapSpecificSettings === 'object')
+                ? linkedSettings.mapSpecificSettings
+                : (linkedSettings.globalGameSettings && typeof linkedSettings.globalGameSettings === 'object'
+                    ? linkedSettings.globalGameSettings
+                    : null);
+            if (mapName && mapScoped) {
+                const scoped = { ...mapScoped };
+                delete scoped.mapType;
+                delete scoped.customMapName;
+                try {
+                    localStorage.setItem(`mapSettings_${mapName}`, JSON.stringify(scoped));
+                    applied = true;
+                } catch (e) {}
+            }
+            return applied;
+        }
+
         function updateSavedMapsSelect() {
             const select = document.getElementById('saved-maps-select');
             select.innerHTML = ''; 
@@ -1310,6 +1359,7 @@
                 showNotification('Please enter a map name.', true);
                 return;
             }
+            const linkedSettings = pendingImportedLinkedSettings || captureLinkedSettings(mapName);
 
             const mapData = {
                 obstacles: obstacles.map(o => {
@@ -1362,12 +1412,15 @@
                 })),
                 spawnPoints: SPAWN_POINTS_DATA,
                 persistentSize: PERSISTENT_OBSTACLE_SIZE,
-                floorColor: floor.material.color.getHex()
+                floorColor: floor.material.color.getHex(),
+                linkedSettings
             };
             
             allCustomMaps[mapName] = mapData;
             try {
                 localStorage.setItem('allCustomMaps', JSON.stringify(allCustomMaps));
+                applyLinkedSettings(mapName, linkedSettings);
+                pendingImportedLinkedSettings = null;
                 showNotification(`Map "${mapName}" saved successfully!`);
                 updateSavedMapsSelect();
             } catch (e) {
@@ -1417,6 +1470,9 @@
                 else setFloorColor(FLOOR_DEFAULT_COLOR);
                 
                 renderSpawnPoints();
+                if (mapData.linkedSettings) {
+                    applyLinkedSettings(mapName, mapData.linkedSettings);
+                }
                 showNotification(`Map "${mapName}" loaded!`);
             } catch(e) {
                 showNotification('Failed to load map data.', true);
@@ -1566,7 +1622,11 @@
                     }).filter(l => l !== null),
                     spawnPoints: SPAWN_POINTS_DATA,
                     persistentSize: PERSISTENT_OBSTACLE_SIZE,
-                    floorColor: floor.material.color.getHex()
+                    floorColor: floor.material.color.getHex(),
+                    linkedSettings: captureLinkedSettings(
+                        document.getElementById('map-name-input').value.trim()
+                        || document.getElementById('saved-maps-select').value
+                    )
                 };
                 
                 console.log('Map data prepared:', mapData);
@@ -1625,6 +1685,7 @@
                     else setFloorColor(FLOOR_DEFAULT_COLOR);
                     
                     renderSpawnPoints();
+                    pendingImportedLinkedSettings = mapData.linkedSettings || null;
                     showNotification('Map imported successfully!');
                 } catch (error) {
                     showNotification('Error: Could not read map file.', true);
