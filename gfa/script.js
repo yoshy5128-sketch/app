@@ -1927,6 +1927,7 @@ fontLoader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.
 function saveSettings() {
     gameSettings.autoAim = document.querySelector('input[name="auto-aim"]:checked').value;
     gameSettings.killCamMode = document.querySelector('input[name="killcam-mode"]:checked').value;
+    if (gameSettings.killCamMode === 'all') gameSettings.killCamMode = 'playerOnly';
     const aiShotSlider = document.getElementById('ai-shot-slider');
     if (aiShotSlider) {
         gameSettings.aiAimPrecision = normalizeAIAimPrecision(aiShotSlider.value);
@@ -1986,6 +1987,9 @@ function loadSettings() {
         }
         parsedSavedSettings.gameMode = normalizeGameMode(parsedSavedSettings.gameMode);
         if (parsedSavedSettings.killCamMode === undefined) {
+            parsedSavedSettings.killCamMode = 'playerOnly';
+        }
+        if (parsedSavedSettings.killCamMode === 'all') {
             parsedSavedSettings.killCamMode = 'playerOnly';
         }
         if (parsedSavedSettings.aiShotLevel === undefined) {
@@ -2257,6 +2261,9 @@ function loadMapSettings(mapName) {
         }
         parsedSavedSettings.gameMode = normalizeGameMode(parsedSavedSettings.gameMode);
         if (parsedSavedSettings.killCamMode === undefined) {
+            parsedSavedSettings.killCamMode = 'playerOnly';
+        }
+        if (parsedSavedSettings.killCamMode === 'all') {
             parsedSavedSettings.killCamMode = 'playerOnly';
         }
         if (parsedSavedSettings.aiShotLevel === undefined) {
@@ -8820,7 +8827,21 @@ function aiShoot(ai, timeElapsed) {
         targetIsPlayer = true;
     }
     
-    if (targetPosition === null) return;
+    if (targetPosition === null) {
+        // 味方AIは非視認でも最寄り敵へ圧をかけ続ける（マップ差の平準化）
+        if (isTeamModeOrTeamArcade && ai.team === 'player') {
+            const fallbackTarget = getClosestOpponentPosition(ai);
+            if (fallbackTarget) {
+                targetPosition = fallbackTarget.clone();
+                distanceToTarget = ai.position.distanceTo(fallbackTarget);
+                targetIsPlayer = false;
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+    }
     // 厳格ルール: 銃口→目標が障害物で遮られている場合は発砲しない。
     {
         const clearOrigin = getClearShotOrigin(targetPosition, startPosition);
@@ -8943,7 +8964,17 @@ function aiShoot(ai, timeElapsed) {
         const safeAIShot = getAISafeFireData(startPosition, direction);
         if (safeAIShot.blocked) {
             createSmokeEffect(safeAIShot.impactPoint || startPosition);
-            ai.lastAttackTime = timeElapsed;
+            if (isTeamModeOrTeamArcade && ai.team === 'player') {
+                // 味方AIは遮蔽で止まりにくくする（再試行を速める）
+                ai.lastAttackTime = timeElapsed - (aiFireRate * 0.65);
+                const pushPos = getClosestOpponentPosition(ai);
+                if (pushPos && ai.state !== 'CLIMBING' && ai.state !== 'DESCENDING' && !ai.isElevating) {
+                    ai.state = 'MOVING';
+                    ai.targetPosition.copy(pushPos);
+                }
+            } else {
+                ai.lastAttackTime = timeElapsed;
+            }
             return;
         }
         let soundToPlay;
@@ -10981,13 +11012,13 @@ function shouldPlayAIDeathKillCam(ai, killerSource) {
     if (mode === 'off') return false;
     // AI同士/環境キルはキルカメラ対象外（通常の倒れ演出を優先）
     if (killerSource !== 'player') return false;
-    if (mode === 'all') return true;
     if (mode === 'playerOnly') {
         if (!ai) return false;
-        if (gameSettings.gameMode === 'ffa') return true;
-        return ai.team === 'enemy';
+        // team/teamArcade では敵AIのみ、それ以外（battle/ffa/arcade/bill）は全AI対象
+        if (isTeamBasedAIMode()) return ai.team === 'enemy';
+        return true;
     }
-    return true;
+    return false;
 }
 
 let enemyKilledMessageTimer = null;
@@ -12801,13 +12832,18 @@ function animate() {
         aiCheckPickup(ai);
         let visibleOpponentInfo = ai.userData.cachedVisibleOpponentInfo;
         let isAISeen = !!ai.userData.cachedIsAISeen;
-            if (timeElapsed >= (ai.userData.nextPerceptionTime || 0)) {
+        if (timeElapsed >= (ai.userData.nextPerceptionTime || 0)) {
             // LOSチェック間隔を約180-240msに広げ、CPU負荷を低減
             visibleOpponentInfo = getVisibleOpponentInfo(ai);
             isAISeen = !!visibleOpponentInfo;
             ai.userData.cachedVisibleOpponentInfo = visibleOpponentInfo;
             ai.userData.cachedIsAISeen = isAISeen;
-            ai.userData.nextPerceptionTime = timeElapsed + 0.18 + Math.random() * 0.06;
+            // 味方AIはマップ差を受けにくくするため知覚更新を高頻度で一定化
+            if (isTeammateInTeamModeOrArcade) {
+                ai.userData.nextPerceptionTime = timeElapsed + 0.1;
+            } else {
+                ai.userData.nextPerceptionTime = timeElapsed + 0.18 + Math.random() * 0.06;
+            }
         }
         if (visibleOpponentInfo) {
             ai.lastSeenEnemyTime = timeElapsed;
