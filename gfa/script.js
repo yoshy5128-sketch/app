@@ -539,9 +539,13 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
         gameModeRadios.forEach(radio => {
             radio.addEventListener('change', () => {
                 if (radio.checked) {
+                    const previousMode = gameSettings.gameMode;
+                    saveCurrentModeSpecificSettings(previousMode);
                     gameSettings.gameMode = normalizeGameMode(radio.value);
+                    applyModeSpecificSettings(gameSettings.gameMode);
                     applyBillBattleModeConstraints();
                     updateSettingsAvailabilityForMode();
+                    syncModeSpecificSettingsUI();
                     saveSettings();
                 }
             });
@@ -792,11 +796,11 @@ const WEAPON_CUSTOMIZATION_RECOVERY_PRESET = {
             <p>FreeForAllをはじめ、1V3から2V2のTeamDeathmatchまで、存分にGunFightが楽しめるシンプルかつ超エキサイティングなFPS。それがこのGunFightArenaだ！</p>
             <p>
 ・プレイヤーと敵AIのHPを自由に変更できる。無敵モード可。<br>
-・プレイヤーのデフォルト武器と敵AIのデフォルト武器をそれぞれ選択可。<br>
+・プレイヤーのデフォルト武器と敵AIのデフォルト武器をそれぞれ選択可。デフォルト武器は弾数無制限（但しReloadあり）<br>
 ・ProjectileSpeedで弾の速さを可変できる。<br>
 ・Character Editerでキャラの容姿をカスタマイズ可能。<br>
-・WeaponCountでアリーナ内に配置できる各武器の数を可変できる。武器は取った後も復活。但し、装備できる武器は1種類のみ。別の武器を拾うことでチェンジ。<br>
-・Medikitは、アーケード・モードとインドア・コンバットモードのみで有効。HPが回復する。配置する数を可変できる。<br>
+・WeaponCountでアリーナ内に配置できる各武器の数を可変できる。武器は取った後も復活。但し、装備できる武器は1種類のみ。別の武器を拾うことでチェンジ。武器は弾を撃ち尽くすまでReload不可。<br>
+・Medikitは、アウトドア・1V3モードとインドア・コンバットモードのみで有効。HPが回復する。配置する数を可変できる。<br>
 ・AICountで敵AIの数を変更可能。チームデスマッチでは、AIが1体味方になる。<br>
 ・強力なMap Editerで自作のオリジナルマップをゼロから作成可。自作のマップデータを.jsonとして保存＆読み込み可。<br>
 ・NightModeは、暗闇での夜戦モード。LightIntensityでアリーナの明るさを調整可能。<br>
@@ -1156,6 +1160,99 @@ function isClassicBillBattleMode() {
 
 function isIndoorTeamDeathmatchMode() {
     return gameSettings.gameMode === GAME_MODE_BILLBATTLE_TDM;
+}
+
+const MODE_PROFILE_FIELDS = [
+    'defaultWeaponPlayer',
+    'defaultWeaponAI',
+    'defaultWeaponAI1',
+    'defaultWeaponAI2',
+    'defaultWeaponAI3',
+    'mgCount',
+    'rrCount',
+    'srCount',
+    'sgCount',
+    'mrCount',
+    'aiCount',
+    'medikitCount'
+];
+
+function isIndoorModeValue(mode) {
+    const normalized = normalizeGameMode(mode);
+    return normalized === GAME_MODE_BILLBATTLE || normalized === GAME_MODE_BILLBATTLE_TDM;
+}
+
+function getModeProfileBucket(mode) {
+    return isIndoorModeValue(mode) ? 'indoor' : 'outdoor';
+}
+
+function createModeProfileFromGameSettings() {
+    const profile = {};
+    MODE_PROFILE_FIELDS.forEach(field => {
+        profile[field] = gameSettings[field];
+    });
+    return profile;
+}
+
+function ensureModeSpecificSettingsProfiles() {
+    if (!gameSettings.modeSpecificSettings || typeof gameSettings.modeSpecificSettings !== 'object') {
+        const currentProfile = createModeProfileFromGameSettings();
+        gameSettings.modeSpecificSettings = {
+            indoor: { ...currentProfile },
+            outdoor: { ...currentProfile }
+        };
+    } else {
+        if (!gameSettings.modeSpecificSettings.indoor || typeof gameSettings.modeSpecificSettings.indoor !== 'object') {
+            gameSettings.modeSpecificSettings.indoor = createModeProfileFromGameSettings();
+        }
+        if (!gameSettings.modeSpecificSettings.outdoor || typeof gameSettings.modeSpecificSettings.outdoor !== 'object') {
+            gameSettings.modeSpecificSettings.outdoor = createModeProfileFromGameSettings();
+        }
+    }
+}
+
+function saveCurrentModeSpecificSettings(mode = gameSettings.gameMode) {
+    ensureModeSpecificSettingsProfiles();
+    const bucket = getModeProfileBucket(mode);
+    gameSettings.modeSpecificSettings[bucket] = createModeProfileFromGameSettings();
+}
+
+function applyModeSpecificSettings(mode = gameSettings.gameMode) {
+    ensureModeSpecificSettingsProfiles();
+    const bucket = getModeProfileBucket(mode);
+    const profile = gameSettings.modeSpecificSettings[bucket];
+    if (!profile) return;
+    MODE_PROFILE_FIELDS.forEach(field => {
+        if (profile[field] !== undefined) {
+            gameSettings[field] = profile[field];
+        }
+    });
+}
+
+function syncModeSpecificSettingsUI() {
+    const setValueIfExists = (id, value) => {
+        const el = document.getElementById(id);
+        if (el && value !== undefined && value !== null) el.value = String(value);
+    };
+    setValueIfExists('mg-count', gameSettings.mgCount);
+    setValueIfExists('rr-count', gameSettings.rrCount);
+    setValueIfExists('sr-count', gameSettings.srCount);
+    setValueIfExists('sg-count', gameSettings.sgCount);
+    setValueIfExists('mr-count', gameSettings.mrCount);
+    setValueIfExists('medikit-count', gameSettings.medikitCount);
+
+    const aiCountRadios = document.querySelectorAll('input[name="ai-count"]');
+    aiCountRadios.forEach(radio => {
+        radio.checked = (radio.value === String(gameSettings.aiCount));
+    });
+
+    const defaultWeaponTargetSelect = document.getElementById('default-weapon-target');
+    const target = defaultWeaponTargetSelect ? defaultWeaponTargetSelect.value : 'player';
+    const selected = getDefaultWeaponForTarget(target);
+    const defaultWeaponChecks = document.querySelectorAll('input[name="default-weapon"]');
+    defaultWeaponChecks.forEach(check => {
+        check.checked = (selected === check.value);
+    });
 }
 
 function normalizeGameMode(mode) {
@@ -1958,6 +2055,7 @@ function saveSettings() {
     // 旧フィールドとの整合性を維持
     gameSettings.defaultWeapon = gameSettings.defaultWeaponPlayer || WEAPON_MG;
     gameSettings.defaultWeaponAI = gameSettings.defaultWeaponAI1 || WEAPON_MG;
+    saveCurrentModeSpecificSettings(gameSettings.gameMode);
     applyBillBattleModeConstraints();
     updateSettingsAvailabilityForMode();
     localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
@@ -2079,11 +2177,33 @@ function loadSettings() {
         if (parsedSavedSettings.mrCount === undefined) {
             parsedSavedSettings.mrCount = gameSettings.mrCount;
         }
+        if (!parsedSavedSettings.modeSpecificSettings || typeof parsedSavedSettings.modeSpecificSettings !== 'object') {
+            const currentProfile = {
+                defaultWeaponPlayer: parsedSavedSettings.defaultWeaponPlayer,
+                defaultWeaponAI: parsedSavedSettings.defaultWeaponAI,
+                defaultWeaponAI1: parsedSavedSettings.defaultWeaponAI1,
+                defaultWeaponAI2: parsedSavedSettings.defaultWeaponAI2,
+                defaultWeaponAI3: parsedSavedSettings.defaultWeaponAI3,
+                mgCount: parsedSavedSettings.mgCount,
+                rrCount: parsedSavedSettings.rrCount,
+                srCount: parsedSavedSettings.srCount,
+                sgCount: parsedSavedSettings.sgCount,
+                mrCount: parsedSavedSettings.mrCount,
+                aiCount: parsedSavedSettings.aiCount,
+                medikitCount: parsedSavedSettings.medikitCount
+            };
+            parsedSavedSettings.modeSpecificSettings = {
+                indoor: { ...currentProfile },
+                outdoor: { ...currentProfile }
+            };
+        }
         Object.assign(gameSettings, parsedSavedSettings);
         gameSettings.aiShotLevel = normalizeAIShotLevel(gameSettings.aiShotLevel);
         gameSettings.gameMode = normalizeGameMode(gameSettings.gameMode);
         gameSettings.aiAimPrecision = normalizeAIAimPrecision(gameSettings.aiAimPrecision);
         gameSettings.billBattleLighting = normalizeBillBattleLightingCount(gameSettings.billBattleLighting);
+        ensureModeSpecificSettingsProfiles();
+        applyModeSpecificSettings(gameSettings.gameMode);
         // buttonPositionsが存在しない場合の既定値を追加
         if (parsedSavedSettings.buttonPositions === undefined) {
             parsedSavedSettings.buttonPositions = {
@@ -2130,6 +2250,7 @@ function loadSettings() {
         };
         syncWeaponUI();
         defaultWeaponTargetSelect.addEventListener('change', syncWeaponUI);
+        syncModeSpecificSettingsUI();
         const nightModeIntensitySlider = document.getElementById('night-mode-intensity');
         const nightModeIntensityValueSpan = document.getElementById('night-mode-intensity-value');
         if (nightModeIntensitySlider) {
@@ -2232,6 +2353,14 @@ function loadSettings() {
 }
 
 // マップごとの設定を保存する関数
+function getMapSaveDisplayName(mapName) {
+    if (mapName !== 'DefaultMap') return mapName;
+    const mode = normalizeGameMode(gameSettings.gameMode);
+    if (mode === GAME_MODE_BILLBATTLE) return 'Indoor 1V3';
+    if (mode === GAME_MODE_BILLBATTLE_TDM) return 'Indoor TDM';
+    return mapName;
+}
+
 function saveMapSettings(mapName) {
     if (!mapName || mapName === '') {
         alert('マップが選択されていません。');
@@ -2247,7 +2376,7 @@ function saveMapSettings(mapName) {
     
     const key = `mapSettings_${mapName}`;
     localStorage.setItem(key, JSON.stringify(settingsToSave));
-    alert(`設定を保存しました: ${mapName}`);
+    alert(`設定を保存しました: ${getMapSaveDisplayName(mapName)}`);
 }
 
 // マップごとの設定を読み込む関数
@@ -9161,12 +9290,31 @@ const lookSpeed = 0.006;
   let keyboardMoveVector = new THREE.Vector2(0, 0);
   let joystickMoveVector = new THREE.Vector2(0, 0);
   let moveManager = null;
+  let joystickReinitTimer = 0;
+
+  function clearJoystickZoneDom(joystickZone = document.getElementById('joystick-move')) {
+      if (!joystickZone) return;
+      joystickZone.innerHTML = '';
+      joystickZone.style.touchAction = 'none';
+      joystickZone.style.webkitUserSelect = 'none';
+      joystickZone.style.userSelect = 'none';
+  }
+
+  function resetJoystickInputState() {
+      joystickMoveVector.set(0, 0);
+      clearJoystickZoneDom();
+  }
 
   function destroyJoystick() {
       joystickMoveVector.set(0, 0);
       if (moveManager) {
           moveManager.destroy();
           moveManager = null;
+      }
+      clearJoystickZoneDom();
+      if (joystickReinitTimer) {
+          clearTimeout(joystickReinitTimer);
+          joystickReinitTimer = 0;
       }
   }
   
@@ -9181,12 +9329,15 @@ const lookSpeed = 0.006;
           return;
       }
       destroyJoystick();
+      clearJoystickZoneDom(joystickZone);
+      const zoneRect = joystickZone.getBoundingClientRect();
+      const joystickSize = Math.max(80, Math.min(150, zoneRect.width || 150, zoneRect.height || 150));
       moveManager = nipplejs.create({
           zone: joystickZone,
           mode: 'static',
           position: { left: '50%', top: '50%' },
           color: 'blue',
-          size: 150,
+          size: joystickSize,
           restOpacity: 0.7
       });
   
@@ -9197,12 +9348,33 @@ const lookSpeed = 0.006;
   
       moveManager.on('move', function (evt, data) {
           if (!isGameRunning) return;
-          joystickMoveVector.set(data.vector.x, data.vector.y);
+          if (!data || !data.vector) {
+              joystickMoveVector.set(0, 0);
+              return;
+          }
+          const x = Number.isFinite(data.vector.x) ? data.vector.x : 0;
+          const y = Number.isFinite(data.vector.y) ? data.vector.y : 0;
+          joystickMoveVector.set(Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y)));
       });
   
       moveManager.on('end', function () {
-          joystickMoveVector.set(0, 0);
+          resetJoystickInputState();
+          rebuildJoystickSoon(30);
       });
+  }
+
+  function rebuildJoystickSoon(delay = 80) {
+      joystickMoveVector.set(0, 0);
+      if (!shouldShowTouchControls()) {
+          destroyJoystick();
+          return;
+      }
+      if (joystickReinitTimer) clearTimeout(joystickReinitTimer);
+      joystickReinitTimer = setTimeout(() => {
+          joystickReinitTimer = 0;
+          if (!isGameRunning || !shouldShowTouchControls()) return;
+          requestAnimationFrame(() => requestAnimationFrame(() => initJoystick()));
+      }, delay);
   }
 
   function ensureJoystickReady(forceReinit = false) {
@@ -9215,16 +9387,16 @@ const lookSpeed = 0.006;
       const rect = joystickZone.getBoundingClientRect();
       const invalidRect = rect.width < 40 || rect.height < 40;
       if (forceReinit || !moveManager || invalidRect) {
-          initJoystick();
+          rebuildJoystickSoon(forceReinit ? 30 : 80);
       }
   }
   
   initJoystick();
   window.addEventListener('resize', () => {
-      if (shouldShowTouchControls()) initJoystick();
+      if (shouldShowTouchControls()) rebuildJoystickSoon(120);
   });
   window.addEventListener('orientationchange', () => {
-      if (shouldShowTouchControls()) initJoystick();
+      if (shouldShowTouchControls()) rebuildJoystickSoon(250);
   });
   document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
@@ -9233,7 +9405,7 @@ const lookSpeed = 0.006;
           return;
       }
       if (isGameRunning && shouldShowTouchControls()) {
-          initJoystick();
+          rebuildJoystickSoon(80);
       }
   });
   window.addEventListener('blur', () => {
@@ -9242,27 +9414,27 @@ const lookSpeed = 0.006;
   });
   window.addEventListener('focus', () => {
       if (isGameRunning && shouldShowTouchControls()) {
-          initJoystick();
+          rebuildJoystickSoon(80);
       }
   });
   document.addEventListener('touchend', (event) => {
       if (!isGameRunning || !shouldShowTouchControls()) return;
       if (event.touches && event.touches.length === 0) {
-          joystickMoveVector.set(0, 0);
-          requestAnimationFrame(() => ensureJoystickReady(true));
+          resetJoystickInputState();
+          rebuildJoystickSoon(30);
       }
   }, { passive: true });
   document.addEventListener('touchcancel', (event) => {
       if (!isGameRunning || !shouldShowTouchControls()) return;
       if (!event.touches || event.touches.length === 0) {
-          joystickMoveVector.set(0, 0);
-          requestAnimationFrame(() => ensureJoystickReady(true));
+          resetJoystickInputState();
+          rebuildJoystickSoon(30);
       }
   }, { passive: true });
   if (window.visualViewport) {
       const reflowJoystick = () => {
           if (!isGameRunning || !shouldShowTouchControls()) return;
-          requestAnimationFrame(() => ensureJoystickReady(true));
+          rebuildJoystickSoon(120);
       };
       window.visualViewport.addEventListener('resize', reflowJoystick);
       window.visualViewport.addEventListener('scroll', reflowJoystick);
@@ -9615,6 +9787,7 @@ function isSettingsScreenVisible() {
 let currentBgmTrack = null;
 let bgmOrderIndex = 0;
 const MENU_BGM_TRACK = 'opm.mp3';
+let hasPlayedInitialMenuBGM = false;
 
 function normalizeBgmVolume(value) {
     const num = Number(value);
@@ -9738,11 +9911,13 @@ function stopGameBGM(resetTime = false) {
 
 function playMenuBGM() {
     if (!bgmAudio || gameSettings.bgmMute) return;
+    if (hasPlayedInitialMenuBGM) return;
     removeContinuousBgmEndedHandler();
     setBgmTrack(MENU_BGM_TRACK, false);
     bgmAudio.loop = true;
     applyBgmVolume();
     bgmAudio.play().catch(() => {});
+    hasPlayedInitialMenuBGM = true;
 }
 
 function stopMenuBGM(resetTime = false) {
@@ -9772,11 +9947,16 @@ function updateMenuBGM() {
         return;
     }
     if (isSettingsScreenVisible()) {
-        if (gameSettings.bgmPlayMode === 'continuous' && currentBgmTrack) {
+        // ゲーム中に設定画面へ戻った場合は、現在の曲をそのまま維持する
+        if (isGameRunning) {
+            applyBgmVolume();
             return;
         }
-        stopGameBGM(false);
-        playMenuBGM();
+        // 起動直後のメニュー表示時のみopm.mp3を再生
+        if (!hasPlayedInitialMenuBGM) {
+            stopGameBGM(false);
+            playMenuBGM();
+        }
         return;
     }
     stopMenuBGM(false);
