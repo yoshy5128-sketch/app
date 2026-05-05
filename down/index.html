@@ -937,14 +937,9 @@
             // Position Player
             const startSpawn = new THREE.Vector3(0, 51.8, 0);
             if (savedPos && Number.isFinite(savedPos.x) && Number.isFinite(savedPos.y) && Number.isFinite(savedPos.z)) {
+                // Respect full-save position so resume starts from the quick-saved location.
                 camera.position.set(savedPos.x, savedPos.y, savedPos.z);
                 velocity.set(0, 0, 0);
-                // Safety: if loaded position has no ground nearby, snap back to stage start.
-                const spawnRay = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0), 0, 6);
-                const spawnHit = spawnRay.intersectObjects(objects);
-                if (spawnHit.length === 0) {
-                    camera.position.copy(startSpawn);
-                }
             } else {
                 camera.position.copy(startSpawn);
                 velocity.set(0, 0, 0);
