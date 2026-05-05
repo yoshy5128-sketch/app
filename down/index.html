@@ -24,13 +24,13 @@
         
         /* UI Elements */
         #ui-overlay { position: absolute; top: 15px; left: 15px; color: gold; font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px black; z-index: 15; pointer-events: none; }
-        .coin-icon { color: #ffd700; margin-left: 15px; }
+        .coin-icon { color: #8cff66; margin-left: 15px; }
         .key-icon { color: #00ff66; text-shadow: 0 0 8px #00ff66; }
         
         #gear-btn { 
             position: absolute; top: 15px; right: 15px; 
-            width: 40px; height: 40px; font-size: 24px; 
-            background: rgba(0,0,0,0.5); color: white; border: 1px solid white; border-radius: 50%; 
+            width: 46px; height: 40px; font-size: 20px; 
+            background: rgba(0,0,0,0.55); color: #f5f5f5; border: 1px solid #ddd; border-radius: 8px; 
             display: flex; justify-content: center; align-items: center; 
             cursor: pointer; z-index: 60; pointer-events: auto; 
         }
@@ -96,6 +96,69 @@
             overflow: auto;
             -webkit-overflow-scrolling: touch;
             touch-action: pan-y;
+        }
+        #map-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; justify-content: flex-start; align-items: center;
+            background: rgba(0,0,0,0.92); color: white; text-align: center; z-index: 115;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #map-stage-distance {
+            margin-top: 6px;
+            color: #ddd;
+            font-size: 0.95em;
+        }
+        #vertical-map {
+            position: relative;
+            width: min(220px, 50vw);
+            height: min(72vh, 620px);
+            margin-top: 16px;
+            border: 1px solid rgba(255,255,255,0.35);
+            border-radius: 8px;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+            overflow: hidden;
+        }
+        .map-goal-line {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 2px;
+            bottom: 0;
+            background: #ff5555;
+            box-shadow: 0 0 8px #ff5555;
+        }
+        .map-goal-dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #ff4040;
+            border: 1px solid #ffd0d0;
+            box-shadow: 0 0 8px #ff4040;
+            transform: translate(-50%, 50%);
+            bottom: 0;
+        }
+        .map-player-dot {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 8px #fff;
+            transform: translate(-50%, -50%);
+        }
+        .map-key-dot {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #8cff66;
+            box-shadow: 0 0 8px #8cff66;
+            transform: translate(-50%, -50%);
+        }
+        #map-key-legend {
+            margin-top: 10px;
+            color: #bfbfbf;
+            font-size: 0.85em;
         }
         #readme-body {
             width: min(900px, 92vw);
@@ -167,6 +230,20 @@
             user-select: none;
         }
         #jump-button:active { background: rgba(255, 255, 255, 0.5); transform: scale(0.95); }
+        #flashlight-button {
+            bottom: 145px; right: 36px; width: 78px; height: 48px;
+            background: rgba(140, 255, 102, 0.18);
+            border: 2px solid rgba(140,255,102,0.65);
+            border-radius: 10px;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; color: #caffbf; font-size: 0.95em;
+            user-select: none;
+        }
+        #flashlight-button.active {
+            background: rgba(140,255,102,0.48);
+            color: #0a0a0a;
+            box-shadow: 0 0 10px rgba(140,255,102,0.8);
+        }
 
         /* Camera Touch Area (Right side of screen) */
         #touch-camera-area { 
@@ -196,13 +273,13 @@
 
     <div id="ui-overlay">
         <span class="key-icon">KEYS: <span id="item-count">0</span> / 4</span><br>
-        <span class="coin-icon">COINS: <span id="coin-count">10</span></span><br>
+        <span class="coin-icon">BATTERY: <span id="coin-count">30s</span></span><br>
         <span style="font-size: 14px; color: #ddd;">SAVE SLOT: <span id="save-slot-val">1</span></span><br>
         <span id="jetpack-status" style="font-size: 14px; color: white;"></span>
     </div>
     <div id="jetpack-toggle" style="display: none;">JET</div>
     <div id="save-spot-btn" style="display: none;">SAVE</div>
-    <div id="gear-btn">⚙</div>
+    <div id="gear-btn">▣</div>
     <div id="stage-label">STAGE 1<br><span id="theme-name">THE DUST RUINS</span></div>
     <div id="stage-announcement">THE DUST RUINS</div>
 
@@ -242,6 +319,20 @@
 こうしたアイテムは、至るところに落ちているコインを集めてゲットできるぞ！</div>
         <div class="menu-buttons" style="margin-top: 18px;">
             <button onclick="closeReadme()">戻る</button>
+        </div>
+    </div>
+
+    <div id="map-screen">
+        <h2 style="letter-spacing: 4px; margin: 0;">VERTICAL MAP</h2>
+        <div id="map-stage-distance">YOU -> GOAL: -- m</div>
+        <div id="vertical-map">
+            <div class="map-goal-line"></div>
+            <div id="map-goal-dot" class="map-goal-dot"></div>
+            <div id="map-player-dot" class="map-player-dot"></div>
+        </div>
+        <div id="map-key-legend">WHITE: YOU / GREEN SQUARE: KEYS / RED LINE: GOAL</div>
+        <div class="menu-buttons" style="margin-top: 16px;">
+            <button onclick="closeMap()">閉じる</button>
         </div>
     </div>
 
@@ -293,6 +384,7 @@
             <div id="joystick-knob"></div>
         </div>
     </div>
+    <div id="flashlight-button" class="mobile-ui">LIGHT</div>
     <div id="jump-button" class="mobile-ui">JUMP</div>
     <div id="touch-camera-area" class="mobile-ui"></div>
 
@@ -312,7 +404,7 @@
          let currentStage = 1;
          let isGameOver = false;
          let collectedItemCount = 0;
-         let collectedCoins = 10;
+         let collectedCoins = 0;
 
          // Save Slots
          const SAVE_SLOTS = 3;
@@ -348,6 +440,8 @@
         let isJumpHeld = false; // For jetpack
         let velocity = new THREE.Vector3();
         let targetY = 51.8, prevTime = performance.now();
+        let stageTopY = 50;
+        let stageBottomY = -50;
         
         // Camera Variables
         let cameraYaw = 0;
@@ -357,6 +451,14 @@
         let joyVector = { x: 0, y: 0 };
         let isFootstepPlaying = false; 
         let wasOnGround = true; // For detecting landing
+        let hasFlashlight = true;
+        let isFlashlightOn = false;
+        let flashlightBattery = 30;
+        const FLASHLIGHT_MAX_BATTERY = 120;
+        const FLASHLIGHT_PICKUP_GAIN = 20;
+        const FLASHLIGHT_DRAIN_PER_SEC = 1.0;
+        let flashlight = null;
+        let flashlightTarget = null;
 
          const stairMat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
          const HINT_EMISSIVE_COLOR = 0xFFD700;
@@ -364,8 +466,8 @@
          const HINT_RADIUS_SQ = HINT_RADIUS * HINT_RADIUS;
         // Key is now bright green for always-visible guidance
         const keyMat = new THREE.MeshStandardMaterial({ color: 0x00ff66, metalness: 0.6, roughness: 0.2, emissive: 0x00aa44, emissiveIntensity: 0.9 });
-        // Coin is Gold
-        const coinMat = new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 0.8, roughness: 0.2 });
+        // Battery pickup material
+        const coinMat = new THREE.MeshStandardMaterial({ color: 0x8cff66, emissive: 0x1a3a12, emissiveIntensity: 0.9, metalness: 0.5, roughness: 0.3 });
 
          // Save Data Handling
          function getSaveKey(slot) {
@@ -437,6 +539,7 @@
                      ...existingData, // Preserve item states
                      stage: stageNum,
                      coins: collectedCoins,
+                     flashlightBattery: flashlightBattery,
                      playerPos: null,
                      keys: 0,
                  };
@@ -446,6 +549,7 @@
                  data = {
                      stage: stageNum,
                      coins: collectedCoins,
+                     flashlightBattery: flashlightBattery,
                      playerPos: pos ? {x: pos.x, y: pos.y, z: pos.z} : null,
                      keys: keys,
                      hasKeyLocator: hasKeyLocator,
@@ -464,6 +568,8 @@
             // hasJetpack = savedData.hasJetpack || false;
             hasJetpack = false;
             hasSaveAnywhere = true;
+            flashlightBattery = typeof savedData.flashlightBattery === 'number' ? Math.max(0, Math.min(FLASHLIGHT_MAX_BATTERY, savedData.flashlightBattery)) : 30;
+            isFlashlightOn = false;
 
              // Reset dynamic states and UI
              isJetpackSwitchOn = false;
@@ -506,6 +612,84 @@
              if (!isMobile && controls && document.getElementById('instructions').style.display === 'none') {
                  controls.lock();
              }
+         };
+
+         function mapYToScreenY(y, heightPx) {
+             const denom = Math.max(1, stageTopY - stageBottomY);
+             const t = (stageTopY - y) / denom;
+             const clamped = Math.max(0, Math.min(1, t));
+             return clamped * heightPx;
+         }
+
+         function renderVerticalMap() {
+             const mapScreen = document.getElementById('map-screen');
+             if (!mapScreen || mapScreen.style.display !== 'flex' || !camera) return;
+
+             const mapEl = document.getElementById('vertical-map');
+             const playerDot = document.getElementById('map-player-dot');
+             const goalDot = document.getElementById('map-goal-dot');
+             const distEl = document.getElementById('map-stage-distance');
+             if (!mapEl || !playerDot || !goalDot || !distEl) return;
+
+             mapEl.querySelectorAll('.map-key-dot').forEach(el => el.remove());
+
+             const mapWidth = mapEl.clientWidth;
+             const mapHeight = mapEl.clientHeight;
+             const playerY = mapYToScreenY(camera.position.y, mapHeight);
+             playerDot.style.left = `${mapWidth * 0.5}px`;
+             playerDot.style.top = `${playerY}px`;
+
+             const goalDistance = Math.max(0, camera.position.y - goal.userData.topY);
+             distEl.innerText = `YOU -> GOAL: ${Math.round(goalDistance)} m`;
+             const goalHorizontal = Math.max(-1, Math.min(1, (goal.position.x - camera.position.x) / 30));
+             const goalX = mapWidth * (0.5 + goalHorizontal * 0.4);
+             goalDot.style.left = `${goalX}px`;
+
+             const keyItems = collectibleItems.filter(item => item.userData.type === 'key');
+             keyItems.forEach((keyItem) => {
+                 const marker = document.createElement('div');
+                 marker.className = 'map-key-dot';
+                 const keyY = mapYToScreenY(keyItem.position.y, mapHeight);
+                 const horizontal = Math.max(-1, Math.min(1, (keyItem.position.x - camera.position.x) / 30));
+                 const keyX = mapWidth * (0.5 + horizontal * 0.4);
+                 const planarDistance = new THREE.Vector2(
+                     keyItem.position.x - camera.position.x,
+                     keyItem.position.z - camera.position.z
+                 ).length();
+                 const alpha = Math.max(0.35, 1 - (planarDistance / 120));
+                 const size = planarDistance < 20 ? 11 : (planarDistance < 45 ? 9 : 7);
+                 marker.style.left = `${keyX}px`;
+                 marker.style.top = `${keyY}px`;
+                 marker.style.opacity = String(alpha);
+                 marker.style.width = `${size}px`;
+                 marker.style.height = `${size}px`;
+                 mapEl.appendChild(marker);
+             });
+         }
+
+         window.openMap = () => {
+             const mapScreen = document.getElementById('map-screen');
+             if (!mapScreen || isGameOver) return;
+             mapScreen.style.display = 'flex';
+             renderVerticalMap();
+             if (!isMobile && controls) controls.unlock();
+         };
+
+         window.closeMap = () => {
+             const mapScreen = document.getElementById('map-screen');
+             if (!mapScreen) return;
+             mapScreen.style.display = 'none';
+             prevTime = performance.now();
+             if (!isMobile && controls && document.getElementById('instructions').style.display === 'none') {
+                 controls.lock();
+             }
+         };
+
+         window.toggleMap = () => {
+             const mapScreen = document.getElementById('map-screen');
+             if (!mapScreen) return;
+             if (mapScreen.style.display === 'flex') window.closeMap();
+             else window.openMap();
          };
 
          window.buyItem = (type, cost) => {
@@ -569,7 +753,6 @@
         }
 
          function updateHUD() {
-             document.getElementById('coin-count').innerText = collectedCoins;
              document.getElementById('item-count').innerText = collectedItemCount;
              const jetpackStatusEl = document.getElementById('jetpack-status');
              if (hasJetpack) {
@@ -585,8 +768,9 @@
                          break;
                  }
              } else {
-                 jetpackStatusEl.innerHTML = '';
+                 jetpackStatusEl.innerHTML = hasFlashlight ? (isFlashlightOn ? "<span style=\"color:#8cff66;\">LIGHT ON</span>" : "<span style=\"color:#888;\">LIGHT OFF</span>") : '';
              }
+             document.getElementById('coin-count').innerText = `${Math.ceil(flashlightBattery)}s`;
          }
 
          function updateHowToPlay() {
@@ -617,7 +801,7 @@
                 // Fix for gear button click vs pointer lock
                 document.getElementById('gear-btn').addEventListener('click', (e) => {
                     e.stopPropagation(); // prevent re-lock immediately
-                    window.openShop();
+                    window.toggleMap();
                 });
                 
              } else {
@@ -625,7 +809,7 @@
                  setupMobileControls();
                 document.getElementById('gear-btn').addEventListener('touchstart', (e) => {
                     e.stopPropagation();
-                    window.openShop();
+                    window.toggleMap();
                 });
             }
 
@@ -636,6 +820,7 @@
                      if (!controls) return;
                      if (document.getElementById('instructions').style.display !== 'none') return;
                      if (document.getElementById('shop-screen').style.display === 'flex') return;
+                     if (document.getElementById('map-screen').style.display === 'flex') return;
                      if (document.getElementById('clear-screen').style.display === 'flex') return;
                      controls.lock();
                      prevTime = performance.now();
@@ -645,6 +830,12 @@
             scene.add(new THREE.AmbientLight(0xffffff, 0.9));
             const light = new THREE.PointLight(0xffffff, 150, 100);
             camera.add(light);
+            flashlightTarget = new THREE.Object3D();
+            scene.add(flashlightTarget);
+            flashlight = new THREE.SpotLight(0xcfffb8, 220, 240, Math.PI / 14, 0.65, 1.2);
+            flashlight.visible = false;
+            flashlight.target = flashlightTarget;
+            scene.add(flashlight);
             scene.add(camera);
 
             window.addEventListener('resize', onWindowResize);
@@ -690,6 +881,19 @@
                      }
                 }
             });
+
+            const flashlightBtn = document.getElementById('flashlight-button');
+            if (flashlightBtn) {
+                flashlightBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!hasFlashlight) return;
+                    if (!isFlashlightOn && flashlightBattery <= 0) return;
+                    isFlashlightOn = !isFlashlightOn;
+                    flashlightBtn.classList.toggle('active', isFlashlightOn);
+                    updateHUD();
+                }, {passive: false});
+            }
             
             // Initial generation (background)
             generateStage(1);
@@ -731,15 +935,23 @@
             scene.add(startP); objects.push(startP);
             
             // Position Player
-            if (savedPos) {
+            const startSpawn = new THREE.Vector3(0, 51.8, 0);
+            if (savedPos && Number.isFinite(savedPos.x) && Number.isFinite(savedPos.y) && Number.isFinite(savedPos.z)) {
                 camera.position.set(savedPos.x, savedPos.y, savedPos.z);
-                velocity.set(0, 0, 0); // CRITICAL: Reset velocity on load to prevent falling
+                velocity.set(0, 0, 0);
+                // Safety: if loaded position has no ground nearby, snap back to stage start.
+                const spawnRay = new THREE.Raycaster(camera.position, new THREE.Vector3(0, -1, 0), 0, 6);
+                const spawnHit = spawnRay.intersectObjects(objects);
+                if (spawnHit.length === 0) {
+                    camera.position.copy(startSpawn);
+                }
             } else {
-                camera.position.set(0, 51.8, 0); 
+                camera.position.copy(startSpawn);
                 velocity.set(0, 0, 0);
                 cameraYaw = 0; cameraPitch = 0;
                 updateCameraRotation();
             }
+            targetY = camera.position.y;
 
             let keyRemaining = 4 - savedKeys;
             // Reduce keys to spawn if loading from save (simple logic: just spawn all, let player find 4 total. 
@@ -748,7 +960,7 @@
             const maxDepth = 25 + (stageNum * 10); 
             const branchChance = Math.min(0.25 + (stageNum * 0.05), 0.5); 
             let currentPos = new THREE.Vector3(0, 50, 0);
-            // let coinsSpawned = 0;
+            let coinsSpawned = 0;
 
              function createPath(startPos, startRot, depth, isMainPath) {
                 let pos = startPos.clone();
@@ -789,15 +1001,15 @@
                         keyRemaining--;
                     }
 
-                    // Coin spawning is temporarily disabled.
-                    // if (coinsSpawned < 2 && rnd() < 0.1 && i > 5) {
-                    //     const coin = createCoin();
-                    //     const coinOffset = new THREE.Vector3((rnd()-0.5)*5, 6, (rnd()-0.5)*5);
-                    //     coin.position.copy(land.position).add(coinOffset);
-                    //     coin.userData.baseY = coin.position.y;
-                    //     scene.add(coin); collectibleItems.push(coin);
-                    //     coinsSpawned++;
-                    // }
+                    // Battery pickup spawning (limited)
+                    if (coinsSpawned < 2 && rnd() < 0.1 && i > 5) {
+                        const battery = createBatteryPickup();
+                        const coinOffset = new THREE.Vector3((rnd()-0.5)*5, 6, (rnd()-0.5)*5);
+                        battery.position.copy(land.position).add(coinOffset);
+                        battery.userData.baseY = battery.position.y;
+                        scene.add(battery); collectibleItems.push(battery);
+                        coinsSpawned++;
+                    }
 
                     if (isMainPath && rnd() < branchChance && depth - i > 6) {
                         const sideRot = rot + (rnd() < 0.5 ? Math.PI/2 : -Math.PI/2);
@@ -816,6 +1028,8 @@
             goal.userData.topY = finalPos.y + 10;
             goal.visible = false;
             scene.add(goal);
+            stageTopY = 50;
+            stageBottomY = goal.userData.topY;
 
             floor = new THREE.Mesh(new THREE.PlaneGeometry(10000, 10000), new THREE.MeshStandardMaterial({ color: 0x000000 }));
             floor.rotation.x = -Math.PI/2; floor.position.y = finalPos.y - 200;
@@ -835,15 +1049,17 @@
             return g;
         }
 
-        // function createCoin() {
-        //     const g = new THREE.Group();
-        //     g.userData.type = 'coin';
-        //     const c = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.1, 32), coinMat);
-        //     c.rotation.x = Math.PI / 2;
-        //     c.position.y = 0.5;
-        //     g.add(c);
-        //     return g;
-        // }
+        function createBatteryPickup() {
+            const g = new THREE.Group();
+            g.userData.type = 'battery';
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.35), coinMat);
+            body.position.y = 0.45;
+            g.add(body);
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.22), new THREE.MeshStandardMaterial({ color: 0xf5f5f5, emissive: 0x222222, emissiveIntensity: 0.5 }));
+            cap.position.y = 0.95;
+            g.add(cap);
+            return g;
+        }
 
         function updateCameraRotation() {
             const minPitch = -Math.PI / 2 + 0.1;
@@ -985,6 +1201,10 @@
                 document.getElementById('save-spot-btn').style.display = 'flex';
                 
                 collectedCoins = 0;
+                flashlightBattery = 30;
+                isFlashlightOn = false;
+                const flashlightBtn = document.getElementById('flashlight-button');
+                if (flashlightBtn) flashlightBtn.classList.remove('active');
                 generateStage(1);
              } else {
                  const savedData = getSaveData(activeSaveSlot);
@@ -1006,8 +1226,9 @@
             const delta = Math.min((time - prevTime) / 1000, 0.1);
 
             // Don't update if a menu overlay is open
-            if (document.getElementById('shop-screen').style.display === 'flex' || document.getElementById('readme-screen').style.display === 'flex') {
+            if (document.getElementById('shop-screen').style.display === 'flex' || document.getElementById('readme-screen').style.display === 'flex' || document.getElementById('map-screen').style.display === 'flex') {
                 prevTime = time;
+                renderVerticalMap();
                 return;
             }
 
@@ -1056,6 +1277,24 @@
                                 jetpackCooldownTimer = 60; // Start 60-second cooldown
                             }
                         }
+                    }
+                }
+                if (flashlight && flashlightTarget) {
+                    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                    flashlight.position.copy(camera.position).add(new THREE.Vector3(0, -0.2, 0));
+                    flashlightTarget.position.copy(camera.position).add(dir.multiplyScalar(16));
+                    if (isFlashlightOn && flashlightBattery > 0) {
+                        flashlight.visible = true;
+                        flashlightBattery = Math.max(0, flashlightBattery - (FLASHLIGHT_DRAIN_PER_SEC * delta));
+                        updateHUD();
+                        if (flashlightBattery <= 0) {
+                            isFlashlightOn = false;
+                            const flashlightBtn = document.getElementById('flashlight-button');
+                            if (flashlightBtn) flashlightBtn.classList.remove('active');
+                            updateHUD();
+                        }
+                    } else {
+                        flashlight.visible = false;
                     }
                 }
 
@@ -1130,15 +1369,15 @@
                         if (k.userData.type === 'key') {
                             collectedItemCount++;
                             if(collectedItemCount >= 4) goal.material.color.set(0x00ff00);
+                        } else if (k.userData.type === 'battery') {
+                            flashlightBattery = Math.min(FLASHLIGHT_MAX_BATTERY, flashlightBattery + FLASHLIGHT_PICKUP_GAIN);
                         }
-                        // } else if (k.userData.type === 'coin') {
-                        //     collectedCoins++;
-                        // }
                         updateHUD();
                     }
                 });
 
                 if(camera.position.y < 20) goal.visible = true;
+                renderVerticalMap();
                 if(camera.position.y < floor.position.y + 50) {
                     isGameOver = true; document.getElementById('sfx-fall').play().catch(()=>{});
                     showEndScreen("FELL INTO THE ABYSS", "RETRY STAGE", () => {
@@ -1206,6 +1445,13 @@
         }
 
         document.addEventListener('keydown', e => {
+            if (e.code === 'KeyM' && !isMobile) {
+                e.preventDefault();
+                if (!isGameOver && document.getElementById('instructions').style.display === 'none' && document.getElementById('readme-screen').style.display !== 'flex') {
+                    window.toggleMap();
+                }
+                return;
+            }
             if (e.code === 'F1') {
                 e.preventDefault();
                 if (!isMobile && !isGameOver && document.getElementById('shop-screen').style.display !== 'flex') {
@@ -1217,6 +1463,14 @@
                         controls.lock();
                         prevTime = performance.now();
                     }
+                }
+                return;
+            }
+            if (e.code === 'KeyL' && !isMobile) {
+                if (hasFlashlight && document.getElementById('instructions').style.display === 'none') {
+                    if (!isFlashlightOn && flashlightBattery <= 0) return;
+                    isFlashlightOn = !isFlashlightOn;
+                    updateHUD();
                 }
                 return;
             }
