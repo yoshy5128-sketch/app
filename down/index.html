@@ -37,7 +37,7 @@
         #gear-btn:active { background: white; color: black; }
 
         #jetpack-toggle {
-            position: absolute; top: 15px; right: 65px; /* Positioned next to the gear button */
+            position: absolute; top: 15px; right: 165px; /* Hidden for now */
             width: 40px; height: 40px; font-size: 16px; font-weight: bold;
             background: rgba(0,0,0,0.5); color: #aaa; border: 1px solid #aaa; border-radius: 8px;
             display: flex; justify-content: center; align-items: center;
@@ -52,7 +52,7 @@
         }
 
         #save-spot-btn {
-            position: absolute; top: 15px; right: 115px; /* Positioned next to the jetpack button */
+            position: absolute; top: 15px; right: 65px; /* Center of the top-right control trio */
             width: 40px; height: 40px; font-size: 11px; font-weight: bold;
             background: rgba(0,0,0,0.5); color: #aaa; border: 1px solid #aaa; border-radius: 8px;
             display: flex; justify-content: center; align-items: center;
@@ -65,6 +65,14 @@
              box-shadow: 0 0 10px #00ff00;
         }
 
+        #menu-btn {
+            position: absolute; top: 15px; right: 115px;
+            width: 40px; height: 40px; font-size: 16px;
+            background: rgba(0,0,0,0.55); color: #fff; border: 1px solid #ddd; border-radius: 8px;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer; z-index: 60; pointer-events: auto;
+        }
+        #menu-btn:active { background: white; color: black; }
         #stage-label { position: absolute; top: 60px; right: 15px; color: white; font-size: 16px; text-align: right; pointer-events: none; }
         #stage-announcement { position: absolute; width: 100%; top: 30%; text-align: center; color: white; font-size: 2.5em; text-shadow: 0 0 15px rgba(255,255,255,0.5); pointer-events: none; opacity: 0; transition: opacity 1s; z-index: 20; }
         
@@ -74,6 +82,14 @@
              display: flex; flex-direction: column; justify-content: center; align-items: center; 
              background: rgba(0,0,0,0.9); color: white; text-align: center; z-index: 100; 
          }
+        #instructions {
+            justify-content: flex-start;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 24px;
+            box-sizing: border-box;
+            touch-action: pan-y;
+        }
          #clear-screen, #shop-screen { display: none; }
 
         /* Allow scrolling inside overlays even though body is non-scrollable */
@@ -280,6 +296,7 @@
     <div id="jetpack-toggle" style="display: none;">JET</div>
     <div id="save-spot-btn" style="display: none;">SAVE</div>
     <div id="gear-btn">▣</div>
+    <div id="menu-btn">MENU</div>
     <div id="stage-label">STAGE 1<br><span id="theme-name">THE DUST RUINS</span></div>
     <div id="stage-announcement">THE DUST RUINS</div>
 
@@ -302,7 +319,18 @@
         <div style="margin-top: 18px;">
             <button style="min-width: 180px; padding: 10px 20px; background:#111;" onclick="openReadme()">README</button>
         </div>
-        <p id="how-to-play" style="font-size: 0.8em; margin-top: 40px; color: #888;"></p>
+        <div style="margin-top: 16px; width: min(420px, 92vw); border: 1px solid rgba(255,255,255,0.18); padding: 12px; box-sizing: border-box;">
+            <div style="margin-bottom: 8px; color: #ddd; font-size: 0.9em;">CLEARED STAGE SELECT</div>
+            <select id="stage-select" style="min-width: 260px; padding: 8px; background:#111; color:#ffd700; border:1px solid #555;"></select>
+            <div style="margin-top: 10px;">
+                <button id="btn-start-selected-stage" style="min-width: 260px; padding: 10px 16px;" onclick="startSelectedStage()">START SELECTED STAGE</button>
+            </div>
+            <div id="stage-select-note" style="margin-top: 8px; color:#888; font-size: 0.8em;">クリア済みステージのみ表示されます</div>
+        </div>
+        <p style="font-size: 0.95em; margin-top: 28px; color: #fff; font-weight: 600; letter-spacing: 1px;">KEY SETTING</p>
+        <p id="how-to-play" style="font-size: 0.8em; margin-top: 8px; color: #888;"></p>
+        <p style="font-size: 0.8em; margin-top: 10px; color: #9a9a9a;">E: FLASHLIGHT</p>
+        <p style="font-size: 0.8em; margin-top: 10px; color: #9a9a9a;">M: MAP / ESC: MENU</p>
     </div>
 
     <div id="readme-screen">
@@ -315,8 +343,7 @@
 
 たとえどんな高さから飛び降りても、下に階段の踊り場があれば着地が可能。だが、欲張りすぎて着地に失敗すると…奈落の底へと落ちてしまうのでくれぐれも注意！
 
-アイテムショップでは、鍵が光って暗闇でも発見しやすくなるアイテムやどこでもセーブが可能となるセーブスロット。さらには、空中を一定時間飛べるジェットパックまで、さまざまなアイテムが手に入る！
-こうしたアイテムは、至るところに落ちているコインを集めてゲットできるぞ！</div>
+暗闇を照らすことができる懐中電灯のバッテリーには限りがある。途中でバッテリーを拾い、少しでも長く暗闇を照らせるようにしろ！</div>
         <div class="menu-buttons" style="margin-top: 18px;">
             <button onclick="closeReadme()">戻る</button>
         </div>
@@ -409,6 +436,7 @@
          // Save Slots
          const SAVE_SLOTS = 3;
          let activeSaveSlot = 1;
+         const UNLOCKED_STAGES_KEY = 'descent_maze_unlocked_stages';
         
         // Items State
         let hasJetpack = false;
@@ -425,9 +453,9 @@
 
         const THEMES = [
             { name: "THE DUST RUINS", sky: 0x8b7355, fog: 0x8b7355, stair: 0x5a4a3a },
-            { name: "THE POISON SWAMP", sky: 0x0a1a0a, fog: 0x0a1a0a, stair: 0x2d3d2d },
-            { name: "THE ASHEN SILENCE", sky: 0x1a1a1a, fog: 0x1a1a1a, stair: 0x444444 },
-            { name: "THE BLOOD TWILIGHT", sky: 0x240a0a, fog: 0x240a0a, stair: 0x4a1a1a }
+            { name: "THE POISON SWAMP", sky: 0x425642, fog: 0x425642, stair: 0x3f4f3f },
+            { name: "THE ASHEN SILENCE", sky: 0x262b26, fog: 0x262b26, stair: 0x3a3f3a },
+            { name: "THE BLOOD TWILIGHT", sky: 0x170c0c, fog: 0x170c0c, stair: 0x382020 }
         ];
 
          let scene, camera, renderer, controls;
@@ -495,6 +523,61 @@
              } catch {
                  return null;
              }
+         }
+
+         function getUnlockedStages() {
+             const raw = localStorage.getItem(UNLOCKED_STAGES_KEY);
+             if (!raw) return [];
+             try {
+                 const arr = JSON.parse(raw);
+                 if (!Array.isArray(arr)) return [];
+                 return arr
+                     .map(v => Number(v))
+                     .filter(v => Number.isFinite(v) && v >= 1)
+                     .map(v => Math.trunc(v))
+                     .sort((a, b) => a - b);
+             } catch {
+                 return [];
+             }
+         }
+
+         function saveUnlockedStages(stages) {
+             localStorage.setItem(UNLOCKED_STAGES_KEY, JSON.stringify(stages));
+         }
+
+         function markStageCleared(stageNum) {
+             const stages = new Set(getUnlockedStages());
+             stages.add(Math.max(1, Math.trunc(stageNum)));
+             saveUnlockedStages(Array.from(stages).sort((a, b) => a - b));
+             refreshStageSelectUI();
+         }
+
+         function refreshStageSelectUI() {
+             const select = document.getElementById('stage-select');
+             const btn = document.getElementById('btn-start-selected-stage');
+             const note = document.getElementById('stage-select-note');
+             if (!select || !btn || !note) return;
+             const stages = getUnlockedStages();
+             select.innerHTML = '';
+             if (stages.length === 0) {
+                 const opt = document.createElement('option');
+                 opt.value = '';
+                 opt.textContent = '未開放（まずはステージをクリア）';
+                 select.appendChild(opt);
+                 select.disabled = true;
+                 btn.disabled = true;
+                 note.innerText = 'クリア済みステージがここに追加されます';
+                 return;
+             }
+             stages.forEach((stage) => {
+                 const opt = document.createElement('option');
+                 opt.value = String(stage);
+                 opt.textContent = `STAGE ${stage}`;
+                 select.appendChild(opt);
+             });
+             select.disabled = false;
+             btn.disabled = false;
+             note.innerText = 'クリア済みステージのみ表示中';
          }
 
          function updateSaveSlotUI() {
@@ -614,6 +697,15 @@
              }
          };
 
+         window.openMainMenu = () => {
+             document.getElementById('instructions').style.display = 'flex';
+             document.getElementById('readme-screen').style.display = 'none';
+             document.getElementById('map-screen').style.display = 'none';
+             document.getElementById('shop-screen').style.display = 'none';
+             if (!isMobile && controls) controls.unlock();
+             refreshStageSelectUI();
+         };
+
          function mapYToScreenY(y, heightPx) {
              const denom = Math.max(1, stageTopY - stageBottomY);
              const t = (stageTopY - y) / denom;
@@ -685,7 +777,7 @@
              }
          };
 
-         window.toggleMap = () => {
+        window.toggleMap = () => {
              const mapScreen = document.getElementById('map-screen');
              if (!mapScreen) return;
              if (mapScreen.style.display === 'flex') window.closeMap();
@@ -728,6 +820,24 @@
             } else {
                 msg.innerText = "NOT ENOUGH COINS";
             }
+        };
+
+        window.startSelectedStage = () => {
+            const select = document.getElementById('stage-select');
+            if (!select || select.disabled) return;
+            const selectedStage = Number(select.value);
+            if (!Number.isFinite(selectedStage) || selectedStage < 1) return;
+            hasKeyLocator = true;
+            hasJetpack = false;
+            isJetpackSwitchOn = false;
+            jetpackState = 'standby';
+            jetpackFuel = 0;
+            hasSaveAnywhere = true;
+            isFlashlightOn = false;
+            generateStage(Math.trunc(selectedStage));
+            updateHUD();
+            document.getElementById('instructions').style.display = 'none';
+            if(!isMobile && controls) controls.lock();
         };
 
         function highlightKeys() {
@@ -803,6 +913,10 @@
                     e.stopPropagation(); // prevent re-lock immediately
                     window.toggleMap();
                 });
+                document.getElementById('menu-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    window.openMainMenu();
+                });
                 
              } else {
                  updateHowToPlay();
@@ -810,6 +924,10 @@
                 document.getElementById('gear-btn').addEventListener('touchstart', (e) => {
                     e.stopPropagation();
                     window.toggleMap();
+                });
+                document.getElementById('menu-btn').addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                    window.openMainMenu();
                 });
             }
 
@@ -842,6 +960,7 @@
             activeSaveSlot = getSavedActiveSlot();
             updateSaveSlotUI();
             refreshContinueButtons();
+            refreshStageSelectUI();
 
             // Jetpack Toggle
             const jetpackToggleBtn = document.getElementById('jetpack-toggle');
@@ -1221,7 +1340,7 @@
             const delta = Math.min((time - prevTime) / 1000, 0.1);
 
             // Don't update if a menu overlay is open
-            if (document.getElementById('shop-screen').style.display === 'flex' || document.getElementById('readme-screen').style.display === 'flex' || document.getElementById('map-screen').style.display === 'flex') {
+            if (document.getElementById('shop-screen').style.display === 'flex' || document.getElementById('readme-screen').style.display === 'flex' || document.getElementById('map-screen').style.display === 'flex' || document.getElementById('instructions').style.display === 'flex') {
                 prevTime = time;
                 renderVerticalMap();
                 return;
@@ -1394,6 +1513,7 @@
                     if(d < 12 && Math.abs(camera.position.y - goal.userData.topY) < 15) {
                         isGameOver = true;
                         const next = currentStage + 1;
+                        markStageCleared(currentStage);
                         // Save progress for the next stage, but not the specific spot
                         saveGame('progress', next);
                         showEndScreen("LEVEL COMPLETED", "DESCEND DEEPER", () => {
@@ -1440,6 +1560,13 @@
         }
 
         document.addEventListener('keydown', e => {
+            if (e.code === 'Escape' && !isMobile) {
+                e.preventDefault();
+                if (document.getElementById('instructions').style.display !== 'flex') {
+                    window.openMainMenu();
+                }
+                return;
+            }
             if (e.code === 'KeyM' && !isMobile) {
                 e.preventDefault();
                 if (!isGameOver && document.getElementById('instructions').style.display === 'none' && document.getElementById('readme-screen').style.display !== 'flex') {
