@@ -279,6 +279,7 @@
     <div id="instructions">
         <h1 style="letter-spacing: 8px;">DESCENT MAZE</h1>
         <div class="menu-buttons">
+            <button id="btn-resume" style="display:none;" onclick="resumeGame()">RESUME</button>
             <button onclick="startGame(true)">NEW GAME</button>
 <button onclick="localStorage.clear(); location.reload();" style="background:#600;">DELETE SAVE DATA</button>
             <button class="btn-continue" id="btn-continue-1" onclick="startGame(false, 1)">CONTINUE SLOT 1 (STAGE <span id="saved-stage-val-1"></span>)</button>
@@ -424,6 +425,7 @@
         const FLASHLIGHT_DRAIN_PER_SEC = 1.0;
         let flashlight = null;
         let flashlightTarget = null;
+        let hasActiveRun = false;
 
          const stairMat = new THREE.MeshStandardMaterial({ roughness: 0.8 });
          const HINT_EMISSIVE_COLOR = 0xFFD700;
@@ -544,6 +546,12 @@
              }
          }
 
+         function refreshResumeButtonUI() {
+             const resumeBtn = document.getElementById('btn-resume');
+             if (!resumeBtn) return;
+             resumeBtn.style.display = (hasActiveRun && !isGameOver) ? 'block' : 'none';
+         }
+
          function setActiveSaveSlotInternal(slot) {
              activeSaveSlot = clampSaveSlot(slot);
              localStorage.setItem('descent_maze_active_slot', String(activeSaveSlot));
@@ -632,6 +640,18 @@
              if (jetAudio) { jetAudio.pause(); jetAudio.currentTime = 0; }
              if (!isMobile && controls) controls.unlock();
              refreshStageSelectUI();
+             refreshResumeButtonUI();
+         };
+
+         window.resumeGame = () => {
+             if (!hasActiveRun || isGameOver) return;
+             document.getElementById('instructions').style.display = 'none';
+             prevTime = performance.now();
+             if (!isMobile && controls) controls.lock();
+             if (isMobile) {
+                 enterFullscreen();
+                 setTimeout(ensureMobileLandscapeFullscreen, 120);
+             }
          };
 
          function mapYToScreenY(y, heightPx) {
@@ -733,6 +753,8 @@
             isFlashlightOn = false;
             generateStage(Math.trunc(selectedStage));
             updateHUD();
+            hasActiveRun = true;
+            refreshResumeButtonUI();
             document.getElementById('instructions').style.display = 'none';
             if(!isMobile && controls) controls.lock();
         };
@@ -849,6 +871,7 @@
             updateSaveSlotUI();
             refreshContinueButtons();
             refreshStageSelectUI();
+            refreshResumeButtonUI();
 
             // Jetpack Toggle
             const jetpackToggleBtn = document.getElementById('jetpack-toggle');
@@ -910,6 +933,7 @@
          function generateStage(stageNum, savedPos = null, savedKeys = 0) {
             currentStage = stageNum;
             hasJetpack = isStageCleared(stageNum);
+            const batterySpawningEnabled = !isStageCleared(stageNum);
             isJetpackSwitchOn = false;
             jetpackState = 'standby';
             jetpackFuel = hasJetpack ? 5 : 0;
@@ -1012,7 +1036,7 @@
                     }
 
                     // Battery pickup spawning (limited)
-                    if (coinsSpawned < 2 && rnd() < 0.1 && i > 5) {
+                    if (batterySpawningEnabled && coinsSpawned < 2 && rnd() < 0.1 && i > 5) {
                         const battery = createBatteryPickup();
                         const coinOffset = new THREE.Vector3((rnd()-0.5)*5, 6, (rnd()-0.5)*5);
                         battery.position.copy(land.position).add(coinOffset);
@@ -1244,11 +1268,13 @@
                      loadGameFromData(savedData);
                  }
              }
-            
-            updateHUD();
-            document.getElementById('instructions').style.display = 'none';
-            if(!isMobile && controls) controls.lock();
-            document.getElementById('bgm').play().catch(()=>{});
+             
+             updateHUD();
+             hasActiveRun = true;
+             refreshResumeButtonUI();
+             document.getElementById('instructions').style.display = 'none';
+             if(!isMobile && controls) controls.lock();
+             document.getElementById('bgm').play().catch(()=>{});
         };
 
          function animate() {
