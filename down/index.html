@@ -719,6 +719,11 @@
             if (!select || select.disabled) return;
             const selectedStage = Number(select.value);
             if (!Number.isFinite(selectedStage) || selectedStage < 1) return;
+            if (isMobile) enterFullscreen();
+            if (isMobile) {
+                setTimeout(ensureMobileLandscapeFullscreen, 120);
+                setTimeout(ensureMobileLandscapeFullscreen, 600);
+            }
             hasKeyLocator = true;
             hasJetpack = false;
             isJetpackSwitchOn = false;
