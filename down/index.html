@@ -77,7 +77,7 @@
         #stage-announcement { position: absolute; width: 100%; top: 30%; text-align: center; color: white; font-size: 2.5em; text-shadow: 0 0 15px rgba(255,255,255,0.5); pointer-events: none; opacity: 0; transition: opacity 1s; z-index: 20; }
         
         /* Menu Screens */
-        #instructions, #clear-screen, #shop-screen { 
+        #instructions, #clear-screen { 
              position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
              display: flex; flex-direction: column; justify-content: center; align-items: center; 
              background: rgba(0,0,0,0.9); color: white; text-align: center; z-index: 100; 
@@ -90,17 +90,7 @@
             box-sizing: border-box;
             touch-action: pan-y;
         }
-         #clear-screen, #shop-screen { display: none; }
-
-        /* Allow scrolling inside overlays even though body is non-scrollable */
-        #shop-screen {
-            justify-content: flex-start;
-            overflow: auto;
-            -webkit-overflow-scrolling: touch;
-            padding: 24px;
-            box-sizing: border-box;
-            touch-action: pan-y;
-        }
+         #clear-screen { display: none; }
 
         /* README Screen */
         #readme-screen {
@@ -197,21 +187,6 @@
         button:disabled { border-color: #555; color: #555; background: #222; cursor: default; }
         .btn-continue { display: none; background: #2c3e4a; }
 
-        /* Shop Specific */
-        #shop-items {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            width: min(520px, 92vw);
-            max-height: 60vh;
-            overflow: auto;
-            -webkit-overflow-scrolling: touch;
-            touch-action: pan-y;
-        }
-        .shop-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.1); padding: 10px; border: 1px solid #555; }
-        .shop-desc { text-align: left; font-size: 0.9em; }
-        .shop-cost { color: #ffd700; font-weight: bold; }
-
         /* Mobile Controls UI */
         .mobile-ui { display: none !important; position: absolute; z-index: 50; touch-action: none; }
         .is-mobile .mobile-ui { display: flex !important; }
@@ -286,6 +261,7 @@
     <audio id="sfx-clear" src="clear.mp3"></audio>
     <audio id="sfx-footsteps" src="ashi.mp3" loop></audio>
     <audio id="sfx-land" src="chaku.mp3"></audio>
+    <audio id="sfx-jet" src="jet.mp3" loop></audio>
 
     <div id="ui-overlay">
         <span class="key-icon">KEYS: <span id="item-count">0</span> / 4</span><br>
@@ -368,44 +344,6 @@
         <button id="action-button">NEXT LEVEL</button>
     </div>
 
-    <div id="shop-screen">
-        <h2>ITEM SHOP</h2>
-        <div style="margin-bottom: 20px;">Current Coins: <span id="shop-coin-display" style="color:#ffd700; font-weight:bold;">0</span></div>
-        <div id="shop-items">
-            <div class="shop-item">
-                <div class="shop-desc">
-                    <strong>Key Locator</strong><br>Highlight keys location
-                </div>
-                <div>
-                    <span class="shop-cost">1 G</span><br>
-                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('locator', 1)" id="btn-buy-locator">BUY</button>
-                </div>
-            </div>
-            <div class="shop-item">
-                <div class="shop-desc">
-                    <strong>Save Anywhere</strong><br>Save current spot
-                </div>
-                <div>
-                    <span class="shop-cost">2 G</span><br>
-                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('save', 2)" id="btn-buy-save">BUY</button>
-                </div>
-            </div>
-            <div class="shop-item">
-                <div class="shop-desc">
-                    <strong>Ult. Jetpack</strong><br>Fly for 30s
-                </div>
-                <div>
-                    <span class="shop-cost">10 G</span><br>
-                    <button style="min-width: 60px; padding: 5px;" onclick="buyItem('jetpack', 10)" id="btn-buy-jetpack">BUY</button>
-                </div>
-            </div>
-        </div>
-        <div class="menu-buttons" style="margin-top: 30px;">
-            <button onclick="closeShop()">RESUME GAME</button>
-        </div>
-        <p id="shop-msg" style="color: #0f0; height: 20px;"></p>
-    </div>
-
     <div id="joystick-zone" class="mobile-ui">
         <div id="joystick-container">
             <div id="joystick-knob"></div>
@@ -431,7 +369,6 @@
          let currentStage = 1;
          let isGameOver = false;
          let collectedItemCount = 0;
-         let collectedCoins = 0;
 
          // Save Slots
          const SAVE_SLOTS = 3;
@@ -552,6 +489,10 @@
              refreshStageSelectUI();
          }
 
+         function isStageCleared(stageNum) {
+             return getUnlockedStages().includes(Math.max(1, Math.trunc(stageNum)));
+         }
+
          function refreshStageSelectUI() {
              const select = document.getElementById('stage-select');
              const btn = document.getElementById('btn-start-selected-stage');
@@ -621,7 +562,6 @@
                  data = {
                      ...existingData, // Preserve item states
                      stage: stageNum,
-                     coins: collectedCoins,
                      flashlightBattery: flashlightBattery,
                      playerPos: null,
                      keys: 0,
@@ -631,7 +571,6 @@
              else if (type === 'full') {
                  data = {
                      stage: stageNum,
-                     coins: collectedCoins,
                      flashlightBattery: flashlightBattery,
                      playerPos: pos ? {x: pos.x, y: pos.y, z: pos.z} : null,
                      keys: keys,
@@ -646,9 +585,7 @@
 
          function loadGameFromData(savedData) {
             // Load game state
-            collectedCoins = savedData.coins;
             hasKeyLocator = true;
-            // hasJetpack = savedData.hasJetpack || false;
             hasJetpack = false;
             hasSaveAnywhere = true;
             flashlightBattery = typeof savedData.flashlightBattery === 'number' ? Math.max(0, Math.min(FLASHLIGHT_MAX_BATTERY, savedData.flashlightBattery)) : 30;
@@ -672,20 +609,10 @@
             }
         }
 
-        // --- Shop Functions ---
-         window.openShop = () => {
-             // Shop system is temporarily disabled.
-             return;
-         };
-
-         window.closeShop = () => {
-             document.getElementById('shop-screen').style.display = 'none';
-             prevTime = performance.now(); // Prevent time jump
-             if (!isMobile && controls) controls.lock();
-         };
-
          window.openReadme = () => {
              document.getElementById('readme-screen').style.display = 'flex';
+             const jetAudio = document.getElementById('sfx-jet');
+             if (jetAudio) { jetAudio.pause(); jetAudio.currentTime = 0; }
              if (!isMobile && controls) controls.unlock();
          };
 
@@ -701,7 +628,8 @@
              document.getElementById('instructions').style.display = 'flex';
              document.getElementById('readme-screen').style.display = 'none';
              document.getElementById('map-screen').style.display = 'none';
-             document.getElementById('shop-screen').style.display = 'none';
+             const jetAudio = document.getElementById('sfx-jet');
+             if (jetAudio) { jetAudio.pause(); jetAudio.currentTime = 0; }
              if (!isMobile && controls) controls.unlock();
              refreshStageSelectUI();
          };
@@ -763,6 +691,8 @@
              const mapScreen = document.getElementById('map-screen');
              if (!mapScreen || isGameOver) return;
              mapScreen.style.display = 'flex';
+             const jetAudio = document.getElementById('sfx-jet');
+             if (jetAudio) { jetAudio.pause(); jetAudio.currentTime = 0; }
              renderVerticalMap();
              if (!isMobile && controls) controls.unlock();
          };
@@ -783,44 +713,6 @@
              if (mapScreen.style.display === 'flex') window.closeMap();
              else window.openMap();
          };
-
-         window.buyItem = (type, cost) => {
-            const msg = document.getElementById('shop-msg');
-            // Shop purchase flow is currently disabled.
-            if (false && collectedCoins >= cost) {
-                if (type === 'locator') {
-                    if (hasKeyLocator) { msg.innerText = "ALREADY ACTIVE"; return; }
-                    collectedCoins -= cost;
-                    hasKeyLocator = true;
-                    highlightKeys();
-                    msg.innerText = "LOCATOR ACTIVATED";
-                    document.getElementById('btn-buy-locator').disabled = true;
-                }
-                 else if (type === 'save') {
-                     if (hasSaveAnywhere) { msg.innerText = "ALREADY OWNED"; return; }
-                     collectedCoins -= cost;
-                     hasSaveAnywhere = true;
-                     document.getElementById('save-spot-btn').style.display = 'flex';
-                     updateHowToPlay();
-                     msg.innerText = "SAVE ANYWHERE UNLOCKED";
-                     document.getElementById('btn-buy-save').disabled = true;
-                 }
-                else if (type === 'jetpack') {
-                    if (hasJetpack) { msg.innerText = "ALREADY OWNED"; return; }
-                    collectedCoins -= cost;
-                    hasJetpack = true;
-                    jetpackState = 'standby';
-                    document.getElementById('jetpack-toggle').style.display = 'flex';
-                    updateHUD(); // To show standby message
-                    msg.innerText = "JETPACK PURCHASED";
-                    document.getElementById('btn-buy-jetpack').disabled = true;
-                }
-                updateHUD();
-                document.getElementById('shop-coin-display').innerText = collectedCoins;
-            } else {
-                msg.innerText = "NOT ENOUGH COINS";
-            }
-        };
 
         window.startSelectedStage = () => {
             const select = document.getElementById('stage-select');
@@ -866,17 +758,9 @@
              document.getElementById('item-count').innerText = collectedItemCount;
              const jetpackStatusEl = document.getElementById('jetpack-status');
              if (hasJetpack) {
-                 switch (jetpackState) {
-                     case 'standby':
-                         jetpackStatusEl.innerHTML = `<span style="color:#00ff00;">JETPACK STANDBY</span>`;
-                         break;
-                     case 'cooldown':
-                         jetpackStatusEl.innerHTML = `JETPACK COOLING: ${Math.ceil(jetpackCooldownTimer)}s`;
-                         break;
-                     case 'active':
-                         // This will be handled in the animate loop for real-time update
-                         break;
-                 }
+                 jetpackStatusEl.innerHTML = isJetpackSwitchOn
+                    ? `<span style="color:#00ff00;">JETPACK ARMED</span>`
+                    : `<span style="color:#8a8a8a;">JETPACK OFF</span>`;
              } else {
                  jetpackStatusEl.innerHTML = hasFlashlight ? (isFlashlightOn ? "<span style=\"color:#8cff66;\">LIGHT ON</span>" : "<span style=\"color:#888;\">LIGHT OFF</span>") : '';
              }
@@ -937,7 +821,6 @@
                  document.body.addEventListener('click', () => {
                      if (!controls) return;
                      if (document.getElementById('instructions').style.display !== 'none') return;
-                     if (document.getElementById('shop-screen').style.display === 'flex') return;
                      if (document.getElementById('map-screen').style.display === 'flex') return;
                      if (document.getElementById('clear-screen').style.display === 'flex') return;
                      controls.lock();
@@ -966,10 +849,10 @@
             const jetpackToggleBtn = document.getElementById('jetpack-toggle');
             jetpackToggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                // Jetpack feature is temporarily disabled.
-                if (false && hasJetpack) {
+                if (hasJetpack) {
                     isJetpackSwitchOn = !isJetpackSwitchOn;
                     jetpackToggleBtn.classList.toggle('active', isJetpackSwitchOn);
+                    updateHUD();
                 }
             });
 
@@ -1021,6 +904,14 @@
 
          function generateStage(stageNum, savedPos = null, savedKeys = 0) {
             currentStage = stageNum;
+            hasJetpack = isStageCleared(stageNum);
+            isJetpackSwitchOn = false;
+            jetpackState = 'standby';
+            jetpackFuel = hasJetpack ? 5 : 0;
+            jetpackCooldownTimer = 0;
+            const jetpackToggleEl = document.getElementById('jetpack-toggle');
+            jetpackToggleEl.style.display = hasJetpack ? 'flex' : 'none';
+            jetpackToggleEl.classList.remove('active');
             const theme = THEMES[(stageNum - 1) % THEMES.length];
             scene.background = new THREE.Color(theme.sky);
             
@@ -1166,12 +1057,15 @@
         function createBatteryPickup() {
             const g = new THREE.Group();
             g.userData.type = 'battery';
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.35), coinMat);
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.9, 20), coinMat);
             body.position.y = 0.45;
             g.add(body);
-            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.22), new THREE.MeshStandardMaterial({ color: 0xf5f5f5, emissive: 0x222222, emissiveIntensity: 0.5 }));
-            cap.position.y = 0.95;
-            g.add(cap);
+            const capTop = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.12, 16), new THREE.MeshStandardMaterial({ color: 0xf5f5f5, emissive: 0x222222, emissiveIntensity: 0.5 }));
+            capTop.position.y = 0.95;
+            g.add(capTop);
+            const capBottom = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 16), new THREE.MeshStandardMaterial({ color: 0xcfcfcf, emissive: 0x111111, emissiveIntensity: 0.4 }));
+            capBottom.position.y = -0.02;
+            g.add(capBottom);
             return g;
         }
 
@@ -1314,7 +1208,6 @@
                 document.getElementById('jetpack-toggle').classList.remove('active');
                 document.getElementById('save-spot-btn').style.display = 'flex';
                 
-                collectedCoins = 0;
                 flashlightBattery = 30;
                 isFlashlightOn = false;
                 const flashlightBtn = document.getElementById('flashlight-button');
@@ -1340,7 +1233,7 @@
             const delta = Math.min((time - prevTime) / 1000, 0.1);
 
             // Don't update if a menu overlay is open
-            if (document.getElementById('shop-screen').style.display === 'flex' || document.getElementById('readme-screen').style.display === 'flex' || document.getElementById('map-screen').style.display === 'flex' || document.getElementById('instructions').style.display === 'flex') {
+            if (document.getElementById('readme-screen').style.display === 'flex' || document.getElementById('map-screen').style.display === 'flex' || document.getElementById('instructions').style.display === 'flex') {
                 prevTime = time;
                 renderVerticalMap();
                 return;
@@ -1357,40 +1250,24 @@
                 const jetpackStatusEl = document.getElementById('jetpack-status');
                 let isJetpacking = false;
 
-                // New Jetpack Logic
-                // Jetpack runtime is temporarily disabled.
-                if (false && hasJetpack) {
-                    // Cooldown state handling
-                    if (jetpackState === 'cooldown') {
-                        jetpackCooldownTimer -= delta;
-                        updateHUD(); // Display countdown
-                        if (jetpackCooldownTimer <= 0) {
-                            jetpackState = 'standby';
-                            jetpackFuel = 5; // Refill fuel
-                            updateHUD(); // Display "STANDBY"
-                        }
+                // Jetpack logic (unlimited usage on cleared stages)
+                if (hasJetpack) {
+                    const jetAudio = document.getElementById('sfx-jet');
+                    if (isJetpackSwitchOn && isJumpHeld) {
+                        isJetpacking = true;
+                        velocity.y += 40.0 * delta;
+                        if (velocity.y > 15) velocity.y = 15;
+                        jetpackStatusEl.innerHTML = `JETPACK ON`;
+                        if (jetAudio && jetAudio.paused) jetAudio.play().catch(()=>{});
+                    } else if (jetAudio && !jetAudio.paused) {
+                        jetAudio.pause();
+                        jetAudio.currentTime = 0;
                     }
-                    
-                    // Spray logic: only when switch is on, jump is held, and not in cooldown
-                    if (isJetpackSwitchOn && isJumpHeld && jetpackState === 'standby') {
-                        if (jetpackFuel > 0) {
-                            isJetpacking = true;
-                            jetpackFuel -= delta;
-                            
-                            // Apply lift
-                            velocity.y += 40.0 * delta;
-                            if (velocity.y > 15) velocity.y = 15;
-                            
-                            // Update UI in real-time
-                            jetpackStatusEl.innerHTML = `JETPACK ON: <span style="color:yellow;">${jetpackFuel.toFixed(1)}s</span>`;
-
-                            // Check if fuel just ran out
-                            if (jetpackFuel <= 0) {
-                                jetpackFuel = 0;
-                                jetpackState = 'cooldown';
-                                jetpackCooldownTimer = 60; // Start 60-second cooldown
-                            }
-                        }
+                } else {
+                    const jetAudio = document.getElementById('sfx-jet');
+                    if (jetAudio && !jetAudio.paused) {
+                        jetAudio.pause();
+                        jetAudio.currentTime = 0;
                     }
                 }
                 if (flashlight && flashlightTarget) {
@@ -1576,7 +1453,7 @@
             }
             if (e.code === 'F1') {
                 e.preventDefault();
-                if (!isMobile && !isGameOver && document.getElementById('shop-screen').style.display !== 'flex') {
+                if (!isMobile && !isGameOver) {
                     saveGame('full', currentStage, camera.position, collectedItemCount, activeSaveSlot);
                     const saveSpotBtn = document.getElementById('save-spot-btn');
                     saveSpotBtn.classList.add('saved');
@@ -1607,18 +1484,12 @@
                 }
                 if(canJump) { velocity.y+=17; canJump=false; }
             }
-            // if (e.code === 'KeyJ' && hasJetpack) {
-            //     const jetpackToggleBtn = document.getElementById('jetpack-toggle');
-            //     isJetpackSwitchOn = !isJetpackSwitchOn;
-            //     jetpackToggleBtn.classList.toggle('active', isJetpackSwitchOn);
-            // }
-            // if (e.code === 'KeyI') {
-            //     if (document.getElementById('shop-screen').style.display === 'flex') {
-            //         window.closeShop();
-            //     } else {
-            //         window.openShop();
-            //     }
-            // }
+            if (e.code === 'KeyJ' && hasJetpack) {
+                const jetpackToggleBtn = document.getElementById('jetpack-toggle');
+                isJetpackSwitchOn = !isJetpackSwitchOn;
+                jetpackToggleBtn.classList.toggle('active', isJetpackSwitchOn);
+                updateHUD();
+            }
         });
         document.addEventListener('keyup', e => {
             if(e.code==='KeyW') moveForward=false; if(e.code==='KeyS') moveBackward=false;
