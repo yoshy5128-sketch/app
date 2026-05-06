@@ -1185,8 +1185,27 @@
             else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
         }
 
+        function ensureMobileLandscapeFullscreen() {
+            if (!isMobile) return;
+            const isLandscape = window.innerWidth > window.innerHeight;
+            if (!isLandscape) return;
+            const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+            if (!fsEl) {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) elem.requestFullscreen().catch(() => {});
+                else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+            }
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {});
+            }
+        }
+
          window.startGame = (isNew, slot = activeSaveSlot) => {
             if (isMobile) enterFullscreen();
+            if (isMobile) {
+                setTimeout(ensureMobileLandscapeFullscreen, 120);
+                setTimeout(ensureMobileLandscapeFullscreen, 600);
+            }
             setActiveSaveSlotInternal(slot);
             
              // If New Game, reset everything
@@ -1496,6 +1515,15 @@
             if(e.code==='KeyA') moveLeft=false; if(e.code==='KeyD') moveRight=false;
             if(e.code==='Space') isJumpHeld = false;
         });
+
+        if (isMobile) {
+            window.addEventListener('orientationchange', () => {
+                setTimeout(ensureMobileLandscapeFullscreen, 120);
+            });
+            window.addEventListener('resize', () => {
+                setTimeout(ensureMobileLandscapeFullscreen, 120);
+            });
+        }
 
         init();
     </script>
